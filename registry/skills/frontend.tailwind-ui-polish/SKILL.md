@@ -19,6 +19,7 @@ Use this skill when Tailwind classes, local Tailwind components, shadcn/Tailwind
 - Use arbitrary values only when no project token expresses the role or when a deliberate product-specific token is being introduced.
 - Avoid one-note palettes, generic gradient/blob/card layouts, nested cards, ornamental shadows, random icon grids, and animation without a job.
 - Avoid inherited model house styles unless the brief earns them. Warm cream plus serif plus terracotta, purple gradients, dark neon glass, and bento-card grids are defaults, not decisions.
+- For subjective polish, set the design dials first: design variance, motion intensity, and visual density. A dense admin table, consumer landing page, and onboarding flow should not receive the same Tailwind treatment.
 - Keep dashboard, CRM, admin, and operational tools compact and scannable. Save hero-scale type, large imagery, and editorial spacing for content that actually needs it.
 - Keep boundaries sharp: use `frontend.design-system` for token/theme architecture, `frontend.visual-design-polish` for broad visual direction, `frontend.ux-critique` for task-flow redesign, and `frontend.interaction-polish` for motion systems beyond local state styling.
 - Use Tailwind as an implementation language for a visual thesis, not as a source of generic styling. The class list should express layout, hierarchy, state, token roles, and responsive behavior.
@@ -114,12 +115,24 @@ Do not start from a decorative class pass. Start from hierarchy, states, respons
 - Test around actual breakpoint edges, not only at ideal desktop and phone widths.
 - Use `min-w-0`, `max-w-*`, `truncate`, `line-clamp`, wrapping, and explicit grid/flex constraints for long labels, translated strings, and user-generated content.
 
+## Mechanical UI Checks
+
+- Flex and grid children that contain text should usually have `min-w-0` plus intentional wrapping, truncation, or `line-clamp` behavior.
+- Buttons, tabs, badges, table cells, nav items, and icon buttons should keep stable dimensions across hover, focus, active, disabled, loading, and selected states.
+- Images and media shells need reserved dimensions, `aspect-*`, or explicit sizing so loading does not shift layout.
+- Full-bleed and fixed-position layouts should account for mobile safe areas when controls sit near viewport edges.
+- Avoid `overflow-x-hidden` as a blanket fix for real overflow. Fix the child constraint, table strategy, sticky element, or long-content behavior first.
+- If theming changes touch the page shell, check `color-scheme`, native form controls, scrollbars, and theme-color behavior where the project supports dark mode.
+- Format dates, numbers, currencies, and units through project helpers or `Intl.*` conventions before polishing spacing around hard-coded text.
+- Preserve deep-linkable UI state for tabs, filters, pagination, and selected records when the product expects shareable or restorable state; style should not hide broken state ownership.
+
 ## Hard Failure Gates
 
 - Do not finish a Tailwind visual/layout change with unresolved page-level horizontal scroll, clipped controls, sticky overlap, invisible focus, or text/control overlap at supported breakpoints.
 - Do not leave state-driven layout shift where hover, focus, active, loading, or disabled states resize controls unexpectedly.
 - Do not rely on dynamic Tailwind class construction such as `bg-${color}-600`; map variants to complete static class strings.
 - Do not replace semantic shadcn/Tailwind tokens with hard-coded neutrals, hex values, or arbitrary spacing unless the product role is deliberate and documented.
+- Do not close responsive polish by hiding overflow while controls, text, tables, or sticky elements remain unreachable.
 - If screenshots/browser verification are unavailable, report the blocker and list the exact viewport/state matrix that remains unverified.
 
 ## Self-Critique And Revision Gate

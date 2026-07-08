@@ -1,0 +1,95 @@
+{
+  "id": "frontend.audit",
+  "name": "audit",
+  "displayName": "Frontend Audit",
+  "description": "Run a final frontend release-readiness audit across accessibility, responsive layout, performance, theming, state coverage, testing evidence, and anti-generic UI risk.",
+  "stackTags": [
+    "frontend",
+    "web-app",
+    "react",
+    "typescript"
+  ],
+  "taskTags": [
+    "audit",
+    "code-review",
+    "ui-quality",
+    "release-readiness",
+    "accessibility",
+    "performance",
+    "responsive-design"
+  ],
+  "supportedAgents": [
+    "codex",
+    "generic-agent-skills"
+  ],
+  "source": {
+    "type": "curated",
+    "registry": "local",
+    "path": "./registry/skills/frontend.audit"
+  },
+  "version": "0.1.0",
+  "riskLevel": "low",
+  "permissions": {
+    "filesystem": [
+      "read-project"
+    ],
+    "network": false,
+    "shell": false,
+    "writes": []
+  },
+  "scripts": [],
+  "dependencies": [],
+  "qualityScore": 0.87,
+  "securityScore": 0.96,
+  "quality": {
+    "rubricVersion": "1.0",
+    "scores": {
+      "usefulness": 0.9,
+      "triggerSpecificity": 0.86,
+      "progressiveDisclosure": 0.88,
+      "safety": 0.96,
+      "verifiability": 0.9,
+      "maintainability": 0.86,
+      "portability": 0.82
+    }
+  },
+  "freshness": {
+    "lastReviewedAt": "2026-07-08"
+  },
+  "installTargets": [
+    "repo",
+    "user"
+  ],
+  "compatibility": {
+    "codex": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "codex"
+    },
+    "generic-agent-skills": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "generic-agent-skills"
+    }
+  },
+  "conflictsWith": [],
+  "supersedes": [],
+  "maintainer": {
+    "name": "local-curated",
+    "trustTier": "curated"
+  },
+  "license": "MIT",
+  "routing": {
+    "lane": "qa",
+    "category": "frontend-audit"
+  },
+  "evaluation": {
+    "status": "none",
+    "benchmarkVersion": "frontend-skill-quality-v1",
+    "evidenceUri": "evals/frontend/suite.json"
+  }
+}

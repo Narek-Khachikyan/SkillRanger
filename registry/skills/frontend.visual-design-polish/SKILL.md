@@ -26,6 +26,7 @@ Use the TASTE framework for substantial visual work:
 - Do not treat anti-generic warnings as a design direction. A good result needs positive visual grammar: token roles, component-state rules, surface/depth policy, and a signature proof medium such as product screenshots, domain imagery, editorial type, operational tables, or data artifacts.
 - Start from the product, audience, and screen job. A design direction must be specific enough that it would not fit a random SaaS page.
 - Make one memorable visual move and keep the rest disciplined.
+- Take one justified aesthetic risk for substantial open-ended work: a stronger type treatment, unexpected composition, domain-specific material, distinctive data treatment, or memorable interaction. If no risk is justified, say why restraint is the better design decision.
 - Prefer hierarchy, readability, density, and subject fit over decoration.
 - Treat browser-rendered screenshots as required evidence for material visual changes. Do not call visual work complete without mobile and desktop evidence unless blocked.
 - Avoid generic AI-layout defaults: purple-blue gradients, floating blobs, nested cards, random icon grids, vague SaaS copy, one-note palettes, and ornamental shadows.
@@ -37,6 +38,16 @@ Use the TASTE framework for substantial visual work:
 - Use trends as ingredients, not as defaults. Gradients, glass, bento, brutalism, AI glow, scroll effects, 3D, nostalgia, and maximalism must have a product reason.
 - Make mobile an art-direction surface, not a collapsed desktop layout. Preserve focal hierarchy, brand character, and action reachability on narrow viewports.
 - Treat accessibility and performance as part of taste. Low contrast, invisible focus, tiny targets, heavy motion, and slow media are not polish.
+
+## Design Dials
+
+Set these dials before material visual work so the design does not mix incompatible signals:
+
+- Design variance: low for mature product surfaces, regulated workflows, settings, billing, permissions, and dense operational tools; medium for product marketing, onboarding, editor surfaces, and dashboards with brand room; high for campaigns, portfolios, launches, event pages, and expressive editorial work.
+- Motion intensity: none or low for repeated work, forms, tables, compliance, and high-stakes flows; medium for onboarding, creation, previews, and route transitions; high only for rare brand moments, demos, games, or story-driven pages where motion explains something.
+- Visual density: compact for dashboards, admin, developer tools, finance, logistics, support, and AI operations; balanced for SaaS product UI and marketplaces; editorial for narrative pages, portfolios, launches, and content-first experiences.
+
+If these dials conflict with the user's brief or existing `DESIGN.md`, name the conflict and choose the safer product-specific direction.
 
 ## Pre-Generation Gate
 
@@ -137,6 +148,7 @@ Translate the extraction into visual rules. A port tool can use berth maps, cont
 
 - Choose layout from user intent: reading, comparing, monitoring, editing, browsing, buying, or deciding.
 - Do not default to cards. Use tables/lists for comparison, split panes for triage, editorial grids for narrative, bento for heterogeneous overviews, and dashboards for monitoring.
+- Structure should encode information. Numbering, rails, dividers, timelines, badges, tabs, cards, and section rhythm should represent real sequence, status, grouping, priority, ownership, or workflow rather than decoration.
 - Use a real alignment system: columns, gutters, margins, keylines, row rhythm, and scroll ownership.
 - Break symmetry deliberately, not randomly. Asymmetry still needs shared edges, baselines, or gutters.
 - Make space semantic: related items are closer than unrelated items; section gaps are larger than item gaps; whitespace should communicate grouping before borders do.

@@ -2,8 +2,8 @@
   "schemaVersion": "1.0",
   "name": "frontend-skill-quality-v1",
   "targetCounts": {
-    "triggerPrompts": 81,
-    "taskEvals": 41
+    "triggerPrompts": 83,
+    "taskEvals": 42
   },
   "triggerPrompts": [
     {
@@ -752,6 +752,24 @@
       "routingExpected": {
         "expectedSkill": "frontend.testing-strategy"
       }
+    },
+    {
+      "id": "trigger-frontend-release-readiness-audit",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.audit",
+      "text": "Do a final frontend release-readiness audit before we ship this feature. Cover accessibility, responsive layout, performance, state coverage, tests, theming, and generic UI risk.",
+      "routingExpected": {
+        "expectedSkill": "frontend.audit"
+      }
+    },
+    {
+      "id": "trigger-frontend-cross-cutting-audit",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.audit",
+      "text": "Review the whole frontend slice after implementation and give a scorecard for release blockers, evidence gaps, browser checks, a11y, perf, responsive states, and visual quality.",
+      "routingExpected": {
+        "expectedSkill": "frontend.audit"
+      }
     }
   ],
   "taskBands": [
@@ -1449,7 +1467,7 @@
     },
     {
       "id": "polish",
-      "targetCount": 10,
+      "targetCount": 11,
       "seedTasks": [
         {
           "id": "generic-landing-page-polish",
@@ -1674,6 +1692,29 @@
               "requiredArtifacts": [
                 "screenshots"
               ]
+            }
+          ]
+        },
+        {
+          "id": "frontend-release-readiness-scorecard",
+          "prompt": "Run a final frontend release-readiness audit for a feature that changed React state, Next.js routing, Tailwind styling, forms, loading/error states, and browser tests.",
+          "assertions": [
+            {
+              "text": "The output starts with an audit envelope and release-readiness verdict.",
+              "graderType": "human"
+            },
+            {
+              "text": "Accessibility, responsive layout, performance, theming/design-system fit, state coverage, testing evidence, visual/UX quality, and runtime integrity are scored with evidence sources.",
+              "graderType": "human",
+              "requiredArtifacts": [
+                "screenshots",
+                "manualA11yChecklist",
+                "webVitalsReport"
+              ]
+            },
+            {
+              "text": "Release blockers and missing evidence are separated from non-blocking polish recommendations.",
+              "graderType": "human"
             }
           ]
         }
