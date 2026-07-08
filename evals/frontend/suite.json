@@ -1,0 +1,1736 @@
+{
+  "schemaVersion": "1.0",
+  "name": "frontend-skill-quality-v1",
+  "targetCounts": {
+    "triggerPrompts": 81,
+    "taskEvals": 41
+  },
+  "triggerPrompts": [
+    {
+      "id": "trigger-playwright-flake",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.playwright-debug",
+      "text": "Our Playwright checkout spec flakes in CI but passes locally. Find the likely cause using trace and artifact evidence.",
+      "routingExpected": {
+        "expectedSkill": "frontend.playwright-debug"
+      }
+    },
+    {
+      "id": "trigger-visual-polish",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.visual-design-polish",
+      "text": "This dashboard works but looks generic and crowded. Improve visual hierarchy, density, and spacing without changing behavior.",
+      "routingExpected": {
+        "expectedSkill": "frontend.visual-design-polish"
+      }
+    },
+    {
+      "id": "trigger-a11y-form",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.accessibility-review",
+      "text": "Review this signup form for labels, focus behavior, validation errors, keyboard use, and WCAG issues.",
+      "routingExpected": {
+        "expectedSkill": "frontend.accessibility-review"
+      }
+    },
+    {
+      "id": "trigger-design-system",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.design-system",
+      "text": "Audit this Tailwind app for token drift, arbitrary values, inconsistent radii, and shadcn theme misuse.",
+      "routingExpected": {
+        "expectedSkill": "frontend.design-system"
+      }
+    },
+    {
+      "id": "trigger-design-to-code",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.design-to-code",
+      "text": "Implement this Figma-style pricing page mock in the existing React app while preserving local components and tokens.",
+      "routingExpected": {
+        "expectedSkill": "frontend.design-to-code"
+      }
+    },
+    {
+      "id": "trigger-performance",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.performance-review",
+      "text": "The home route feels slow and the bundle grew. Diagnose LCP, INP, bundle size, and render bottlenecks.",
+      "routingExpected": {
+        "expectedSkill": "frontend.performance-review"
+      }
+    },
+    {
+      "id": "trigger-react-component-api",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.react-component-design",
+      "text": "Refactor this React card component API; it has boolean prop sprawl and duplicated loading/error states.",
+      "routingExpected": {
+        "expectedSkill": "frontend.react-component-design"
+      }
+    },
+    {
+      "id": "trigger-testing-portfolio",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.testing-strategy",
+      "text": "This Vite React project has no tests. Propose the smallest credible unit, component, and e2e test portfolio.",
+      "routingExpected": {
+        "expectedSkill": "frontend.testing-strategy"
+      }
+    },
+    {
+      "id": "nontrigger-backend-api",
+      "kind": "should-not-trigger",
+      "text": "Add cursor pagination to this Express API endpoint and update the database query.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-database-migration",
+      "kind": "should-not-trigger",
+      "text": "Write a SQL migration that adds an index and backfills nullable rows.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-copy-only",
+      "kind": "should-not-trigger",
+      "text": "Rewrite the README introduction to sound friendlier, without touching app code.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-cli-tooling",
+      "kind": "should-not-trigger",
+      "text": "Add a CLI flag to export JSON from this Node command-line script.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-auth-service",
+      "kind": "should-not-trigger",
+      "text": "Debug why JWT refresh tokens expire too early in the backend auth service.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-package-release",
+      "kind": "should-not-trigger",
+      "text": "Prepare a package release by updating changelog entries and semantic version metadata.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "ambiguous-make-better",
+      "kind": "ambiguous",
+      "text": "Make this page better.",
+      "routingExpected": {
+        "triageOnly": true,
+        "acceptableAlternates": [
+          "frontend.visual-design-polish",
+          "frontend.tailwind-ui-polish",
+          "frontend.ux-critique",
+          "frontend.design-to-code"
+        ],
+        "falsePositiveSeverity": "medium"
+      }
+    },
+    {
+      "id": "ambiguous-layout-bug",
+      "kind": "ambiguous",
+      "expectedSkill": "frontend.visual-design-polish",
+      "text": "Fix this layout bug on mobile; the action bar overlaps the content.",
+      "routingExpected": {
+        "expectedSkill": "frontend.visual-design-polish"
+      }
+    },
+    {
+      "id": "ambiguous-polish-modal",
+      "kind": "ambiguous",
+      "expectedSkill": "frontend.interaction-polish",
+      "text": "Polish this modal so it feels less abrupt and handles keyboard focus correctly.",
+      "routingExpected": {
+        "expectedSkill": "frontend.interaction-polish"
+      }
+    },
+    {
+      "id": "ambiguous-react-question",
+      "kind": "ambiguous",
+      "text": "Should this React value live in state or be derived during render?"
+    },
+    {
+      "id": "trigger-tailwind-screenshot-qa",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.tailwind-ui-polish",
+      "text": "Use screenshots to review this Tailwind settings page at mobile and desktop widths, then fix spacing, wrapping, and state styling issues.",
+      "routingExpected": {
+        "expectedSkill": "frontend.tailwind-ui-polish"
+      }
+    },
+    {
+      "id": "trigger-tailwind-token-drift",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.tailwind-ui-polish",
+      "text": "This Tailwind app has arbitrary colors, inconsistent radii, and repeated card class bundles. Clean it up without changing the product direction.",
+      "routingExpected": {
+        "expectedSkill": "frontend.tailwind-ui-polish"
+      }
+    },
+    {
+      "id": "trigger-visual-design-product-fit",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.visual-design-polish",
+      "text": "The page feels like a generic AI SaaS template. Reject the default purple/cream/blob look and make the visual direction specific to a manga discovery product.",
+      "routingExpected": {
+        "expectedSkill": "frontend.visual-design-polish"
+      }
+    },
+    {
+      "id": "trigger-visual-design-md-first",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.visual-design-polish",
+      "text": "Before redesigning this page, use the existing DESIGN.md or create a compact mini-DESIGN spec with color roles, type roles, component rules, and responsive behavior so the result stops looking like generic AI slop.",
+      "routingExpected": {
+        "expectedSkill": "frontend.visual-design-polish"
+      }
+    },
+    {
+      "id": "trigger-responsive-dashboard-density",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.tailwind-ui-polish",
+      "text": "Polish this Tailwind analytics dashboard so dense tables, filters, and actions remain scannable from 390px to desktop.",
+      "routingExpected": {
+        "expectedSkill": "frontend.tailwind-ui-polish"
+      }
+    },
+    {
+      "id": "trigger-focus-visible-states",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.accessibility-review",
+      "text": "Review and fix focus-visible styles, keyboard navigation, disabled states, and contrast in this Tailwind form flow.",
+      "routingExpected": {
+        "expectedSkill": "frontend.accessibility-review"
+      }
+    },
+    {
+      "id": "trigger-interaction-motion",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.interaction-polish",
+      "text": "The drawer and toast transitions feel abrupt. Improve interaction polish while respecting reduced motion.",
+      "routingExpected": {
+        "expectedSkill": "frontend.interaction-polish"
+      }
+    },
+    {
+      "id": "trigger-design-system-extraction",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.design-system",
+      "text": "Extract repeated button, badge, and panel variants from this Tailwind page into reusable tokens or local components.",
+      "routingExpected": {
+        "expectedSkill": "frontend.design-system"
+      }
+    },
+    {
+      "id": "trigger-design-to-code-screenshot",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.design-to-code",
+      "text": "Implement this supplied product screenshot in the existing React Tailwind app with matching responsive behavior and states.",
+      "routingExpected": {
+        "expectedSkill": "frontend.design-to-code"
+      }
+    },
+    {
+      "id": "trigger-ux-critique-flow",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.ux-critique",
+      "text": "Critique the onboarding flow for confusing steps, missing feedback, weak affordances, and completion blockers.",
+      "routingExpected": {
+        "expectedSkill": "frontend.ux-critique"
+      }
+    },
+    {
+      "id": "trigger-tailwind-empty-error-states",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.tailwind-ui-polish",
+      "text": "The list view looks fine with data but empty, loading, and error states feel unfinished. Polish the Tailwind UI states.",
+      "routingExpected": {
+        "expectedSkill": "frontend.tailwind-ui-polish"
+      }
+    },
+    {
+      "id": "trigger-visual-regression-before-after",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.visual-design-polish",
+      "text": "Compare before and after screenshots and identify which visual changes improved hierarchy versus only adding decoration.",
+      "routingExpected": {
+        "expectedSkill": "frontend.visual-design-polish"
+      }
+    },
+    {
+      "id": "trigger-mobile-nav-overflow",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.tailwind-ui-polish",
+      "text": "Fix the mobile navigation where labels wrap badly, icons shift, and the active state is hard to see.",
+      "routingExpected": {
+        "expectedSkill": "frontend.tailwind-ui-polish"
+      }
+    },
+    {
+      "id": "nontrigger-api-rate-limit",
+      "kind": "should-not-trigger",
+      "text": "Add server-side rate limiting and Redis-backed request counters to this API route.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-unit-test-pure-function",
+      "kind": "should-not-trigger",
+      "text": "Write unit tests for this pure date formatting helper.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-ci-cache",
+      "kind": "should-not-trigger",
+      "text": "Optimize CI dependency caching for pnpm and Node without changing application code.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-terminal-script",
+      "kind": "should-not-trigger",
+      "text": "Create a shell script that archives logs and uploads them to S3.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-backend-validation",
+      "kind": "should-not-trigger",
+      "text": "Add Zod validation to the backend webhook handler and return structured errors.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-license-audit",
+      "kind": "should-not-trigger",
+      "text": "Review package licenses and produce a compliance summary.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-data-export",
+      "kind": "should-not-trigger",
+      "text": "Add a CSV export endpoint for monthly order reports.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-readme-screenshots",
+      "kind": "should-not-trigger",
+      "text": "Update README screenshots and captions to explain the app installation flow.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "ambiguous-polish-copy-or-ui",
+      "kind": "ambiguous",
+      "text": "Polish the pricing page.",
+      "routingExpected": {
+        "triageOnly": true,
+        "acceptableAlternates": [
+          "frontend.visual-design-polish",
+          "frontend.tailwind-ui-polish",
+          "frontend.ux-critique",
+          "frontend.design-to-code"
+        ],
+        "falsePositiveSeverity": "medium"
+      }
+    },
+    {
+      "id": "ambiguous-tailwind-refactor",
+      "kind": "ambiguous",
+      "expectedSkill": "frontend.tailwind-ui-polish",
+      "text": "Refactor these Tailwind classes so the component is easier to maintain.",
+      "routingExpected": {
+        "expectedSkill": "frontend.tailwind-ui-polish"
+      }
+    },
+    {
+      "id": "ambiguous-screenshot-off",
+      "kind": "ambiguous",
+      "expectedSkill": "frontend.visual-design-polish",
+      "text": "This screenshot looks off. Tell me what to change.",
+      "routingExpected": {
+        "expectedSkill": "frontend.visual-design-polish"
+      }
+    },
+    {
+      "id": "ambiguous-shadcn-theme",
+      "kind": "ambiguous",
+      "expectedSkill": "frontend.design-system",
+      "text": "The shadcn theme feels inconsistent with the rest of the app.",
+      "routingExpected": {
+        "expectedSkill": "frontend.design-system"
+      }
+    },
+    {
+      "id": "ambiguous-modal-keyboard",
+      "kind": "ambiguous",
+      "expectedSkill": "frontend.interaction-polish",
+      "text": "The modal feels wrong when I open it from the table row.",
+      "routingExpected": {
+        "expectedSkill": "frontend.interaction-polish"
+      }
+    },
+    {
+      "id": "ambiguous-homepage-redesign",
+      "kind": "ambiguous",
+      "expectedSkill": "frontend.visual-design-polish",
+      "text": "Redesign the homepage but keep the current codebase.",
+      "routingExpected": {
+        "expectedSkill": "frontend.visual-design-polish"
+      }
+    },
+    {
+      "id": "trigger-playwright-timeout-actionability",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.playwright-debug",
+      "text": "A Playwright test times out clicking Save because the button is visible but not receiving events. Use trace evidence to find the overlay or actionability failure.",
+      "routingExpected": {
+        "expectedSkill": "frontend.playwright-debug"
+      }
+    },
+    {
+      "id": "trigger-playwright-auth-storage-state",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.playwright-debug",
+      "text": "CI Playwright specs started failing after login changes. Inspect storage state, auth expiry, traces, and retries before changing assertions.",
+      "routingExpected": {
+        "expectedSkill": "frontend.playwright-debug"
+      }
+    },
+    {
+      "id": "trigger-playwright-network-flake",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.playwright-debug",
+      "text": "A checkout e2e passes when slowed down but flakes on a network response wait. Diagnose the wait strategy using trace, network, and console artifacts.",
+      "routingExpected": {
+        "expectedSkill": "frontend.playwright-debug"
+      }
+    },
+    {
+      "id": "trigger-a11y-combobox-apg",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.accessibility-review",
+      "text": "Review a custom searchable combobox for ARIA APG roles, keyboard behavior, focus movement, labels, and screen reader state.",
+      "routingExpected": {
+        "expectedSkill": "frontend.accessibility-review"
+      }
+    },
+    {
+      "id": "trigger-a11y-dialog-focus-trap",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.accessibility-review",
+      "text": "Audit a modal dialog implementation for focus trap, escape close, return focus, accessible name, inert background, and reduced motion.",
+      "routingExpected": {
+        "expectedSkill": "frontend.accessibility-review"
+      }
+    },
+    {
+      "id": "trigger-a11y-target-size-mobile",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.accessibility-review",
+      "text": "Check mobile controls for WCAG 2.2 target size, focus visibility, contrast, disabled state semantics, and touch affordances.",
+      "routingExpected": {
+        "expectedSkill": "frontend.accessibility-review"
+      }
+    },
+    {
+      "id": "trigger-next-rsc-client-boundary",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.next-app-router-review",
+      "text": "Review a Next.js App Router PR that moved data fetching into a client component and started passing server objects through props.",
+      "routingExpected": {
+        "expectedSkill": "frontend.next-app-router-review"
+      }
+    },
+    {
+      "id": "trigger-next-server-actions-cache",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.next-app-router-review",
+      "text": "Review Server Actions that mutate account settings but leave stale cached route data and unclear pending/error UI.",
+      "routingExpected": {
+        "expectedSkill": "frontend.next-app-router-review"
+      }
+    },
+    {
+      "id": "trigger-next-route-handler-fetch",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.next-app-router-review",
+      "text": "A Next.js Server Component fetches through its own route handler and regressed latency. Review framework data-fetching and cache boundaries.",
+      "routingExpected": {
+        "expectedSkill": "frontend.next-app-router-review"
+      }
+    },
+    {
+      "id": "trigger-performance-lighthouse-lcp",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.performance-review",
+      "text": "Use Lighthouse and browser evidence to diagnose an LCP regression after adding a hero image, web font, and client carousel.",
+      "routingExpected": {
+        "expectedSkill": "frontend.performance-review"
+      }
+    },
+    {
+      "id": "trigger-performance-inp-render",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.performance-review",
+      "text": "The search page has poor INP when filtering large lists. Diagnose render cost, memoization, virtualization, and interaction latency.",
+      "routingExpected": {
+        "expectedSkill": "frontend.performance-review"
+      }
+    },
+    {
+      "id": "trigger-react-controlled-state-api",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.react-component-design",
+      "text": "Redesign a React form component API that mixes controlled and uncontrolled state, render props, and duplicated validation state.",
+      "routingExpected": {
+        "expectedSkill": "frontend.react-component-design"
+      }
+    },
+    {
+      "id": "trigger-testing-playwright-component-mix",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.testing-strategy",
+      "text": "Create a frontend testing strategy for a React app with critical forms, shared components, and one happy-path Playwright flow.",
+      "routingExpected": {
+        "expectedSkill": "frontend.testing-strategy"
+      }
+    },
+    {
+      "id": "trigger-agents-md-frontend-bootstrap",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.agents-md-bootstrap",
+      "text": "Create an AGENTS.md for a frontend repo documenting build/test commands, design conventions, screenshots, accessibility checks, and browser QA expectations.",
+      "routingExpected": {
+        "expectedSkill": "frontend.agents-md-bootstrap"
+      }
+    },
+    {
+      "id": "trigger-design-system-token-migration",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.design-system",
+      "text": "Plan a migration from hard-coded Tailwind colors and spacing to semantic tokens across buttons, cards, forms, and dark mode.",
+      "routingExpected": {
+        "expectedSkill": "frontend.design-system"
+      }
+    },
+    {
+      "id": "trigger-design-to-code-responsive-states",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.design-to-code",
+      "text": "Turn a supplied desktop and mobile design into React components with matching breakpoints, loading states, and existing tokens.",
+      "routingExpected": {
+        "expectedSkill": "frontend.design-to-code"
+      }
+    },
+    {
+      "id": "trigger-interaction-drag-drop-states",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.interaction-polish",
+      "text": "Polish a drag-and-drop list interaction so hover, grab, dragging, drop target, keyboard, and reduced-motion states feel intentional.",
+      "routingExpected": {
+        "expectedSkill": "frontend.interaction-polish"
+      }
+    },
+    {
+      "id": "trigger-ux-critique-empty-onboarding",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.ux-critique",
+      "text": "Critique a first-run onboarding flow with empty dashboard, unclear next step, weak progress feedback, and recovery from skipped setup.",
+      "routingExpected": {
+        "expectedSkill": "frontend.ux-critique"
+      }
+    },
+    {
+      "id": "trigger-visual-editorial-layout",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.visual-design-polish",
+      "text": "Improve an editorial article page so type scale, rhythm, imagery, captions, and related links feel distinctive and readable.",
+      "routingExpected": {
+        "expectedSkill": "frontend.visual-design-polish"
+      }
+    },
+    {
+      "id": "trigger-tailwind-container-query-card",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.tailwind-ui-polish",
+      "text": "Polish a reusable Tailwind card that appears in narrow sidebars and wide grids using container-aware layout, static classes, and state styles.",
+      "routingExpected": {
+        "expectedSkill": "frontend.tailwind-ui-polish"
+      }
+    },
+    {
+      "id": "nontrigger-rust-parser",
+      "kind": "should-not-trigger",
+      "text": "Fix a Rust parser lifetime error and add unit coverage for invalid tokens.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-python-data-pipeline",
+      "kind": "should-not-trigger",
+      "text": "Optimize a Python batch job that normalizes CSV files and writes parquet output.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-go-grpc-timeout",
+      "kind": "should-not-trigger",
+      "text": "Debug a Go gRPC service timeout and add retry/backoff around upstream calls.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-infra-terraform",
+      "kind": "should-not-trigger",
+      "text": "Create Terraform for an S3 bucket, CloudFront distribution, and IAM deploy role.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-db-query-plan",
+      "kind": "should-not-trigger",
+      "text": "Analyze a slow PostgreSQL query plan and add the right covering index.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-security-jwt-rotation",
+      "kind": "should-not-trigger",
+      "text": "Implement backend JWT key rotation and verify old tokens expire correctly.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-docs-api-reference",
+      "kind": "should-not-trigger",
+      "text": "Write API reference docs for a webhook payload and error codes.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-node-streams",
+      "kind": "should-not-trigger",
+      "text": "Fix a Node stream backpressure bug in a file upload service.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-mobile-native-swift",
+      "kind": "should-not-trigger",
+      "text": "Fix a SwiftUI native iOS notification permission flow.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-repo-dependency-upgrade",
+      "kind": "should-not-trigger",
+      "text": "Upgrade workspace dependencies and resolve package manager lockfile conflicts.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "ambiguous-improve-checkout",
+      "kind": "ambiguous",
+      "expectedSkill": "frontend.ux-critique",
+      "text": "Improve checkout so fewer users abandon it.",
+      "routingExpected": {
+        "expectedSkill": "frontend.ux-critique"
+      }
+    },
+    {
+      "id": "ambiguous-dashboard-feels-slow",
+      "kind": "ambiguous",
+      "text": "The dashboard feels slow and cluttered; decide whether this is performance, visual density, or UX flow work.",
+      "routingExpected": {
+        "triageOnly": true,
+        "acceptableAlternates": [
+          "frontend.performance-review",
+          "frontend.visual-design-polish",
+          "frontend.ux-critique"
+        ]
+      }
+    },
+    {
+      "id": "ambiguous-form-feels-broken",
+      "kind": "ambiguous",
+      "expectedSkill": "frontend.accessibility-review",
+      "text": "The form feels broken for keyboard users and the errors are hard to understand.",
+      "routingExpected": {
+        "expectedSkill": "frontend.accessibility-review"
+      }
+    },
+    {
+      "id": "ambiguous-next-page-review",
+      "kind": "ambiguous",
+      "expectedSkill": "frontend.next-app-router-review",
+      "text": "Review this Next.js page change before release.",
+      "routingExpected": {
+        "expectedSkill": "frontend.next-app-router-review"
+      }
+    },
+    {
+      "id": "ambiguous-design-refresh",
+      "kind": "ambiguous",
+      "text": "Give this app a design refresh.",
+      "routingExpected": {
+        "triageOnly": true,
+        "acceptableAlternates": [
+          "frontend.visual-design-polish",
+          "frontend.tailwind-ui-polish",
+          "frontend.ux-critique",
+          "frontend.design-to-code"
+        ],
+        "falsePositiveSeverity": "medium"
+      }
+    },
+    {
+      "id": "ambiguous-tests-are-bad",
+      "kind": "ambiguous",
+      "expectedSkill": "frontend.testing-strategy",
+      "text": "Our frontend tests are bad and miss regressions; decide the smallest useful testing plan.",
+      "routingExpected": {
+        "expectedSkill": "frontend.testing-strategy"
+      }
+    }
+  ],
+  "taskBands": [
+    {
+      "id": "greenfield-ui",
+      "targetCount": 11,
+      "seedTasks": [
+        {
+          "id": "greenfield-crm-first-screen",
+          "prompt": "Build the first screen of a compact CRM dashboard with lead status, filters, and repeated daily-use actions.",
+          "assertions": [
+            {
+              "text": "Primary workflow and content hierarchy are visible in the first viewport without relying on generic dashboard decoration.",
+              "graderType": "human"
+            },
+            {
+              "text": "Dashboard density is compact but readable.",
+              "graderType": "human"
+            },
+            {
+              "text": "Mobile and desktop screenshots show a responsive layout without horizontal scrolling or clipped primary actions.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots",
+                "responsiveMatrix"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "greenfield-library-discovery",
+          "prompt": "Build a manga/anime discovery library first screen with filters, saved items, and quick scanning for returning users.",
+          "assertions": [
+            {
+              "text": "A visual thesis ties manga discovery to subject-specific structure, imagery, type, or content rhythm instead of a generic AI SaaS palette.",
+              "graderType": "human"
+            },
+            {
+              "text": "Cards or rows support long titles and variable metadata.",
+              "graderType": "human"
+            },
+            {
+              "text": "Primary filter and save actions remain reachable in mobile and desktop screenshots.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots",
+                "responsiveMatrix"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "greenfield-design-md-manga-library",
+          "prompt": "Build a manga discovery first screen, but start by creating a compact DESIGN.md-style visual spec. Include theme, color roles, typography roles, component stylings, layout principles, depth model, do/don't guardrails, responsive behavior, and a non-cloning note if using public references.",
+          "assertions": [
+            {
+              "text": "The result includes a DESIGN.md-style source with token roles and positive visual grammar before implementation details.",
+              "graderType": "human"
+            },
+            {
+              "text": "At least two design decisions are specific to manga discovery and could not fit a random analytics SaaS page unchanged.",
+              "graderType": "human"
+            },
+            {
+              "text": "Common app surfaces are covered beyond the hero: primary action, repeated card or row, filters, empty/loading/error state, and mobile layout.",
+              "graderType": "human"
+            },
+            {
+              "text": "Mobile and desktop screenshots or requested artifacts show the visual grammar survives responsive collapse without horizontal scroll or clipped primary actions.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots",
+                "responsiveMatrix"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "greenfield-ops-command-center",
+          "prompt": "Build a logistics operations command center with alerts, map/list alternatives, and status triage.",
+          "assertions": [
+            {
+              "text": "Information hierarchy separates urgent alerts from routine status.",
+              "graderType": "human"
+            },
+            {
+              "text": "Density supports repeated operational use.",
+              "graderType": "human"
+            },
+            {
+              "text": "Color is not the only carrier of severity.",
+              "graderType": "human"
+            }
+          ]
+        },
+        {
+          "id": "greenfield-finance-command-panel",
+          "prompt": "Build a personal finance command panel with spending alerts, budget progress, recurring bills, and quick actions.",
+          "assertions": [
+            {
+              "text": "Financial risk and urgent actions are visually prioritized.",
+              "graderType": "human"
+            },
+            {
+              "text": "Charts and numbers remain readable without relying only on color.",
+              "graderType": "human"
+            },
+            {
+              "text": "Mobile screenshots show no clipped amounts or overlapping controls.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "greenfield-health-appointment-flow",
+          "prompt": "Build a healthcare appointment booking first screen with provider filters, availability, insurance hints, and confirmation affordances.",
+          "assertions": [
+            {
+              "text": "The primary booking path is obvious before secondary content.",
+              "graderType": "human"
+            },
+            {
+              "text": "Privacy-sensitive details are not overexposed in dense cards.",
+              "graderType": "human"
+            },
+            {
+              "text": "Labels, errors, focus order, and WCAG 2.2 AA residual risks are checked for the booking form.",
+              "graderType": "axe",
+              "requiredArtifacts": [
+                "axeJson",
+                "manualA11yChecklist"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "greenfield-creator-studio-dashboard",
+          "prompt": "Build a creator studio dashboard for scheduled posts, performance highlights, content drafts, and publishing warnings.",
+          "assertions": [
+            {
+              "text": "Daily publishing actions are reachable without hunting.",
+              "graderType": "human"
+            },
+            {
+              "text": "Warning and draft states are distinct beyond color.",
+              "graderType": "human"
+            },
+            {
+              "text": "Responsive states preserve scanning across phone and desktop.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "greenfield-ai-review-inbox",
+          "prompt": "Build an AI review inbox for triaging generated suggestions, confidence, diffs, and accept/reject decisions.",
+          "assertions": [
+            {
+              "text": "Trust, risk, and provenance are visible in the main workflow.",
+              "graderType": "human"
+            },
+            {
+              "text": "Bulk and single-item decisions are clearly separated.",
+              "graderType": "human"
+            },
+            {
+              "text": "Dense diff-like content remains scannable at tablet width.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "greenfield-travel-planner",
+          "prompt": "Build a travel planning first screen with itinerary timeline, budget hints, weather risk, and saved alternatives.",
+          "assertions": [
+            {
+              "text": "Timeline and decision state are clear at a glance.",
+              "graderType": "human"
+            },
+            {
+              "text": "Location imagery or styling supports the domain without generic SaaS decoration, blobs, or interchangeable cards.",
+              "graderType": "human"
+            },
+            {
+              "text": "Mobile layout keeps next trip action reachable.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "greenfield-devtools-monitor",
+          "prompt": "Build a developer observability monitor for deploy health, logs, incidents, and rollback action.",
+          "assertions": [
+            {
+              "text": "Incident severity and rollback path are prioritized.",
+              "graderType": "human"
+            },
+            {
+              "text": "Monospace/log content is readable without overwhelming summary cards.",
+              "graderType": "human"
+            },
+            {
+              "text": "Desktop screenshot shows useful density without decorative clutter.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "greenfield-education-progress",
+          "prompt": "Build an education progress dashboard for lessons, practice streaks, weak topics, and next recommended exercise.",
+          "assertions": [
+            {
+              "text": "Motivation elements do not obscure the next learning action.",
+              "graderType": "human"
+            },
+            {
+              "text": "Progress, streak, and weak-topic signals have distinct visual treatment.",
+              "graderType": "human"
+            },
+            {
+              "text": "Progress indicators expose names, values, and non-color-only meaning accessibly.",
+              "graderType": "axe",
+              "requiredArtifacts": [
+                "axeJson",
+                "manualA11yChecklist"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "existing-project-modification",
+      "targetCount": 10,
+      "seedTasks": [
+        {
+          "id": "animebounty-library-filter",
+          "prompt": "In AnimeBounty-Info, improve the library filter UI while preserving existing visual language and route behavior.",
+          "assertions": [
+            {
+              "text": "Existing app conventions are reused.",
+              "graderType": "human"
+            },
+            {
+              "text": "Loading, empty, and error states remain covered.",
+              "graderType": "human"
+            },
+            {
+              "text": "Playwright smoke routes still pass or a targeted command is recommended.",
+              "graderType": "code",
+              "requiredArtifacts": [
+                "playwrightTrace"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "vite-tailwind-settings-polish",
+          "prompt": "In a Vite React Tailwind app, polish a settings page with repeated controls, helper text, and save/cancel actions.",
+          "assertions": [
+            {
+              "text": "Shared form and button conventions are reused.",
+              "graderType": "human"
+            },
+            {
+              "text": "Focus, disabled, dirty, loading, and error states are specified.",
+              "graderType": "human"
+            },
+            {
+              "text": "Before/after screenshots are requested or produced for mobile and desktop, with responsive states called out.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "beforeAfterScreenshots",
+                "responsiveMatrix"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "next-tailwind-dashboard-density",
+          "prompt": "In a Next.js Tailwind dashboard, improve table/filter density without changing data fetching or route behavior.",
+          "assertions": [
+            {
+              "text": "Server/client boundaries are not changed unnecessarily.",
+              "graderType": "human"
+            },
+            {
+              "text": "Table, filter, and action wrapping are checked at narrow widths.",
+              "graderType": "human"
+            },
+            {
+              "text": "Visual hierarchy is improved without decorative card nesting.",
+              "graderType": "human"
+            }
+          ]
+        },
+        {
+          "id": "existing-next-profile-settings",
+          "prompt": "In an existing Next.js App Router profile settings page, improve form layout and pending/error states without moving server-only code into client components.",
+          "assertions": [
+            {
+              "text": "Server/client boundaries are preserved.",
+              "graderType": "human"
+            },
+            {
+              "text": "Pending, success, and error states are visible and accessible.",
+              "graderType": "human"
+            },
+            {
+              "text": "A targeted Next or route smoke command is recommended or run when available, with test layer and CI placement rationale.",
+              "graderType": "code",
+              "requiredArtifacts": [
+                "testLayerPlan"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "existing-shadcn-billing-table",
+          "prompt": "In a shadcn/Tailwind billing table, improve invoice filtering, row actions, and empty states while preserving theme tokens.",
+          "assertions": [
+            {
+              "text": "shadcn theme variables and local component variants are reused.",
+              "graderType": "human"
+            },
+            {
+              "text": "Table actions remain discoverable at narrow widths without horizontal page scroll or clipped controls.",
+              "graderType": "human"
+            },
+            {
+              "text": "Before/after screenshots cover mobile and desktop, including token and state changes.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "beforeAfterScreenshots",
+                "responsiveMatrix"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "existing-react-component-api-cleanup",
+          "prompt": "In an existing React component library, simplify a Badge and StatusPill API with repeated variant logic and unclear disabled states.",
+          "assertions": [
+            {
+              "text": "API changes reduce boolean prop combinations.",
+              "graderType": "human"
+            },
+            {
+              "text": "Existing callsite semantics are preserved or migrated.",
+              "graderType": "human"
+            },
+            {
+              "text": "Targeted component tests or story checks are recommended with layer rationale and state coverage.",
+              "graderType": "code",
+              "requiredArtifacts": [
+                "testLayerPlan"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "existing-vite-marketing-hero",
+          "prompt": "In an existing Vite React marketing page, replace generic hero styling with product-specific hierarchy while keeping the copy and routes; avoid swapping in another fixed model house style.",
+          "assertions": [
+            {
+              "text": "Visual thesis is specific to the product domain, names the generic default it avoids, and accounts for product-specific microcopy.",
+              "graderType": "human"
+            },
+            {
+              "text": "No new unrelated design system is introduced.",
+              "graderType": "human"
+            },
+            {
+              "text": "Before/after screenshots demonstrate hierarchy changes across mobile and desktop.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "beforeAfterScreenshots",
+                "responsiveMatrix"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "existing-a11y-custom-select",
+          "prompt": "In an existing React app, repair a custom select dropdown that fails keyboard navigation and screen reader announcement.",
+          "assertions": [
+            {
+              "text": "APG select/listbox or combobox pattern is named with manual keyboard and screen reader checks separated from automation.",
+              "graderType": "human",
+              "requiredArtifacts": [
+                "manualA11yChecklist"
+              ]
+            },
+            {
+              "text": "Automated accessibility output is captured when tooling exists.",
+              "graderType": "axe",
+              "requiredArtifacts": [
+                "axeJson"
+              ]
+            },
+            {
+              "text": "Keyboard open, navigate, select, escape, blur, focus return, and announcement behavior are covered.",
+              "graderType": "human",
+              "requiredArtifacts": [
+                "manualA11yChecklist"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "existing-performance-search-page",
+          "prompt": "In an existing search page, improve perceived responsiveness of filtering without changing API contracts.",
+          "assertions": [
+            {
+              "text": "Render cost and interaction latency are addressed separately, including INP risk or equivalent interaction evidence.",
+              "graderType": "human",
+              "requiredArtifacts": [
+                "webVitalsReport"
+              ]
+            },
+            {
+              "text": "Performance evidence is requested when browser tooling exists, naming Web Vitals, trace, or bundle evidence used.",
+              "graderType": "lighthouse",
+              "requiredArtifacts": [
+                "lighthouseReport",
+                "webVitalsReport"
+              ]
+            },
+            {
+              "text": "Loading, empty, and partial-result states remain coherent.",
+              "graderType": "human"
+            }
+          ]
+        },
+        {
+          "id": "existing-agents-md-frontend",
+          "prompt": "Add frontend-specific AGENTS.md guidance to an existing repo with React, Tailwind, Playwright, and screenshots.",
+          "assertions": [
+            {
+              "text": "Commands are concrete and repo-local.",
+              "graderType": "human"
+            },
+            {
+              "text": "Design, accessibility, and browser QA expectations are captured.",
+              "graderType": "human"
+            },
+            {
+              "text": "No fabricated commands or absent tooling are documented.",
+              "graderType": "human"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repair",
+      "targetCount": 10,
+      "seedTasks": [
+        {
+          "id": "mobile-overlap-action-bar",
+          "prompt": "Fix a mobile overlap where a sticky action bar covers the final form fields and submit button.",
+          "assertions": [
+            {
+              "text": "No content is obscured at 320px and 390px widths.",
+              "graderType": "human"
+            },
+            {
+              "text": "Keyboard focus can reach the final fields and submit button.",
+              "graderType": "human"
+            },
+            {
+              "text": "No page-level horizontal scroll is introduced.",
+              "graderType": "human"
+            }
+          ]
+        },
+        {
+          "id": "long-copy-breaks-card-grid",
+          "prompt": "Repair a Tailwind card grid where long titles, badges, and CTAs overflow or resize cards unpredictably.",
+          "assertions": [
+            {
+              "text": "Long words and translated text fit or truncate intentionally.",
+              "graderType": "human"
+            },
+            {
+              "text": "Hover/focus states do not shift layout.",
+              "graderType": "human"
+            },
+            {
+              "text": "Grid columns and card dimensions remain stable across breakpoints.",
+              "graderType": "human"
+            }
+          ]
+        },
+        {
+          "id": "contrast-regression-dark-mode",
+          "prompt": "Fix a dark-mode Tailwind regression where muted text, borders, and focus rings have insufficient contrast.",
+          "assertions": [
+            {
+              "text": "Text, icon, border, focus, and non-text contrast are checked separately against WCAG 2.2 AA expectations.",
+              "graderType": "axe",
+              "requiredArtifacts": [
+                "axeJson",
+                "manualA11yChecklist"
+              ]
+            },
+            {
+              "text": "Semantic tokens are preferred over one-off colors.",
+              "graderType": "human"
+            },
+            {
+              "text": "Reduced motion and keyboard focus remain intact and are listed as manual residual checks when not automated.",
+              "graderType": "human",
+              "requiredArtifacts": [
+                "manualA11yChecklist"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "playwright-click-obscured",
+          "prompt": "Repair a Playwright test failing because a sticky header intermittently obscures the target button.",
+          "assertions": [
+            {
+              "text": "Trace/actionability evidence identifies the obscuring element.",
+              "graderType": "code",
+              "requiredArtifacts": [
+                "playwrightTrace"
+              ]
+            },
+            {
+              "text": "Fix targets app behavior or locator specificity instead of blind force clicks.",
+              "graderType": "human"
+            },
+            {
+              "text": "Retry/flaky status is considered before changing assertions.",
+              "graderType": "code"
+            }
+          ]
+        },
+        {
+          "id": "dialog-focus-escape-regression",
+          "prompt": "Repair a dialog where focus escapes behind the modal and Escape does not close consistently.",
+          "assertions": [
+            {
+              "text": "Focus trap, return focus, Escape behavior, and background inertness are fixed together.",
+              "graderType": "human",
+              "requiredArtifacts": [
+                "manualA11yChecklist"
+              ]
+            },
+            {
+              "text": "Dialog name/role/value checks are covered by automation plus manual residual-risk notes.",
+              "graderType": "axe",
+              "requiredArtifacts": [
+                "axeJson",
+                "manualA11yChecklist"
+              ]
+            },
+            {
+              "text": "Reduced motion and background inertness are considered.",
+              "graderType": "human"
+            }
+          ]
+        },
+        {
+          "id": "next-stale-settings-after-action",
+          "prompt": "Repair a Next.js settings page where a Server Action saves data but the UI continues showing stale cached values.",
+          "assertions": [
+            {
+              "text": "Mutation, cache invalidation, and refresh behavior are tied to the route contract.",
+              "graderType": "human"
+            },
+            {
+              "text": "Pending and error UI remain accessible.",
+              "graderType": "human"
+            },
+            {
+              "text": "No client-side secret or server-only import leak is introduced.",
+              "graderType": "code"
+            }
+          ]
+        },
+        {
+          "id": "tailwind-dynamic-class-missing",
+          "prompt": "Repair a Tailwind component where dynamic class names cause production styles to disappear.",
+          "assertions": [
+            {
+              "text": "Dynamic class construction is replaced with static class maps.",
+              "graderType": "human"
+            },
+            {
+              "text": "Variant behavior remains explicit and maintainable.",
+              "graderType": "human"
+            },
+            {
+              "text": "Affected states are checked visually after the fix across the relevant responsive matrix.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots",
+                "responsiveMatrix"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "image-lcp-regression",
+          "prompt": "Repair an LCP regression caused by a new hero image and font combination.",
+          "assertions": [
+            {
+              "text": "LCP evidence identifies image, font, render-blocking, or client-script root cause against Web Vitals targets.",
+              "graderType": "lighthouse",
+              "requiredArtifacts": [
+                "lighthouseReport",
+                "webVitalsReport"
+              ]
+            },
+            {
+              "text": "Fix avoids merely hiding the hero content.",
+              "graderType": "human"
+            },
+            {
+              "text": "Responsive image behavior, dimensions, priority, and layout shift risk remain correct.",
+              "graderType": "human",
+              "requiredArtifacts": [
+                "responsiveMatrix"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "form-error-announcement",
+          "prompt": "Repair a form whose validation errors appear visually but are not announced or associated with fields.",
+          "assertions": [
+            {
+              "text": "Errors are programmatically associated with fields and announced in a recoverable flow.",
+              "graderType": "human",
+              "requiredArtifacts": [
+                "manualA11yChecklist"
+              ]
+            },
+            {
+              "text": "Automated checks cover labels and descriptions where possible.",
+              "graderType": "axe",
+              "requiredArtifacts": [
+                "axeJson"
+              ]
+            },
+            {
+              "text": "Focus movement after submit is intentional and manual residual risks are reported separately from axe output.",
+              "graderType": "human",
+              "requiredArtifacts": [
+                "manualA11yChecklist"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "responsive-table-overflow",
+          "prompt": "Repair a responsive data table where columns overflow and row actions become unreachable on mobile.",
+          "assertions": [
+            {
+              "text": "Narrow viewport screenshots show no horizontal page scroll.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots"
+              ]
+            },
+            {
+              "text": "Critical row actions remain reachable.",
+              "graderType": "human"
+            },
+            {
+              "text": "Column hiding, stacking, or scrolling tradeoff is explicit.",
+              "graderType": "human"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "polish",
+      "targetCount": 10,
+      "seedTasks": [
+        {
+          "id": "generic-landing-page-polish",
+          "prompt": "Improve a generic landing page so the visual direction is specific to the product and no longer reads as a stock AI layout or a default cream/serif/terracotta page.",
+          "assertions": [
+            {
+              "text": "A subject-specific visual thesis is stated, including audience, hierarchy, density, type/color roles, and one generic default that was rejected.",
+              "graderType": "human"
+            },
+            {
+              "text": "At least one generic decorative pattern is removed or replaced with a subject-specific signature move.",
+              "graderType": "human"
+            },
+            {
+              "text": "Browser screenshots show typography, spacing, and hierarchy changes at mobile and desktop widths.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "beforeAfterScreenshots",
+                "responsiveMatrix"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "tailwind-before-after-screenshot-review",
+          "prompt": "Review before/after screenshots of a Tailwind UI polish pass and decide whether the changes improved usability.",
+          "assertions": [
+            {
+              "text": "Findings reference visible evidence from screenshots.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "beforeAfterScreenshots"
+              ]
+            },
+            {
+              "text": "Decoration-only changes are separated from hierarchy or usability gains.",
+              "graderType": "human"
+            },
+            {
+              "text": "Remaining risks include at least mobile, desktop, keyboard, and loading/empty states.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots",
+                "responsiveMatrix"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "interaction-state-final-pass",
+          "prompt": "Do a final visual QA pass on a modal, menu, and toast interaction set before release.",
+          "assertions": [
+            {
+              "text": "Open, close, hover, focus, active, disabled, loading, and error states are covered by keyboard and pointer checks.",
+              "graderType": "human"
+            },
+            {
+              "text": "Motion has a functional purpose and respects reduced motion.",
+              "graderType": "human",
+              "requiredArtifacts": [
+                "screenshots",
+                "manualInteractionChecklist"
+              ]
+            },
+            {
+              "text": "Verification includes screenshot or browser checks for the relevant interaction states.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "beforeAfterScreenshots",
+                "responsiveMatrix"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "playwright-flake-final-review",
+          "prompt": "Review a Playwright flake fix and decide whether it addresses the root cause or just increases timeouts.",
+          "assertions": [
+            {
+              "text": "Trace, retry, console, or network evidence is referenced.",
+              "graderType": "code",
+              "requiredArtifacts": [
+                "playwrightTrace"
+              ]
+            },
+            {
+              "text": "Timeout increases are rejected unless evidence justifies them.",
+              "graderType": "human"
+            },
+            {
+              "text": "Locator uniqueness and actionability are checked.",
+              "graderType": "human"
+            }
+          ]
+        },
+        {
+          "id": "accessibility-release-audit",
+          "prompt": "Do a release accessibility audit for a form-heavy page with custom controls, dialogs, and dark mode.",
+          "assertions": [
+            {
+              "text": "Axe output or equivalent automated check is included when tooling exists.",
+              "graderType": "axe",
+              "requiredArtifacts": [
+                "axeJson",
+                "manualA11yChecklist"
+              ]
+            },
+            {
+              "text": "Manual keyboard, APG, screen reader announcement, reflow, and reduced-motion checks are listed separately from automation.",
+              "graderType": "human",
+              "requiredArtifacts": [
+                "manualA11yChecklist"
+              ]
+            },
+            {
+              "text": "WCAG 2.2 AA risks are prioritized by user impact.",
+              "graderType": "human"
+            }
+          ]
+        },
+        {
+          "id": "next-pr-final-review",
+          "prompt": "Do a final review of a Next.js App Router PR touching layouts, metadata, route handlers, and a Server Action.",
+          "assertions": [
+            {
+              "text": "Framework-specific risks are separated from visual or accessibility concerns.",
+              "graderType": "human"
+            },
+            {
+              "text": "Cache and revalidation behavior is explicitly reviewed.",
+              "graderType": "human"
+            },
+            {
+              "text": "Server/client boundary and serializable props are checked.",
+              "graderType": "code"
+            }
+          ]
+        },
+        {
+          "id": "tailwind-design-system-final-pass",
+          "prompt": "Do a final Tailwind polish pass on buttons, cards, forms, and badges after a token migration.",
+          "assertions": [
+            {
+              "text": "Semantic tokens and component variants are used consistently without flattening deliberate product character.",
+              "graderType": "human"
+            },
+            {
+              "text": "Before/after screenshots cover representative states across mobile and desktop.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "beforeAfterScreenshots",
+                "responsiveMatrix"
+              ]
+            },
+            {
+              "text": "One-off arbitrary values are justified or removed.",
+              "graderType": "human"
+            }
+          ]
+        },
+        {
+          "id": "performance-before-after-review",
+          "prompt": "Review before/after performance artifacts for a frontend optimization and decide whether UX actually improved.",
+          "assertions": [
+            {
+              "text": "Lighthouse or equivalent reports are compared with Web Vitals and budget deltas called out.",
+              "graderType": "lighthouse",
+              "requiredArtifacts": [
+                "lighthouseReport",
+                "webVitalsReport"
+              ]
+            },
+            {
+              "text": "Metric changes are tied to user-visible behavior and labeled as measured or risk-based.",
+              "graderType": "human",
+              "requiredArtifacts": [
+                "webVitalsReport"
+              ]
+            },
+            {
+              "text": "Regressions in accessibility or visual stability are checked, including CLS and a11y residual risk.",
+              "graderType": "human",
+              "requiredArtifacts": [
+                "manualA11yChecklist"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "design-system-boundary-review",
+          "prompt": "Review whether a visual refresh should become design-system tokens/components or stay local to the page.",
+          "assertions": [
+            {
+              "text": "Token/component extraction is justified by reuse.",
+              "graderType": "human"
+            },
+            {
+              "text": "Local one-off styling is allowed when reuse is not proven.",
+              "graderType": "human"
+            },
+            {
+              "text": "Migration risk and callsites are considered.",
+              "graderType": "human"
+            }
+          ]
+        },
+        {
+          "id": "ux-critique-post-implementation",
+          "prompt": "Critique an implemented onboarding redesign and identify remaining friction before release.",
+          "assertions": [
+            {
+              "text": "Findings reference actual user task flow, not only aesthetics.",
+              "graderType": "human"
+            },
+            {
+              "text": "Empty, error, and recovery paths are included.",
+              "graderType": "human"
+            },
+            {
+              "text": "Screenshots or browser observations support visual claims.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "utilityWeights": {
+      "functionalCorrectness": 0.2,
+      "visualQa": 0.14,
+      "accessibility": 0.13,
+      "performance": 0.09,
+      "projectFit": 0.1,
+      "reviewQuality": 0.08,
+      "costEfficiency": 0.06,
+      "contentDesign": 0.06,
+      "tokenDiscipline": 0.05,
+      "screenshotEvidence": 0.05,
+      "responsiveCoverage": 0.04
+    },
+    "promotionGates": {
+      "minimumTriggerRecall": 0.85,
+      "minimumTriggerPrecision": 0.9,
+      "minimumNoSkillDelta": 10,
+      "minimumOldSkillDelta": 5,
+      "maximumCategoryRegression": 3,
+      "minimumBlindPreferenceShare": 0.6,
+      "criticalFailurePolicy": "No increase in critical build, runtime, or accessibility failures."
+    }
+  },
+  "artifactContract": {
+    "screenshots": [
+      "390x844",
+      "768x1024",
+      "1440x900"
+    ],
+    "requiredMetadata": [
+      "skillId",
+      "skillVersion",
+      "skillChecksum",
+      "model",
+      "fixture",
+      "command",
+      "durationMs"
+    ],
+    "optionalArtifacts": [
+      "playwrightTrace",
+      "axeJson",
+      "lighthouseReport",
+      "bundleOutput",
+      "beforeAfterScreenshots",
+      "responsiveMatrix",
+      "visualComparison",
+      "manualInteractionChecklist",
+      "manualA11yChecklist",
+      "webVitalsReport",
+      "testLayerPlan"
+    ]
+  }
+}

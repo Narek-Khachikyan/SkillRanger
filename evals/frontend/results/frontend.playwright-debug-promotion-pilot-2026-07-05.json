@@ -1,0 +1,151 @@
+{
+  "skillId": "frontend.playwright-debug",
+  "skillVersion": "0.1.0",
+  "benchmarkVersion": "frontend-skill-quality-v1",
+  "statusRecommendation": "real-project-smoke",
+  "score": 0.9,
+  "createdAt": "2026-07-05T20:45:46Z",
+  "updatedAt": "2026-07-05T21:20:31Z",
+  "commands": [
+    {
+      "cwd": "/Users/narek_khachikyan/Desktop/PersonalProjects/SkillRanger",
+      "command": "node src/cli/index.ts eval:frontend --json",
+      "result": "pass",
+      "summary": "ok=true; issues=[]; triggerPrompts.total=80; taskEvals.seedTasks=40; bands=greenfield-ui, existing-project-modification, repair, polish."
+    },
+    {
+      "cwd": "/Users/narek_khachikyan/Desktop/PersonalProjects/SkillRanger",
+      "command": "node --test tests/frontend-eval.test.ts",
+      "result": "pass",
+      "summary": "5 tests passed; 0 failed."
+    },
+    {
+      "cwd": "/Users/narek_khachikyan/Desktop/PersonalProjects/SkillRanger",
+      "command": "node --test tests/registry.validation.test.ts",
+      "result": "pass",
+      "summary": "14 tests passed; 0 failed."
+    },
+    {
+      "cwd": "/Users/narek_khachikyan/Desktop/PersonalProjects/SkillRanger",
+      "command": "npm run validate:registry",
+      "result": "pass",
+      "summary": "Registry valid: 13 skills."
+    },
+    {
+      "cwd": "/Users/narek_khachikyan/Desktop/PersonalProjects/SkillRanger",
+      "command": "node src/cli/index.ts scan /Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info --json",
+      "result": "pass",
+      "summary": "AnimeBounty-Info detected as frontend Vite React JavaScript app with Tailwind, Playwright testing, npm package manager, and existing AGENTS.md."
+    },
+    {
+      "cwd": "/Users/narek_khachikyan/Desktop/PersonalProjects/SkillRanger",
+      "command": "node src/cli/index.ts install frontend.playwright-debug --project /Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info --target codex --scope repo --dry-run",
+      "result": "pass",
+      "summary": "Dry-run only; planned scoped writes to .agents/skills/playwright-debug/SKILL.md, .agents/skills/playwright-debug/skill.manifest.json, and skillranger.lock.json; warnings=[]."
+    },
+    {
+      "cwd": "/Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info",
+      "command": "npm run pwa:e2e -- e2e/user-library.spec.js --trace on",
+      "result": "blocked",
+      "summary": "Initial run before dependency install failed before test execution: Cannot find package '@playwright/test' imported from playwright.config.js."
+    },
+    {
+      "cwd": "/Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info",
+      "command": "npm ci",
+      "result": "pass",
+      "summary": "Installed 511 packages from package-lock.json. Reported 9 audit findings and allow-scripts warnings; no npm audit fix or script approval was run."
+    },
+    {
+      "cwd": "/Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info",
+      "command": "npm run build",
+      "result": "pass",
+      "summary": "Vite production build completed and generated dist/ for the Playwright preview web server."
+    },
+    {
+      "cwd": "/Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info",
+      "command": "npm run pwa:e2e -- e2e/user-library.spec.js --trace on",
+      "result": "fail",
+      "summary": "Real Playwright run executed 1 Chromium test and failed with Test timeout of 60000ms exceeded."
+    },
+    {
+      "cwd": "/Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info",
+      "command": "npx playwright test e2e/user-library.spec.js --trace on --output test-results --reporter=html,line",
+      "result": "fail",
+      "summary": "Real Playwright rerun executed 1 Chromium test, failed with Test timeout of 60000ms exceeded, and generated playwright-report/index.html. No test-results directory or trace zip was present after the run."
+    },
+    {
+      "cwd": "/Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info",
+      "command": "npx playwright test e2e/a11y-smoke.spec.js -g \"skip link\" --trace=on --output=test-results-artifacts --reporter=html,line",
+      "result": "pass",
+      "summary": "Targeted passing smoke executed 1 Chromium test and generated a retained trace.zip plus HTML report data."
+    },
+    {
+      "cwd": "/Users/narek_khachikyan/Desktop/PersonalProjects/SkillRanger",
+      "command": "80-prompt frontend.playwright-debug trigger precision/recall benchmark via suite.json + recommendSkills on AnimeBounty-Info fingerprint",
+      "result": "pass",
+      "summary": "frontend.playwright-debug trigger recall=1.000 and precision=1.000 across suite.json prompts: TP=4, FN=0, FP=0, TN=76. Full all-skill routing across the same single Vite project was 60/80, with Next/agent-context prompts limited by fixture mismatch."
+    }
+  ],
+  "routingChecks": [
+    {
+      "prompt": "Playwright test fails: page.getByRole('button', { name: 'Save' }).click() times out in CI, need trace/screenshot artifact diagnosis",
+      "expected": "frontend.playwright-debug",
+      "actual": "frontend.playwright-debug",
+      "score": 0.679,
+      "passed": true
+    },
+    {
+      "prompt": "Optimize backend database migration and API cache invalidation for a Node service",
+      "expected": "no frontend skill",
+      "actual": "none",
+      "passed": true,
+      "notes": "Checked against AnimeBounty-Info after routing specificity fix; recommendations=[]."
+    },
+    {
+      "prompt": "Make the landing page more visually polished and distinctive on mobile",
+      "expected": "not frontend.playwright-debug",
+      "actual": "frontend.tailwind-ui-polish",
+      "score": 0.734,
+      "passed": true,
+      "notes": "After routing specificity fix, design-lane skills rank above frontend.playwright-debug on AnimeBounty-Info for vague visual/design intent."
+    }
+  ],
+  "installDryRun": {
+    "safeAndScoped": true,
+    "plannedWrites": [
+      "/Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info/.agents/skills/playwright-debug/SKILL.md",
+      "/Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info/.agents/skills/playwright-debug/skill.manifest.json"
+    ],
+    "plannedLockfileUpdates": [
+      "/Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info/skillranger.lock.json"
+    ],
+    "warnings": []
+  },
+  "playwrightWorkflow": {
+    "project": "/Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info",
+    "packageManager": "npm",
+    "config": "playwright.config.js",
+    "script": "pwa:e2e",
+    "targetSpec": "e2e/user-library.spec.js",
+    "result": "fail",
+    "rootCauseClass": "unknown",
+    "summary": "Targeted Playwright workflow executed against the real AnimeBounty-Info project after npm ci and npm run build. The user-library spec failed with a whole-test 60000ms timeout. Captured output did not include a locator/actionability stack, and no trace zip was found."
+  },
+  "artifactPaths": [
+    "/Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info/playwright-report/index.html",
+    "/Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info/playwright-report/data/c20a82a52e6943cc27e2123ccc329d61959eef8c.zip",
+    "/Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info/test-results-artifacts/a11y-smoke-Accessibility-S-8a7f5--and-activates-main-content-chromium/trace.zip"
+  ],
+  "notes": [
+    "Baseline suite and registry checks passed before edits.",
+    "Dry-run install is safe and repo-scoped.",
+    "Routing specificity was fixed and verified: Playwright failure intent routes to frontend.playwright-debug; backend-only intent returns no frontend recommendations; vague visual/design intent ranks design skills above frontend.playwright-debug.",
+    "A real Playwright workflow ran on AnimeBounty-Info and generated an HTML report artifact, supporting real-project-smoke but not curated by itself.",
+    "A separate targeted passing Playwright smoke confirmed trace.zip capture with explicit --trace=on and --output=test-results-artifacts.",
+    "frontend.playwright-debug trigger precision/recall now passes the suite thresholds, but this is still not a full task-eval/pairwise run."
+  ],
+  "blockers": [
+    "No implemented runner exists in this repo for full task-eval execution, no-skill/old-skill deltas, pairwise comparison, or blind human/LLM preference judging across the 40 task seeds.",
+    "Curated promotion requires minimumBlindPreferenceShare and task delta evidence; those gates were not executed and must not be fabricated."
+  ]
+}

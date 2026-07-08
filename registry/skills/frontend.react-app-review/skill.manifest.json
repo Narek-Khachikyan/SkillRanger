@@ -1,0 +1,98 @@
+{
+  "id": "frontend.react-app-review",
+  "name": "react-app-review",
+  "displayName": "React App Review",
+  "description": "Review React app changes for state ownership, effects, data flow, routing integration, rendering boundaries, component composition, accessibility handoffs, and maintainability.",
+  "stackTags": [
+    "frontend",
+    "web-app",
+    "react",
+    "typescript"
+  ],
+  "taskTags": [
+    "code-review",
+    "react",
+    "state-management",
+    "data-flow",
+    "maintainability"
+  ],
+  "supportedAgents": [
+    "codex",
+    "generic-agent-skills"
+  ],
+  "source": {
+    "type": "curated",
+    "registry": "local",
+    "path": "./registry/skills/frontend.react-app-review"
+  },
+  "version": "0.1.0",
+  "riskLevel": "low",
+  "permissions": {
+    "filesystem": [
+      "read-project"
+    ],
+    "network": false,
+    "shell": false,
+    "writes": []
+  },
+  "scripts": [],
+  "dependencies": [],
+  "qualityScore": 0.85,
+  "securityScore": 0.96,
+  "quality": {
+    "rubricVersion": "1.0",
+    "scores": {
+      "usefulness": 0.88,
+      "triggerSpecificity": 0.86,
+      "progressiveDisclosure": 0.84,
+      "safety": 0.96,
+      "verifiability": 0.84,
+      "maintainability": 0.86,
+      "portability": 0.82
+    }
+  },
+  "freshness": {
+    "lastReviewedAt": "2026-07-06",
+    "targetFrameworkVersions": {
+      "react": "18-19"
+    }
+  },
+  "installTargets": [
+    "repo",
+    "user"
+  ],
+  "compatibility": {
+    "codex": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "codex"
+    },
+    "generic-agent-skills": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "generic-agent-skills"
+    }
+  },
+  "conflictsWith": [],
+  "supersedes": [
+    "frontend.next-react-review"
+  ],
+  "maintainer": {
+    "name": "local-curated",
+    "trustTier": "curated"
+  },
+  "license": "MIT",
+  "routing": {
+    "lane": "implementation",
+    "category": "react-app-review"
+  },
+  "evaluation": {
+    "status": "none",
+    "benchmarkVersion": "frontend-skill-quality-v1",
+    "evidenceUri": "evals/frontend/suite.json"
+  }
+}

@@ -1,0 +1,40 @@
+export type JsonObject = Record<string, unknown>;
+
+export type McpToolDefinition = {
+  name: string;
+  title: string;
+  description: string;
+  inputSchema: JsonObject;
+};
+
+export type McpToolResult = {
+  content: Array<{
+    type: "text";
+    text: string;
+  }>;
+  structuredContent: unknown;
+  isError: boolean;
+};
+
+export type McpToolErrorCode =
+  | "audit-blocked"
+  | "confirmation-required"
+  | "invalid-arguments"
+  | "skill-not-found"
+  | "stale-plan"
+  | "unsupported-target"
+  | "unknown-tool";
+
+export class McpToolError extends Error {
+  code: McpToolErrorCode;
+  details?: JsonObject;
+
+  constructor(code: McpToolErrorCode, message: string, details?: JsonObject) {
+    super(message);
+    this.name = "McpToolError";
+    this.code = code;
+    this.details = details;
+  }
+}
+
+export type McpToolHandler = (args: JsonObject) => Promise<McpToolResult>;

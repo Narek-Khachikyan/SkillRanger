@@ -1,0 +1,99 @@
+{
+  "id": "frontend.testing-strategy",
+  "name": "testing-strategy",
+  "displayName": "Frontend Testing Strategy",
+  "description": "Plan and review frontend testing strategy across unit, integration, component, end-to-end, accessibility, and regression coverage.",
+  "stackTags": [
+    "frontend",
+    "web-app",
+    "react",
+    "typescript",
+    "testing"
+  ],
+  "taskTags": [
+    "testing",
+    "test-strategy",
+    "qa",
+    "code-review",
+    "accessibility"
+  ],
+  "supportedAgents": [
+    "codex",
+    "generic-agent-skills"
+  ],
+  "source": {
+    "type": "curated",
+    "registry": "local",
+    "path": "./registry/skills/frontend.testing-strategy"
+  },
+  "version": "0.1.0",
+  "riskLevel": "low",
+  "permissions": {
+    "filesystem": [
+      "read-project"
+    ],
+    "network": false,
+    "shell": false,
+    "writes": []
+  },
+  "scripts": [],
+  "dependencies": [],
+  "qualityScore": 0.84,
+  "securityScore": 0.95,
+  "quality": {
+    "rubricVersion": "1.0",
+    "scores": {
+      "usefulness": 0.86,
+      "triggerSpecificity": 0.84,
+      "progressiveDisclosure": 0.82,
+      "safety": 0.96,
+      "verifiability": 0.86,
+      "maintainability": 0.84,
+      "portability": 0.82
+    }
+  },
+  "freshness": {
+    "lastReviewedAt": "2026-07-01",
+    "targetFrameworkVersions": {
+      "react": "18-19",
+      "playwright": "1.40-1.53",
+      "vitest": "1-3"
+    }
+  },
+  "installTargets": [
+    "repo",
+    "user"
+  ],
+  "compatibility": {
+    "codex": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "codex"
+    },
+    "generic-agent-skills": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "generic-agent-skills"
+    }
+  },
+  "conflictsWith": [],
+  "supersedes": [],
+  "maintainer": {
+    "name": "local-curated",
+    "trustTier": "curated"
+  },
+  "license": "MIT",
+  "routing": {
+    "lane": "qa",
+    "category": "testing-strategy"
+  },
+  "evaluation": {
+    "status": "none",
+    "benchmarkVersion": "frontend-skill-quality-v1",
+    "evidenceUri": "evals/frontend/suite.json"
+  }
+}

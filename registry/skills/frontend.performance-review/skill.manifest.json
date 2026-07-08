@@ -1,0 +1,97 @@
+{
+  "id": "frontend.performance-review",
+  "name": "performance-review",
+  "displayName": "Frontend Performance Review",
+  "description": "Review frontend web app performance for rendering cost, bundle size, data loading, image delivery, caching, and Core Web Vitals risk.",
+  "stackTags": [
+    "frontend",
+    "web-app",
+    "react",
+    "typescript",
+    "performance"
+  ],
+  "taskTags": [
+    "performance",
+    "code-review",
+    "bundle-analysis",
+    "core-web-vitals"
+  ],
+  "supportedAgents": [
+    "codex",
+    "generic-agent-skills"
+  ],
+  "source": {
+    "type": "curated",
+    "registry": "local",
+    "path": "./registry/skills/frontend.performance-review"
+  },
+  "version": "0.1.0",
+  "riskLevel": "low",
+  "permissions": {
+    "filesystem": [
+      "read-project"
+    ],
+    "network": false,
+    "shell": false,
+    "writes": []
+  },
+  "scripts": [],
+  "dependencies": [],
+  "qualityScore": 0.83,
+  "securityScore": 0.96,
+  "quality": {
+    "rubricVersion": "1.0",
+    "scores": {
+      "usefulness": 0.86,
+      "triggerSpecificity": 0.84,
+      "progressiveDisclosure": 0.82,
+      "safety": 0.96,
+      "verifiability": 0.84,
+      "maintainability": 0.82,
+      "portability": 0.8
+    }
+  },
+  "freshness": {
+    "lastReviewedAt": "2026-07-01",
+    "targetFrameworkVersions": {
+      "nextjs": "14-15",
+      "react": "18-19"
+    }
+  },
+  "installTargets": [
+    "repo",
+    "user"
+  ],
+  "compatibility": {
+    "codex": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "codex"
+    },
+    "generic-agent-skills": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "generic-agent-skills"
+    }
+  },
+  "conflictsWith": [],
+  "supersedes": [],
+  "maintainer": {
+    "name": "local-curated",
+    "trustTier": "curated"
+  },
+  "license": "MIT",
+  "routing": {
+    "lane": "implementation",
+    "category": "performance-review"
+  },
+  "evaluation": {
+    "status": "none",
+    "benchmarkVersion": "frontend-skill-quality-v1",
+    "evidenceUri": "evals/frontend/suite.json"
+  }
+}

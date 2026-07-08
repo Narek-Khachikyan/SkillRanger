@@ -1,0 +1,59 @@
+{
+  "name": "skillranger",
+  "version": "0.1.0",
+  "description": "SkillRanger is a local-first router and package manager for AI agent skills.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "bin": {
+    "skillranger": "./dist/cli/index.js",
+    "skillranger-mcp": "./dist/mcp/server.js"
+  },
+  "files": [
+    "dist/",
+    "src/",
+    "registry/skills/",
+    "schemas/",
+    "evals/",
+    "docs/",
+    "README.md",
+    "RELEASE.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "scan": "node src/cli/index.ts scan",
+    "recommend": "node src/cli/index.ts recommend",
+    "validate:registry": "node src/cli/index.ts validate:registry",
+    "lint:skills": "node src/cli/index.ts lint:skills",
+    "audit:registry": "node src/cli/index.ts audit:registry",
+    "publish:check": "node src/cli/index.ts publish:check",
+    "eval:frontend": "node src/cli/index.ts eval:frontend",
+    "mcp": "node src/mcp/server.ts",
+    "test": "node --test tests/*.test.ts",
+    "check": "node --check src/cli/index.ts && node --check src/paths.ts && node --check src/evals/frontend.ts && node --check src/mcp/server.ts && node --check src/mcp/protocol.ts && node --check src/mcp/tools.ts && node --check src/mcp/tools/types.ts && node --check src/mcp/tools/utils.ts && node --check src/mcp/tools/project.ts && node --check src/mcp/tools/registry.ts && node --check src/mcp/tools/install.ts"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "agent-skills",
+    "skills",
+    "mcp",
+    "cli",
+    "codex",
+    "local-first",
+    "registry",
+    "audit"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "packageManager": "pnpm@11.7.0",
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "typescript": "^6.0.3"
+  }
+}

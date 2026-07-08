@@ -1,0 +1,98 @@
+{
+  "id": "frontend.playwright-debug",
+  "name": "playwright-debug",
+  "displayName": "Playwright Debug",
+  "description": "Diagnose Playwright end-to-end failures using traces, artifacts, actionability logs, locator audits, route-aware waits, retries, CI checks, and fixture isolation.",
+  "stackTags": [
+    "frontend",
+    "web-app",
+    "react",
+    "playwright",
+    "testing"
+  ],
+  "taskTags": [
+    "debugging",
+    "e2e-testing",
+    "testing",
+    "qa"
+  ],
+  "supportedAgents": [
+    "codex",
+    "generic-agent-skills"
+  ],
+  "source": {
+    "type": "curated",
+    "registry": "local",
+    "path": "./registry/skills/frontend.playwright-debug"
+  },
+  "version": "0.1.0",
+  "riskLevel": "low",
+  "permissions": {
+    "filesystem": [
+      "read-project"
+    ],
+    "network": false,
+    "shell": false,
+    "writes": []
+  },
+  "scripts": [],
+  "dependencies": [],
+  "qualityScore": 0.89,
+  "securityScore": 0.94,
+  "quality": {
+    "rubricVersion": "1.0",
+    "scores": {
+      "usefulness": 0.92,
+      "triggerSpecificity": 0.91,
+      "progressiveDisclosure": 0.88,
+      "safety": 0.94,
+      "verifiability": 0.91,
+      "maintainability": 0.86,
+      "portability": 0.85
+    }
+  },
+  "freshness": {
+    "lastReviewedAt": "2026-07-05",
+    "targetFrameworkVersions": {
+      "playwright": "1.40-1.53"
+    }
+  },
+  "installTargets": [
+    "repo",
+    "user"
+  ],
+  "compatibility": {
+    "codex": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "codex"
+    },
+    "generic-agent-skills": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "generic-agent-skills"
+    }
+  },
+  "conflictsWith": [],
+  "supersedes": [],
+  "maintainer": {
+    "name": "local-curated",
+    "trustTier": "curated"
+  },
+  "license": "MIT",
+  "routing": {
+    "lane": "qa",
+    "category": "playwright-debug"
+  },
+  "evaluation": {
+    "status": "real-project-smoke",
+    "lastRunAt": "2026-07-05T21:20:31Z",
+    "benchmarkVersion": "frontend-skill-quality-v1",
+    "evidenceUri": "evals/frontend/results/frontend.playwright-debug-promotion-pilot-2026-07-05.json",
+    "score": 0.9
+  }
+}

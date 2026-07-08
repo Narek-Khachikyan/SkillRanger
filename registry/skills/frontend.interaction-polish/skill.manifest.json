@@ -1,0 +1,98 @@
+{
+  "id": "frontend.interaction-polish",
+  "name": "interaction-polish",
+  "displayName": "Interaction Polish",
+  "description": "Refine frontend interaction states, motion, microinteractions, loading feedback, focus behavior, menus, modals, drawers, toasts, and perceived responsiveness.",
+  "stackTags": [
+    "frontend",
+    "web-app",
+    "react",
+    "typescript",
+    "tailwind"
+  ],
+  "taskTags": [
+    "interaction-polish",
+    "motion",
+    "state-styling",
+    "accessibility",
+    "ui-quality"
+  ],
+  "supportedAgents": [
+    "codex",
+    "generic-agent-skills"
+  ],
+  "source": {
+    "type": "curated",
+    "registry": "local",
+    "path": "./registry/skills/frontend.interaction-polish"
+  },
+  "version": "0.1.0",
+  "riskLevel": "low",
+  "permissions": {
+    "filesystem": [
+      "read-project"
+    ],
+    "network": false,
+    "shell": false,
+    "writes": []
+  },
+  "scripts": [],
+  "dependencies": [],
+  "qualityScore": 0.85,
+  "securityScore": 0.95,
+  "quality": {
+    "rubricVersion": "1.0",
+    "scores": {
+      "usefulness": 0.88,
+      "triggerSpecificity": 0.87,
+      "progressiveDisclosure": 0.84,
+      "safety": 0.95,
+      "verifiability": 0.86,
+      "maintainability": 0.83,
+      "portability": 0.82
+    }
+  },
+  "freshness": {
+    "lastReviewedAt": "2026-07-07",
+    "targetFrameworkVersions": {
+      "tailwindcss": "3-4",
+      "react": "18-19"
+    }
+  },
+  "installTargets": [
+    "repo",
+    "user"
+  ],
+  "compatibility": {
+    "codex": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "codex"
+    },
+    "generic-agent-skills": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "generic-agent-skills"
+    }
+  },
+  "conflictsWith": [],
+  "supersedes": [],
+  "maintainer": {
+    "name": "local-curated",
+    "trustTier": "curated"
+  },
+  "license": "MIT",
+  "routing": {
+    "lane": "design",
+    "category": "interaction-polish"
+  },
+  "evaluation": {
+    "status": "none",
+    "benchmarkVersion": "frontend-skill-quality-v1",
+    "evidenceUri": "evals/frontend/suite.json"
+  }
+}

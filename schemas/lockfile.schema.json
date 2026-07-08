@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/schemas/lockfile.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "installed"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "installed": {
+      "type": "array",
+      "description": "Runtime validation also enforces uniqueness across skillId, targetAgent and scope.",
+      "items": {
+        "type": "object",
+        "required": ["skillId", "version", "checksum", "targetAgent", "scope", "installedPath", "source", "audit"],
+        "additionalProperties": false,
+        "properties": {
+          "skillId": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]*$"
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          },
+          "checksum": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "targetAgent": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]*$"
+          },
+          "scope": {
+            "enum": ["repo", "user"]
+          },
+          "installedPath": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          },
+          "source": {
+            "type": "object",
+            "required": ["type", "registry", "path"],
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "registry": {
+                "type": "string",
+                "minLength": 1
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+              }
+            }
+          },
+          "audit": {
+            "type": "object",
+            "required": ["riskLevel", "securityScore", "findings"],
+            "additionalProperties": false,
+            "properties": {
+              "riskLevel": {
+                "enum": ["low", "medium", "high", "block"]
+              },
+              "securityScore": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "findings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["severity", "code", "message"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "severity": {
+                      "enum": ["low", "medium", "high", "block"]
+                    },
+                    "code": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "path": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

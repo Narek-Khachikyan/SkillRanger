@@ -1,0 +1,92 @@
+{
+  "id": "frontend.accessibility-review",
+  "name": "accessibility-review",
+  "displayName": "Accessibility Review",
+  "description": "Review frontend changes for semantic HTML, keyboard behavior, focus management, forms, landmarks, color contrast, and screen reader usability.",
+  "stackTags": [
+    "frontend",
+    "web-app",
+    "react",
+    "typescript"
+  ],
+  "taskTags": [
+    "accessibility",
+    "code-review",
+    "ui-quality",
+    "forms"
+  ],
+  "supportedAgents": [
+    "codex",
+    "generic-agent-skills"
+  ],
+  "source": {
+    "type": "curated",
+    "registry": "local",
+    "path": "./registry/skills/frontend.accessibility-review"
+  },
+  "version": "0.1.0",
+  "riskLevel": "low",
+  "permissions": {
+    "filesystem": [
+      "read-project"
+    ],
+    "network": false,
+    "shell": false,
+    "writes": []
+  },
+  "scripts": [],
+  "dependencies": [],
+  "qualityScore": 0.84,
+  "securityScore": 0.96,
+  "quality": {
+    "rubricVersion": "1.0",
+    "scores": {
+      "usefulness": 0.88,
+      "triggerSpecificity": 0.88,
+      "progressiveDisclosure": 0.82,
+      "safety": 0.96,
+      "verifiability": 0.84,
+      "maintainability": 0.82,
+      "portability": 0.8
+    }
+  },
+  "freshness": {
+    "lastReviewedAt": "2026-07-01"
+  },
+  "installTargets": [
+    "repo",
+    "user"
+  ],
+  "compatibility": {
+    "codex": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "codex"
+    },
+    "generic-agent-skills": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "generic-agent-skills"
+    }
+  },
+  "conflictsWith": [],
+  "supersedes": [],
+  "maintainer": {
+    "name": "local-curated",
+    "trustTier": "curated"
+  },
+  "license": "MIT",
+  "routing": {
+    "lane": "qa",
+    "category": "accessibility-review"
+  },
+  "evaluation": {
+    "status": "none",
+    "benchmarkVersion": "frontend-skill-quality-v1",
+    "evidenceUri": "evals/frontend/suite.json"
+  }
+}

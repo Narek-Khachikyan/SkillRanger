@@ -1,0 +1,95 @@
+{
+  "id": "frontend.tailwind-ui-polish",
+  "name": "tailwind-ui-polish",
+  "displayName": "Tailwind UI Polish",
+  "description": "Improve Tailwind-based UI through screenshot-driven visual QA, responsive layout repair, spacing, density, typography, state styling, accessibility checks, token consistency, and subject-specific design polish.",
+  "stackTags": [
+    "frontend",
+    "react",
+    "typescript",
+    "tailwind"
+  ],
+  "taskTags": [
+    "ui-quality",
+    "design-system",
+    "responsive-design",
+    "styling"
+  ],
+  "supportedAgents": [
+    "codex",
+    "generic-agent-skills"
+  ],
+  "source": {
+    "type": "curated",
+    "registry": "local",
+    "path": "./registry/skills/frontend.tailwind-ui-polish"
+  },
+  "version": "0.2.0",
+  "riskLevel": "low",
+  "permissions": {
+    "filesystem": [
+      "read-project"
+    ],
+    "network": false,
+    "shell": false,
+    "writes": []
+  },
+  "scripts": [],
+  "dependencies": [],
+  "qualityScore": 0.87,
+  "securityScore": 0.96,
+  "quality": {
+    "rubricVersion": "1.0",
+    "scores": {
+      "usefulness": 0.9,
+      "triggerSpecificity": 0.88,
+      "progressiveDisclosure": 0.87,
+      "safety": 0.96,
+      "verifiability": 0.89,
+      "maintainability": 0.84,
+      "portability": 0.82
+    }
+  },
+  "freshness": {
+    "lastReviewedAt": "2026-07-07",
+    "targetFrameworkVersions": {
+      "tailwindcss": "3-4"
+    }
+  },
+  "installTargets": [
+    "repo",
+    "user"
+  ],
+  "compatibility": {
+    "codex": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "codex"
+    },
+    "generic-agent-skills": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "generic-agent-skills"
+    }
+  },
+  "conflictsWith": [],
+  "supersedes": [],
+  "maintainer": {
+    "name": "local-curated",
+    "trustTier": "curated"
+  },
+  "license": "MIT",
+  "routing": {
+    "lane": "design",
+    "category": "tailwind-ui-polish"
+  },
+  "evaluation": {
+    "status": "none",
+    "benchmarkVersion": "frontend-skill-quality-v1",
+    "evidenceUri": "evals/frontend/suite.json"
+  }
+}

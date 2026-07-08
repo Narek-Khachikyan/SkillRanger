@@ -1,0 +1,17 @@
+{
+  "name": "fixture-backend-node",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "express": "5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.0",
+    "tsx": "4.19.0",
+    "typescript": "5.8.0",
+    "vitest": "3.2.0"
+  }
+}
