@@ -98,6 +98,37 @@ export type FrontendTaskEvidenceReport = {
   };
 };
 
+export type FrontendPairwiseReview = {
+  schemaVersion: "1.0";
+  suiteName: string;
+  candidateUnderTestLabel: "A" | "B";
+  comparisons: Array<{
+    comparisonId: string;
+    taskId: string;
+    labels: ["A", "B"];
+    winner: "A" | "B" | "tie" | "abstain";
+    reviewer: {
+      kind: "human";
+      id: string;
+    };
+  }>;
+};
+
+export type FrontendPairwiseReviewReport = {
+  issues: string[];
+  metrics: {
+    expectedTasks: number;
+    reviewedTasks: number;
+    decisiveComparisons: number;
+    candidateWins: number;
+    candidateLosses: number;
+    ties: number;
+    abstains: number;
+    candidatePreferenceShare: number;
+    promotionReady: boolean;
+  };
+};
+
 export type FrontendEvalSummary = {
   name: string;
   triggerPrompts: {
@@ -199,6 +230,11 @@ export const loadFrontendTaskEvidence = async (
   evidencePath: string,
 ): Promise<FrontendTaskEvidence> =>
   JSON.parse(await readFile(evidencePath, "utf8")) as FrontendTaskEvidence;
+
+export const loadFrontendPairwiseReview = async (
+  reviewPath: string,
+): Promise<FrontendPairwiseReview> =>
+  JSON.parse(await readFile(reviewPath, "utf8")) as FrontendPairwiseReview;
 
 export const validateFrontendEvalSuite = (suite: FrontendEvalSuite) => {
   const issues: string[] = [];
@@ -431,6 +467,87 @@ export const validateFrontendTaskEvidence = (
       failedAssertions,
       unassessedAssertions,
       promotionReady: issues.length === 0 && failedAssertions === 0 && unassessedAssertions === 0,
+    },
+  };
+};
+
+export const validateFrontendPairwiseReview = (
+  suite: FrontendEvalSuite,
+  review: FrontendPairwiseReview,
+): FrontendPairwiseReviewReport => {
+  const issues: string[] = [];
+  const taskIds = new Set((suite.taskBands ?? []).flatMap((band) => band.seedTasks ?? []).map((task) => task.id));
+  const reviewedTaskIds = new Set<string>();
+  const comparisonIds = new Set<string>();
+  let candidateWins = 0;
+  let candidateLosses = 0;
+  let ties = 0;
+  let abstains = 0;
+
+  if (review.schemaVersion !== "1.0") issues.push("pairwise review schemaVersion must be 1.0");
+  if (review.suiteName !== suite.name) issues.push(`pairwise review suiteName must equal ${suite.name}`);
+  if (!["A", "B"].includes(review.candidateUnderTestLabel)) {
+    issues.push("pairwise review candidateUnderTestLabel must be A or B");
+  }
+  if (!Array.isArray(review.comparisons)) issues.push("pairwise review comparisons must be an array");
+
+  for (const comparison of Array.isArray(review.comparisons) ? review.comparisons : []) {
+    if (!comparison.comparisonId?.trim()) issues.push("pairwise review comparisonId is required");
+    if (comparisonIds.has(comparison.comparisonId)) {
+      issues.push(`duplicate pairwise review comparisonId: ${comparison.comparisonId}`);
+    }
+    comparisonIds.add(comparison.comparisonId);
+    if (!taskIds.has(comparison.taskId)) {
+      issues.push(`pairwise review references unknown task: ${comparison.taskId}`);
+      continue;
+    }
+    if (reviewedTaskIds.has(comparison.taskId)) {
+      issues.push(`duplicate pairwise review taskId: ${comparison.taskId}`);
+    }
+    reviewedTaskIds.add(comparison.taskId);
+    if (!Array.isArray(comparison.labels) || comparison.labels.length !== 2 || comparison.labels[0] !== "A" || comparison.labels[1] !== "B") {
+      issues.push(`pairwise review ${comparison.taskId} labels must be blinded A and B`);
+    }
+    if (!["A", "B", "tie", "abstain"].includes(comparison.winner)) {
+      issues.push(`pairwise review ${comparison.taskId} winner is invalid`);
+      continue;
+    }
+    if (comparison.reviewer?.kind !== "human") {
+      issues.push(`pairwise review ${comparison.taskId} reviewer must be human`);
+    }
+    if (!comparison.reviewer?.id?.trim()) {
+      issues.push(`pairwise review ${comparison.taskId} reviewer id is required`);
+    }
+
+    if (comparison.winner === "tie") ties += 1;
+    else if (comparison.winner === "abstain") abstains += 1;
+    else if (comparison.winner === review.candidateUnderTestLabel) candidateWins += 1;
+    else candidateLosses += 1;
+  }
+
+  for (const taskId of taskIds) {
+    if (!reviewedTaskIds.has(taskId)) issues.push(`pairwise review is missing task: ${taskId}`);
+  }
+
+  const decisiveComparisons = candidateWins + candidateLosses;
+  const candidatePreferenceShare = roundedRate(candidateWins, decisiveComparisons);
+  const configuredGate = suite.scoring?.promotionGates.minimumBlindPreferenceShare;
+  const minimumBlindPreferenceShare = typeof configuredGate === "number" ? configuredGate : 1;
+  return {
+    issues,
+    metrics: {
+      expectedTasks: taskIds.size,
+      reviewedTasks: reviewedTaskIds.size,
+      decisiveComparisons,
+      candidateWins,
+      candidateLosses,
+      ties,
+      abstains,
+      candidatePreferenceShare,
+      promotionReady:
+        issues.length === 0 &&
+        decisiveComparisons > 0 &&
+        candidatePreferenceShare >= minimumBlindPreferenceShare,
     },
   };
 };

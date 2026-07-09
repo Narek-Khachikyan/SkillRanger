@@ -129,7 +129,7 @@ Design-lane boundaries are part of routing quality: `frontend.visual-design-poli
 
 ## Eval Set
 
-Use `evals/frontend/suite.json` as the frozen coverage target before increasing `qualityScore`: 87 trigger prompts and 42 task eval seeds across greenfield UI, existing-project modification, repair, and polish. Run it against repeatable fixtures before claiming benchmark-backed quality:
+Use `evals/frontend/suite.json` as the frozen coverage target before increasing `qualityScore`: 87 trigger prompts and 49 task eval seeds across greenfield UI, existing-project modification, repair, and polish. Run it against repeatable fixtures before claiming benchmark-backed quality:
 
 - `fixtures/next-react-ts`: Next.js, React, TypeScript, Tailwind, Playwright.
 - `fixtures/vite-react-ts`: Vite, React, TypeScript, existing `AGENTS.md`.
@@ -152,7 +152,18 @@ node src/cli/index.ts eval:frontend --run-routing --project fixtures/next-react-
 
 This scans the target project once, routes each `triggerPrompts` entry through `recommendSkills(..., { userIntent: prompt.text })`, and compares the top frontend recommendation against `routingExpected`. Prompts without `routingExpected` and without legacy `expectedSkill` are skipped. `shouldNotTrigger` passes only when no frontend recommendation is returned; `expectedSkill` requires an exact top-skill match unless `acceptableAlternates` are present; `triageOnly` accepts any listed alternate.
 
-Routing eval is necessary but not sufficient. It catches scoring and trigger regressions, but it does not run an agent, browser, screenshots, task artifacts, no-skill/old-skill deltas, pairwise comparison, or blind preference judging. Those remain the next task-eval gate before `curated` promotion.
+Routing eval is necessary but not sufficient. It catches scoring and trigger regressions, but it does not run an agent or browser, calculate no-skill/old-skill deltas, or create human judgments. Those remain required before `curated` promotion.
+
+The repo validates two promotion artifacts after an external run:
+
+```bash
+node src/cli/index.ts eval:frontend --suite evals/frontend/suite.json --verify-task-evidence results/task-evidence.json --json
+node src/cli/index.ts eval:frontend --suite evals/frontend/suite.json --verify-pairwise-review results/pairwise-review.json --json
+```
+
+Task evidence requires one run for every seed task, its skill id/version/checksum, model, fixture, command, duration, asserted outcome, and every required artifact named by that task. A failed or unassessed assertion blocks the evidence promotion gate. Pairwise review requires a human reviewer, complete task coverage, opaque `A`/`B` labels instead of skill names, and a candidate preference share meeting `minimumBlindPreferenceShare`; it intentionally rejects `llm_judge`.
+
+When scan detects React outside 18–19 or Tailwind outside 3–4, it emits a conservative version-drift warning. Keep the skill unpromoted until an evidence run verifies that project version.
 
 Promotion evidence is tracked in manifest `evaluation` metadata:
 
@@ -167,8 +178,8 @@ Do not increase `qualityScore` from prose review alone; derive it from the froze
 
 The `frontend.playwright-debug` promotion pilot is recorded at `evals/frontend/results/frontend.playwright-debug-promotion-pilot-2026-07-05.json`.
 
-`frontend.playwright-debug` remains at `evaluation.status: real-project-smoke`. Its historical pilot used the former 80-prompt/40-task suite and is not promotion evidence for the current frozen 87-prompt/42-task suite.
+`frontend.playwright-debug` remains at `evaluation.status: real-project-smoke`. Its historical pilot used the former 80-prompt/40-task suite and is not promotion evidence for the current frozen 87-prompt/49-task suite.
 
-Do not promote to `curated` yet. The repo validates the 42 task seeds but does not implement a runner for full task-eval execution, no-skill/old-skill deltas, pairwise comparison, or blind preference judging. Those gates are required by `minimumBlindPreferenceShare` and must not be inferred from routing or smoke artifacts.
+Do not promote to `curated` yet. The repo validates the 49 task seeds plus traceable evidence and blinded human-review manifests, but does not execute agents or calculate no-skill/old-skill deltas. Those gates must not be inferred from routing or smoke artifacts.
 
-Next step: implement or wire a full frontend task-eval/pairwise runner that executes the 42 task seeds against no-skill, old-skill, and current-skill baselines, stores comparable artifacts, and records blind preference results before any curated decision.
+Next step: wire a task runner for a user-provided real project that executes the 49 task seeds against no-skill, old-skill, and current-skill baselines, then feeds its artifacts into these validators before any curated decision.

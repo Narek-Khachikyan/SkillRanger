@@ -7,11 +7,13 @@ import path from "node:path";
 import { promisify } from "node:util";
 import {
   type FrontendEvalSuite,
+  type FrontendPairwiseReview,
   loadFrontendEvalSuite,
   type FrontendTaskEvidence,
   runFrontendRoutingEval,
   scoreSkillUtility,
   summarizeFrontendEvalSuite,
+  validateFrontendPairwiseReview,
   validateFrontendTaskEvidence,
   validateFrontendEvalSuite,
 } from "../src/evals/frontend.ts";
@@ -57,7 +59,7 @@ test("frontend eval suite validates and summarizes seed coverage", async () => {
   assert.equal(summary.triggerPrompts.total, summary.triggerPrompts.target);
   assert.equal(summary.triggerPrompts.target, 87);
   assert.equal(summary.taskEvals.seedTasks, summary.taskEvals.target);
-  assert.equal(summary.taskEvals.target, 42);
+  assert.equal(summary.taskEvals.target, 49);
   assert.equal(
     summary.triggerPrompts.shouldTrigger + summary.triggerPrompts.shouldNotTrigger + summary.triggerPrompts.ambiguous,
     summary.triggerPrompts.total,
@@ -296,6 +298,45 @@ test("frontend task evidence requires traceable metadata, task coverage, and ass
   assert.equal(invalid.metrics.unassessedAssertions, 1);
 });
 
+test("frontend pairwise review requires blinded human coverage before promotion", () => {
+  const suite = routingSuite([]);
+  suite.scoring.promotionGates.minimumBlindPreferenceShare = 0.6;
+  const review: FrontendPairwiseReview = {
+    schemaVersion: "1.0",
+    suiteName: suite.name,
+    candidateUnderTestLabel: "A",
+    comparisons: [
+      {
+        comparisonId: "routing-smoke-task-v1",
+        taskId: "routing-smoke-task",
+        labels: ["A", "B"],
+        winner: "A",
+        reviewer: { kind: "human", id: "reviewer-1" },
+      },
+    ],
+  };
+
+  assert.deepEqual(validateFrontendPairwiseReview(suite, review), {
+    issues: [],
+    metrics: {
+      expectedTasks: 1,
+      reviewedTasks: 1,
+      decisiveComparisons: 1,
+      candidateWins: 1,
+      candidateLosses: 0,
+      ties: 0,
+      abstains: 0,
+      candidatePreferenceShare: 1,
+      promotionReady: true,
+    },
+  });
+
+  review.comparisons[0]!.reviewer.kind = "llm_judge" as "human";
+  const invalid = validateFrontendPairwiseReview(suite, review);
+  assert.ok(invalid.issues.includes("pairwise review routing-smoke-task reviewer must be human"));
+  assert.equal(invalid.metrics.promotionReady, false);
+});
+
 test("frontend eval skill utility score applies configured weights", async () => {
   const suite = await loadFrontendEvalSuite();
   const score = scoreSkillUtility(
@@ -386,7 +427,7 @@ test("eval:frontend CLI reports suite summary as JSON", async () => {
   assert.equal(report.ok, true);
   assert.deepEqual(report.issues, []);
   assert.equal(report.summary.triggerPrompts.target, 87);
-  assert.equal(report.summary.taskEvals.target, 42);
+  assert.equal(report.summary.taskEvals.target, 49);
   assert.equal("routingEval" in report, false);
 });
 
@@ -480,6 +521,48 @@ test("eval:frontend verifies complete task evidence as a promotion gate", async 
   assert.equal(report.ok, true);
   assert.equal(report.taskEvidence.metrics.promotionReady, true);
   assert.equal(report.taskEvidence.metrics.passedAssertions, 1);
+});
+
+test("eval:frontend verifies a blinded human pairwise review", async () => {
+  const suite = routingSuite([]);
+  suite.scoring.promotionGates.minimumBlindPreferenceShare = 0.6;
+  const review: FrontendPairwiseReview = {
+    schemaVersion: "1.0",
+    suiteName: suite.name,
+    candidateUnderTestLabel: "A",
+    comparisons: [
+      {
+        comparisonId: "routing-smoke-task-v1",
+        taskId: "routing-smoke-task",
+        labels: ["A", "B"],
+        winner: "A",
+        reviewer: { kind: "human", id: "reviewer-1" },
+      },
+    ],
+  };
+  const dir = await mkdtemp(path.join(tmpdir(), "skillranger-frontend-eval-"));
+  const suitePath = path.join(dir, "suite.json");
+  const reviewPath = path.join(dir, "pairwise-review.json");
+  await writeFile(suitePath, JSON.stringify(suite), "utf8");
+  await writeFile(reviewPath, JSON.stringify(review), "utf8");
+
+  const { stdout } = await execFileAsync("node", [
+    "src/cli/index.ts",
+    "eval:frontend",
+    "--suite",
+    suitePath,
+    "--verify-pairwise-review",
+    reviewPath,
+    "--json",
+  ]);
+  const report = JSON.parse(stdout) as {
+    ok: boolean;
+    pairwiseReview: { metrics: { promotionReady: boolean; candidatePreferenceShare: number } };
+  };
+
+  assert.equal(report.ok, true);
+  assert.equal(report.pairwiseReview.metrics.promotionReady, true);
+  assert.equal(report.pairwiseReview.metrics.candidatePreferenceShare, 1);
 });
 
 test("eval:frontend exits non-zero when routing evaluation fails", async () => {

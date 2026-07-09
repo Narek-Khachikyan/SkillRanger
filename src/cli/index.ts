@@ -10,9 +10,11 @@ import { detectInstalledAgents, getAdapter } from "../installers/codex.ts";
 import { readLockfile } from "../lockfile/index.ts";
 import {
   loadFrontendEvalSuite,
+  loadFrontendPairwiseReview,
   loadFrontendTaskEvidence,
   runFrontendRoutingEval,
   summarizeFrontendEvalSuite,
+  validateFrontendPairwiseReview,
   validateFrontendTaskEvidence,
   validateFrontendEvalSuite,
 } from "../evals/frontend.ts";
@@ -108,6 +110,7 @@ const printHelp = () => {
   skillranger eval:frontend [--suite <path>] [--json]
   skillranger eval:frontend --run-routing --project <path> [--target codex] [--suite <path>] [--json]
   skillranger eval:frontend --verify-task-evidence <path> [--suite <path>] [--json]
+  skillranger eval:frontend --verify-pairwise-review <path> [--suite <path>] [--json]
   skillranger install <skill-id> --project <path> [--target codex|claude-code|opencode|cursor|gemini-cli] [--scope repo|user] [--copy] [--dry-run] [--yes]
   skillranger installed [project] [--project <path>] [--json]
   skillranger mcp
@@ -727,10 +730,16 @@ const run = async () => {
     const taskEvidencePath = typeof args.flags["verify-task-evidence"] === "string"
       ? path.resolve(args.flags["verify-task-evidence"])
       : undefined;
+    const pairwiseReviewPath = typeof args.flags["verify-pairwise-review"] === "string"
+      ? path.resolve(args.flags["verify-pairwise-review"])
+      : undefined;
     const targetAgent = asString(args.flags.target, "codex");
     if (runRouting && !projectRoot) throw new Error("--project is required with --run-routing.");
     if (args.flags["verify-task-evidence"] === true) {
       throw new Error("--verify-task-evidence requires a JSON evidence path.");
+    }
+    if (args.flags["verify-pairwise-review"] === true) {
+      throw new Error("--verify-pairwise-review requires a JSON review path.");
     }
     const routingEval = runRouting && projectRoot
       ? await runFrontendRoutingEval(suite, { projectRoot, targetAgent })
@@ -738,15 +747,20 @@ const run = async () => {
     const taskEvidence = taskEvidencePath
       ? validateFrontendTaskEvidence(suite, await loadFrontendTaskEvidence(taskEvidencePath))
       : undefined;
+    const pairwiseReview = pairwiseReviewPath
+      ? validateFrontendPairwiseReview(suite, await loadFrontendPairwiseReview(pairwiseReviewPath))
+      : undefined;
     const report = {
       ok:
         issues.length === 0 &&
         (!routingEval || routingEval.failures.length === 0) &&
-        (!taskEvidence || taskEvidence.metrics.promotionReady),
+        (!taskEvidence || taskEvidence.metrics.promotionReady) &&
+        (!pairwiseReview || pairwiseReview.metrics.promotionReady),
       issues,
       summary: summarizeFrontendEvalSuite(suite),
       ...(routingEval ? { routingEval } : {}),
       ...(taskEvidence ? { taskEvidence } : {}),
+      ...(pairwiseReview ? { pairwiseReview } : {}),
     };
     if (args.flags.json) {
       printJson(report);
@@ -769,6 +783,11 @@ const run = async () => {
         console.log(`Task-evidence promotion gate: ${taskEvidence.metrics.promotionReady ? "ready" : "blocked"}`);
         for (const issue of taskEvidence.issues) console.log(`Task evidence issue: ${issue}`);
       }
+      if (pairwiseReview) {
+        console.log(`Pairwise review: ${pairwiseReview.metrics.reviewedTasks}/${pairwiseReview.metrics.expectedTasks} tasks; candidate preference ${pairwiseReview.metrics.candidatePreferenceShare.toFixed(3)}`);
+        console.log(`Pairwise promotion gate: ${pairwiseReview.metrics.promotionReady ? "ready" : "blocked"}`);
+        for (const issue of pairwiseReview.issues) console.log(`Pairwise review issue: ${issue}`);
+      }
       if (issues.length > 0) {
         for (const issue of issues) console.log(`Issue: ${issue}`);
       }
@@ -779,6 +798,9 @@ const run = async () => {
     }
     if (taskEvidence && !taskEvidence.metrics.promotionReady) {
       throw new Error("Frontend task evidence promotion gate failed.");
+    }
+    if (pairwiseReview && !pairwiseReview.metrics.promotionReady) {
+      throw new Error("Frontend pairwise review promotion gate failed.");
     }
     return;
   }

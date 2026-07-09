@@ -71,6 +71,12 @@ const dependencyEvidence = (pkg: PackageJson | undefined, name: string) => {
   return evidence;
 };
 
+const dependencyMajorVersion = (pkg: PackageJson | undefined, name: string) => {
+  const version = dependencyVersion(pkg, name);
+  const match = version?.match(/\d+/);
+  return match ? Number(match[0]) : undefined;
+};
+
 const scanFiles = async (root: string, maxFiles = 500): Promise<string[]> => {
   const found: string[] = [];
   const ignored = new Set(["node_modules", ".git", ".next", "dist", "coverage"]);
@@ -155,6 +161,15 @@ export const scanProject = async (projectRoot: string): Promise<ProjectFingerpri
   if (dependencyVersion(pkg, "tailwindcss") || (await hasAnyFile(root, ["tailwind.config.js", "tailwind.config.ts", "postcss.config.js", "postcss.config.mjs"])).length) {
     styling.push(signal("tailwindcss", 0.88, [...dependencyEvidence(pkg, "tailwindcss"), ...(await hasAnyFile(root, ["tailwind.config.js", "tailwind.config.ts"]))]));
     tags.add("tailwind");
+  }
+
+  const reactMajor = dependencyMajorVersion(pkg, "react");
+  if (reactMajor !== undefined && (reactMajor < 18 || reactMajor > 19)) {
+    warnings.push(`React ${reactMajor} is outside the maintained frontend-skill range (18-19); use conservative fallbacks and do not promote without verification.`);
+  }
+  const tailwindMajor = dependencyMajorVersion(pkg, "tailwindcss");
+  if (tailwindMajor !== undefined && (tailwindMajor < 3 || tailwindMajor > 4)) {
+    warnings.push(`Tailwind CSS ${tailwindMajor} is outside the maintained frontend-skill range (3-4); use conservative fallbacks and do not promote without verification.`);
   }
 
   for (const [name, type, confidence] of [

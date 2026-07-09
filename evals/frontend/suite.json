@@ -3,7 +3,7 @@
   "name": "frontend-skill-quality-v1",
   "targetCounts": {
     "triggerPrompts": 87,
-    "taskEvals": 42
+    "taskEvals": 49
   },
   "triggerPrompts": [
     {
@@ -811,7 +811,7 @@
   "taskBands": [
     {
       "id": "greenfield-ui",
-      "targetCount": 11,
+      "targetCount": 13,
       "seedTasks": [
         {
           "id": "greenfield-crm-first-screen",
@@ -1049,12 +1049,56 @@
               ]
             }
           ]
+        },
+        {
+          "id": "greenfield-niche-domain-uncertainty",
+          "prompt": "Design the first screen of a maritime incident-triage tool. The product brief is intentionally sparse: do not invent nautical workflows, terminology, or artifacts that are not supported by the supplied project evidence.",
+          "assertions": [
+            {
+              "text": "Observed evidence, inferences, and assumptions are separated before the visual thesis.",
+              "graderType": "human"
+            },
+            {
+              "text": "The direction uses neutral, task-supporting structure where domain facts are unknown instead of fabricated specifics.",
+              "graderType": "human"
+            },
+            {
+              "text": "Mobile and desktop evidence demonstrates actionable triage hierarchy without overflow.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots",
+                "responsiveMatrix"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "greenfield-single-reference-fidelity",
+          "prompt": "Implement a React pricing screen from one supplied Figma-style reference. Preserve local components and tokens; do not clone a possible third-party brand or claim pixel fidelity for unspecified fonts, assets, or responsive states.",
+          "assertions": [
+            {
+              "text": "The reference is classified and its missing measurements, assets, and states are recorded as fidelity limits.",
+              "graderType": "human"
+            },
+            {
+              "text": "Local substitutes alter multiple identity axes when the reference could be a third-party brand.",
+              "graderType": "human"
+            },
+            {
+              "text": "Rendered evidence covers desktop and mobile rather than treating one reference as a complete responsive blueprint.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots",
+                "responsiveMatrix"
+              ]
+            }
+          ]
         }
       ]
     },
     {
       "id": "existing-project-modification",
-      "targetCount": 10,
+      "targetCount": 12,
       "seedTasks": [
         {
           "id": "animebounty-library-filter",
@@ -1272,12 +1316,56 @@
               "graderType": "human"
             }
           ]
+        },
+        {
+          "id": "existing-stale-generic-design-md",
+          "prompt": "Polish an existing admin screen. Its DESIGN.md says to use a generic warm-cream serif and terracotta direction, but the current product is a dense operational tool with neutral tokens and no matching surfaces.",
+          "assertions": [
+            {
+              "text": "The existing DESIGN.md is health-checked against current UI evidence and the mismatch is stated.",
+              "graderType": "human"
+            },
+            {
+              "text": "A compact correction is proposed for approval instead of silently following or replacing the document.",
+              "graderType": "human"
+            },
+            {
+              "text": "The implemented direction is verified against the established operational screen at mobile and desktop widths.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots",
+                "beforeAfterScreenshots"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "existing-tailwind-without-shadcn",
+          "prompt": "Polish a Tailwind React application that has local CSS variables and custom primitives but no shadcn setup. Improve inconsistent settings-page states without introducing a shadcn dependency or replacing its design language.",
+          "assertions": [
+            {
+              "text": "The project archetype is identified before proposing token or component changes.",
+              "graderType": "code"
+            },
+            {
+              "text": "Recommendations use the existing CSS variables and local primitives rather than assuming shadcn token names.",
+              "graderType": "code"
+            },
+            {
+              "text": "Screenshots cover the changed settings states at mobile and desktop widths.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots",
+                "responsiveMatrix"
+              ]
+            }
+          ]
         }
       ]
     },
     {
       "id": "repair",
-      "targetCount": 10,
+      "targetCount": 11,
       "seedTasks": [
         {
           "id": "mobile-overlap-action-bar",
@@ -1498,12 +1586,34 @@
               "graderType": "human"
             }
           ]
+        },
+        {
+          "id": "cli-only-material-redesign",
+          "prompt": "In a CLI-only host with no browser, screenshot, or Playwright capability, materially redesign a checkout screen and mark it ready to ship.",
+          "assertions": [
+            {
+              "text": "The material visual implementation is blocked rather than declared complete without rendered evidence.",
+              "graderType": "human"
+            },
+            {
+              "text": "The result distinguishes blocked analysis from any explicitly requested implemented-unverified change.",
+              "graderType": "human"
+            },
+            {
+              "text": "A manual mobile and desktop QA checklist names viewport, focus, overflow, action reachability, and state checks.",
+              "graderType": "human",
+              "requiredArtifacts": [
+                "manualA11yChecklist",
+                "responsiveMatrix"
+              ]
+            }
+          ]
         }
       ]
     },
     {
       "id": "polish",
-      "targetCount": 11,
+      "targetCount": 13,
       "seedTasks": [
         {
           "id": "generic-landing-page-polish",
@@ -1751,6 +1861,50 @@
             {
               "text": "Release blockers and missing evidence are separated from non-blocking polish recommendations.",
               "graderType": "human"
+            }
+          ]
+        },
+        {
+          "id": "long-context-final-corrective-gate",
+          "prompt": "After a long implementation conversation, finish a material visual polish of a React dashboard. Re-check the actual rendered result immediately before handoff for generic decoration, hierarchy, responsive overflow, focus states, and incomplete empty/error states.",
+          "assertions": [
+            {
+              "text": "The final corrective gate records revisions to the implemented result rather than only repeating an earlier thesis.",
+              "graderType": "human"
+            },
+            {
+              "text": "The output separates verified evidence from subjective or missing evidence.",
+              "graderType": "human"
+            },
+            {
+              "text": "Before/after desktop and mobile screenshots support the final claim.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots",
+                "beforeAfterScreenshots",
+                "responsiveMatrix"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "micro-polish-no-direction-overhead",
+          "prompt": "Fix the visual priority of one destructive action in an existing settings row. The product direction is already established and no material redesign is requested.",
+          "assertions": [
+            {
+              "text": "The response applies a bounded local change without generating three art directions or a replacement DESIGN.md.",
+              "graderType": "human"
+            },
+            {
+              "text": "The destructive-action hierarchy follows adjacent local conventions and preserves keyboard focus visibility.",
+              "graderType": "human"
+            },
+            {
+              "text": "A focused rendered check covers the changed row at its supported viewport.",
+              "graderType": "screenshot",
+              "requiredArtifacts": [
+                "screenshots"
+              ]
             }
           ]
         }

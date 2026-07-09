@@ -102,6 +102,8 @@ skillranger audit:registry [--json]
 skillranger publish:check [--json]
 skillranger eval:frontend [--suite <path>] [--json]
 skillranger eval:frontend --run-routing --project <path> [--target codex] [--suite <path>] [--json]
+skillranger eval:frontend --verify-task-evidence <path> [--suite <path>] [--json]
+skillranger eval:frontend --verify-pairwise-review <path> [--suite <path>] [--json]
 skillranger install <skill-id> --project <path> [--target codex] [--scope repo] [--dry-run] [--yes]
 skillranger installed [project] [--project <path>] [--json]
 skillranger mcp

@@ -6,7 +6,7 @@ Use this reference when a frontend design task is open-ended, generic-looking, r
 
 High-quality AI-generated UI needs a reusable design source, not only taste advice. A `DESIGN.md`-style source defines how the product should look and feel in terms agents can apply repeatedly: visual theme, tokens, component rules, layout behavior, guardrails, and responsive strategy.
 
-Before material visual work, look for an existing `DESIGN.md` in the project root or docs. If one exists, treat it as the visual source of truth unless the user explicitly asks to replace it. If none exists, create a compact mini-DESIGN spec before implementing.
+Before material visual work, look for an existing `DESIGN.md` in the project root or docs. Audit it against current UI and product evidence first. If it is stale, generic, contradictory, or unsupported, explain the conflict and ask for approval of a compact correction; do not follow or replace it silently. If none exists, create a compact mini-DESIGN spec before implementing.
 
 ## Mini-DESIGN Spec
 
