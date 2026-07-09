@@ -191,6 +191,7 @@ npm run audit:registry
 npm run publish:check
 npm run eval:frontend
 node src/cli/index.ts eval:frontend --run-routing --project fixtures/next-react-ts --json
+npm run release:check
 ```
 
 See `RELEASE.md` for the full MVP release checklist.

@@ -6,19 +6,13 @@ This MVP supports npm/npx usage from compiled `dist/` via `skillranger`, MCP lau
 
 ## Pre-Release Checks
 
-Run all core checks from the repository root:
+Run the single local release gate from the repository root:
 
 ```bash
-npm run build
-npm run check
-npm test
-npm run validate:registry
-npm run lint:skills
-npm run audit:registry
-npm run publish:check
-npm run eval:frontend
-node src/cli/index.ts eval:frontend --run-routing --project fixtures/next-react-ts --json
+npm run release:check
 ```
+
+`release:check` runs the build, source check, test suite, registry validation/lint/audit, and the blocking frontend routing evaluation. Run `npm run publish:check` separately before creating a package.
 
 Expected result:
 

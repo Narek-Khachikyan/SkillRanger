@@ -30,6 +30,7 @@
     "lint:skills": "node src/cli/index.ts lint:skills",
     "audit:registry": "node src/cli/index.ts audit:registry",
     "publish:check": "node src/cli/index.ts publish:check",
+    "release:check": "npm run build && npm run check && npm test && npm run validate:registry && npm run lint:skills && npm run audit:registry && npm run eval:frontend -- --run-routing --project fixtures/next-react-ts --json",
     "eval:frontend": "node src/cli/index.ts eval:frontend",
     "mcp": "node src/mcp/server.ts",
     "test": "node --test tests/*.test.ts",
