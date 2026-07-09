@@ -35,6 +35,36 @@ test("setup CLI refuses to run without an interactive terminal", async () => {
   );
 });
 
+test("setup CLI requires an intent before --yes installs a composed skill set", async () => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-setup-"));
+  const projectRoot = path.join(tmpRoot, "project");
+  await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
+
+  try {
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        "src/cli/index.ts",
+        "setup",
+        projectRoot,
+        "--target",
+        "codex",
+        "--yes",
+      ]),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(
+          (error as Error & { stderr?: string }).stderr ?? "",
+          /setup --yes requires --intent/,
+        );
+        return true;
+      },
+    );
+    assert.equal(await exists(path.join(projectRoot, "skillranger.lock.json")), false);
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true });
+  }
+});
+
 test("setup CLI applies recommendations non-interactively with --yes and explicit target", async () => {
   const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-setup-"));
   const projectRoot = path.join(tmpRoot, "project");
@@ -47,6 +77,8 @@ test("setup CLI applies recommendations non-interactively with --yes and explici
       projectRoot,
       "--target",
       "codex",
+      "--intent",
+      "Review this Next.js App Router's route handlers, Server Actions, and RSC boundaries.",
       "--scope",
       "repo",
       "--yes",
@@ -74,6 +106,8 @@ test("setup CLI supports comma-separated multi-agent targets", async () => {
       projectRoot,
       "--target",
       "codex,claude-code",
+      "--intent",
+      "Review this Next.js App Router's route handlers, Server Actions, and RSC boundaries.",
       "--scope",
       "repo",
       "--yes",

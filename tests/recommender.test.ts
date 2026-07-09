@@ -82,6 +82,15 @@ test("recommender suppresses backend architecture design requests", async () => 
   }
 });
 
+test("recommender keeps Next.js Server Actions in the frontend lane", async () => {
+  const recommendations = await nextFixtureRecommendations({
+    userIntent:
+      "Review this Next.js App Router's route handlers, Server Actions, and RSC boundaries.",
+  });
+
+  assert.equal(recommendations[0]?.skillId, "frontend.next-app-router-review");
+});
+
 test("recommender recognizes visual refresh synonyms", async () => {
   for (const userIntent of [
     "Modernize this app.",

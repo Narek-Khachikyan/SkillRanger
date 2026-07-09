@@ -97,7 +97,7 @@ const printHelp = () => {
 	Usage:
 	  skillranger scan [project] [--json]
   skillranger recommend [project] [--target codex|claude-code|opencode|cursor|gemini-cli] [--intent "..."] [--capabilities browser,screenshots] [--lane <lane>] [--limit-per-lane <n>] [--explain] [--json]
-  skillranger setup [project] [--target codex[,claude-code,opencode,cursor,gemini-cli]] [--scope repo|user] [--copy] [--yes] [--lane <lane>] [--limit-per-lane <n>]
+  skillranger setup [project] [--target codex[,claude-code,opencode,cursor,gemini-cli]] [--intent "..."] [--scope repo|user] [--copy] [--yes] [--lane <lane>] [--limit-per-lane <n>]
 	  skillranger audit <skill-id> [--json]
 	  skillranger validate:registry [--json]
 	  skillranger audit:registry [--json]
@@ -528,10 +528,14 @@ const run = async () => {
   if (command === "setup") {
     const autoConfirm = Boolean(args.flags.yes);
     const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    const userIntent = typeof args.flags.intent === "string" ? args.flags.intent : undefined;
     if (!interactive && !autoConfirm) {
       console.error("skillranger setup requires an interactive terminal. Use `skillranger recommend ...` and `skillranger install ... --yes` for non-interactive usage.");
       process.exitCode = 1;
       return;
+    }
+    if (autoConfirm && !userIntent?.trim()) {
+      throw new Error("setup --yes requires --intent so SkillRanger can install one primary skill and compatible companions.");
     }
 
     const projectRoot = path.resolve(args.positionals[0] ?? ".");
@@ -564,7 +568,12 @@ const run = async () => {
     const scope = await chooseSetupScope(args.flags.scope, interactive);
     const mode = await chooseSetupInstallMode(args.flags.copy, interactive);
     const recommendations = mergeRecommendationsBySkillId(
-      targetAgents.map((targetAgent) => recommendSkills(fingerprint, skills, { targetAgent, lane, limitPerLane }))
+      targetAgents.map((targetAgent) => recommendSkills(fingerprint, skills, {
+        targetAgent,
+        userIntent,
+        lane,
+        limitPerLane,
+      }))
     );
 
     console.log("SkillRanger setup");
