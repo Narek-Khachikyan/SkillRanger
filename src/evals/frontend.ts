@@ -201,12 +201,23 @@ export const validateFrontendEvalSuite = (suite: FrontendEvalSuite) => {
       }
     }
   }
+  const seededTriggerPrompts = (suite.triggerPrompts ?? []).length;
+  if (suite.targetCounts?.triggerPrompts !== seededTriggerPrompts) {
+    issues.push(
+      `targetCounts.triggerPrompts must equal seeded prompts (${seededTriggerPrompts}).`,
+    );
+  }
 
   const taskIds = new Set<string>();
   for (const band of suite.taskBands ?? []) {
     if (!band.id?.trim()) issues.push("task band id is required");
     if (!Number.isInteger(band.targetCount) || band.targetCount <= 0) {
       issues.push(`task band ${band.id} targetCount must be positive`);
+    }
+    if (band.targetCount !== (band.seedTasks ?? []).length) {
+      issues.push(
+        `task band ${band.id} targetCount must equal seeded tasks (${(band.seedTasks ?? []).length}).`,
+      );
     }
     for (const task of band.seedTasks ?? []) {
       if (!task.id?.trim()) issues.push(`task id is required in band ${band.id}`);
@@ -237,6 +248,15 @@ export const validateFrontendEvalSuite = (suite: FrontendEvalSuite) => {
         }
       }
     }
+  }
+  const seededTaskEvals = (suite.taskBands ?? []).reduce(
+    (count, band) => count + (band.seedTasks ?? []).length,
+    0,
+  );
+  if (suite.targetCounts?.taskEvals !== seededTaskEvals) {
+    issues.push(
+      `targetCounts.taskEvals must equal seeded tasks (${seededTaskEvals}).`,
+    );
   }
 
   if (suite.artifactContract !== undefined) {

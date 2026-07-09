@@ -53,9 +53,9 @@ test("frontend eval suite validates and summarizes seed coverage", async () => {
 
   const summary = summarizeFrontendEvalSuite(suite);
   assert.equal(summary.triggerPrompts.total, summary.triggerPrompts.target);
-  assert.equal(summary.triggerPrompts.target, 81);
+  assert.equal(summary.triggerPrompts.target, 83);
   assert.equal(summary.taskEvals.seedTasks, summary.taskEvals.target);
-  assert.equal(summary.taskEvals.target, 41);
+  assert.equal(summary.taskEvals.target, 42);
   assert.equal(
     summary.triggerPrompts.shouldTrigger + summary.triggerPrompts.shouldNotTrigger + summary.triggerPrompts.ambiguous,
     summary.triggerPrompts.total,
@@ -73,7 +73,7 @@ test("frontend eval suite accepts routing expectations and artifact-aware assert
     schemaVersion: "1.0",
     name: "frontend-routing-schema-test",
     targetCounts: {
-      triggerPrompts: 1,
+      triggerPrompts: 2,
       taskEvals: 1,
     },
     triggerPrompts: [
@@ -148,10 +148,30 @@ test("frontend eval suite accepts routing expectations and artifact-aware assert
     shouldTrigger: 1,
     shouldNotTrigger: 1,
     ambiguous: 0,
-    target: 1,
+    target: 2,
   });
   assert.equal(summary.taskEvals.seedTasks, 1);
   assert.deepEqual(summary.taskEvals.bands, ["repair"]);
+});
+
+test("frontend eval suite rejects declared coverage that drifts from seeded cases", () => {
+  const suite = routingSuite([
+    {
+      id: "trigger-a11y-review",
+      kind: "should-trigger",
+      text: "Review the signup form accessibility.",
+      routingExpected: { expectedSkill: "frontend.accessibility-review" },
+    },
+  ]);
+  suite.targetCounts.triggerPrompts = 2;
+  suite.targetCounts.taskEvals = 2;
+  suite.taskBands[0]!.targetCount = 2;
+
+  const issues = validateFrontendEvalSuite(suite);
+
+  assert.ok(issues.includes("targetCounts.triggerPrompts must equal seeded prompts (1)."));
+  assert.ok(issues.includes("targetCounts.taskEvals must equal seeded tasks (1)."));
+  assert.ok(issues.includes("task band routing-smoke targetCount must equal seeded tasks (1)."));
 });
 
 test("frontend eval suite rejects malformed routing, grader, and artifact contracts", () => {
@@ -312,8 +332,8 @@ test("eval:frontend CLI reports suite summary as JSON", async () => {
   };
   assert.equal(report.ok, true);
   assert.deepEqual(report.issues, []);
-  assert.equal(report.summary.triggerPrompts.target, 81);
-  assert.equal(report.summary.taskEvals.target, 41);
+  assert.equal(report.summary.triggerPrompts.target, 83);
+  assert.equal(report.summary.taskEvals.target, 42);
   assert.equal("routingEval" in report, false);
 });
 
@@ -361,4 +381,41 @@ test("eval:frontend --run-routing --json returns routing metrics", async () => {
   assert.equal(report.routingEval.metrics.evaluated, 2);
   assert.equal(report.routingEval.metrics.passed, 2);
   assert.equal(report.routingEval.metrics.overallPassRate, 1);
+});
+
+test("eval:frontend exits non-zero when routing evaluation fails", async () => {
+  const suite = routingSuite([
+    {
+      id: "wrong-routing-expectation",
+      kind: "should-trigger",
+      text: "Improve the Tailwind page spacing and responsive layout.",
+      routingExpected: {
+        expectedSkill: "frontend.accessibility-review",
+      },
+    },
+  ]);
+  const dir = await mkdtemp(path.join(tmpdir(), "skillranger-frontend-eval-"));
+  const suitePath = path.join(dir, "suite.json");
+  await writeFile(suitePath, JSON.stringify(suite), "utf8");
+
+  await assert.rejects(
+    execFileAsync("node", [
+      "src/cli/index.ts",
+      "eval:frontend",
+      "--run-routing",
+      "--project",
+      "fixtures/next-react-ts",
+      "--suite",
+      suitePath,
+      "--json",
+    ]),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      const stdout = (error as Error & { stdout?: string }).stdout ?? "";
+      const report = JSON.parse(stdout) as { ok: boolean; routingEval: { failures: unknown[] } };
+      assert.equal(report.ok, false);
+      assert.equal(report.routingEval.failures.length, 1);
+      return true;
+    },
+  );
 });

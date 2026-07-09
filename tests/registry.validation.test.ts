@@ -87,7 +87,7 @@ const writeSkillPackage = async (
 test("local registry validation accepts curated skills", async () => {
   const report = await validateLocalRegistry("registry");
   assert.equal(report.ok, true);
-  assert.equal(report.skills.length, 14);
+  assert.equal(report.skills.length, 15);
 });
 
 test("curated skills carry derived quality rubric metadata", async () => {

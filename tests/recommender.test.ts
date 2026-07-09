@@ -44,6 +44,73 @@ test("recommender ranks Next.js review first for Next.js fixture", async () => {
   );
 });
 
+test("recommender omits the final audit without an explicit audit intent", async () => {
+  const recommendations = await nextFixtureRecommendations();
+
+  assert.equal(
+    recommendations.some((item) => item.skillId === "frontend.audit"),
+    false,
+  );
+});
+
+test("recommender promotes the final audit for explicit release-readiness work", async () => {
+  const recommendations = await nextFixtureRecommendations({
+    userIntent:
+      "Run a final frontend release-readiness audit with a scorecard for browser checks, a11y, performance, and visual quality.",
+  });
+
+  assert.equal(recommendations[0]?.skillId, "frontend.audit");
+});
+
+test("recommender routes a Russian redesign request to visual design polish", async () => {
+  const recommendations = await nextFixtureRecommendations({
+    userIntent: "Сделай редизайн главной страницы и убери ощущение типового AI-интерфейса.",
+  });
+
+  assert.equal(recommendations[0]?.skillId, "frontend.visual-design-polish");
+  assert.equal(recommendations[0]?.lane, "design");
+});
+
+test("recommender suppresses backend architecture design requests", async () => {
+  for (const userIntent of [
+    "Design the database schema for the billing service.",
+    "Review the API design for this backend endpoint.",
+    "Сделай дизайн схемы базы данных для сервиса оплаты.",
+  ]) {
+    const recommendations = await nextFixtureRecommendations({ userIntent });
+    assert.deepEqual(recommendations, [], userIntent);
+  }
+});
+
+test("recommender recognizes visual refresh synonyms", async () => {
+  for (const userIntent of [
+    "Modernize this app.",
+    "Refresh the visual design of this page.",
+    "Rebrand this landing page without changing its product flow.",
+  ]) {
+    const recommendations = await nextFixtureRecommendations({ userIntent });
+    assert.equal(recommendations[0]?.skillId, "frontend.visual-design-polish", userIntent);
+  }
+});
+
+test("recommender keeps a Tailwind token audit in the design-system lane", async () => {
+  const recommendations = await nextFixtureRecommendations({
+    userIntent:
+      "Audit this Tailwind app for token drift, arbitrary values, inconsistent radii, and shadcn theme misuse.",
+  });
+
+  assert.equal(recommendations[0]?.skillId, "frontend.design-system");
+});
+
+test("recommender lets component API intent override redesign wording", async () => {
+  const recommendations = await nextFixtureRecommendations({
+    userIntent:
+      "Redesign a React form component API that mixes controlled and uncontrolled state, render props, and duplicated validation state.",
+  });
+
+  assert.equal(recommendations[0]?.skillId, "frontend.react-component-design");
+});
+
 test("recommender includes the full curated frontend MVP pack for Next.js fixture", async () => {
   const recommendations = await nextFixtureRecommendations();
   assert.deepEqual(

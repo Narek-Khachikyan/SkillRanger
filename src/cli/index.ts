@@ -718,6 +718,9 @@ const run = async () => {
       }
     }
     if (issues.length > 0) throw new Error("Frontend eval suite validation failed.");
+    if (routingEval && routingEval.failures.length > 0) {
+      throw new Error("Frontend routing evaluation failed.");
+    }
     return;
   }
 

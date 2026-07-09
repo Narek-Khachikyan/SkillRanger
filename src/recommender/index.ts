@@ -18,7 +18,7 @@ const tokenize = (input: string) =>
   new Set(
     input
       .toLowerCase()
-      .split(/[^a-z0-9+.#-]+/)
+      .split(/[^\p{L}\p{N}+.#-]+/u)
       .map((part) => part.trim())
       .map((part) => part.replace(/^[.,:;!?()[\]{}"']+|[.,:;!?()[\]{}"']+$/g, ""))
       .filter(Boolean),
@@ -44,8 +44,13 @@ const freshnessScore = (date?: string) => {
 const fieldTokens = (values: string[]) => tokenize(values.join(" "));
 
 const backendOnlyIntentTokens = new Set([
+  "api",
+  "архитектура",
+  "база",
+  "бэкенд",
   "backend",
   "cache",
+  "данных",
   "database",
   "db",
   "endpoint",
@@ -55,7 +60,20 @@ const backendOnlyIntentTokens = new Set([
   "query",
   "server",
   "service",
+  "сервис",
+  "схема",
 ]);
+
+const backendArchitecturePhrases = [
+  "api design",
+  "data model",
+  "database design",
+  "database schema",
+  "design the database",
+  "дизайн базы данных",
+  "дизайн схемы базы",
+  "схема базы данных",
+];
 
 const nonFrontendIntentTokens = new Set([
   "changelog",
@@ -94,7 +112,6 @@ const frontendIntentTokens = new Set([
   "browser",
   "component",
   "css",
-  "design",
   "e2e",
   "frontend",
   "hydration",
@@ -111,6 +128,10 @@ const frontendIntentTokens = new Set([
   "ui",
   "visual",
   "visually",
+  "интерфейс",
+  "страница",
+  "фронтенд",
+  "ui",
 ]);
 
 const specializedIntentHints: Record<string, string[]> = {
@@ -292,6 +313,12 @@ const specializedIntentHints: Record<string, string[]> = {
     "manga",
     "product fit",
     "redesign",
+    "rebrand",
+    "refresh",
+    "revamp",
+    "modernize",
+    "редизайн",
+    "ребрендинг",
     "screenshot looks off",
     "tell me what to change",
     "visual",
@@ -306,6 +333,24 @@ const designIntentPhrases = [
   "make the page better",
 ];
 
+const frontendAuditIntentPhrases = [
+  "cross-cutting frontend",
+  "final frontend review",
+  "frontend audit",
+  "frontend scorecard",
+  "release readiness",
+  "release-readiness",
+  "whole frontend",
+];
+
+const implementationDesignPhrases = [
+  "component api",
+  "controlled and uncontrolled",
+  "data model",
+  "render props",
+  "state ownership",
+];
+
 const designIntentTokens = new Set([
   "design",
   "distinctive",
@@ -314,19 +359,48 @@ const designIntentTokens = new Set([
   "palette",
   "polish",
   "polished",
+  "rebrand",
+  "redesign",
+  "refresh",
+  "revamp",
+  "modernize",
   "responsive",
   "spacing",
   "typography",
   "ui",
   "visual",
   "visually",
+  "дизайн",
+  "редизайн",
+  "ребрендинг",
+  "современный",
 ]);
 
 const hasAnyToken = (tokens: Set<string>, expected: Set<string>) =>
   [...tokens].some((token) => expected.has(token));
 
+const isFrontendAuditIntent = (intent?: string) => {
+  if (!intent) return false;
+  const normalizedIntent = intent.toLowerCase();
+  return frontendAuditIntentPhrases.some((phrase) =>
+    normalizedIntent.includes(phrase),
+  );
+};
+
+const hasImplementationDesignIntent = (intent?: string) =>
+  Boolean(
+    intent &&
+      implementationDesignPhrases.some((phrase) =>
+        intent.toLowerCase().includes(phrase),
+      ),
+  );
+
 const isBackendOnlyIntent = (intent?: string) => {
   if (!intent) return false;
+  const normalizedIntent = intent.toLowerCase();
+  if (backendArchitecturePhrases.some((phrase) => normalizedIntent.includes(phrase))) {
+    return true;
+  }
   const tokens = tokenize(intent);
   if (hasAnyToken(tokens, hardNonFrontendIntentTokens)) return true;
   return (
@@ -340,6 +414,7 @@ const intentLaneAdjustment = (lane: SkillLane, intent?: string) => {
   const normalizedIntent = intent.toLowerCase();
   const tokens = tokenize(intent);
   if (lane === "agent-context" && normalizedIntent.includes("agents.md")) return 0.08;
+  if (hasImplementationDesignIntent(intent)) return lane === "design" ? -0.08 : 0;
   const hasDesignIntent =
     hasAnyToken(tokens, designIntentTokens) ||
     designIntentPhrases.some((phrase) => normalizedIntent.includes(phrase));
@@ -376,6 +451,9 @@ const hasSpecializedIntent = (intent?: string) => {
 
 const intentSkillAdjustment = (skill: RegistrySkill, intent?: string) => {
   if (!intent) return 0;
+  if (skill.manifest.id === "frontend.audit") {
+    return isFrontendAuditIntent(intent) ? 0.25 : 0;
+  }
   const specializedScore = specializedIntentScore(skill, intent);
   if (skill.manifest.id === "frontend.playwright-debug") {
     return specializedScore >= 0.5 ? 0.18 * specializedScore : -0.18;
@@ -505,6 +583,12 @@ export const recommendSkills = (
       const agentCompatibilityScore = compatibilityScore(skill, targetAgent);
       const lane = skill.manifest.routing?.lane ?? fallbackLane(skill);
       if (agentCompatibilityScore === 0) return [];
+      if (
+        skill.manifest.id === "frontend.audit" &&
+        !isFrontendAuditIntent(options.userIntent)
+      ) {
+        return [];
+      }
       if (skill.manifest.stackTags.length > 0 && stackMatch === 0) return [];
       if (!hasRequiredStackTags(fingerprint, skill)) return [];
       if (isAlreadyCoveredByAgentContext(fingerprint, skill)) return [];
