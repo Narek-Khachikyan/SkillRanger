@@ -10,8 +10,10 @@ import { detectInstalledAgents, getAdapter } from "../installers/codex.ts";
 import { readLockfile } from "../lockfile/index.ts";
 import {
   loadFrontendEvalSuite,
+  loadFrontendTaskEvidence,
   runFrontendRoutingEval,
   summarizeFrontendEvalSuite,
+  validateFrontendTaskEvidence,
   validateFrontendEvalSuite,
 } from "../evals/frontend.ts";
 import { defaultRegistryRoot, packageRoot } from "../paths.ts";
@@ -105,6 +107,7 @@ const printHelp = () => {
   skillranger publish:check [--json]
   skillranger eval:frontend [--suite <path>] [--json]
   skillranger eval:frontend --run-routing --project <path> [--target codex] [--suite <path>] [--json]
+  skillranger eval:frontend --verify-task-evidence <path> [--suite <path>] [--json]
   skillranger install <skill-id> --project <path> [--target codex|claude-code|opencode|cursor|gemini-cli] [--scope repo|user] [--copy] [--dry-run] [--yes]
   skillranger installed [project] [--project <path>] [--json]
   skillranger mcp
@@ -721,16 +724,29 @@ const run = async () => {
     const issues = validateFrontendEvalSuite(suite);
     const runRouting = Boolean(args.flags["run-routing"]);
     const projectRoot = typeof args.flags.project === "string" ? path.resolve(args.flags.project) : undefined;
+    const taskEvidencePath = typeof args.flags["verify-task-evidence"] === "string"
+      ? path.resolve(args.flags["verify-task-evidence"])
+      : undefined;
     const targetAgent = asString(args.flags.target, "codex");
     if (runRouting && !projectRoot) throw new Error("--project is required with --run-routing.");
+    if (args.flags["verify-task-evidence"] === true) {
+      throw new Error("--verify-task-evidence requires a JSON evidence path.");
+    }
     const routingEval = runRouting && projectRoot
       ? await runFrontendRoutingEval(suite, { projectRoot, targetAgent })
       : undefined;
+    const taskEvidence = taskEvidencePath
+      ? validateFrontendTaskEvidence(suite, await loadFrontendTaskEvidence(taskEvidencePath))
+      : undefined;
     const report = {
-      ok: issues.length === 0 && (!routingEval || routingEval.failures.length === 0),
+      ok:
+        issues.length === 0 &&
+        (!routingEval || routingEval.failures.length === 0) &&
+        (!taskEvidence || taskEvidence.metrics.promotionReady),
       issues,
       summary: summarizeFrontendEvalSuite(suite),
-      ...(routingEval ? { routingEval } : {})
+      ...(routingEval ? { routingEval } : {}),
+      ...(taskEvidence ? { taskEvidence } : {}),
     };
     if (args.flags.json) {
       printJson(report);
@@ -748,6 +764,11 @@ const run = async () => {
           console.log(`Failure: ${failure.id} expected ${failure.expected}, received ${failure.actual ?? "none"} (${failure.reason})`);
         }
       }
+      if (taskEvidence) {
+        console.log(`Task evidence: ${taskEvidence.metrics.recordedTasks}/${taskEvidence.metrics.expectedTasks} tasks; ${taskEvidence.metrics.passedAssertions} passed assertions`);
+        console.log(`Task-evidence promotion gate: ${taskEvidence.metrics.promotionReady ? "ready" : "blocked"}`);
+        for (const issue of taskEvidence.issues) console.log(`Task evidence issue: ${issue}`);
+      }
       if (issues.length > 0) {
         for (const issue of issues) console.log(`Issue: ${issue}`);
       }
@@ -755,6 +776,9 @@ const run = async () => {
     if (issues.length > 0) throw new Error("Frontend eval suite validation failed.");
     if (routingEval && routingEval.failures.length > 0) {
       throw new Error("Frontend routing evaluation failed.");
+    }
+    if (taskEvidence && !taskEvidence.metrics.promotionReady) {
+      throw new Error("Frontend task evidence promotion gate failed.");
     }
     return;
   }

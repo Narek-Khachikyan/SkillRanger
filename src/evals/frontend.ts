@@ -59,6 +59,45 @@ export type FrontendEvalSuite = {
   };
 };
 
+export type FrontendTaskEvidenceStatus = "passed" | "failed" | "not-assessed";
+
+export type FrontendTaskEvidence = {
+  schemaVersion: "1.0";
+  suiteName: string;
+  runs: Array<{
+    runId: string;
+    taskId: string;
+    skillId: string;
+    skillVersion: string;
+    skillChecksum: string;
+    model: string;
+    fixture: string;
+    command: string;
+    durationMs: number;
+    artifacts: Array<{
+      name: string;
+      path: string;
+    }>;
+    assertions: Array<{
+      text: string;
+      status: FrontendTaskEvidenceStatus;
+    }>;
+  }>;
+};
+
+export type FrontendTaskEvidenceReport = {
+  issues: string[];
+  metrics: {
+    expectedTasks: number;
+    recordedTasks: number;
+    artifactCount: number;
+    passedAssertions: number;
+    failedAssertions: number;
+    unassessedAssertions: number;
+    promotionReady: boolean;
+  };
+};
+
 export type FrontendEvalSummary = {
   name: string;
   triggerPrompts: {
@@ -155,6 +194,11 @@ export const loadFrontendEvalSuite = async (
   suitePath = defaultFrontendEvalSuitePath,
 ): Promise<FrontendEvalSuite> =>
   JSON.parse(await readFile(suitePath, "utf8")) as FrontendEvalSuite;
+
+export const loadFrontendTaskEvidence = async (
+  evidencePath: string,
+): Promise<FrontendTaskEvidence> =>
+  JSON.parse(await readFile(evidencePath, "utf8")) as FrontendTaskEvidence;
 
 export const validateFrontendEvalSuite = (suite: FrontendEvalSuite) => {
   const issues: string[] = [];
@@ -275,6 +319,120 @@ export const validateFrontendEvalSuite = (suite: FrontendEvalSuite) => {
   }
 
   return issues;
+};
+
+const assertionText = (assertion: FrontendTaskAssertion) =>
+  typeof assertion === "string" ? assertion : assertion.text;
+
+const assertionArtifacts = (assertion: FrontendTaskAssertion) =>
+  typeof assertion === "string" ? [] : assertion.requiredArtifacts ?? [];
+
+export const validateFrontendTaskEvidence = (
+  suite: FrontendEvalSuite,
+  evidence: FrontendTaskEvidence,
+): FrontendTaskEvidenceReport => {
+  const issues: string[] = [];
+  const tasks = (suite.taskBands ?? []).flatMap((band) => band.seedTasks ?? []);
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const seenRunIds = new Set<string>();
+  const recordedTaskIds = new Set<string>();
+  let artifactCount = 0;
+  let passedAssertions = 0;
+  let failedAssertions = 0;
+  let unassessedAssertions = 0;
+
+  if (evidence.schemaVersion !== "1.0") issues.push("task evidence schemaVersion must be 1.0");
+  if (evidence.suiteName !== suite.name) issues.push(`task evidence suiteName must equal ${suite.name}`);
+  if (!Array.isArray(evidence.runs)) {
+    issues.push("task evidence runs must be an array");
+  }
+
+  for (const run of Array.isArray(evidence.runs) ? evidence.runs : []) {
+    if (!run.runId?.trim()) issues.push("task evidence runId is required");
+    if (seenRunIds.has(run.runId)) issues.push(`duplicate task evidence runId: ${run.runId}`);
+    seenRunIds.add(run.runId);
+
+    const task = taskById.get(run.taskId);
+    if (!task) {
+      issues.push(`task evidence references unknown task: ${run.taskId}`);
+      continue;
+    }
+    if (recordedTaskIds.has(run.taskId)) issues.push(`duplicate task evidence taskId: ${run.taskId}`);
+    recordedTaskIds.add(run.taskId);
+
+    for (const key of ["skillId", "skillVersion", "skillChecksum", "model", "fixture", "command"] as const) {
+      if (!run[key]?.trim()) issues.push(`task evidence ${run.taskId} ${key} is required`);
+    }
+    if (!Number.isFinite(run.durationMs) || run.durationMs <= 0) {
+      issues.push(`task evidence ${run.taskId} durationMs must be positive`);
+    }
+
+    if (!Array.isArray(run.artifacts)) {
+      issues.push(`task evidence ${run.taskId} artifacts must be an array`);
+    }
+    const artifactNames = new Set<string>();
+    for (const artifact of Array.isArray(run.artifacts) ? run.artifacts : []) {
+      artifactCount += 1;
+      if (!artifact?.name?.trim() || !artifact.path?.trim()) {
+        issues.push(`task evidence ${run.taskId} artifacts require name and path`);
+        continue;
+      }
+      artifactNames.add(artifact.name);
+    }
+
+    if (!Array.isArray(run.assertions)) {
+      issues.push(`task evidence ${run.taskId} assertions must be an array`);
+    }
+    const assertionByText = new Map<string, FrontendTaskEvidenceStatus>();
+    for (const assertion of Array.isArray(run.assertions) ? run.assertions : []) {
+      if (!assertion?.text?.trim()) {
+        issues.push(`task evidence ${run.taskId} assertion text is required`);
+        continue;
+      }
+      if (assertionByText.has(assertion.text)) {
+        issues.push(`duplicate task evidence ${run.taskId} assertion: ${assertion.text}`);
+      }
+      if (!["passed", "failed", "not-assessed"].includes(assertion.status)) {
+        issues.push(`task evidence ${run.taskId} assertion ${assertion.text} status is invalid`);
+        continue;
+      }
+      assertionByText.set(assertion.text, assertion.status);
+    }
+
+    for (const expectedAssertion of task.assertions) {
+      const text = assertionText(expectedAssertion);
+      const status = assertionByText.get(text);
+      if (!status) {
+        issues.push(`task evidence ${run.taskId} is missing assertion: ${text}`);
+        continue;
+      }
+      if (status === "passed") passedAssertions += 1;
+      if (status === "failed") failedAssertions += 1;
+      if (status === "not-assessed") unassessedAssertions += 1;
+      for (const artifactName of assertionArtifacts(expectedAssertion)) {
+        if (!artifactNames.has(artifactName)) {
+          issues.push(`task evidence ${run.taskId} is missing required artifact ${artifactName}`);
+        }
+      }
+    }
+  }
+
+  for (const task of tasks) {
+    if (!recordedTaskIds.has(task.id)) issues.push(`task evidence is missing task: ${task.id}`);
+  }
+
+  return {
+    issues,
+    metrics: {
+      expectedTasks: tasks.length,
+      recordedTasks: recordedTaskIds.size,
+      artifactCount,
+      passedAssertions,
+      failedAssertions,
+      unassessedAssertions,
+      promotionReady: issues.length === 0 && failedAssertions === 0 && unassessedAssertions === 0,
+    },
+  };
 };
 
 export const summarizeFrontendEvalSuite = (

@@ -8,9 +8,11 @@ import { promisify } from "node:util";
 import {
   type FrontendEvalSuite,
   loadFrontendEvalSuite,
+  type FrontendTaskEvidence,
   runFrontendRoutingEval,
   scoreSkillUtility,
   summarizeFrontendEvalSuite,
+  validateFrontendTaskEvidence,
   validateFrontendEvalSuite,
 } from "../src/evals/frontend.ts";
 
@@ -243,6 +245,57 @@ test("frontend eval suite rejects malformed routing, grader, and artifact contra
   ]);
 });
 
+test("frontend task evidence requires traceable metadata, task coverage, and asserted artifacts", () => {
+  const suite = routingSuite([]);
+  suite.taskBands[0]!.seedTasks[0]!.assertions = [
+    {
+      text: "A screenshot proves the responsive state.",
+      graderType: "screenshot",
+      requiredArtifacts: ["screenshots"],
+    },
+  ];
+
+  const evidence: FrontendTaskEvidence = {
+    schemaVersion: "1.0",
+    suiteName: suite.name,
+    runs: [
+      {
+        runId: "candidate-a",
+        taskId: "routing-smoke-task",
+        skillId: "frontend.visual-design-polish",
+        skillVersion: "1.0.0",
+        skillChecksum: "sha256:abc123",
+        model: "test-model",
+        fixture: "fixtures/next-react-ts",
+        command: "agent run --task routing-smoke-task",
+        durationMs: 1250,
+        artifacts: [{ name: "screenshots", path: "artifacts/responsive.png" }],
+        assertions: [{ text: "A screenshot proves the responsive state.", status: "passed" }],
+      },
+    ],
+  };
+
+  assert.deepEqual(validateFrontendTaskEvidence(suite, evidence), {
+    issues: [],
+    metrics: {
+      expectedTasks: 1,
+      recordedTasks: 1,
+      artifactCount: 1,
+      passedAssertions: 1,
+      failedAssertions: 0,
+      unassessedAssertions: 0,
+      promotionReady: true,
+    },
+  });
+
+  evidence.runs[0]!.artifacts = [];
+  evidence.runs[0]!.assertions[0]!.status = "not-assessed";
+  const invalid = validateFrontendTaskEvidence(suite, evidence);
+  assert.ok(invalid.issues.includes("task evidence routing-smoke-task is missing required artifact screenshots"));
+  assert.equal(invalid.metrics.promotionReady, false);
+  assert.equal(invalid.metrics.unassessedAssertions, 1);
+});
+
 test("frontend eval skill utility score applies configured weights", async () => {
   const suite = await loadFrontendEvalSuite();
   const score = scoreSkillUtility(
@@ -381,6 +434,52 @@ test("eval:frontend --run-routing --json returns routing metrics", async () => {
   assert.equal(report.routingEval.metrics.evaluated, 2);
   assert.equal(report.routingEval.metrics.passed, 2);
   assert.equal(report.routingEval.metrics.overallPassRate, 1);
+});
+
+test("eval:frontend verifies complete task evidence as a promotion gate", async () => {
+  const suite = routingSuite([]);
+  const evidence: FrontendTaskEvidence = {
+    schemaVersion: "1.0",
+    suiteName: suite.name,
+    runs: [
+      {
+        runId: "candidate-a",
+        taskId: "routing-smoke-task",
+        skillId: "frontend.visual-design-polish",
+        skillVersion: "1.0.0",
+        skillChecksum: "sha256:abc123",
+        model: "test-model",
+        fixture: "fixtures/next-react-ts",
+        command: "agent run --task routing-smoke-task",
+        durationMs: 1250,
+        artifacts: [],
+        assertions: [{ text: "A routing smoke assertion exists.", status: "passed" }],
+      },
+    ],
+  };
+  const dir = await mkdtemp(path.join(tmpdir(), "skillranger-frontend-eval-"));
+  const suitePath = path.join(dir, "suite.json");
+  const evidencePath = path.join(dir, "task-evidence.json");
+  await writeFile(suitePath, JSON.stringify(suite), "utf8");
+  await writeFile(evidencePath, JSON.stringify(evidence), "utf8");
+
+  const { stdout } = await execFileAsync("node", [
+    "src/cli/index.ts",
+    "eval:frontend",
+    "--suite",
+    suitePath,
+    "--verify-task-evidence",
+    evidencePath,
+    "--json",
+  ]);
+  const report = JSON.parse(stdout) as {
+    ok: boolean;
+    taskEvidence: { metrics: { promotionReady: boolean; passedAssertions: number } };
+  };
+
+  assert.equal(report.ok, true);
+  assert.equal(report.taskEvidence.metrics.promotionReady, true);
+  assert.equal(report.taskEvidence.metrics.passedAssertions, 1);
 });
 
 test("eval:frontend exits non-zero when routing evaluation fails", async () => {
