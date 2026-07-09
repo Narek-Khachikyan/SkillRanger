@@ -4,7 +4,7 @@ import { loadLocalRegistry } from "../../registry/index.ts";
 import { scanProject } from "../../scanner/index.ts";
 import { skillLanes, type SkillLane } from "../../types.ts";
 import { McpToolError, type McpToolDefinition, type McpToolHandler } from "./types.ts";
-import { asString, jsonToolResult, optionalString, projectRootProperty, registryRootProperty, resolveRegistryRoot } from "./utils.ts";
+import { asString, jsonToolResult, optionalString, projectRootProperty, registryRootProperty, requireStringArray, resolveRegistryRoot } from "./utils.ts";
 
 export const projectToolDefinitions: McpToolDefinition[] = [
   {
@@ -45,6 +45,11 @@ export const projectToolDefinitions: McpToolDefinition[] = [
           type: "integer",
           minimum: 1,
           description: "Optional maximum recommendations to return per lane."
+        },
+        hostCapabilities: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional host capabilities available for verified skill completion, such as browser and screenshots."
         }
       },
       additionalProperties: false
@@ -75,6 +80,17 @@ const optionalPositiveInteger = (value: unknown, name: string): number | undefin
   throw new McpToolError("invalid-arguments", `${name} must be a positive integer.`, { argument: name });
 };
 
+const optionalHostCapabilities = (value: unknown) => {
+  if (value === undefined) return [];
+  const capabilities = requireStringArray(value, "hostCapabilities");
+  if (capabilities.some((capability) => capability.trim() === "")) {
+    throw new McpToolError("invalid-arguments", "hostCapabilities must not contain empty strings.", {
+      argument: "hostCapabilities",
+    });
+  }
+  return capabilities;
+};
+
 const recommendProjectSkills: McpToolHandler = async (args) => {
   const projectRoot = path.resolve(asString(args.projectRoot, "."));
   const registryRoot = resolveRegistryRoot(args.registryRoot);
@@ -82,9 +98,16 @@ const recommendProjectSkills: McpToolHandler = async (args) => {
   const userIntent = optionalString(args.userIntent);
   const lane = optionalSkillLane(args.lane);
   const limitPerLane = optionalPositiveInteger(args.limitPerLane, "limitPerLane");
+  const hostCapabilities = optionalHostCapabilities(args.hostCapabilities);
   const fingerprint = await scanProject(projectRoot);
   const skills = await loadLocalRegistry(registryRoot);
-  const recommendations = recommendSkills(fingerprint, skills, { targetAgent, userIntent, lane, limitPerLane });
+  const recommendations = recommendSkills(fingerprint, skills, {
+    targetAgent,
+    userIntent,
+    lane,
+    limitPerLane,
+    hostCapabilities,
+  });
   return jsonToolResult({
     projectRoot,
     targetAgent,

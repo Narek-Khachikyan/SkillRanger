@@ -418,6 +418,31 @@ export const validateSkillManifest = (
     }
   }
 
+  if (input.verification !== undefined) {
+    if (!isRecord(input.verification)) {
+      issues.push({ path: "verification", message: "Must be an object when present." });
+    } else {
+      if (
+        !isStringArray(input.verification.requiredCapabilities) ||
+        input.verification.requiredCapabilities.length === 0
+      ) {
+        issues.push({
+          path: "verification.requiredCapabilities",
+          message: "Must be a non-empty array of strings.",
+        });
+      }
+      if (
+        input.verification.fallback !== "unverified" &&
+        input.verification.fallback !== "blocked"
+      ) {
+        issues.push({
+          path: "verification.fallback",
+          message: "Must be unverified or blocked.",
+        });
+      }
+    }
+  }
+
   if (!isRecord(input.source)) {
     issues.push({ path: "source", message: "Must be an object." });
   } else {

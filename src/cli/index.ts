@@ -72,6 +72,21 @@ const asPositiveInteger = (
   throw new Error(`${flagName} must be a positive integer.`);
 };
 
+const asCapabilities = (value: string | boolean | undefined) => {
+  if (value === undefined) return [];
+  if (typeof value !== "string") {
+    throw new Error("--capabilities must be a comma-separated list of capability names.");
+  }
+  const capabilities = value
+    .split(",")
+    .map((capability) => capability.trim().toLowerCase())
+    .filter(Boolean);
+  if (capabilities.length === 0) {
+    throw new Error("--capabilities must include at least one capability name.");
+  }
+  return capabilities;
+};
+
 const printJson = (value: unknown) => {
   console.log(JSON.stringify(value, null, 2));
 };
@@ -81,7 +96,7 @@ const printHelp = () => {
 
 	Usage:
 	  skillranger scan [project] [--json]
-  skillranger recommend [project] [--target codex|claude-code|opencode|cursor|gemini-cli] [--intent "..."] [--lane <lane>] [--limit-per-lane <n>] [--explain] [--json]
+  skillranger recommend [project] [--target codex|claude-code|opencode|cursor|gemini-cli] [--intent "..."] [--capabilities browser,screenshots] [--lane <lane>] [--limit-per-lane <n>] [--explain] [--json]
   skillranger setup [project] [--target codex[,claude-code,opencode,cursor,gemini-cli]] [--scope repo|user] [--copy] [--yes] [--lane <lane>] [--limit-per-lane <n>]
 	  skillranger audit <skill-id> [--json]
 	  skillranger validate:registry [--json]
@@ -475,11 +490,18 @@ const run = async () => {
     const projectRoot = path.resolve(args.positionals[0] ?? ".");
     const targetAgent = asString(args.flags.target, "codex");
     const userIntent = typeof args.flags.intent === "string" ? args.flags.intent : undefined;
+    const hostCapabilities = asCapabilities(args.flags.capabilities);
     const lane = asSkillLane(args.flags.lane);
     const limitPerLane = asPositiveInteger(args.flags["limit-per-lane"], "--limit-per-lane");
     const fingerprint = await scanProject(projectRoot);
     const skills = await loadLocalRegistry(registryRoot);
-    const recommendations = recommendSkills(fingerprint, skills, { targetAgent, userIntent, lane, limitPerLane });
+    const recommendations = recommendSkills(fingerprint, skills, {
+      targetAgent,
+      userIntent,
+      lane,
+      limitPerLane,
+      hostCapabilities,
+    });
     if (args.flags.json) {
       printJson({ recommendations, recommendationGroups: groupRecommendationsByLane(recommendations) });
       return;
@@ -491,6 +513,9 @@ const run = async () => {
         const category = recommendation.category ? `  ${recommendation.category}` : "";
         console.log(`${index + 1}. ${recommendation.skillId}${category}  score ${recommendation.score.toFixed(3)}  risk ${recommendation.riskLevel}`);
         console.log(`   ${recommendation.reasons.join("; ")}`);
+        if (recommendation.verification.status !== "ready") {
+          console.log(`   verification: ${recommendation.verification.status} (${recommendation.verification.missingCapabilities.join(", ")} unavailable)`);
+        }
         if (args.flags.explain) {
           console.log(`   score drivers: ${formatScoreBreakdown(recommendation)}`);
         }

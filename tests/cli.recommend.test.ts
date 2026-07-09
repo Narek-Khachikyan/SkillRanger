@@ -43,6 +43,27 @@ test("recommend CLI filters JSON recommendations by lane", async () => {
   assert.equal(report.recommendations.every((item) => item.lane === "design"), true);
 });
 
+test("recommend CLI accepts visual verification capabilities", async () => {
+  const { stdout } = await execFileAsync(process.execPath, [
+    "src/cli/index.ts",
+    "recommend",
+    "fixtures/next-react-ts",
+    "--intent",
+    "Redesign this product page with stronger visual hierarchy.",
+    "--capabilities",
+    "browser,screenshots",
+    "--json",
+  ]);
+  const report = parseRecommendations(stdout) as typeof parseRecommendations extends (stdout: string) => infer T
+    ? T & { recommendations: Array<{ verification: { status: string; missingCapabilities: string[] } }> }
+    : never;
+
+  assert.deepEqual(report.recommendations[0]?.verification, {
+    status: "ready",
+    missingCapabilities: [],
+  });
+});
+
 test("recommend CLI explains score drivers in human output", async () => {
   const { stdout } = await execFileAsync(process.execPath, [
     "src/cli/index.ts",

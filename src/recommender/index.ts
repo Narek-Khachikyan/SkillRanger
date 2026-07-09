@@ -10,6 +10,7 @@ export type RecommendSkillsOptions = {
   userIntent?: string;
   lane?: SkillLane;
   limitPerLane?: number;
+  hostCapabilities?: string[];
 };
 
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
@@ -496,6 +497,23 @@ const compatibilityScore = (skill: RegistrySkill, targetAgent: string) => {
   return 0;
 };
 
+const verificationFor = (skill: RegistrySkill, hostCapabilities: Set<string>) => {
+  const verification = skill.manifest.verification;
+  if (!verification) {
+    return { status: "ready" as const, missingCapabilities: [] };
+  }
+  const missingCapabilities = verification.requiredCapabilities.filter(
+    (capability) => !hostCapabilities.has(capability),
+  );
+  return {
+    status:
+      missingCapabilities.length === 0
+        ? ("ready" as const)
+        : verification.fallback,
+    missingCapabilities,
+  };
+};
+
 const rounded = (value: number) => Number(value.toFixed(3));
 
 const requiredStackTags = new Set(["nextjs", "vite", "react", "tailwind", "playwright"]);
@@ -566,6 +584,9 @@ export const recommendSkills = (
   options: RecommendSkillsOptions = {},
 ): Recommendation[] => {
   const targetAgent = options.targetAgent ?? "codex";
+  const hostCapabilities = new Set(
+    (options.hostCapabilities ?? []).map((capability) => capability.toLowerCase()),
+  );
   if (isBackendOnlyIntent(options.userIntent)) return [];
 
   const rankedRecommendations = skills
@@ -600,6 +621,7 @@ export const recommendSkills = (
           : 0;
       const laneAdjustment = intentLaneAdjustment(lane, options.userIntent);
       const skillAdjustment = intentSkillAdjustment(skill, options.userIntent);
+      const verification = verificationFor(skill, hostCapabilities);
 
       const score =
         0.3 * stackMatch +
@@ -627,6 +649,11 @@ export const recommendSkills = (
         reasons.push("specialized intent boost");
       if (laneAdjustment > 0)
         reasons.push(`${lane} lane matches intent`);
+      if (verification.missingCapabilities.length > 0) {
+        reasons.push(
+          `verified completion needs ${verification.missingCapabilities.join(", ")}`,
+        );
+      }
       if (skill.manifest.riskLevel === "low")
         reasons.push("low-risk instruction-only skill");
       if (!fingerprint.agentContext.codexSkills.present)
@@ -652,6 +679,7 @@ export const recommendSkills = (
             finalScore: rounded(score),
           },
           riskLevel: skill.manifest.riskLevel,
+          verification,
           reasons: [
             ...reasons,
             matchedStackTags.length > 0

@@ -54,6 +54,24 @@ test("MCP recommend_skills returns deterministic recommendations", async () => {
   );
 });
 
+test("MCP recommend_skills accepts host capabilities for visual verification", async () => {
+  const result = await callMcpTool("recommend_skills", {
+    projectRoot: "fixtures/next-react-ts",
+    targetAgent: "codex",
+    userIntent: "Redesign this product page with stronger visual hierarchy.",
+    hostCapabilities: ["browser", "screenshots"],
+  });
+  const content = parseStructuredContent<{
+    recommendations: Array<{ skillId: string; verification: { status: string; missingCapabilities: string[] } }>;
+  }>(result);
+
+  assert.equal(content.recommendations[0]?.skillId, "frontend.visual-design-polish");
+  assert.deepEqual(content.recommendations[0]?.verification, {
+    status: "ready",
+    missingCapabilities: [],
+  });
+});
+
 test("MCP recommend_skills filters and limits design recommendations", async () => {
   const result = await callMcpTool("recommend_skills", {
     projectRoot: "fixtures/next-react-ts",

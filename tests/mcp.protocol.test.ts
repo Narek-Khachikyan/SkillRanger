@@ -47,6 +47,7 @@ test("MCP protocol lists tools", async () => {
         properties?: {
           lane?: { enum?: unknown[] };
           limitPerLane?: { type?: string; minimum?: number };
+          hostCapabilities?: { type?: string; items?: { type?: string } };
         };
       };
     }>;
@@ -69,6 +70,14 @@ test("MCP protocol lists tools", async () => {
   assert.equal(
     recommendSkillsTool?.inputSchema.properties?.limitPerLane?.minimum,
     1,
+  );
+  assert.equal(
+    recommendSkillsTool?.inputSchema.properties?.hostCapabilities?.type,
+    "array",
+  );
+  assert.equal(
+    recommendSkillsTool?.inputSchema.properties?.hostCapabilities?.items?.type,
+    "string",
   );
 });
 

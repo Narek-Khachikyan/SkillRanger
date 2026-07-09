@@ -111,6 +111,26 @@ test("recommender lets component API intent override redesign wording", async ()
   assert.equal(recommendations[0]?.skillId, "frontend.react-component-design");
 });
 
+test("recommender reports when visual verification capabilities are missing", async () => {
+  const withoutVisualQa = await nextFixtureRecommendations({
+    userIntent: "Redesign this product page with stronger visual hierarchy.",
+  });
+  const withVisualQa = await nextFixtureRecommendations({
+    userIntent: "Redesign this product page with stronger visual hierarchy.",
+    hostCapabilities: ["browser", "screenshots"],
+  });
+
+  assert.equal(withoutVisualQa[0]?.skillId, "frontend.visual-design-polish");
+  assert.deepEqual(withoutVisualQa[0]?.verification, {
+    status: "unverified",
+    missingCapabilities: ["browser", "screenshots"],
+  });
+  assert.deepEqual(withVisualQa[0]?.verification, {
+    status: "ready",
+    missingCapabilities: [],
+  });
+});
+
 test("recommender includes the full curated frontend MVP pack for Next.js fixture", async () => {
   const recommendations = await nextFixtureRecommendations();
   assert.deepEqual(

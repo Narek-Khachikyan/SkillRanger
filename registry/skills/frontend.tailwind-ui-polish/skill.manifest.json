@@ -50,6 +50,10 @@
       "portability": 0.82
     }
   },
+  "verification": {
+    "requiredCapabilities": ["browser", "screenshots"],
+    "fallback": "unverified"
+  },
   "freshness": {
     "lastReviewedAt": "2026-07-07",
     "targetFrameworkVersions": {

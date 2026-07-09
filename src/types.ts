@@ -39,6 +39,7 @@ export type ProjectFingerprint = {
 export type RiskLevel = "low" | "medium" | "high" | "block";
 export type CompatibilityLevel = "native" | "convertible" | "packageable" | "unsupported";
 export type EvaluationStatus = "none" | "trigger-eval" | "task-eval" | "real-project-smoke" | "curated";
+export type VerificationStatus = "ready" | "unverified" | "blocked";
 export const skillLanes = [
   "framework",
   "design",
@@ -96,6 +97,10 @@ export type SkillManifest = {
     benchmarkVersion?: string;
     evidenceUri?: string;
     score?: number;
+  };
+  verification?: {
+    requiredCapabilities: string[];
+    fallback: Exclude<VerificationStatus, "ready">;
   };
   freshness?: {
     lastReviewedAt?: string;
@@ -162,6 +167,10 @@ export type Recommendation = {
     finalScore: number;
   };
   riskLevel: RiskLevel;
+  verification: {
+    status: VerificationStatus;
+    missingCapabilities: string[];
+  };
   reasons: string[];
 };
 
