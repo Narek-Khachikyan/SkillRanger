@@ -93,8 +93,8 @@ Confirmed installs copy skill files into `.agents/skills/<skill>/` and update `s
 
 ```bash
 skillranger scan [project] [--json]
-skillranger recommend [project] [--target codex] [--intent "..."] [--lane <lane>] [--limit-per-lane <n>] [--explain] [--json]
-skillranger setup [project] [--target codex] [--scope repo] [--lane <lane>] [--limit-per-lane <n>]
+skillranger recommend [project] [--target codex] [--intent "..."] [--capabilities browser,screenshots] [--lane <lane>] [--limit-per-lane <n>] [--explain] [--json]
+skillranger setup [project] [--target codex] [--intent "..."] [--scope repo] [--lane <lane>] [--limit-per-lane <n>]
 skillranger audit <skill-id> [--json]
 skillranger validate:registry [--json]
 skillranger lint:skills [--json]
@@ -118,11 +118,11 @@ Recommendation lanes:
 - `qa`
 - `agent-context`
 
-Use `--lane` when the user intent is specific, for example design-only review. Use `--limit-per-lane` to keep output balanced without collapsing all recommendations into one flat ranking. Use `--explain` to print score drivers for human-readable recommendations; JSON and MCP recommendation output include `scoreBreakdown` for each skill.
+Use `--lane` when the user intent is specific, for example design-only review. With `--intent`, SkillRanger returns one primary skill and up to two compatible companions rather than an overlapping full pack. Use `--capabilities browser,screenshots` to mark visual work as ready for verification; without them, visual recommendations remain available but are explicitly `unverified`. `setup --yes` requires `--intent` for the same reason. Use `--limit-per-lane` to keep catalog output balanced and `--explain` to print score drivers; JSON and MCP recommendation output include `scoreBreakdown` and `verification` for each skill.
 
 ## Curated Skills
 
-The bundled frontend registry currently includes 13 low-risk, instruction-only skills, including:
+The bundled frontend registry currently includes 15 low-risk, instruction-only skills, including:
 
 - `frontend.next-app-router-review`
 - `frontend.react-app-review`
@@ -138,6 +138,7 @@ The bundled frontend registry currently includes 13 low-risk, instruction-only s
 - `frontend.design-to-code`
 - `frontend.ux-critique`
 - `frontend.interaction-polish`
+- `frontend.audit`
 
 Every curated manifest is validated for package shape, frontmatter consistency, checksums, compatibility metadata, routing metadata, quality rubric drift, and low-risk audit status.
 

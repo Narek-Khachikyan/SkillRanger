@@ -129,11 +129,11 @@ Design-lane boundaries are part of routing quality: `frontend.visual-design-poli
 
 ## Eval Set
 
-Use `evals/frontend/suite.json` as the frozen coverage target before increasing `qualityScore`: 80 trigger prompts and 40 task eval seeds across greenfield UI, existing-project modification, repair, and polish. Run it against repeatable fixtures before claiming benchmark-backed quality:
+Use `evals/frontend/suite.json` as the frozen coverage target before increasing `qualityScore`: 87 trigger prompts and 42 task eval seeds across greenfield UI, existing-project modification, repair, and polish. Run it against repeatable fixtures before claiming benchmark-backed quality:
 
 - `fixtures/next-react-ts`: Next.js, React, TypeScript, Tailwind, Playwright.
 - `fixtures/vite-react-ts`: Vite, React, TypeScript, existing `AGENTS.md`.
-- `/Users/narek_khachikyan/Desktop/PersonalProjects/AnimeBounty-Info`: real Vite React JavaScript app with Tailwind, Playwright, docs, PWA, and existing `AGENTS.md`.
+- A user-provided real frontend project, run from an isolated copy so the smoke cannot modify the original.
 
 Each eval should record:
 
@@ -167,8 +167,8 @@ Do not increase `qualityScore` from prose review alone; derive it from the froze
 
 The `frontend.playwright-debug` promotion pilot is recorded at `evals/frontend/results/frontend.playwright-debug-promotion-pilot-2026-07-05.json`.
 
-`frontend.playwright-debug` remains at `evaluation.status: real-project-smoke`. The evidence includes passing baseline evals, corrected routing specificity, safe AnimeBounty-Info install dry-run, `frontend.playwright-debug` trigger precision/recall at 1.000 across the 80-prompt suite, and real AnimeBounty-Info Playwright runs that generated an HTML report plus retained trace zip.
+`frontend.playwright-debug` remains at `evaluation.status: real-project-smoke`. Its historical pilot used the former 80-prompt/40-task suite and is not promotion evidence for the current frozen 87-prompt/42-task suite.
 
-Do not promote to `curated` yet. The repo validates the 40 task seeds but does not implement a runner for full task-eval execution, no-skill/old-skill deltas, pairwise comparison, or blind preference judging. Those gates are required by `minimumBlindPreferenceShare` and must not be inferred from routing or smoke artifacts.
+Do not promote to `curated` yet. The repo validates the 42 task seeds but does not implement a runner for full task-eval execution, no-skill/old-skill deltas, pairwise comparison, or blind preference judging. Those gates are required by `minimumBlindPreferenceShare` and must not be inferred from routing or smoke artifacts.
 
-Next step: implement or wire a full frontend task-eval/pairwise runner that executes the 40 task seeds against no-skill, old-skill, and current-skill baselines, stores comparable artifacts, and records blind preference results before any curated decision.
+Next step: implement or wire a full frontend task-eval/pairwise runner that executes the 42 task seeds against no-skill, old-skill, and current-skill baselines, stores comparable artifacts, and records blind preference results before any curated decision.
