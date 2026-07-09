@@ -151,6 +151,7 @@ export type AuditReport = {
 export type Recommendation = {
   skillId: string;
   displayName: string;
+  role?: "primary" | "companion";
   lane?: SkillLane;
   category?: string;
   score: number;

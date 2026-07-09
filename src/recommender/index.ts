@@ -522,6 +522,37 @@ const rounded = (value: number) => Number(value.toFixed(3));
 
 const requiredStackTags = new Set(["nextjs", "vite", "react", "tailwind", "playwright"]);
 
+const companionSkillIds: Record<string, string[]> = {
+  "frontend.visual-design-polish": [
+    "frontend.tailwind-ui-polish",
+    "frontend.interaction-polish",
+    "frontend.accessibility-review",
+  ],
+  "frontend.design-to-code": [
+    "frontend.tailwind-ui-polish",
+    "frontend.interaction-polish",
+    "frontend.accessibility-review",
+  ],
+  "frontend.design-system": [
+    "frontend.tailwind-ui-polish",
+    "frontend.accessibility-review",
+  ],
+  "frontend.tailwind-ui-polish": ["frontend.accessibility-review"],
+  "frontend.interaction-polish": ["frontend.accessibility-review"],
+  "frontend.ux-critique": ["frontend.accessibility-review"],
+};
+
+const composeTaskRecommendations = (recommendations: Recommendation[]) => {
+  const primary = recommendations[0];
+  if (!primary) return recommendations;
+  const allowedCompanions = new Set(companionSkillIds[primary.skillId] ?? []);
+  const companions = recommendations
+    .filter((recommendation) => allowedCompanions.has(recommendation.skillId))
+    .slice(0, 2)
+    .map((recommendation) => ({ ...recommendation, role: "companion" as const }));
+  return [{ ...primary, role: "primary" as const }, ...companions];
+};
+
 const hasRequiredStackTags = (
   fingerprint: ProjectFingerprint,
   skill: RegistrySkill,
@@ -710,11 +741,16 @@ export const recommendSkills = (
     : rankedRecommendations;
 
   const limitPerLane = options.limitPerLane;
-  if (typeof limitPerLane === "number" && Number.isInteger(limitPerLane) && limitPerLane > 0) {
-    return groupRecommendationsByLane(laneRecommendations).flatMap((group) =>
-      group.recommendations.slice(0, limitPerLane),
-    );
+  const limitedRecommendations =
+    typeof limitPerLane === "number" && Number.isInteger(limitPerLane) && limitPerLane > 0
+      ? groupRecommendationsByLane(laneRecommendations).flatMap((group) =>
+          group.recommendations.slice(0, limitPerLane),
+        )
+      : laneRecommendations;
+
+  if (options.userIntent?.trim()) {
+    return composeTaskRecommendations(limitedRecommendations);
   }
 
-  return laneRecommendations;
+  return limitedRecommendations;
 };

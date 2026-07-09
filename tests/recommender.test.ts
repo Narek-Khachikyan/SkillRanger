@@ -143,6 +143,23 @@ test("recommender applies an evidence penalty until a skill is curated", async (
   assert.equal(visualDesign?.scoreBreakdown.evaluationPenalty, 0.03);
 });
 
+test("recommender composes a visual task around one primary and compatible companions", async () => {
+  const recommendations = await nextFixtureRecommendations({
+    userIntent:
+      "Redesign this product page with stronger visual hierarchy, responsive spacing, and interaction feedback.",
+    hostCapabilities: ["browser", "screenshots"],
+  });
+
+  assert.deepEqual(
+    recommendations.map((item) => [item.skillId, item.role]),
+    [
+      ["frontend.visual-design-polish", "primary"],
+      ["frontend.tailwind-ui-polish", "companion"],
+      ["frontend.interaction-polish", "companion"],
+    ],
+  );
+});
+
 test("recommender includes the full curated frontend MVP pack for Next.js fixture", async () => {
   const recommendations = await nextFixtureRecommendations();
   assert.deepEqual(
