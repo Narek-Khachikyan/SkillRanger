@@ -7,6 +7,10 @@ description: Audit, extract, and apply frontend design-system conventions for Ta
 
 Use this skill when a frontend project needs token cleanup, shadcn/Tailwind theme review, component variant extraction, repeated class consolidation, or consistency checks across buttons, inputs, cards, badges, navigation, and layout primitives. Do not use it for one-off visual taste work unless the task is about making the system consistent.
 
+## Systemization Gate
+
+Extract a token, variant, or primitive only when the same semantic need appears in at least two current product surfaces or has a confirmed near-term owner. For throwaway prototypes, a single local exception, or a visibly inconsistent legacy baseline, prefer a small local repair and record the candidate pattern instead of normalizing existing noise into a system. Preserve deliberate distinctive values by giving them a semantic role when they repeat; do not flatten them into default shadcn neutrals.
+
 ## Decision Rules
 
 - Discover the existing system before inventing a new one.

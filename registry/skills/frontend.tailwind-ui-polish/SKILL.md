@@ -7,6 +7,16 @@ description: Improve Tailwind-based UI through screenshot-driven visual QA, resp
 
 Use this skill when Tailwind classes, local Tailwind components, shadcn/Tailwind tokens, or Tailwind-driven layouts are the implementation surface for visual polish, responsive repair, density tuning, or state styling. Do not use it for pure backend work, non-visual refactors, brand redesign from scratch, illustration work, or projects where Tailwind is not part of the UI layer.
 
+## Project Archetype
+
+Classify the project before prescribing tokens: **shadcn-backed**, **Tailwind with local semantic tokens**, or **Tailwind/CSS-first without a system**. Use shadcn names only in the first case; reuse local roles in the second; keep changes page-local in the third until repetition proves a system boundary. Do not turn a prototype or an inconsistent baseline into a token migration by default.
+
+## Verification Outcome
+
+- Report `verified` only after the changed view is rendered at the relevant desktop and mobile widths.
+- Without browser or screenshot capability, allow only analysis and small reversible fixes; mark material layout or visual work `blocked`.
+- If the user explicitly accepts the risk, return `implemented-unverified` with a manual overflow, focus, state, and viewport checklist.
+
 ## Decision Rules
 
 - Start from the product's subject, audience, and primary job. A manga library, CRM dashboard, and health portal should not receive the same palette, density, typography, or decorative moves.

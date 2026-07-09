@@ -7,6 +7,16 @@ description: Translate screenshots, mocks, Figma-style briefs, or visual referen
 
 Use this skill when implementing a supplied design, screenshot, mock, Figma-style brief, or visual reference in an existing frontend project. Do not use it for open-ended redesigns without a reference, pure component API refactors, or backend behavior.
 
+## Reference Intake
+
+Classify the input before implementation: **user-owned specification**, **product-local reference**, **competitor/brand inspiration**, or **generic/unknown source**. A user-owned Figma can be authoritative for fidelity; a competitor or generic source is only an attribute source and needs product-specific adaptation. Record missing fonts, assets, measurements, and responsive states before substituting them. If the cumulative substitutes can change hierarchy or density, stop and ask for the asset/spec instead of compounding approximation drift.
+
+## Verification Outcome
+
+- Report `verified` only after reference, implementation, and mobile adaptation are compared in rendered evidence.
+- Without browser or screenshot capability, report `blocked` before material fidelity work; do not claim a final match from code inspection.
+- With explicit user approval to continue, return `implemented-unverified` plus every approximation and the required manual comparison matrix.
+
 ## Decision Rules
 
 - Translate design intent into the existing product system, not isolated pixel art.

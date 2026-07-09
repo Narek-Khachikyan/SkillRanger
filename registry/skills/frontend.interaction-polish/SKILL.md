@@ -7,6 +7,12 @@ description: Refine frontend interaction states, motion, microinteractions, load
 
 Use this skill when a frontend interaction feels abrupt, unclear, jumpy, slow, inaccessible, or unfinished: modals, drawers, menus, toasts, tabs, accordions, hover/focus states, loading transitions, optimistic updates, and microinteractions. Do not use it for broad visual redesigns or Playwright debugging unless the main issue is interaction quality.
 
+## Verification Outcome
+
+- Report `verified` only after keyboard, pointer, reduced-motion, and relevant focus-return behavior are exercised in a rendered surface.
+- Without browser automation or a manual test surface, return `blocked` for material interaction changes rather than assuming the state machine is safe.
+- If the user explicitly accepts implementation without that evidence, return `implemented-unverified` with the exact manual interaction matrix; never describe it as complete.
+
 ## Decision Rules
 
 - Every motion needs a job: confirm input, preserve spatial context, reveal cause/effect, soften a state change, or make waiting understandable.

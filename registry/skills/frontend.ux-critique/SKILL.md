@@ -7,6 +7,10 @@ description: Critique frontend user flows for task completion, information archi
 
 Use this skill when reviewing a frontend flow, screen, form, onboarding path, checkout path, navigation model, or task workflow for usability. Do not use it for visual styling-only polish, framework review, or pure accessibility audits unless the request is about user flow and comprehension.
 
+## Evidence Ledger
+
+For every finding, label the source as **observed** (code, rendered UI, analytics, or research), **inferred** (a reasoned hypothesis), or **assumed** (missing product evidence). Only observed evidence can justify a release blocker or a scored verdict. When browser access, analytics, or user research is absent, describe usability concerns as hypotheses with a concrete validation step rather than fabricated certainty.
+
 ## Decision Rules
 
 - Evaluate whether the user can complete the job, not whether the UI merely looks clean.

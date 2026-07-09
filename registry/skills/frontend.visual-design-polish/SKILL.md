@@ -7,6 +7,22 @@ description: Improve frontend visual design with subject-specific direction, hie
 
 Use this skill when a frontend screen works but feels generic, visually weak, poorly prioritized, too crowded, too empty, or mismatched to the product's subject and audience. Do not use it for pure Tailwind class cleanup, backend work, accessibility-only audits, or design-system extraction unless the main request is visual direction and polish.
 
+## Scope Triage
+
+- **Micro polish:** a bounded, reversible adjustment such as a button hierarchy, one spacing defect, or one responsive overlap. Inspect local conventions, make one directionally consistent change, and do not create three art directions.
+- **Bounded screen:** one screen or flow with an established product direction. Use one visual thesis and a compact before/after evidence plan.
+- **Material redesign:** a new or substantially changed direction, layout, density model, or brand expression. Run the full thesis, design-dial, reference, and responsive workflow; offer three directions only when the user has not chosen one.
+
+## Evidence Ledger
+
+Before choosing a visual thesis, separate **observed** project evidence, **inferred** product context, and **assumptions** that need confirmation. Do not invent domain artifacts, personas, or business terminology at low confidence. Treat an existing `DESIGN.md` as an input to audit: if it is stale, generic, contradictory, or unsupported by the current UI, state the conflict and propose a compact correction for approval rather than following or replacing it silently.
+
+## Verification Outcome
+
+- Report `verified` only with rendered mobile and desktop evidence for material visual work.
+- If browser or screenshot capability is unavailable, return `blocked` for material redesign before implementation; analysis and a manual QA plan are still useful.
+- If the user explicitly requests implementation despite that blocker, return `implemented-unverified` with the missing evidence and exact manual viewport/state checks. Never call that result complete.
+
 ## Core Directive
 
 Do not produce generic "clean modern SaaS" UI by default. Beautiful frontend design starts with a product-specific visual thesis, then carries that thesis through layout, typography, color, surfaces, imagery, content, states, and motion. Trendy is acceptable only when it improves comprehension, memorability, trust, or task completion.
