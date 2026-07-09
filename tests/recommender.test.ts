@@ -131,6 +131,18 @@ test("recommender reports when visual verification capabilities are missing", as
   });
 });
 
+test("recommender applies an evidence penalty until a skill is curated", async () => {
+  const recommendations = await nextFixtureRecommendations({
+    userIntent: "Redesign this product page with stronger visual hierarchy.",
+  });
+  const visualDesign = recommendations.find(
+    (item) => item.skillId === "frontend.visual-design-polish",
+  );
+
+  assert.equal(visualDesign?.scoreBreakdown.qualityScore, 0.88);
+  assert.equal(visualDesign?.scoreBreakdown.evaluationPenalty, 0.03);
+});
+
 test("recommender includes the full curated frontend MVP pack for Next.js fixture", async () => {
   const recommendations = await nextFixtureRecommendations();
   assert.deepEqual(

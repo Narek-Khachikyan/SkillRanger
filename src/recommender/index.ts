@@ -305,6 +305,7 @@ const specializedIntentHints: Record<string, string[]> = {
   "frontend.visual-design-polish": [
     "before-after",
     "crowded",
+    "design.md",
     "editorial",
     "generic",
     "hierarchy",
@@ -514,6 +515,9 @@ const verificationFor = (skill: RegistrySkill, hostCapabilities: Set<string>) =>
   };
 };
 
+const evaluationPenalty = (skill: RegistrySkill) =>
+  skill.manifest.evaluation?.status === "curated" ? 0 : 0.03;
+
 const rounded = (value: number) => Number(value.toFixed(3));
 
 const requiredStackTags = new Set(["nextjs", "vite", "react", "tailwind", "playwright"]);
@@ -596,7 +600,9 @@ export const recommendSkills = (
         skill.manifest.stackTags,
       );
       const userIntentMatch = intentScore(skill, options.userIntent);
+      const hasEvaluationEvidence = skill.manifest.evaluation?.status === "curated";
       const qualityScore = clamp(skill.manifest.qualityScore);
+      const unverifiedEvaluationPenalty = evaluationPenalty(skill);
       const securityScore = clamp(skill.manifest.securityScore);
       const freshScore = freshnessScore(
         skill.manifest.freshness?.lastReviewedAt,
@@ -631,6 +637,7 @@ export const recommendSkills = (
         0.08 * freshScore +
         0.07 * agentCompatibilityScore -
         0.02 * duplicatePenalty +
+        -unverifiedEvaluationPenalty +
         laneAdjustment +
         skillAdjustment;
 
@@ -654,6 +661,9 @@ export const recommendSkills = (
           `verified completion needs ${verification.missingCapabilities.join(", ")}`,
         );
       }
+      if (!hasEvaluationEvidence) {
+        reasons.push("evaluation evidence missing; ranking penalty applied");
+      }
       if (skill.manifest.riskLevel === "low")
         reasons.push("low-risk instruction-only skill");
       if (!fingerprint.agentContext.codexSkills.present)
@@ -674,6 +684,7 @@ export const recommendSkills = (
             freshnessScore: rounded(freshScore),
             compatibilityScore: rounded(agentCompatibilityScore),
             duplicatePenalty: rounded(duplicatePenalty),
+            evaluationPenalty: rounded(unverifiedEvaluationPenalty),
             laneAdjustment: rounded(laneAdjustment),
             skillAdjustment: rounded(skillAdjustment),
             finalScore: rounded(score),

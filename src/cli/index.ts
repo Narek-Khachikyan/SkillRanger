@@ -133,6 +133,7 @@ const formatScoreBreakdown = (recommendation: { scoreBreakdown: Record<string, n
     `security ${breakdown.securityScore.toFixed(3)}`,
     `freshness ${breakdown.freshnessScore.toFixed(3)}`,
     `compatibility ${breakdown.compatibilityScore.toFixed(3)}`,
+    `evaluation penalty ${breakdown.evaluationPenalty.toFixed(3)}`,
     `lane adj ${breakdown.laneAdjustment.toFixed(3)}`,
     `skill adj ${breakdown.skillAdjustment.toFixed(3)}`,
   ].join("; ");

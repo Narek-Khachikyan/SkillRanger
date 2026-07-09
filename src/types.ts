@@ -162,6 +162,7 @@ export type Recommendation = {
     freshnessScore: number;
     compatibilityScore: number;
     duplicatePenalty: number;
+    evaluationPenalty: number;
     laneAdjustment: number;
     skillAdjustment: number;
     finalScore: number;
