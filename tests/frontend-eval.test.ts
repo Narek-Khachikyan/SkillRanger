@@ -53,7 +53,7 @@ test("frontend eval suite validates and summarizes seed coverage", async () => {
 
   const summary = summarizeFrontendEvalSuite(suite);
   assert.equal(summary.triggerPrompts.total, summary.triggerPrompts.target);
-  assert.equal(summary.triggerPrompts.target, 83);
+  assert.equal(summary.triggerPrompts.target, 87);
   assert.equal(summary.taskEvals.seedTasks, summary.taskEvals.target);
   assert.equal(summary.taskEvals.target, 42);
   assert.equal(
@@ -332,7 +332,7 @@ test("eval:frontend CLI reports suite summary as JSON", async () => {
   };
   assert.equal(report.ok, true);
   assert.deepEqual(report.issues, []);
-  assert.equal(report.summary.triggerPrompts.target, 83);
+  assert.equal(report.summary.triggerPrompts.target, 87);
   assert.equal(report.summary.taskEvals.target, 42);
   assert.equal("routingEval" in report, false);
 });

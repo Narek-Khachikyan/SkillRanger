@@ -2,7 +2,7 @@
   "schemaVersion": "1.0",
   "name": "frontend-skill-quality-v1",
   "targetCounts": {
-    "triggerPrompts": 83,
+    "triggerPrompts": 87,
     "taskEvals": 42
   },
   "triggerPrompts": [
@@ -20,6 +20,24 @@
       "kind": "should-trigger",
       "expectedSkill": "frontend.visual-design-polish",
       "text": "This dashboard works but looks generic and crowded. Improve visual hierarchy, density, and spacing without changing behavior.",
+      "routingExpected": {
+        "expectedSkill": "frontend.visual-design-polish"
+      }
+    },
+    {
+      "id": "trigger-russian-visual-redesign",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.visual-design-polish",
+      "text": "Сделай редизайн главной страницы и убери ощущение типового AI-интерфейса.",
+      "routingExpected": {
+        "expectedSkill": "frontend.visual-design-polish"
+      }
+    },
+    {
+      "id": "trigger-visual-rebrand",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.visual-design-polish",
+      "text": "Rebrand this landing page without changing its product flow.",
       "routingExpected": {
         "expectedSkill": "frontend.visual-design-polish"
       }
@@ -82,6 +100,24 @@
       "id": "nontrigger-backend-api",
       "kind": "should-not-trigger",
       "text": "Add cursor pagination to this Express API endpoint and update the database query.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-backend-database-design",
+      "kind": "should-not-trigger",
+      "text": "Design the database schema for the billing service.",
+      "routingExpected": {
+        "shouldNotTrigger": true,
+        "falsePositiveSeverity": "high"
+      }
+    },
+    {
+      "id": "nontrigger-russian-database-design",
+      "kind": "should-not-trigger",
+      "text": "Сделай дизайн схемы базы данных для сервиса оплаты.",
       "routingExpected": {
         "shouldNotTrigger": true,
         "falsePositiveSeverity": "high"
