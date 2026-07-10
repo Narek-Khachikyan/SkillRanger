@@ -20,6 +20,10 @@ responsive/states/overflow repair of an existing direction.
 
 Classify the project before prescribing tokens: **shadcn-backed**, **Tailwind with local semantic tokens**, or **Tailwind/CSS-first without a system**. Use shadcn names only in the first case; reuse local roles in the second; keep changes page-local in the third until repetition proves a system boundary. Do not turn a prototype or an inconsistent baseline into a token migration by default.
 
+## Structured Execution Contract
+
+For material responsive or state work, read `input.schema.json`, `workflow.json`, and `gates.json` before editing. Follow the selected profile without relaxing hard gates. With unknown model capability, use the constrained profile: preserve the existing direction, make the smallest bounded class change, verify declared states and viewports, and run one repair pass. Return `output.schema.json`; use `evals.json` for isolated evaluation.
+
 ## Verification Outcome
 
 - Report `verified` only after the changed view is rendered at the relevant desktop and mobile widths.

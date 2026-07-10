@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "id": "editorial-content",
+  "name": "Editorial Content",
+  "appropriateWhen": ["Reading, understanding, comparison, or narrative progression is the primary job."],
+  "inappropriateWhen": ["Users continuously monitor dense changing data or perform repetitive high-frequency actions."],
+  "domainSignals": ["editorial", "article", "documentation", "story", "report", "publication", "guide", "content"],
+  "layoutModels": ["editorial-grid", "structured-list", "timeline"],
+  "densityRange": ["spacious", "editorial", "balanced"],
+  "hierarchyStrategies": ["narrative-first", "data-first"],
+  "mobileStrategy": ["Preserve reading measure, source context, and progress; move secondary navigation out of the text column."],
+  "requiredStates": ["loading", "empty", "error", "long-content"],
+  "signatureMovePatterns": ["Use the real content hierarchy, citations, chronology, or media treatment as the signature."],
+  "forbiddenDefaults": ["Feature-card marketing grid", "testimonial strip", "oversized empty hero", "decorative pull quotes without content value"],
+  "validationRules": ["Reading measure is controlled", "Heading hierarchy is semantic", "Long content does not collapse navigation"]
+}

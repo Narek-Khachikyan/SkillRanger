@@ -32,16 +32,21 @@ export type RunPlanEntry = {
   prompt: string;
   baselineKind: BaselineKind;
   assertions: FrontendTaskAssertion[];
+  repetition?: number;
 };
 
 export type RunPlan = {
   suiteName: string;
+  repetitions: number;
+  skillSlice?: string;
   entries: RunPlanEntry[];
 };
 
 export type GenerateRunPlanOptions = {
   baselines: BaselineKind[];
   filter?: string[];
+  repetitions?: number;
+  skillSlice?: string;
 };
 
 export type ExecuteRunPlanOptions = {
@@ -113,6 +118,7 @@ const substitutePlaceholders = (
       .replace(/\{\{baseline\}\}/g, entry.baselineKind)
       .replace(/\{\{prompt\}\}/g, entry.prompt)
       .replace(/\{\{bandId\}\}/g, entry.bandId)
+      .replace(/\{\{repetition\}\}/g, String(entry.repetition ?? 1))
       .replace(/\{\{outputDir\}\}/g, runDir),
   );
 
@@ -167,11 +173,27 @@ export const generateRunPlan = (
   options: GenerateRunPlanOptions,
 ): RunPlan => {
   const { baselines, filter } = options;
+  if (baselines.length === 0) {
+    throw new Error("run plan requires at least one baseline");
+  }
+  if (new Set(baselines).size !== baselines.length) {
+    throw new Error("run plan baseline values must be unique");
+  }
+  const repetitions = options.repetitions ?? 1;
+  if (!Number.isInteger(repetitions) || repetitions < 1) {
+    throw new Error("repetitions must be a positive integer");
+  }
+  const slice = options.skillSlice
+    ? suite.skillSlices?.find((candidate) => candidate.id === options.skillSlice || candidate.skillId === options.skillSlice)
+    : undefined;
+  if (options.skillSlice && !slice) throw new Error(`Skill slice not found: ${options.skillSlice}`);
+  const sliceTaskIds = slice ? new Set(slice.taskIds) : undefined;
   const entries: RunPlanEntry[] = [];
   const taskBands = suite.taskBands ?? [];
 
   for (const band of taskBands) {
     for (const task of band.seedTasks ?? []) {
+      if (sliceTaskIds && !sliceTaskIds.has(task.id)) continue;
       if (filter && filter.length > 0) {
         const matches = filter.some(
           (f) => task.id === f || task.id.includes(f),
@@ -179,18 +201,26 @@ export const generateRunPlan = (
         if (!matches) continue;
       }
       for (const baselineKind of baselines) {
-        entries.push({
-          taskId: task.id,
-          bandId: band.id,
-          prompt: task.prompt,
-          baselineKind,
-          assertions: task.assertions,
-        });
+        for (let repetition = 1; repetition <= repetitions; repetition += 1) {
+          entries.push({
+            taskId: task.id,
+            bandId: band.id,
+            prompt: task.prompt,
+            baselineKind,
+            assertions: task.assertions,
+            ...(repetitions > 1 ? { repetition } : {}),
+          });
+        }
       }
     }
   }
 
-  return { suiteName: suite.name, entries };
+  return {
+    suiteName: suite.name,
+    repetitions,
+    ...(slice ? { skillSlice: slice.id } : {}),
+    entries,
+  };
 };
 
 export const printRunPlan = (plan: RunPlan, baselineMeta: BaselineConfigMap): void => {
@@ -214,6 +244,7 @@ export const printRunPlan = (plan: RunPlan, baselineMeta: BaselineConfigMap): vo
         meta?.skillId ? ` skill=${meta.skillId}` : "";
       console.log(
         `    baseline=${entry.baselineKind}${skillTag}` +
+          (entry.repetition ? ` repetition=${entry.repetition}` : "") +
           (meta?.model ? ` model=${meta.model}` : "") +
           (meta?.fixture ? ` fixture=${meta.fixture}` : ""),
       );
@@ -268,7 +299,12 @@ export const executeRunPlan = async (
   }
 
   for (const entry of plan.entries) {
-    const runDir = path.resolve(outputDir, entry.taskId, entry.baselineKind);
+    const runDir = path.resolve(
+      outputDir,
+      entry.taskId,
+      entry.baselineKind,
+      ...(entry.repetition ? [`rep-${entry.repetition}`] : []),
+    );
     const resolvedOutputDir = path.resolve(outputDir);
     if (!runDir.startsWith(`${resolvedOutputDir}${path.sep}`)) {
       throw new Error(`Run output escapes output directory: ${runDir}`);
@@ -282,9 +318,10 @@ export const executeRunPlan = async (
       const existing = await readExistingRunDir(runDir);
       if (existing !== null) {
         runs.push({
-          runId: `${entry.taskId}-${entry.baselineKind}`,
+          runId: `${entry.taskId}-${entry.baselineKind}${entry.repetition ? `-rep-${entry.repetition}` : ""}`,
           taskId: entry.taskId,
           baseline: entry.baselineKind,
+          ...(entry.repetition ? { repetition: entry.repetition } : {}),
           skillId: baselineMeta.skillId ?? "(none)",
           skillVersion: baselineMeta.skillVersion ?? "(none)",
           skillChecksum: baselineMeta.skillChecksum ?? "(none)",
@@ -315,9 +352,10 @@ export const executeRunPlan = async (
         console.log(`[dry-run] ${entry.taskId} / ${entry.baselineKind}: ${cmdLine}`);
       }
       runs.push({
-        runId: `${entry.taskId}-${entry.baselineKind}`,
+        runId: `${entry.taskId}-${entry.baselineKind}${entry.repetition ? `-rep-${entry.repetition}` : ""}`,
         taskId: entry.taskId,
         baseline: entry.baselineKind,
+        ...(entry.repetition ? { repetition: entry.repetition } : {}),
         skillId: baselineMeta.skillId ?? "(none)",
         skillVersion: baselineMeta.skillVersion ?? "(none)",
         skillChecksum: baselineMeta.skillChecksum ?? "(none)",
@@ -361,9 +399,10 @@ export const executeRunPlan = async (
     ];
 
     runs.push({
-      runId: `${entry.taskId}-${entry.baselineKind}`,
+      runId: `${entry.taskId}-${entry.baselineKind}${entry.repetition ? `-rep-${entry.repetition}` : ""}`,
       taskId: entry.taskId,
       baseline: entry.baselineKind,
+      ...(entry.repetition ? { repetition: entry.repetition } : {}),
       skillId: baselineMeta.skillId ?? "(none)",
       skillVersion: baselineMeta.skillVersion ?? "(none)",
       skillChecksum: baselineMeta.skillChecksum ?? "(none)",
@@ -386,6 +425,8 @@ export const executeRunPlan = async (
     schemaVersion: "1.0",
     suiteName: plan.suiteName,
     baselines: [...new Set(plan.entries.map((entry) => entry.baselineKind))],
+    ...(plan.repetitions > 1 ? { repetitions: plan.repetitions } : {}),
+    ...(plan.skillSlice ? { skillSlice: plan.skillSlice } : {}),
     runs,
   };
 };

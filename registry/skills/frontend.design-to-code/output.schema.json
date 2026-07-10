@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["outcome", "referenceInterpretation", "changes", "comparisonEvidence", "knownGaps"],
+  "properties": {
+    "outcome": { "enum": ["verified", "implemented-unverified", "failed", "blocked"] },
+    "referenceInterpretation": { "type": "object" },
+    "changes": { "type": "array", "items": { "type": "string" } },
+    "comparisonEvidence": { "type": "array", "items": { "type": "object" } },
+    "knownGaps": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "id": "consumer-discovery",
+  "name": "Consumer Discovery",
+  "appropriateWhen": ["Users browse, compare, save, or discover a visual catalogue of real content or products."],
+  "inappropriateWhen": ["The main task is dense administration, regulated data entry, or incident response."],
+  "domainSignals": ["discovery", "catalog", "browse", "media", "manga", "travel", "food", "marketplace", "collection"],
+  "layoutModels": ["grid", "editorial-grid", "structured-list"],
+  "densityRange": ["balanced", "spacious"],
+  "hierarchyStrategies": ["narrative-first", "action-first"],
+  "mobileStrategy": ["Keep discovery context and one-thumb primary actions; use content-aware cropping and progressive filters."],
+  "requiredStates": ["loading", "empty", "error", "saved", "filtered"],
+  "signatureMovePatterns": ["Derive rhythm, crop, metadata, and color emphasis from the actual catalogue content."],
+  "forbiddenDefaults": ["Generic SaaS hero", "fake testimonials", "unrelated abstract gradients", "identical nested cards"],
+  "validationRules": ["Real content drives hierarchy", "Filters do not hide results", "Long titles survive mobile"]
+}

@@ -2099,6 +2099,56 @@
     ]
   }
   ],
+  "skillSlices": [
+    {
+      "id": "visual-direction",
+      "skillId": "frontend.visual-design-polish",
+      "taskIds": [
+        "greenfield-library-discovery",
+        "greenfield-ops-command-center",
+        "greenfield-niche-domain-uncertainty",
+        "existing-vite-marketing-hero",
+        "existing-stale-generic-design-md"
+      ],
+      "triggerPromptIds": [
+        "trigger-visual-polish",
+        "trigger-russian-visual-redesign",
+        "trigger-visual-design-product-fit",
+        "trigger-visual-editorial-layout",
+        "trigger-visual-art-direction"
+      ]
+    },
+    {
+      "id": "tailwind-execution",
+      "skillId": "frontend.tailwind-ui-polish",
+      "taskIds": [
+        "vite-tailwind-settings-polish",
+        "next-tailwind-dashboard-density",
+        "existing-shadcn-billing-table",
+        "existing-tailwind-without-shadcn",
+        "mobile-overlap-action-bar"
+      ],
+      "triggerPromptIds": [
+        "trigger-tailwind-screenshot-qa",
+        "trigger-tailwind-token-drift",
+        "trigger-responsive-dashboard-density",
+        "trigger-mobile-nav-overflow",
+        "trigger-tailwind-responsive-fix"
+      ]
+    },
+    {
+      "id": "design-to-code",
+      "skillId": "frontend.design-to-code",
+      "taskIds": [
+        "greenfield-single-reference-fidelity"
+      ],
+      "triggerPromptIds": [
+        "trigger-design-to-code",
+        "trigger-design-to-code-screenshot",
+        "trigger-design-to-code-responsive-states"
+      ]
+    }
+  ],
   "scoring": {
     "utilityWeights": {
       "functionalCorrectness": 0.2,
@@ -2120,6 +2170,8 @@
       "minimumOldSkillDelta": 5,
       "maximumCategoryRegression": 3,
       "minimumBlindPreferenceShare": 0.6,
+      "minimumRepetitions": 3,
+      "maximumPassRateStdDev": 0.15,
       "criticalFailurePolicy": "No increase in critical build, runtime, or accessibility failures."
     }
   },

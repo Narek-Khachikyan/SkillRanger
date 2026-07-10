@@ -18,10 +18,26 @@ const exists = async (filePath: string) => {
   }
 };
 
-test("MCP exposes the read-only MVP tool set", () => {
+test("MCP exposes the project, install, and domain workflow tool set", () => {
   assert.deepEqual(
     mcpTools.map((tool) => tool.name),
-    ["analyze_project", "recommend_skills", "audit_skill", "list_installed_skills", "plan_skill_install", "install_skill"]
+    [
+      "analyze_project",
+      "recommend_skills",
+      "audit_skill",
+      "list_installed_skills",
+      "plan_skill_install",
+      "install_skill",
+      "list_domains",
+      "inspect_domain",
+      "create_frontend_design_brief",
+      "recommend_frontend_recipe",
+      "validate_frontend_result",
+      "compile_frontend_design_spec",
+      "verify_frontend_result",
+      "repair_frontend_result",
+      "run_domain_eval",
+    ]
   );
 });
 

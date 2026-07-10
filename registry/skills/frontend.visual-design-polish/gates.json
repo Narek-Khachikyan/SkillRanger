@@ -1,0 +1,5 @@
+{
+  "schemaVersion": "1.0",
+  "hard": ["product-evidence-present", "design-direction-valid", "required-states-covered", "responsive-evidence-present", "no-horizontal-overflow", "no-keyboard-trap", "focus-visible", "no-critical-axe", "no-runtime-console-errors", "reduced-motion-verified"],
+  "advisory": ["genericity-findings-reviewed", "token-drift-reviewed", "destructive-critique-present"]
+}

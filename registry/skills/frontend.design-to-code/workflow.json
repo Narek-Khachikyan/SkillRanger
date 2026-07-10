@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0",
+  "id": "frontend.design-to-code",
+  "maxRepairIterations": 3,
+  "profileInstructions": {
+    "constrained": ["Stop when reference evidence is absent.", "Extract one bounded direction.", "Reuse local components and tokens.", "State every approximation.", "Compare reference and implementation in browser evidence."],
+    "standard": ["Allow one local component variant when required by the reference.", "Keep fidelity and hard gates unchanged."],
+    "advanced": ["Allow a new primitive only when the reference and product evidence require it.", "Do not copy protected brand expression."]
+  },
+  "steps": ["validate-reference", "extract-brief", "map-local-components", "implement", "compare-reference", "browser-verify", "repair", "final-report"]
+}

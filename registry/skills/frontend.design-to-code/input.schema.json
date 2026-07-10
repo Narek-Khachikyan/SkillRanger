@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["brief", "referenceEvidence", "capabilityProfile"],
+  "properties": {
+    "brief": { "type": "object" },
+    "referenceEvidence": {
+      "type": "object",
+      "required": ["kind", "paths", "ownership"],
+      "properties": {
+        "kind": { "enum": ["screenshot", "mock", "figma-brief", "design-spec"] },
+        "paths": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "ownership": { "enum": ["user-owned", "product-local", "competitor-inspiration", "unknown"] }
+      }
+    },
+    "capabilityProfile": { "enum": ["constrained", "standard", "advanced"] },
+    "knownApproximations": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

@@ -8,6 +8,8 @@ export const packageRoot = path.resolve(
 
 export const defaultRegistryRoot = path.join(packageRoot, "registry");
 
+export const defaultDomainsRoot = path.join(packageRoot, "domains");
+
 export const defaultFrontendEvalSuitePath = path.join(
   packageRoot,
   "evals",

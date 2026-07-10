@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["outcome", "artifacts", "verification", "changes", "residualRisks"],
+  "properties": {
+    "outcome": { "enum": ["verified", "implemented-unverified", "failed", "blocked"] },
+    "artifacts": {
+      "type": "object",
+      "required": ["brief", "recipe", "direction", "verification"],
+      "properties": {
+        "brief": { "type": "string" },
+        "recipe": { "type": "string" },
+        "direction": { "type": "string" },
+        "verification": { "type": "string" }
+      }
+    },
+    "verification": { "type": "object" },
+    "changes": { "type": "array", "items": { "type": "string" } },
+    "residualRisks": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["brief", "existingDirection", "capabilityProfile"],
+  "properties": {
+    "brief": { "type": "object" },
+    "existingDirection": { "type": "object", "description": "Approved design direction; this skill must not replace it." },
+    "capabilityProfile": { "enum": ["constrained", "standard", "advanced"] },
+    "tailwindVersion": { "enum": ["3", "4", "unknown"] },
+    "affectedSurfaces": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

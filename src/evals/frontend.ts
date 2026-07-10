@@ -5,7 +5,23 @@ import { scanProject } from "../scanner/index.ts";
 import { defaultFrontendEvalSuitePath, defaultRegistryRoot } from "../paths.ts";
 import type { Recommendation } from "../types.ts";
 
-export type FrontendGraderType = "code" | "screenshot" | "axe" | "lighthouse" | "human" | "llm_judge" | "pairwise";
+export type GraderType =
+  | "code"
+  | "test"
+  | "schema"
+  | "screenshot"
+  | "browser"
+  | "axe"
+  | "lighthouse"
+  | "static-analysis"
+  | "runtime"
+  | "human"
+  | "pairwise"
+  | "llm-judge"
+  | "llm_judge"
+  | "benchmark";
+
+export type FrontendGraderType = GraderType;
 
 export type FrontendRoutingExpected = {
   expectedSkill?: string;
@@ -57,6 +73,12 @@ export type FrontendEvalSuite = {
     utilityWeights: Record<string, number>;
     promotionGates: Record<string, number | string>;
   };
+  skillSlices?: Array<{
+    id: string;
+    skillId: string;
+    taskIds: string[];
+    triggerPromptIds?: string[];
+  }>;
 };
 
 export type FrontendTaskEvidenceStatus = "passed" | "failed" | "not-assessed";
@@ -65,10 +87,13 @@ export type FrontendTaskEvidence = {
   schemaVersion: "1.0";
   suiteName: string;
   baselines?: string[];
+  repetitions?: number;
+  skillSlice?: string;
   runs: Array<{
     runId: string;
     taskId: string;
     baseline?: string;
+    repetition?: number;
     skillId: string;
     skillVersion: string;
     skillChecksum: string;
@@ -87,6 +112,34 @@ export type FrontendTaskEvidence = {
       text: string;
       status: FrontendTaskEvidenceStatus;
     }>;
+    verification?: {
+      outcome: "verified" | "implemented-unverified" | "failed" | "blocked";
+      hardGatesPassed: boolean;
+      criticalFindings: number;
+    };
+  }>;
+};
+
+export type FrontendVarianceSummary = {
+  repetitions: number;
+  issues: string[];
+  promotionReady: boolean;
+  groups: Array<{
+    baseline: string;
+    model: string;
+    runs: number;
+    passRate: number;
+    worstRunPassRate: number;
+    passRateStdDev: number;
+    failedAssertions: number;
+    falseCompletionClaims: number;
+  }>;
+  comparisons: Array<{
+    candidate: string;
+    baseline: string;
+    passRateDelta: number;
+    worstRunDelta: number;
+    varianceDelta: number;
   }>;
 };
 
@@ -108,6 +161,7 @@ export type FrontendTaskEvidenceReport = {
 export type FrontendPairwiseReview = {
   schemaVersion: "1.0";
   suiteName: string;
+  skillSlice?: string;
   candidateUnderTestLabel: "A" | "B";
   comparisons: Array<{
     comparisonId: string;
@@ -197,12 +251,19 @@ const sum = (values: number[]) =>
 
 const graderTypes: Record<FrontendGraderType, true> = {
   code: true,
+  test: true,
+  schema: true,
   screenshot: true,
+  browser: true,
   axe: true,
   lighthouse: true,
+  "static-analysis": true,
+  runtime: true,
   human: true,
   llm_judge: true,
+  "llm-judge": true,
   pairwise: true,
+  benchmark: true,
 };
 
 const roundedRate = (passed: number, total: number) =>
@@ -346,6 +407,26 @@ export const validateFrontendEvalSuite = (suite: FrontendEvalSuite) => {
     );
   }
 
+  if (suite.skillSlices !== undefined) {
+    const sliceIds = new Set<string>();
+    for (const slice of suite.skillSlices) {
+      if (!slice.id?.trim()) issues.push("skill slice id is required");
+      if (sliceIds.has(slice.id)) issues.push(`duplicate skill slice id: ${slice.id}`);
+      sliceIds.add(slice.id);
+      if (!slice.skillId?.trim()) issues.push(`skill slice ${slice.id} skillId is required`);
+      if (!Array.isArray(slice.taskIds) || slice.taskIds.length === 0) {
+        issues.push(`skill slice ${slice.id} taskIds must be non-empty`);
+      } else {
+        for (const taskId of slice.taskIds) {
+          if (!taskIds.has(taskId)) issues.push(`skill slice ${slice.id} references unknown task: ${taskId}`);
+        }
+      }
+      for (const promptId of slice.triggerPromptIds ?? []) {
+        if (!promptIds.has(promptId)) issues.push(`skill slice ${slice.id} references unknown trigger prompt: ${promptId}`);
+      }
+    }
+  }
+
   if (suite.artifactContract !== undefined) {
     for (const key of ["screenshots", "requiredMetadata", "optionalArtifacts"] as const) {
       const value = suite.artifactContract[key];
@@ -359,6 +440,21 @@ export const validateFrontendEvalSuite = (suite: FrontendEvalSuite) => {
   const weightTotal = sum(weights);
   if (Math.abs(weightTotal - 1) > 0.001) {
     issues.push(`utilityWeights must sum to 1.00, received ${weightTotal.toFixed(2)}`);
+  }
+  for (const gate of [
+    "minimumTriggerRecall",
+    "minimumTriggerPrecision",
+    "minimumNoSkillDelta",
+    "minimumOldSkillDelta",
+    "maximumCategoryRegression",
+    "minimumBlindPreferenceShare",
+    "minimumRepetitions",
+    "maximumPassRateStdDev",
+  ]) {
+    const value = suite.scoring?.promotionGates?.[gate];
+    if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value))) {
+      issues.push(`promotionGates.${gate} must be a finite number when present`);
+    }
   }
 
   return issues;
@@ -375,10 +471,23 @@ export const validateFrontendTaskEvidence = (
   evidence: FrontendTaskEvidence,
 ): FrontendTaskEvidenceReport => {
   const issues: string[] = [];
-  const tasks = (suite.taskBands ?? []).flatMap((band) => band.seedTasks ?? []);
+  const allTasks = (suite.taskBands ?? []).flatMap((band) => band.seedTasks ?? []);
+  const selectedSlice = evidence.skillSlice
+    ? suite.skillSlices?.find(
+        (slice) => slice.id === evidence.skillSlice || slice.skillId === evidence.skillSlice,
+      )
+    : undefined;
+  if (evidence.skillSlice && !selectedSlice) {
+    issues.push(`task evidence references unknown skill slice: ${evidence.skillSlice}`);
+  }
+  const selectedTaskIds = selectedSlice ? new Set(selectedSlice.taskIds) : undefined;
+  const tasks = selectedTaskIds
+    ? allTasks.filter((task) => selectedTaskIds.has(task.id))
+    : allTasks;
   const taskById = new Map(tasks.map((task) => [task.id, task]));
   const seenRunIds = new Set<string>();
   const seenRunKeys = new Set<string>();
+  const comparisonMetadata = new Map<string, { model: string; fixture: string }>();
   const recordedTaskIds = new Set<string>();
   let artifactCount = 0;
   let passedAssertions = 0;
@@ -395,6 +504,10 @@ export const validateFrontendTaskEvidence = (
     : [];
   if (expectedBaselines.some((baseline) => !baseline?.trim())) {
     issues.push("task evidence baselines must be non-empty strings");
+  }
+  const expectedRepetitions = evidence.repetitions ?? 1;
+  if (!Number.isInteger(expectedRepetitions) || expectedRepetitions < 1) {
+    issues.push("task evidence repetitions must be a positive integer");
   }
 
   for (const run of Array.isArray(evidence.runs) ? evidence.runs : []) {
@@ -418,13 +531,35 @@ export const validateFrontendTaskEvidence = (
     ) {
       issues.push(`task evidence ${run.taskId} references unknown baseline: ${run.baseline}`);
     }
-    const runKey = expectedBaselines.length > 0
-      ? `${run.taskId}::${run.baseline ?? ""}`
-      : run.taskId;
+    if (expectedRepetitions > 1 && (!Number.isInteger(run.repetition) || (run.repetition ?? 0) < 1 || (run.repetition ?? 0) > expectedRepetitions)) {
+      issues.push(`task evidence ${run.taskId} repetition must be from 1 to ${expectedRepetitions}`);
+    }
+    const runKey = [
+      run.taskId,
+      ...(expectedBaselines.length > 0 ? [run.baseline ?? ""] : []),
+      ...(expectedRepetitions > 1 ? [`rep:${run.repetition ?? ""}`] : []),
+    ].join("::");
     if (seenRunKeys.has(runKey)) {
       issues.push(`duplicate task evidence run: ${runKey}`);
     }
     seenRunKeys.add(runKey);
+    if (expectedBaselines.length > 1) {
+      const comparisonKey = [
+        run.taskId,
+        ...(expectedRepetitions > 1 ? [`rep:${run.repetition ?? ""}`] : []),
+      ].join("::");
+      const metadata = comparisonMetadata.get(comparisonKey);
+      if (!metadata) {
+        comparisonMetadata.set(comparisonKey, { model: run.model, fixture: run.fixture });
+      } else {
+        if (metadata.model !== run.model) {
+          issues.push(`task evidence ${comparisonKey} must use the same model across baselines`);
+        }
+        if (metadata.fixture !== run.fixture) {
+          issues.push(`task evidence ${comparisonKey} must use the same fixture across baselines`);
+        }
+      }
+    }
 
     for (const key of ["skillId", "skillVersion", "skillChecksum", "model", "fixture", "command"] as const) {
       if (!run[key]?.trim()) issues.push(`task evidence ${run.taskId} ${key} is required`);
@@ -517,8 +652,15 @@ export const validateFrontendTaskEvidence = (
       continue;
     }
     for (const baseline of expectedBaselines) {
-      if (!seenRunKeys.has(`${task.id}::${baseline}`)) {
-        issues.push(`task evidence is missing task/baseline: ${task.id}::${baseline}`);
+      for (let repetition = 1; repetition <= expectedRepetitions; repetition += 1) {
+        const expectedKey = [
+          task.id,
+          baseline,
+          ...(expectedRepetitions > 1 ? [`rep:${repetition}`] : []),
+        ].join("::");
+        if (!seenRunKeys.has(expectedKey)) {
+          issues.push(`task evidence is missing task/baseline: ${expectedKey}`);
+        }
       }
     }
   }
@@ -528,7 +670,7 @@ export const validateFrontendTaskEvidence = (
     metrics: {
       expectedTasks: tasks.length,
       recordedTasks: recordedTaskIds.size,
-      expectedRuns: tasks.length * Math.max(expectedBaselines.length, 1),
+      expectedRuns: tasks.length * Math.max(expectedBaselines.length, 1) * Math.max(expectedRepetitions, 1),
       recordedRuns: seenRunKeys.size,
       artifactCount,
       passedAssertions,
@@ -539,12 +681,152 @@ export const validateFrontendTaskEvidence = (
   };
 };
 
+const mean = (values: number[]) =>
+  values.length === 0 ? 0 : values.reduce((total, value) => total + value, 0) / values.length;
+
+const standardDeviation = (values: number[]) => {
+  if (values.length < 2) return 0;
+  const average = mean(values);
+  const squaredDeviations = values.reduce(
+    (total, value) => total + (value - average) ** 2,
+    0,
+  );
+  return Math.sqrt(squaredDeviations / (values.length - 1));
+};
+
+export const summarizeFrontendVariance = (
+  evidence: FrontendTaskEvidence,
+  suite?: FrontendEvalSuite,
+): FrontendVarianceSummary => {
+  const byGroup = new Map<string, FrontendTaskEvidence["runs"]>();
+  for (const run of evidence.runs) {
+    const key = `${run.baseline ?? "unspecified"}::${run.model}`;
+    byGroup.set(key, [...(byGroup.get(key) ?? []), run]);
+  }
+  const groups = [...byGroup.entries()].map(([key, runs]) => {
+    const [baseline, model] = key.split("::", 2) as [string, string];
+    const byRepetition = new Map<number, typeof runs>();
+    for (const run of runs) {
+      const repetition = run.repetition ?? 1;
+      byRepetition.set(repetition, [...(byRepetition.get(repetition) ?? []), run]);
+    }
+    const passRates = [...byRepetition.values()].map((repetitionRuns) => {
+      const assessed = repetitionRuns.flatMap((run) =>
+        run.assertions.filter((assertion) => assertion.status !== "not-assessed"),
+      );
+      const passed = assessed.filter((assertion) => assertion.status === "passed").length;
+      return assessed.length === 0 ? 0 : passed / assessed.length;
+    });
+    const failedAssertions = runs.reduce(
+      (total, run) => total + run.assertions.filter((assertion) => assertion.status === "failed").length,
+      0,
+    );
+    const falseCompletionClaims = runs.filter((run) =>
+      run.verification?.outcome === "verified" &&
+      (
+        !run.verification.hardGatesPassed ||
+        run.verification.criticalFindings > 0 ||
+        run.assertions.some((assertion) => assertion.status !== "passed")
+      ),
+    ).length;
+    return {
+      baseline,
+      model,
+      runs: runs.length,
+      passRate: Number(mean(passRates).toFixed(4)),
+      worstRunPassRate: Number(Math.min(...passRates).toFixed(4)),
+      passRateStdDev: Number(standardDeviation(passRates).toFixed(4)),
+      failedAssertions,
+      falseCompletionClaims,
+    };
+  }).sort((a, b) => a.model.localeCompare(b.model) || a.baseline.localeCompare(b.baseline));
+  const comparisons: FrontendVarianceSummary["comparisons"] = [];
+  for (const candidate of groups.filter((group) => group.baseline === "current-skill")) {
+    for (const baseline of groups.filter((group) => group.model === candidate.model && group.baseline !== "current-skill")) {
+      comparisons.push({
+        candidate: candidate.baseline,
+        baseline: baseline.baseline,
+        passRateDelta: Number((candidate.passRate - baseline.passRate).toFixed(4)),
+        worstRunDelta: Number((candidate.worstRunPassRate - baseline.worstRunPassRate).toFixed(4)),
+        varianceDelta: Number((candidate.passRateStdDev - baseline.passRateStdDev).toFixed(4)),
+      });
+    }
+  }
+  const issues: string[] = [];
+  const currentGroups = groups.filter((group) => group.baseline === "current-skill");
+  if (suite && currentGroups.length === 0) {
+    issues.push("variance requires a current-skill model group");
+  }
+  if (suite) {
+    for (const candidate of currentGroups) {
+      for (const requiredBaseline of ["without-skill", "old-skill"] as const) {
+        if (!groups.some(
+          (group) => group.model === candidate.model && group.baseline === requiredBaseline,
+        )) {
+          issues.push(`${candidate.model} is missing required ${requiredBaseline} variance group`);
+        }
+      }
+    }
+  }
+  const configuredMinimumRepetitions = suite?.scoring.promotionGates.minimumRepetitions;
+  const minimumRepetitions = typeof configuredMinimumRepetitions === "number"
+    ? configuredMinimumRepetitions
+    : 1;
+  const configuredMaximumStdDev = suite?.scoring.promotionGates.maximumPassRateStdDev;
+  const maximumPassRateStdDev = typeof configuredMaximumStdDev === "number"
+    ? configuredMaximumStdDev
+    : 1;
+  const normalizeDelta = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value) ? (value >= 1 ? value / 100 : value) : 0;
+  const minimumNoSkillDelta = normalizeDelta(suite?.scoring.promotionGates.minimumNoSkillDelta);
+  const minimumOldSkillDelta = normalizeDelta(suite?.scoring.promotionGates.minimumOldSkillDelta);
+  if ((evidence.repetitions ?? 1) < minimumRepetitions) {
+    issues.push(`variance requires at least ${minimumRepetitions} repetitions`);
+  }
+  for (const group of groups.filter((candidate) => candidate.baseline === "current-skill")) {
+    if (group.passRateStdDev > maximumPassRateStdDev) {
+      issues.push(`${group.model} current-skill variance ${group.passRateStdDev} exceeds ${maximumPassRateStdDev}`);
+    }
+    if (group.falseCompletionClaims > 0) {
+      issues.push(`${group.model} has ${group.falseCompletionClaims} false verified completion claims`);
+    }
+  }
+  for (const comparison of comparisons) {
+    const minimumDelta = comparison.baseline === "without-skill"
+      ? minimumNoSkillDelta
+      : comparison.baseline === "old-skill"
+        ? minimumOldSkillDelta
+        : 0;
+    if (comparison.passRateDelta < minimumDelta) {
+      issues.push(
+        `${comparison.candidate} pass-rate delta over ${comparison.baseline} is ${comparison.passRateDelta}; required ${minimumDelta}`,
+      );
+    }
+  }
+  return {
+    repetitions: evidence.repetitions ?? 1,
+    issues,
+    promotionReady: issues.length === 0,
+    groups,
+    comparisons,
+  };
+};
+
 export const validateFrontendPairwiseReview = (
   suite: FrontendEvalSuite,
   review: FrontendPairwiseReview,
 ): FrontendPairwiseReviewReport => {
   const issues: string[] = [];
-  const taskIds = new Set((suite.taskBands ?? []).flatMap((band) => band.seedTasks ?? []).map((task) => task.id));
+  const allTaskIds = new Set((suite.taskBands ?? []).flatMap((band) => band.seedTasks ?? []).map((task) => task.id));
+  const selectedSlice = review.skillSlice
+    ? suite.skillSlices?.find(
+        (slice) => slice.id === review.skillSlice || slice.skillId === review.skillSlice,
+      )
+    : undefined;
+  if (review.skillSlice && !selectedSlice) {
+    issues.push(`pairwise review references unknown skill slice: ${review.skillSlice}`);
+  }
+  const taskIds = selectedSlice ? new Set(selectedSlice.taskIds) : allTaskIds;
   const reviewedTaskIds = new Set<string>();
   const comparisonIds = new Set<string>();
   let candidateWins = 0;

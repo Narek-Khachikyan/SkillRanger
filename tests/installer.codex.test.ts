@@ -119,6 +119,50 @@ test("codex installer copies skill support files", async () => {
   assert.equal(await exists(path.join(projectRoot, ".agents/skills/supported-skill/references/design.md")), true);
 });
 
+test("codex installer keeps structured design skills self-contained", async () => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-install-"));
+  const projectRoot = path.join(tmpRoot, "next-react-ts");
+  await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
+
+  const skill = await findSkill("frontend.visual-design-polish", "registry");
+  assert.ok(skill);
+  const adapter = getAdapter("codex");
+  const plan = await adapter.planInstall(skill, {
+    projectRoot,
+    targetAgent: "codex",
+    scope: "repo",
+    dryRun: true,
+  });
+  for (const file of [
+    "input.schema.json",
+    "output.schema.json",
+    "workflow.json",
+    "gates.json",
+    "evals.json",
+  ]) {
+    assert.ok(plan.writes.some((filePath) => filePath.endsWith(`visual-design-polish/${file}`)));
+  }
+
+  await adapter.applyInstall(skill, {
+    projectRoot,
+    targetAgent: "codex",
+    scope: "repo",
+    dryRun: false,
+  });
+  const installedRoot = path.join(projectRoot, ".agents/skills/visual-design-polish");
+  for (const file of [
+    "SKILL.md",
+    "skill.manifest.json",
+    "input.schema.json",
+    "output.schema.json",
+    "workflow.json",
+    "gates.json",
+    "evals.json",
+  ]) {
+    assert.equal(await exists(path.join(installedRoot, file)), true, file);
+  }
+});
+
 test("codex installer upserts repeat installs into one lockfile entry", async () => {
   const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-install-"));
   const projectRoot = path.join(tmpRoot, "next-react-ts");

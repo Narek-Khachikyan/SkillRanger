@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import path from "node:path";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import * as readline from "node:readline";
 import { fileURLToPath } from "node:url";
 import { scanProject } from "../scanner/index.ts";
@@ -15,11 +15,32 @@ import {
   loadFrontendTaskEvidence,
   runFrontendRoutingEval,
   summarizeFrontendEvalSuite,
+  summarizeFrontendVariance,
   validateFrontendPairwiseReview,
   validateFrontendTaskEvidence,
   validateFrontendEvalSuite,
 } from "../evals/frontend.ts";
 import { defaultRegistryRoot, packageRoot } from "../paths.ts";
+import "../domains/bundled.ts";
+import { getDomainPack, inspectDomainPack, listDomainPacks } from "../domains/registry.ts";
+import {
+  compileDesignFile,
+  createBrowserObservationPlan,
+  createDesignBriefScaffold,
+  executeBrowserObservationPlan,
+  loadFrontendRecipes,
+  readJsonArtifact,
+  recommendFrontendRecipe,
+  type BrowserObservation,
+  type DesignBrief,
+  type DesignDirection,
+  validateDesignBrief,
+  validateDesignDirection,
+  validateDesignResult,
+  validateFrontendSourceFiles,
+} from "../domains/frontend/design/index.ts";
+import { createRepairRequest } from "../runtime/verification.ts";
+import type { VerificationReport } from "../runtime/types.ts";
 import {
   BASELINE_KINDS,
   executeRunPlan,
@@ -65,6 +86,11 @@ const parseArgs = (argv: string[]): ParsedArgs => {
 
 const asString = (value: string | boolean | undefined, fallback: string) => (typeof value === "string" ? value : fallback);
 
+const requiredFlag = (value: string | boolean | undefined, name: string) => {
+  if (typeof value !== "string" || value.trim() === "") throw new Error(`${name} requires a path.`);
+  return path.resolve(value);
+};
+
 const asSkillLane = (value: string | boolean | undefined): SkillLane | undefined => {
   if (value === undefined) return undefined;
   if (typeof value === "string" && skillLanes.includes(value as SkillLane)) {
@@ -109,6 +135,16 @@ const printHelp = () => {
 
 	Usage:
 	  skillranger scan [project] [--json]
+  skillranger domain:list [--json]
+  skillranger domain:inspect <domain-id> [--json]
+  skillranger design:brief [project] [--domain <name>] [--user <actor>] [--task <task>] [--surface <type>] [--action <action>] [--output <path>] [--json]
+  skillranger design:recommend-recipe --brief <path> [--json]
+  skillranger design:observe --brief <path> --base-url <url> --command <adapter> [--route </path>] [--output observations.json] [--project <path>] [--json]
+  skillranger design:validate --brief <path> [--direction <path>] [--json]
+  skillranger design:validate-source [project] --files <comma-separated-paths> [--semantic-tokens] [--json]
+  skillranger design:verify --brief <path> --direction <path> [--observations <path>] [--capabilities browser,screenshots] [--iteration <n>] [--json]
+  skillranger design:repair --report <path> [--max-iterations <n>] [--json]
+  skillranger design:compile --brief <path> --direction <path> [--report <path>] [--output <path>] [--json]
   skillranger recommend [project] [--target codex|claude-code|opencode|cursor|gemini-cli] [--intent "..."] [--capabilities browser,screenshots] [--lane <lane>] [--limit-per-lane <n>] [--explain] [--json]
   skillranger setup [project] [--target codex[,claude-code,opencode,cursor,gemini-cli]] [--intent "..."] [--scope repo|user] [--copy] [--yes] [--lane <lane>] [--limit-per-lane <n>]
 	  skillranger audit <skill-id> [--json]
@@ -116,7 +152,9 @@ const printHelp = () => {
 	  skillranger audit:registry [--json]
   skillranger lint:skills [--json]
   skillranger publish:check [--json]
-  skillranger eval:frontend [--suite <path>] [--json]
+	  skillranger eval:frontend [--suite <path>] [--json]
+  skillranger eval:frontend --run-tasks --skill-slice <id> --repetitions <n> [--baselines without-skill,old-skill,current-skill] [--json]
+  skillranger eval:frontend --verify-task-evidence <path> --summarize-variance [--json]
   skillranger eval:frontend --run-routing --project <path> [--target codex] [--suite <path>] [--json]
   skillranger eval:frontend --verify-task-evidence <path> [--suite <path>] [--json]
   skillranger eval:frontend --verify-pairwise-review <path> [--suite <path>] [--json]
@@ -481,6 +519,181 @@ const run = async () => {
     return;
   }
 
+  if (command === "domain:list") {
+    const domains = listDomainPacks().map(inspectDomainPack);
+    if (args.flags.json) printJson({ domains });
+    else for (const domain of domains) console.log(`${domain.id}@${domain.version}  ${domain.displayName}`);
+    return;
+  }
+
+  if (command === "domain:inspect") {
+    const domainId = args.positionals[0];
+    if (!domainId) throw new Error("Missing domain id.");
+    const domain = getDomainPack(domainId);
+    if (!domain) throw new Error(`Domain not found: ${domainId}`);
+    const report = inspectDomainPack(domain);
+    if (args.flags.json) printJson(report);
+    else {
+      console.log(`${report.displayName} (${report.id}) @ ${report.version}`);
+      console.log(`Capabilities: ${report.capabilities.join(", ")}`);
+      console.log(`Skills: ${report.ownership.map((rule) => rule.primarySkill).join(", ")}`);
+    }
+    return;
+  }
+
+  if (command === "design:brief") {
+    const projectRoot = path.resolve(args.positionals[0] ?? ".");
+    const fingerprint = await scanProject(projectRoot);
+    const brief = createDesignBriefScaffold(fingerprint, {
+      domain: typeof args.flags.domain === "string" ? args.flags.domain : undefined,
+      primaryUserOrActor: typeof args.flags.user === "string" ? args.flags.user : undefined,
+      primaryTask: typeof args.flags.task === "string" ? args.flags.task : undefined,
+      surfaceType: typeof args.flags.surface === "string" ? args.flags.surface : undefined,
+      primaryAction: typeof args.flags.action === "string" ? args.flags.action : undefined,
+    });
+    const outputPath = typeof args.flags.output === "string" ? path.resolve(args.flags.output) : undefined;
+    if (outputPath) {
+      await mkdir(path.dirname(outputPath), { recursive: true });
+      await writeFile(outputPath, `${JSON.stringify(brief, null, 2)}\n`, "utf8");
+    }
+    if (args.flags.json) printJson({ brief, ...(outputPath ? { outputPath } : {}) });
+    else if (outputPath) console.log(`Design brief written to ${outputPath}`);
+    else printJson(brief);
+    return;
+  }
+
+  if (command === "design:recommend-recipe") {
+    const briefPath = requiredFlag(args.flags.brief, "--brief");
+    const brief = await readJsonArtifact<DesignBrief>(briefPath);
+    const findings = validateDesignBrief(brief);
+    const recommendations = recommendFrontendRecipe(brief, await loadFrontendRecipes());
+    const report = { ok: !findings.some((finding) => finding.gate === "hard"), findings, recommendations };
+    if (args.flags.json) printJson(report);
+    else {
+      for (const [index, recommendation] of recommendations.entries()) {
+        console.log(`${index + 1}. ${recommendation.recipe.id}  score ${recommendation.score.toFixed(3)}  ${recommendation.reasons.join("; ")}`);
+      }
+    }
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
+
+  if (command === "design:observe") {
+    const brief = await readJsonArtifact<DesignBrief>(requiredFlag(args.flags.brief, "--brief"));
+    const baseUrl = asString(args.flags["base-url"], "");
+    if (!baseUrl) throw new Error("--base-url is required with design:observe.");
+    const commandTemplate = asString(args.flags.command, "");
+    if (!commandTemplate) throw new Error("--command is required with design:observe.");
+    const outputPath = path.resolve(asString(args.flags.output, path.join(".design", "observations.json")));
+    const projectRoot = path.resolve(asString(args.flags.project, "."));
+    const plan = createBrowserObservationPlan({
+      brief,
+      baseUrl,
+      route: asString(args.flags.route, "/"),
+      outputDir: path.dirname(outputPath),
+    });
+    const observations = await executeBrowserObservationPlan({
+      plan,
+      commandTemplate,
+      outputPath,
+      projectRoot,
+    });
+    if (args.flags.json) printJson({ outputPath, plan, observations });
+    else console.log(`Browser observations written to ${outputPath}`);
+    return;
+  }
+
+  if (command === "design:validate") {
+    const brief = await readJsonArtifact<DesignBrief>(requiredFlag(args.flags.brief, "--brief"));
+    const direction = typeof args.flags.direction === "string"
+      ? await readJsonArtifact<DesignDirection>(path.resolve(args.flags.direction))
+      : undefined;
+    const result = direction
+      ? validateDesignResult({ workflowId: "frontend.design-generation", brief, direction, capabilities: [] })
+      : { findings: validateDesignBrief(brief) };
+    const report = { ok: !result.findings.some((finding) => finding.gate === "hard"), ...result };
+    if (args.flags.json) printJson(report);
+    else for (const finding of report.findings) console.log(`[${finding.severity}] ${finding.code}: ${finding.message}`);
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
+
+  if (command === "design:validate-source") {
+    const projectRoot = path.resolve(args.positionals[0] ?? ".");
+    const files = asString(args.flags.files, "").split(",").map((file) => file.trim()).filter(Boolean);
+    if (files.length === 0) throw new Error("--files is required with design:validate-source.");
+    const findings = await validateFrontendSourceFiles(files, {
+      projectRoot,
+      semanticTokensPresent: Boolean(args.flags["semantic-tokens"]),
+    });
+    const report = {
+      ok: !findings.some((finding) => finding.gate === "hard"),
+      findings,
+    };
+    if (args.flags.json) printJson(report);
+    else for (const finding of findings) console.log(`[${finding.severity}] ${finding.code}: ${finding.message}`);
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
+
+  if (command === "design:verify") {
+    const brief = await readJsonArtifact<DesignBrief>(requiredFlag(args.flags.brief, "--brief"));
+    const direction = await readJsonArtifact<DesignDirection>(requiredFlag(args.flags.direction, "--direction"));
+    const observations = typeof args.flags.observations === "string"
+      ? await readJsonArtifact<BrowserObservation[]>(path.resolve(args.flags.observations))
+      : [];
+    const capabilities = asCapabilities(args.flags.capabilities);
+    const iteration = asPositiveInteger(args.flags.iteration, "--iteration") ?? 0;
+    const result = validateDesignResult({
+      workflowId: "frontend.design-generation",
+      brief,
+      direction,
+      observations,
+      capabilities,
+      iteration,
+    });
+    if (args.flags.json) printJson(result.report);
+    else {
+      console.log(`Outcome: ${result.report.outcome}`);
+      for (const finding of result.findings) console.log(`[${finding.severity}] ${finding.code}: ${finding.message}`);
+    }
+    if (["failed", "blocked"].includes(result.report.outcome)) process.exitCode = 1;
+    return;
+  }
+
+  if (command === "design:repair") {
+    const report = await readJsonArtifact<VerificationReport>(requiredFlag(args.flags.report, "--report"));
+    const maxIterations = asPositiveInteger(args.flags["max-iterations"], "--max-iterations") ?? 3;
+    const request = createRepairRequest(report, maxIterations);
+    if (args.flags.json) printJson(request);
+    else if (request.stopReason) console.log(`Repair stopped: ${request.stopReason}`);
+    else for (const instruction of request.instructions) console.log(`- ${instruction}`);
+    return;
+  }
+
+  if (command === "design:compile") {
+    const brief = await readJsonArtifact<DesignBrief>(requiredFlag(args.flags.brief, "--brief"));
+    const direction = await readJsonArtifact<DesignDirection>(requiredFlag(args.flags.direction, "--direction"));
+    const report = typeof args.flags.report === "string"
+      ? await readJsonArtifact<VerificationReport>(path.resolve(args.flags.report))
+      : undefined;
+    const findings = [
+      ...validateDesignBrief(brief),
+      ...validateDesignDirection(brief, direction),
+    ];
+    if (findings.some((finding) => finding.gate === "hard")) {
+      if (args.flags.json) printJson({ ok: false, findings });
+      else for (const finding of findings) console.log(`[${finding.severity}] ${finding.code}: ${finding.message}`);
+      process.exitCode = 1;
+      return;
+    }
+    const outputPath = path.resolve(asString(args.flags.output, path.join(".design", "DESIGN.md")));
+    const result = await compileDesignFile({ brief, direction, report, outputPath });
+    if (args.flags.json) printJson({ outputPath: result.outputPath, bytes: result.bytes });
+    else console.log(`Design contract written to ${result.outputPath}`);
+    return;
+  }
+
   if (command === "scan") {
     const projectRoot = path.resolve(args.positionals[0] ?? ".");
     const fingerprint = await scanProject(projectRoot);
@@ -771,6 +984,8 @@ const run = async () => {
       const resume = Boolean(args.flags.resume);
       const filterRaw = typeof args.flags.filter === "string" ? args.flags.filter : undefined;
       const filter = filterRaw ? filterRaw.split(",").map((f) => f.trim()).filter(Boolean) : undefined;
+      const repetitions = asPositiveInteger(args.flags.repetitions, "--repetitions") ?? 1;
+      const skillSlice = typeof args.flags["skill-slice"] === "string" ? args.flags["skill-slice"] : undefined;
       const baselineFixtureMetadata: Record<string, { kind: string; skillId?: string; skillVersion?: string; skillChecksum?: string; model?: string; fixture?: string }> = typeof args.flags["baseline-fixture-metadata"] === "string"
         ? JSON.parse(args.flags["baseline-fixture-metadata"])
         : {};
@@ -781,7 +996,7 @@ const run = async () => {
       }
       if (!projectRoot) throw new Error("--project is required with --run-tasks.");
 
-      const plan = generateRunPlan(suite, { baselines, filter });
+      const plan = generateRunPlan(suite, { baselines, filter, repetitions, skillSlice });
 
       if (!dryRun && !resume) {
         const existingTasks = await loadFrontendTaskEvidence(
@@ -846,6 +1061,9 @@ const run = async () => {
     const taskEvidence = taskEvidencePath
       ? validateFrontendTaskEvidence(suite, await loadFrontendTaskEvidence(taskEvidencePath))
       : undefined;
+    const varianceSummary = taskEvidencePath && args.flags["summarize-variance"]
+      ? summarizeFrontendVariance(await loadFrontendTaskEvidence(taskEvidencePath), suite)
+      : undefined;
     const pairwiseReview = pairwiseReviewPath
       ? validateFrontendPairwiseReview(suite, await loadFrontendPairwiseReview(pairwiseReviewPath))
       : undefined;
@@ -854,11 +1072,13 @@ const run = async () => {
         issues.length === 0 &&
         (!routingEval || routingEval.failures.length === 0) &&
         (!taskEvidence || taskEvidence.metrics.promotionReady) &&
+        (!varianceSummary || varianceSummary.promotionReady) &&
         (!pairwiseReview || pairwiseReview.metrics.promotionReady),
       issues,
       summary: summarizeFrontendEvalSuite(suite),
       ...(routingEval ? { routingEval } : {}),
       ...(taskEvidence ? { taskEvidence } : {}),
+      ...(varianceSummary ? { varianceSummary } : {}),
       ...(pairwiseReview ? { pairwiseReview } : {}),
     };
     if (args.flags.json) {
@@ -882,6 +1102,13 @@ const run = async () => {
         console.log(`Task-evidence promotion gate: ${taskEvidence.metrics.promotionReady ? "ready" : "blocked"}`);
         for (const issue of taskEvidence.issues) console.log(`Task evidence issue: ${issue}`);
       }
+      if (varianceSummary) {
+        console.log(`Variance: ${varianceSummary.repetitions} repetitions across ${varianceSummary.groups.length} model/baseline groups`);
+        for (const group of varianceSummary.groups) {
+          console.log(`${group.model} ${group.baseline}: mean ${group.passRate.toFixed(3)}, worst ${group.worstRunPassRate.toFixed(3)}, stddev ${group.passRateStdDev.toFixed(3)}`);
+        }
+        for (const issue of varianceSummary.issues) console.log(`Variance issue: ${issue}`);
+      }
       if (pairwiseReview) {
         console.log(`Pairwise review: ${pairwiseReview.metrics.reviewedTasks}/${pairwiseReview.metrics.expectedTasks} tasks; candidate preference ${pairwiseReview.metrics.candidatePreferenceShare.toFixed(3)}`);
         console.log(`Pairwise promotion gate: ${pairwiseReview.metrics.promotionReady ? "ready" : "blocked"}`);
@@ -897,6 +1124,9 @@ const run = async () => {
     }
     if (taskEvidence && !taskEvidence.metrics.promotionReady) {
       throw new Error("Frontend task evidence promotion gate failed.");
+    }
+    if (varianceSummary && !varianceSummary.promotionReady) {
+      throw new Error("Frontend variance promotion gate failed.");
     }
     if (pairwiseReview && !pairwiseReview.metrics.promotionReady) {
       throw new Error("Frontend pairwise review promotion gate failed.");

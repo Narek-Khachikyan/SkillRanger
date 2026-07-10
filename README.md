@@ -17,6 +17,8 @@ This `0.1.0` MVP is intentionally narrow:
 - Repo-local Codex/generic skill install planning and confirmed apply.
 - Lockfile tracking in `skillranger.lock.json`.
 - MCP stdio server exposing scan, recommend, audit, list, plan, and gated install tools.
+- Generic domain-pack registration with frontend as the reference domain.
+- Structured design briefs, product recipes, deterministic verification, bounded repair requests, and repeated A/B/C eval slices.
 
 Not in this MVP: public marketplace, remote registry sync, signature infrastructure, generated trusted skills, dashboard UI, user-global installs, or every agent adapter.
 
@@ -104,6 +106,16 @@ skillranger eval:frontend [--suite <path>] [--json]
 skillranger eval:frontend --run-routing --project <path> [--target codex] [--suite <path>] [--json]
 skillranger eval:frontend --verify-task-evidence <path> [--suite <path>] [--json]
 skillranger eval:frontend --verify-pairwise-review <path> [--suite <path>] [--json]
+skillranger domain:list [--json]
+skillranger domain:inspect frontend [--json]
+skillranger design:brief [project] --domain <domain> --user <actor> --task <task> --surface <type> --action <action> [--output .design/brief.json] [--json]
+skillranger design:recommend-recipe --brief .design/brief.json [--json]
+skillranger design:observe --brief .design/brief.json --base-url <url> --command <adapter> [--route </path>] [--output .design/observations.json] [--json]
+skillranger design:validate --brief .design/brief.json [--direction .design/direction.json] [--json]
+skillranger design:validate-source [project] --files <paths> [--semantic-tokens] [--json]
+skillranger design:verify --brief .design/brief.json --direction .design/direction.json --observations observations.json --capabilities browser,screenshots [--json]
+skillranger design:repair --report .design/verification.json [--max-iterations 3] [--json]
+skillranger design:compile --brief .design/brief.json --direction .design/direction.json [--report .design/verification.json] [--output .design/DESIGN.md]
 skillranger install <skill-id> --project <path> [--target codex] [--scope repo] [--dry-run] [--yes]
 skillranger installed [project] [--project <path>] [--json]
 skillranger mcp
@@ -167,6 +179,15 @@ MVP tools:
 - `list_installed_skills`
 - `plan_skill_install`
 - `install_skill`
+- `list_domains`
+- `inspect_domain`
+- `create_frontend_design_brief`
+- `recommend_frontend_recipe`
+- `validate_frontend_result`
+- `compile_frontend_design_spec`
+- `verify_frontend_result`
+- `repair_frontend_result`
+- `run_domain_eval`
 
 `install_skill` is write-capable and gated. It requires `confirm: true`, plus exact `expectedWrites` and `expectedLockfileUpdates` copied from a fresh `plan_skill_install` result. See `docs/mcp-host-config.md` for host configuration and JSON-RPC smoke examples.
 

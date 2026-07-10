@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0",
+  "id": "frontend.visual-design-polish",
+  "maxRepairIterations": 3,
+  "profileInstructions": {
+    "constrained": ["Use the top recommended recipe.", "Choose one signature move.", "Reuse existing components and tokens.", "Do not invent a broad direction outside the recipe.", "Run verification and at least one repair pass when findings exist."],
+    "standard": ["Compare the top two recipes.", "Allow one bounded composition variation.", "Keep hard gates unchanged."],
+    "advanced": ["A new grammar requires observed product evidence and destructive critique.", "Keep hard gates unchanged."]
+  },
+  "steps": ["collect-evidence", "validate-brief", "select-recipe", "generate-direction", "validate-direction", "implement", "browser-verify", "repair", "final-report"]
+}

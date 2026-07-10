@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/domains/frontend/design-brief.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "product", "surface", "direction", "evidence"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "product": {
+      "type": "object",
+      "required": ["domain", "primaryUserOrActor", "primaryTask", "contentTypes", "usageFrequency", "stakes"],
+      "properties": {
+        "domain": { "type": "string", "minLength": 1 },
+        "primaryUserOrActor": { "type": "string", "minLength": 1 },
+        "primaryTask": { "type": "string", "minLength": 1 },
+        "contentTypes": { "type": "array", "items": { "type": "string" } },
+        "usageFrequency": { "enum": ["rare", "occasional", "frequent", "continuous", "unknown"] },
+        "stakes": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "surface": {
+      "type": "object",
+      "required": ["type", "primaryAction", "supportedViewports", "requiredStates"],
+      "properties": {
+        "type": { "type": "string", "minLength": 1 },
+        "primaryAction": { "type": "string", "minLength": 1 },
+        "supportedViewports": { "type": "array", "minItems": 2, "items": { "type": "integer", "minimum": 320 } },
+        "requiredStates": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "direction": {
+      "type": "object",
+      "required": ["requestedTone", "antiGoals", "existingDirection"],
+      "properties": {
+        "requestedTone": { "type": "array", "items": { "type": "string" } },
+        "antiGoals": { "type": "array", "items": { "type": "string" } },
+        "existingDirection": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["observed", "inferred", "assumed", "unknown"],
+      "properties": {
+        "observed": { "$ref": "#/$defs/evidenceList" },
+        "inferred": { "$ref": "#/$defs/evidenceList" },
+        "assumed": { "$ref": "#/$defs/evidenceList" },
+        "unknown": { "$ref": "#/$defs/evidenceList" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "evidenceList": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["statement"],
+        "properties": {
+          "statement": { "type": "string", "minLength": 1 },
+          "source": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

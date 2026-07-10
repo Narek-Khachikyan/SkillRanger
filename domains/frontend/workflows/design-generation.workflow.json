@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0",
+  "id": "frontend.design-generation",
+  "domain": "frontend",
+  "requiredCapabilities": ["filesystem-read", "filesystem-write"],
+  "maxRepairIterations": 3,
+  "steps": [
+    { "id": "collect-evidence", "type": "collect", "requires": [], "produces": [".design/brief.json"], "gate": "product-evidence-present" },
+    { "id": "validate-brief", "type": "validate", "requires": [".design/brief.json"], "produces": ["brief-findings"] },
+    { "id": "select-recipe", "type": "model", "requires": [".design/brief.json"], "produces": [".design/recipe.json"] },
+    { "id": "define-direction", "type": "model", "requires": [".design/brief.json", ".design/recipe.json"], "produces": [".design/direction.json"], "gate": "design-direction-valid" },
+    { "id": "implement", "type": "implement", "requires": [".design/direction.json"], "produces": ["implementation-diff"] },
+    { "id": "verify", "type": "verify", "requires": ["implementation-diff"], "produces": [".design/verification.json"], "gate": "responsive-verification" },
+    { "id": "repair", "type": "repair", "requires": [".design/verification.json"], "produces": ["repair-diff"] },
+    { "id": "report", "type": "report", "requires": [".design/verification.json"], "produces": [".design/DESIGN.md"] }
+  ]
+}

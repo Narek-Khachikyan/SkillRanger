@@ -10,6 +10,10 @@ import {
   registryToolDefinitions,
   registryToolHandlers,
 } from "./tools/registry.ts";
+import {
+  domainToolDefinitions,
+  domainToolHandlers,
+} from "./tools/domains.ts";
 import type {
   JsonObject,
   McpToolDefinition,
@@ -28,12 +32,14 @@ export const mcpTools: McpToolDefinition[] = [
   ...projectToolDefinitions,
   ...registryToolDefinitions,
   ...installToolDefinitions,
+  ...domainToolDefinitions,
 ];
 
 const mcpToolHandlers: Record<string, McpToolHandler> = {
   ...projectToolHandlers,
   ...registryToolHandlers,
   ...installToolHandlers,
+  ...domainToolHandlers,
 };
 
 export const callMcpTool = async (

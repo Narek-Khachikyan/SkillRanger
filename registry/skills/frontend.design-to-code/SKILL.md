@@ -11,6 +11,10 @@ Use this skill when implementing a supplied design, screenshot, mock, Figma-styl
 
 Classify the input before implementation: **user-owned specification**, **product-local reference**, **competitor/brand inspiration**, or **generic/unknown source**. A user-owned Figma can be authoritative for fidelity; a competitor or generic source is only an attribute source and needs product-specific adaptation. Record missing fonts, assets, measurements, and responsive states before substituting them. If the cumulative substitutes can change hierarchy or density, stop and ask for the asset/spec instead of compounding approximation drift.
 
+## Structured Execution Contract
+
+For material implementation, read `input.schema.json`, `workflow.json`, and `gates.json` before coding. Do not run this workflow without supplied reference evidence. With unknown model capability, use the constrained profile: extract one bounded direction, map it to existing components, and preserve the reference signature without inventing assets. Complete browser comparison and one repair pass, then return `output.schema.json`. `evals.json` identifies the isolated benchmark slice.
+
 ## Verification Outcome
 
 - Report `verified` only after reference, implementation, and mobile adaptation are compared in rendered evidence.

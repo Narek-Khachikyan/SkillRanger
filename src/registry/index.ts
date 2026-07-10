@@ -45,6 +45,11 @@ const allowedSkillTopLevelEntries = new Set([
   "README.md",
   "LICENSE",
   "CHANGELOG.md",
+  "input.schema.json",
+  "output.schema.json",
+  "workflow.json",
+  "gates.json",
+  "evals.json",
 ]);
 
 const hasHiddenPart = (relativePath: string) =>

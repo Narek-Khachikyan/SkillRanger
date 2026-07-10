@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "1.0",
+  "name": "frontend-tailwind-execution-v1",
+  "targetCounts": { "triggerPrompts": 0, "taskEvals": 5 },
+  "triggerPrompts": [],
+  "taskBands": [
+    {
+      "id": "tailwind-execution",
+      "targetCount": 5,
+      "seedTasks": [
+        {
+          "id": "tailwind-mobile-action-overlap",
+          "prompt": "Fix a Tailwind mobile form whose sticky action bar covers the final controls. Preserve the existing visual direction.",
+          "assertions": [
+            { "text": "The change stays bounded to implementation and does not invent a new direction.", "graderType": "human" },
+            { "text": "The primary action and final controls are reachable at 390px without hidden overflow.", "graderType": "browser", "requiredArtifacts": ["screenshots", "verificationReport"] },
+            { "text": "Focus and loading behavior do not resize or obscure controls.", "graderType": "axe", "requiredArtifacts": ["manualA11yChecklist"] }
+          ]
+        },
+        {
+          "id": "tailwind-shadcn-table",
+          "prompt": "Repair a shadcn/Tailwind billing table with wrapping filters, clipped row actions, and unfinished empty/error states while preserving semantic tokens.",
+          "assertions": [
+            { "text": "Existing semantic tokens and component variants are reused.", "graderType": "static-analysis" },
+            { "text": "No page-level horizontal overflow or unreachable row action remains.", "graderType": "browser", "requiredArtifacts": ["screenshots", "responsiveMatrix", "verificationReport"] },
+            { "text": "Loading, empty, error, and selected states are verified.", "graderType": "browser", "requiredArtifacts": ["verificationReport"] }
+          ]
+        },
+        {
+          "id": "tailwind-v4-dynamic-classes",
+          "prompt": "Fix a Tailwind v4 component whose dynamically constructed color classes are missing from production and whose local variants conflict.",
+          "assertions": [
+            { "text": "Dynamic construction is replaced by complete static class mappings.", "graderType": "static-analysis" },
+            { "text": "Conflicting utilities are removed without raw-color token drift.", "graderType": "static-analysis" },
+            { "text": "Rendered variants and focus states pass runtime verification.", "graderType": "browser", "requiredArtifacts": ["screenshots", "verificationReport"] }
+          ]
+        },
+        {
+          "id": "tailwind-local-token-system",
+          "prompt": "Polish a Tailwind app that has local CSS variables and custom primitives but no shadcn setup. Do not introduce shadcn assumptions.",
+          "assertions": [
+            { "text": "The project archetype is identified before changes.", "graderType": "schema" },
+            { "text": "Local variables and primitives are preserved without unnecessary extraction.", "graderType": "static-analysis" },
+            { "text": "Changed states pass mobile and desktop browser checks.", "graderType": "browser", "requiredArtifacts": ["screenshots", "verificationReport"] }
+          ]
+        },
+        {
+          "id": "tailwind-dense-toolbar",
+          "prompt": "Repair a dense Tailwind analytics toolbar with long translated labels, filters, and actions from 390px through desktop.",
+          "assertions": [
+            { "text": "Long labels and translated content have an intentional wrapping or overflow strategy.", "graderType": "browser", "requiredArtifacts": ["responsiveMatrix"] },
+            { "text": "Primary and secondary actions remain distinguishable and reachable.", "graderType": "human" },
+            { "text": "No clipped controls, sticky overlap, or state-driven layout shift remains.", "graderType": "browser", "requiredArtifacts": ["screenshots", "verificationReport"] }
+          ]
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "utilityWeights": { "functionalCorrectness": 0.3, "hardGatePassRate": 0.3, "tokenDiscipline": 0.15, "responsiveQuality": 0.15, "stability": 0.1 },
+    "promotionGates": { "minimumRepetitions": 3, "minimumNoSkillDelta": 10, "minimumOldSkillDelta": 0, "maximumPassRateStdDev": 0.15, "minimumBlindPreferenceShare": 0.6 }
+  },
+  "artifactContract": {
+    "screenshots": ["390x844", "768x1024", "1440x900"],
+    "requiredMetadata": ["skillId", "skillVersion", "skillChecksum", "model", "fixture", "command", "durationMs"],
+    "optionalArtifacts": ["screenshots", "responsiveMatrix", "verificationReport", "manualA11yChecklist"]
+  }
+}

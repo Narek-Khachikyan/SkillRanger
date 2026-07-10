@@ -21,6 +21,10 @@ open-ended direction work in tailwind-ui-polish.
 - **Bounded screen:** one established screen or flow. Use one compact thesis and before/after evidence where possible.
 - **Material redesign:** a new direction, layout, density model, or brand expression. Run the full workflow below. Offer three directions only when the user has not selected one.
 
+## Structured Execution Contract
+
+For material work, read `input.schema.json`, `workflow.json`, and `gates.json` before implementation. Create the required `.design` artifacts in workflow order and validate them with SkillRanger when available. Use the constrained profile when model capability is unknown: select one recommended recipe, keep one signature move, use existing primitives, and do not skip browser evidence or the repair pass. Return the shape in `output.schema.json`; `evals.json` identifies the benchmark slice.
+
 ## Evidence Ledger
 
 Before choosing a thesis, separate **observed** project evidence, **inferred** context, and **assumptions** requiring confirmation. Never invent domain artifacts, personas, or terminology at low confidence.

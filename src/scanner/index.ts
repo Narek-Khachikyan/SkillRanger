@@ -1,12 +1,9 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import "../domains/bundled.ts";
+import { listProjectSignalProviders } from "./providers.ts";
+import type { PackageJson, ProjectSignalContext } from "./types.ts";
 import type { ProjectFingerprint, Signal } from "../types.ts";
-
-type PackageJson = {
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  scripts?: Record<string, string>;
-};
 
 const fileExists = async (filePath: string) => {
   try {
@@ -139,53 +136,37 @@ export const scanProject = async (projectRoot: string): Promise<ProjectFingerpri
     languages.push(signal("javascript", 0.8, ["package.json"]));
   }
 
-  if (dependencyVersion(pkg, "next") || (await hasAnyFile(root, ["next.config.js", "next.config.ts", "next.config.mjs"])).length) {
-    frameworks.push(signal("nextjs", 0.96, [...dependencyEvidence(pkg, "next"), ...(await hasAnyFile(root, ["next.config.js", "next.config.ts", "next.config.mjs"]))]));
-    tags.add("nextjs");
-    tags.add("frontend");
-    tags.add("web-app");
-  }
-
-  if (dependencyVersion(pkg, "vite") || (await hasAnyFile(root, ["vite.config.js", "vite.config.ts"])).length) {
-    frameworks.push(signal("vite", 0.9, [...dependencyEvidence(pkg, "vite"), ...(await hasAnyFile(root, ["vite.config.js", "vite.config.ts"]))]));
-    tags.add("vite");
-    tags.add("frontend");
-  }
-
-  if (dependencyVersion(pkg, "react")) {
-    frameworks.push(signal("react", 0.98, dependencyEvidence(pkg, "react")));
-    tags.add("react");
-    tags.add("frontend");
-  }
-
-  if (dependencyVersion(pkg, "tailwindcss") || (await hasAnyFile(root, ["tailwind.config.js", "tailwind.config.ts", "postcss.config.js", "postcss.config.mjs"])).length) {
-    styling.push(signal("tailwindcss", 0.88, [...dependencyEvidence(pkg, "tailwindcss"), ...(await hasAnyFile(root, ["tailwind.config.js", "tailwind.config.ts"]))]));
-    tags.add("tailwind");
-  }
-
-  const reactMajor = dependencyMajorVersion(pkg, "react");
-  if (reactMajor !== undefined && (reactMajor < 18 || reactMajor > 19)) {
-    warnings.push(`React ${reactMajor} is outside the maintained frontend-skill range (18-19); use conservative fallbacks and do not promote without verification.`);
-  }
-  const tailwindMajor = dependencyMajorVersion(pkg, "tailwindcss");
-  if (tailwindMajor !== undefined && (tailwindMajor < 3 || tailwindMajor > 4)) {
-    warnings.push(`Tailwind CSS ${tailwindMajor} is outside the maintained frontend-skill range (3-4); use conservative fallbacks and do not promote without verification.`);
-  }
-
   for (const [name, type, confidence] of [
     ["vitest", "unit", 0.78],
-    ["jest", "unit", 0.76],
-    ["playwright", "e2e", 0.82],
-    ["cypress", "e2e", 0.76],
-    ["@testing-library/react", "component", 0.74]
+    ["jest", "unit", 0.76]
   ] as const) {
     const evidence = dependencyEvidence(pkg, name);
-    if (name === "playwright") evidence.push(...(await hasAnyFile(root, ["playwright.config.ts", "playwright.config.js"])));
     if (evidence.length > 0) {
-      testing.push({ ...signal(name.replace("@testing-library/react", "testing-library"), confidence, evidence), type });
+      testing.push({ ...signal(name, confidence, evidence), type });
       tags.add("testing");
-      if (name.includes("playwright")) tags.add("playwright");
     }
+  }
+
+  const projectTypes = [];
+  const providerContext: ProjectSignalContext = {
+    root,
+    packageJson: pkg,
+    files,
+    hasAnyFile: (names) => hasAnyFile(root, names),
+    dependencyVersion: (name) => dependencyVersion(pkg, name),
+    dependencyEvidence: (name) => dependencyEvidence(pkg, name),
+    dependencyMajorVersion: (name) => dependencyMajorVersion(pkg, name),
+    signal,
+  };
+  for (const provider of listProjectSignalProviders()) {
+    const contribution = await provider.detect(providerContext);
+    projectTypes.push(...(contribution.projectTypes ?? []));
+    frameworks.push(...(contribution.frameworks ?? []));
+    styling.push(...(contribution.styling ?? []));
+    testing.push(...(contribution.testing ?? []));
+    infrastructure.push(...(contribution.infrastructure ?? []));
+    for (const tag of contribution.tags ?? []) tags.add(tag);
+    warnings.push(...(contribution.warnings ?? []));
   }
 
   if ((await hasAnyFile(root, ["Dockerfile", "docker-compose.yml", "docker-compose.yaml"])).length) {
@@ -195,7 +176,6 @@ export const scanProject = async (projectRoot: string): Promise<ProjectFingerpri
 
   const folderSignals = await hasAnyFile(root, ["app", "pages", "src", "components", "server", "api", "packages"]);
   for (const folder of folderSignals) {
-    if (folder === "components") tags.add("component-design");
     signals.add(`${folder}/`);
   }
 
@@ -206,11 +186,9 @@ export const scanProject = async (projectRoot: string): Promise<ProjectFingerpri
   if (!agentsMd.length) warnings.push("No AGENTS.md found for repo-local agent guidance.");
   if (!codexSkills.length) warnings.push("No repo-local Codex/generic skills found.");
 
-  const projectTypes = [
-    ...(tags.has("frontend") ? [{ type: "frontend", confidence: 0.94, evidence: ["react/next/vite signals"] }] : []),
-    ...(tags.has("web-app") ? [{ type: "web-app", confidence: 0.92, evidence: ["app/pages/package signals"] }] : []),
-    ...(tags.has("devops-platform") ? [{ type: "devops-platform", confidence: 0.72, evidence: ["Docker config"] }] : [])
-  ];
+  if (tags.has("devops-platform")) {
+    projectTypes.push({ type: "devops-platform", confidence: 0.72, evidence: ["Docker config"] });
+  }
 
   return {
     schemaVersion: "1.0",

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "id": "operational-command-center",
+  "name": "Operational Command Center",
+  "appropriateWhen": ["Users repeatedly monitor, triage, compare, and act on changing operational data."],
+  "inappropriateWhen": ["The main job is narrative reading, brand discovery, or a rare single-step action."],
+  "domainSignals": ["dashboard", "operations", "monitoring", "admin", "incident", "queue", "workflow", "analytics"],
+  "layoutModels": ["table", "split-pane", "structured-list"],
+  "densityRange": ["compact", "balanced"],
+  "hierarchyStrategies": ["exception-first", "data-first", "action-first"],
+  "mobileStrategy": ["Promote exceptions and the primary action; convert wide comparisons to staged detail or intentional horizontal regions."],
+  "requiredStates": ["loading", "empty", "error", "stale", "no-permission"],
+  "signatureMovePatterns": ["Use a real operational status, threshold, or exception as the visual organizing device."],
+  "forbiddenDefaults": ["Decorative metric cards", "oversized editorial headlines above dense work", "ambient motion"],
+  "validationRules": ["Primary exceptions remain visible", "Dense data remains scannable", "Actions remain reachable at 390px"]
+}

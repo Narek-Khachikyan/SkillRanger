@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1.0",
+  "suite": "frontend-visual-direction-v1",
+  "slice": "visual-direction",
+  "baselines": ["without-skill", "old-skill", "current-skill"],
+  "minimumRepetitions": 3
+}

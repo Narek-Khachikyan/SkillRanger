@@ -13,6 +13,7 @@ import {
   runFrontendRoutingEval,
   scoreSkillUtility,
   summarizeFrontendEvalSuite,
+  summarizeFrontendVariance,
   validateFrontendPairwiseReview,
   validateFrontendTaskEvidence,
   validateFrontendEvalSuite,
@@ -71,6 +72,18 @@ test("frontend eval suite validates and summarizes seed coverage", async () => {
     "polish",
     "motion-quality",
   ]);
+});
+
+test("dedicated design skill eval suites each provide five valid tasks", async () => {
+  for (const suitePath of [
+    "evals/frontend/slices/visual-direction.json",
+    "evals/frontend/slices/tailwind-execution.json",
+    "evals/frontend/slices/design-to-code.json",
+  ]) {
+    const suite = await loadFrontendEvalSuite(path.resolve(suitePath));
+    assert.deepEqual(validateFrontendEvalSuite(suite), [], suitePath);
+    assert.equal(summarizeFrontendEvalSuite(suite).taskEvals.seedTasks, 5, suitePath);
+  }
 });
 
 test("frontend eval suite accepts routing expectations and artifact-aware assertions", () => {
@@ -248,6 +261,16 @@ test("frontend eval suite rejects malformed routing, grader, and artifact contra
   ]);
 });
 
+test("frontend eval suite rejects string values for numeric promotion gates", () => {
+  const suite = routingSuite([]);
+  suite.scoring.promotionGates.minimumRepetitions = "3";
+  assert.ok(
+    validateFrontendEvalSuite(suite).includes(
+      "promotionGates.minimumRepetitions must be a finite number when present",
+    ),
+  );
+});
+
 test("frontend task evidence requires traceable metadata, task coverage, and asserted artifacts", () => {
   const suite = routingSuite([]);
   suite.taskBands[0]!.seedTasks[0]!.assertions = [
@@ -299,6 +322,42 @@ test("frontend task evidence requires traceable metadata, task coverage, and ass
   assert.ok(invalid.issues.includes("task evidence routing-smoke-task is missing required artifact screenshots"));
   assert.equal(invalid.metrics.promotionReady, false);
   assert.equal(invalid.metrics.unassessedAssertions, 1);
+});
+
+test("A/B/C evidence requires the same model and fixture across baselines", () => {
+  const suite = routingSuite([]);
+  const run = (
+    baseline: string,
+    model: string,
+    fixture: string,
+  ): FrontendTaskEvidence["runs"][number] => ({
+    runId: baseline,
+    taskId: "routing-smoke-task",
+    baseline,
+    skillId: baseline === "without-skill" ? "(none)" : "frontend.visual-design-polish",
+    skillVersion: baseline === "without-skill" ? "(none)" : "1.0.0",
+    skillChecksum: baseline === "without-skill" ? "(none)" : "sha256:test",
+    model,
+    fixture,
+    command: "agent run",
+    durationMs: 1,
+    exitCode: 0,
+    artifacts: [],
+    assertions: [{ text: "A routing smoke assertion exists.", status: "passed" }],
+  });
+  const evidence: FrontendTaskEvidence = {
+    schemaVersion: "1.0",
+    suiteName: suite.name,
+    baselines: ["without-skill", "current-skill"],
+    runs: [
+      run("without-skill", "model-a", "fixture-a"),
+      run("current-skill", "model-b", "fixture-b"),
+    ],
+  };
+  const report = validateFrontendTaskEvidence(suite, evidence);
+  assert.ok(report.issues.includes("task evidence routing-smoke-task must use the same model across baselines"));
+  assert.ok(report.issues.includes("task evidence routing-smoke-task must use the same fixture across baselines"));
+  assert.equal(report.metrics.promotionReady, false);
 });
 
 test("frontend pairwise review requires blinded human coverage before promotion", () => {
@@ -680,6 +739,227 @@ test("runner plan exposes prompt and bandId", async () => {
   assert.equal(plan.entries[0]!.prompt, "Do task A");
   assert.equal(plan.entries[0]!.bandId, "test-band");
   assert.equal(plan.entries[0]!.assertions.length, 1);
+});
+
+test("runner filters a skill slice and expands deterministic repetitions", async () => {
+  const suite = await fullSuite();
+  const plan = generateRunPlan(suite, {
+    baselines: ["without-skill", "old-skill", "current-skill"],
+    skillSlice: "visual-direction",
+    repetitions: 3,
+  });
+  assert.equal(plan.repetitions, 3);
+  assert.equal(plan.entries.length, 5 * 3 * 3);
+  assert.deepEqual([...new Set(plan.entries.map((entry) => entry.repetition))], [1, 2, 3]);
+  assert.ok(plan.entries.every((entry) => entry.taskId !== "greenfield-single-reference-fidelity"));
+});
+
+test("runner rejects an unknown skill slice", () => {
+  assert.throws(
+    () => generateRunPlan(smallSuite(), { baselines: ["current-skill"], skillSlice: "missing" }),
+    /Skill slice not found/,
+  );
+});
+
+test("runner rejects empty baseline plans", () => {
+  assert.throws(
+    () => generateRunPlan(smallSuite(), { baselines: [] }),
+    /at least one baseline/,
+  );
+});
+
+test("runner rejects duplicate baseline plans", () => {
+  assert.throws(
+    () => generateRunPlan(smallSuite(), {
+      baselines: ["current-skill", "current-skill"],
+    }),
+    /baseline values must be unique/,
+  );
+});
+
+test("variance promotion requires complete A/B/C model groups", () => {
+  const suite = routingSuite([]);
+  suite.scoring.promotionGates.minimumRepetitions = 3;
+  suite.scoring.promotionGates.minimumNoSkillDelta = 10;
+  suite.scoring.promotionGates.minimumOldSkillDelta = 5;
+  const evidence: FrontendTaskEvidence = {
+    schemaVersion: "1.0",
+    suiteName: suite.name,
+    repetitions: 3,
+    baselines: ["current-skill"],
+    runs: [1, 2, 3].map((repetition) => ({
+      runId: `current-${repetition}`,
+      taskId: "routing-smoke-task",
+      baseline: "current-skill",
+      repetition,
+      skillId: "frontend.visual-design-polish",
+      skillVersion: "1.0.0",
+      skillChecksum: "sha256:test",
+      model: "test-model",
+      fixture: "fixture",
+      command: "agent run",
+      durationMs: 1,
+      artifacts: [],
+      assertions: [{ text: "A routing smoke assertion exists.", status: "passed" }],
+    })),
+  };
+  const summary = summarizeFrontendVariance(evidence, suite);
+  assert.equal(summary.promotionReady, false);
+  assert.ok(summary.issues.some((issue) => issue.includes("without-skill")));
+  assert.ok(summary.issues.some((issue) => issue.includes("old-skill")));
+});
+
+test("variance summary reports mean, worst run, and variance deltas", () => {
+  const makeRun = (
+    baseline: string,
+    repetition: number,
+    statuses: Array<"passed" | "failed">,
+  ): FrontendTaskEvidence["runs"][number] => ({
+    runId: `${baseline}-${repetition}`,
+    taskId: "routing-smoke-task",
+    baseline,
+    repetition,
+    skillId: baseline === "without-skill" ? "(none)" : "frontend.visual-design-polish",
+    skillVersion: baseline === "without-skill" ? "(none)" : "1.0.0",
+    skillChecksum: baseline === "without-skill" ? "(none)" : "sha256:test",
+    model: "test-model",
+    fixture: "fixture",
+    command: "agent run",
+    durationMs: 100,
+    artifacts: [],
+    assertions: statuses.map((status, index) => ({ text: `assertion-${index}`, status })),
+  });
+  const evidence: FrontendTaskEvidence = {
+    schemaVersion: "1.0",
+    suiteName: "frontend-routing-test",
+    repetitions: 3,
+    baselines: ["without-skill", "current-skill"],
+    runs: [
+      makeRun("without-skill", 1, ["passed", "failed"]),
+      makeRun("without-skill", 2, ["failed", "failed"]),
+      makeRun("without-skill", 3, ["passed", "failed"]),
+      makeRun("current-skill", 1, ["passed", "passed"]),
+      makeRun("current-skill", 2, ["passed", "passed"]),
+      makeRun("current-skill", 3, ["passed", "failed"]),
+    ],
+  };
+  const summary = summarizeFrontendVariance(evidence);
+  const candidate = summary.groups.find((group) => group.baseline === "current-skill");
+  assert.equal(candidate?.passRate, 0.8333);
+  assert.equal(candidate?.worstRunPassRate, 0.5);
+  assert.ok((candidate?.passRateStdDev ?? 0) > 0);
+  assert.ok((summary.comparisons[0]?.passRateDelta ?? 0) > 0);
+  assert.ok((summary.comparisons[0]?.worstRunDelta ?? 0) > 0);
+  assert.equal(summary.promotionReady, true);
+});
+
+test("task evidence validates only the declared skill slice across repetitions", async () => {
+  const suite = await fullSuite();
+  const plan = generateRunPlan(suite, {
+    baselines: ["without-skill"],
+    skillSlice: "design-to-code",
+    repetitions: 2,
+  });
+  const evidence = await executeRunPlan({
+    plan,
+    commandTemplate: 'echo "{{taskId}} {{repetition}}"',
+    outputDir: await mkdtemp(path.join(tmpdir(), "runner-slice-evidence-")),
+    dryRun: true,
+    baselinesConfig: {
+      "without-skill": { kind: "without-skill", model: "test-model", fixture: "fixture" },
+    },
+    projectRoot: ".",
+  });
+  assert.equal(evidence.skillSlice, "design-to-code");
+  assert.equal(evidence.runs.length, 2);
+  for (const run of evidence.runs) {
+    run.durationMs = 1;
+    run.exitCode = 0;
+    run.artifacts = [
+      { name: "screenshots", path: "screenshots/result.png" },
+      { name: "responsiveMatrix", path: "artifacts/responsive.json" },
+    ];
+    for (const assertion of run.assertions) assertion.status = "passed";
+  }
+  const report = validateFrontendTaskEvidence(suite, evidence);
+  assert.equal(report.metrics.expectedTasks, 1);
+  assert.equal(report.metrics.expectedRuns, 2);
+  assert.deepEqual(report.issues, []);
+});
+
+test("variance summary detects a false verified completion claim", () => {
+  const evidence: FrontendTaskEvidence = {
+    schemaVersion: "1.0",
+    suiteName: "test",
+    runs: [{
+      runId: "false-claim",
+      taskId: "task",
+      baseline: "current-skill",
+      skillId: "frontend.visual-design-polish",
+      skillVersion: "1.0.0",
+      skillChecksum: "sha256:test",
+      model: "test-model",
+      fixture: "fixture",
+      command: "agent run",
+      durationMs: 1,
+      artifacts: [],
+      assertions: [{ text: "hard gate", status: "failed" }],
+      verification: {
+        outcome: "verified",
+        hardGatesPassed: false,
+        criticalFindings: 1,
+      },
+    }],
+  };
+  const summary = summarizeFrontendVariance(evidence);
+  assert.equal(summary.groups[0]?.falseCompletionClaims, 1);
+  assert.equal(summary.promotionReady, false);
+});
+
+test("variance promotion applies repetition, delta, and standard-deviation gates", () => {
+  const suite = routingSuite([]);
+  suite.scoring.promotionGates.minimumRepetitions = 3;
+  suite.scoring.promotionGates.minimumNoSkillDelta = 10;
+  suite.scoring.promotionGates.minimumOldSkillDelta = 5;
+  suite.scoring.promotionGates.maximumPassRateStdDev = 0.15;
+  const run = (
+    baseline: string,
+    repetition: number,
+    statuses: Array<"passed" | "failed">,
+  ): FrontendTaskEvidence["runs"][number] => ({
+    runId: `${baseline}-${repetition}`,
+    taskId: "routing-smoke-task",
+    baseline,
+    repetition,
+    skillId: baseline === "without-skill" ? "(none)" : "frontend.visual-design-polish",
+    skillVersion: baseline === "without-skill" ? "(none)" : "1.0.0",
+    skillChecksum: baseline === "without-skill" ? "(none)" : "sha256:test",
+    model: "test-model",
+    fixture: "fixture",
+    command: "agent run",
+    durationMs: 1,
+    artifacts: [],
+    assertions: statuses.map((status, index) => ({ text: `assertion-${index}`, status })),
+  });
+  const evidence: FrontendTaskEvidence = {
+    schemaVersion: "1.0",
+    suiteName: suite.name,
+    repetitions: 2,
+    baselines: ["without-skill", "old-skill", "current-skill"],
+    runs: [
+      run("without-skill", 1, ["passed", "failed"]),
+      run("without-skill", 2, ["passed", "failed"]),
+      run("old-skill", 1, ["passed", "failed"]),
+      run("old-skill", 2, ["passed", "failed"]),
+      run("current-skill", 1, ["passed", "passed"]),
+      run("current-skill", 2, ["failed", "failed"]),
+    ],
+  };
+  const summary = summarizeFrontendVariance(evidence, suite);
+  assert.equal(summary.promotionReady, false);
+  assert.ok(summary.issues.some((issue) => issue.includes("at least 3 repetitions")));
+  assert.ok(summary.issues.some((issue) => issue.includes("variance")));
+  assert.ok(summary.issues.some((issue) => issue.includes("pass-rate delta")));
 });
 
 test("runner dry run does not execute or write output", async () => {

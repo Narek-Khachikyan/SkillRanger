@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "id": "frontend.design-to-code",
+  "domain": "frontend",
+  "requiredCapabilities": ["filesystem-read", "filesystem-write", "screenshots"],
+  "maxRepairIterations": 3,
+  "steps": [
+    { "id": "collect-reference", "type": "collect", "requires": ["visual-reference"], "produces": [".design/brief.json"], "gate": "reference-evidence-present" },
+    { "id": "extract-direction", "type": "model", "requires": ["visual-reference", ".design/brief.json"], "produces": [".design/direction.json"], "gate": "design-direction-valid" },
+    { "id": "implement", "type": "implement", "requires": [".design/direction.json"], "produces": ["implementation-diff"] },
+    { "id": "compare", "type": "verify", "requires": ["visual-reference", "implementation-diff"], "produces": [".design/verification.json"], "gate": "responsive-verification" },
+    { "id": "repair", "type": "repair", "requires": [".design/verification.json"], "produces": ["repair-diff"] },
+    { "id": "report", "type": "report", "requires": [".design/verification.json"], "produces": [".design/DESIGN.md"] }
+  ]
+}

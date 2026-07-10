@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1.0",
+  "suite": "frontend-design-to-code-v1",
+  "slice": "design-to-code",
+  "baselines": ["without-skill", "old-skill", "current-skill"],
+  "minimumRepetitions": 3
+}

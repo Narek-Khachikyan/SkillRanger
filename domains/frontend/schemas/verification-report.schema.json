@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/domains/frontend/verification-report.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "domain", "workflowId", "iteration", "capabilityStatus", "executionStatus", "verificationStatus", "outcome", "findings", "gates", "evidence", "residualRisks"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "domain": { "type": "string" },
+    "workflowId": { "type": "string" },
+    "iteration": { "type": "integer", "minimum": 0 },
+    "capabilityStatus": { "enum": ["ready", "degraded", "unavailable"] },
+    "executionStatus": { "enum": ["not-started", "running", "implemented", "failed", "blocked"] },
+    "verificationStatus": { "enum": ["not-run", "passed", "failed", "partial"] },
+    "outcome": { "enum": ["verified", "implemented-unverified", "failed", "blocked"] },
+    "findings": { "type": "array", "items": { "type": "object" } },
+    "gates": { "type": "object" },
+    "evidence": { "type": "array", "items": { "type": "object" } },
+    "residualRisks": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

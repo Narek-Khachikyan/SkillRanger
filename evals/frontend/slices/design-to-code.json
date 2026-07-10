@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "1.0",
+  "name": "frontend-design-to-code-v1",
+  "targetCounts": { "triggerPrompts": 0, "taskEvals": 5 },
+  "triggerPrompts": [],
+  "taskBands": [
+    {
+      "id": "design-to-code",
+      "targetCount": 5,
+      "seedTasks": [
+        {
+          "id": "reference-pricing-page",
+          "prompt": "Implement a React pricing page from a supplied user-owned desktop mock. Preserve local components and define mobile behavior and async states.",
+          "assertions": [
+            { "text": "Reference ownership, missing assets, measurements, and states are recorded before coding.", "graderType": "schema", "requiredArtifacts": ["designBrief", "designDirection"] },
+            { "text": "Local components and tokens preserve the reference signature without isolated pixel art.", "graderType": "human" },
+            { "text": "Reference viewport and mobile adaptation pass comparison gates.", "graderType": "screenshot", "requiredArtifacts": ["visualComparison", "responsiveMatrix", "verificationReport"] }
+          ]
+        },
+        {
+          "id": "reference-mobile-checkout",
+          "prompt": "Implement a mobile checkout from supplied product screenshots, then derive a credible desktop layout without inventing payment data or brand assets.",
+          "assertions": [
+            { "text": "Supplied evidence and inferred desktop behavior remain distinct.", "graderType": "schema", "requiredArtifacts": ["designBrief"] },
+            { "text": "No fake transaction, person, testimonial, or brand asset is introduced.", "graderType": "human" },
+            { "text": "Checkout states, keyboard flow, mobile, and desktop pass hard gates.", "graderType": "axe", "requiredArtifacts": ["visualComparison", "manualA11yChecklist", "verificationReport"] }
+          ]
+        },
+        {
+          "id": "reference-dashboard-dark-mode",
+          "prompt": "Implement a supplied dashboard reference in an existing shadcn/Tailwind app, including loading, empty, error, selected, and dark-mode states.",
+          "assertions": [
+            { "text": "Reference colors and surfaces are mapped to local semantic tokens.", "graderType": "static-analysis" },
+            { "text": "The distinctive hierarchy survives local component reuse.", "graderType": "human" },
+            { "text": "All required states and dark mode have rendered comparison evidence.", "graderType": "browser", "requiredArtifacts": ["visualComparison", "screenshots", "verificationReport"] }
+          ]
+        },
+        {
+          "id": "reference-editorial-long-content",
+          "prompt": "Implement a supplied editorial article mock with source notes, media, a comparison table, and long-content behavior in the existing React app.",
+          "assertions": [
+            { "text": "Reading hierarchy and distinctive editorial rhythm match the reference intent.", "graderType": "human" },
+            { "text": "Semantic headings, source notes, table behavior, and focus are preserved.", "graderType": "axe", "requiredArtifacts": ["manualA11yChecklist"] },
+            { "text": "Long content and narrow viewport evidence show no overlap or clipped navigation.", "graderType": "browser", "requiredArtifacts": ["visualComparison", "verificationReport"] }
+          ]
+        },
+        {
+          "id": "reference-competitor-adaptation",
+          "prompt": "Use a competitor screenshot only as an attribute source for a creator workspace. Implement a product-specific alternative without copying brand expression, exact composition, or invented assets.",
+          "assertions": [
+            { "text": "High-risk reference elements and reusable abstract attributes are separated.", "graderType": "schema", "requiredArtifacts": ["designBrief", "designDirection"] },
+            { "text": "At least three identity axes differ while the useful workflow idea remains.", "graderType": "human" },
+            { "text": "Rendered comparison covers the adapted signature and responsive states.", "graderType": "screenshot", "requiredArtifacts": ["visualComparison", "responsiveMatrix", "verificationReport"] }
+          ]
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "utilityWeights": { "fidelity": 0.25, "projectFit": 0.2, "hardGatePassRate": 0.25, "responsiveQuality": 0.15, "referenceSafety": 0.05, "stability": 0.1 },
+    "promotionGates": { "minimumRepetitions": 3, "minimumNoSkillDelta": 10, "minimumOldSkillDelta": 0, "maximumPassRateStdDev": 0.15, "minimumBlindPreferenceShare": 0.6 }
+  },
+  "artifactContract": {
+    "screenshots": ["reference-viewport", "390x844", "1440x900"],
+    "requiredMetadata": ["skillId", "skillVersion", "skillChecksum", "model", "fixture", "command", "durationMs"],
+    "optionalArtifacts": ["designBrief", "designDirection", "visualComparison", "responsiveMatrix", "verificationReport", "manualA11yChecklist"]
+  }
+}

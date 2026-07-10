@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0",
+  "hardGates": [
+    "horizontal-overflow",
+    "clipped-controls",
+    "unreachable-actions",
+    "sticky-overlap",
+    "runtime-console-error",
+    "keyboard-trap",
+    "invisible-focus",
+    "critical-axe",
+    "responsive-state-evidence-missing",
+    "reduced-motion-unverified"
+  ],
+  "advisoryRules": [
+    "brief-required-state",
+    "direction-rejected-default",
+    "constraint-dense-expression"
+  ]
+}

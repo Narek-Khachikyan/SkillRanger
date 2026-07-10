@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["outcome", "classification", "changes", "verification", "residualRisks"],
+  "properties": {
+    "outcome": { "enum": ["verified", "implemented-unverified", "failed", "blocked"] },
+    "classification": { "enum": ["responsive-bug", "state-gap", "hierarchy", "token-drift", "accessibility", "density", "subjective-polish"] },
+    "changes": { "type": "array", "items": { "type": "string" } },
+    "verification": { "type": "object" },
+    "residualRisks": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

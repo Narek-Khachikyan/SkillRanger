@@ -1,0 +1,5 @@
+{
+  "schemaVersion": "1.0",
+  "hard": ["reference-evidence-present", "reference-ownership-classified", "required-states-covered", "responsive-comparison-present", "no-horizontal-overflow", "focus-visible", "no-critical-axe", "no-runtime-console-errors", "reduced-motion-verified"],
+  "advisory": ["approximations-declared", "reference-safety-reviewed", "signature-preserved"]
+}

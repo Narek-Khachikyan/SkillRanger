@@ -1,0 +1,5 @@
+{
+  "schemaVersion": "1.0",
+  "hard": ["existing-direction-present", "tailwind-project-confirmed", "required-states-covered", "no-horizontal-overflow", "no-clipped-controls", "no-sticky-overlap", "focus-visible", "no-dynamic-tailwind-classes", "no-runtime-console-errors", "reduced-motion-verified"],
+  "advisory": ["raw-colors-reviewed", "repeated-class-bundles-reviewed", "genericity-findings-reviewed"]
+}

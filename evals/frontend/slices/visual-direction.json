@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "1.0",
+  "name": "frontend-visual-direction-v1",
+  "targetCounts": { "triggerPrompts": 0, "taskEvals": 5 },
+  "triggerPrompts": [],
+  "taskBands": [
+    {
+      "id": "visual-direction",
+      "targetCount": 5,
+      "seedTasks": [
+        {
+          "id": "visual-consumer-discovery",
+          "prompt": "Redesign a manga discovery library for returning readers. Use project evidence, avoid invented titles or metrics, and make the result product-specific across mobile and desktop.",
+          "assertions": [
+            { "text": "Observed evidence, assumptions, recipe, direction, and rejected defaults are explicit.", "graderType": "schema", "requiredArtifacts": ["designBrief", "designDirection"] },
+            { "text": "The visual grammar is specific to discovery content rather than an interchangeable SaaS layout.", "graderType": "human" },
+            { "text": "Required states and mobile/desktop layouts pass hard gates.", "graderType": "browser", "requiredArtifacts": ["screenshots", "responsiveMatrix", "verificationReport"] }
+          ]
+        },
+        {
+          "id": "visual-operational-command-center",
+          "prompt": "Redesign a logistics command center for alert triage, status comparison, and repeated actions without decorative metric cards or oversized editorial type.",
+          "assertions": [
+            { "text": "Exception hierarchy and density are justified by the operational task.", "graderType": "human" },
+            { "text": "The chosen recipe and axes do not conflict with high-frequency work.", "graderType": "schema", "requiredArtifacts": ["designBrief", "designDirection"] },
+            { "text": "Dense content, long labels, and primary actions pass required browser states.", "graderType": "browser", "requiredArtifacts": ["screenshots", "verificationReport"] }
+          ]
+        },
+        {
+          "id": "visual-developer-tool",
+          "prompt": "Redesign a repository skill inspector for developers who compare evidence, risk, compatibility, and install commands.",
+          "assertions": [
+            { "text": "Repository evidence and install risk organize the interface.", "graderType": "human" },
+            { "text": "No fake command output, users, or metrics are introduced.", "graderType": "human" },
+            { "text": "Technical content and list-detail behavior pass mobile and desktop checks.", "graderType": "browser", "requiredArtifacts": ["screenshots", "responsiveMatrix", "verificationReport"] }
+          ]
+        },
+        {
+          "id": "visual-editorial-content",
+          "prompt": "Redesign a long-form engineering research report with sources, comparison tables, and a clear reading progression.",
+          "assertions": [
+            { "text": "Content hierarchy and reading measure drive the direction.", "graderType": "human" },
+            { "text": "The result avoids a marketing hero and feature-card template.", "graderType": "human" },
+            { "text": "Long content, tables, navigation, and focus pass responsive verification.", "graderType": "browser", "requiredArtifacts": ["screenshots", "verificationReport"] }
+          ]
+        },
+        {
+          "id": "visual-regulated-flow",
+          "prompt": "Redesign a healthcare appointment booking flow with provider availability, insurance hints, validation, and confirmation. Keep the direction restrained and evidence-based.",
+          "assertions": [
+            { "text": "The direction rejects high ambient motion and invented patient data.", "graderType": "schema", "requiredArtifacts": ["designBrief", "designDirection"] },
+            { "text": "Booking hierarchy and recovery states are clear.", "graderType": "human" },
+            { "text": "Keyboard, focus, axe, reduced motion, and mobile actions pass hard gates.", "graderType": "axe", "requiredArtifacts": ["axeJson", "manualA11yChecklist", "verificationReport"] }
+          ]
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "utilityWeights": { "productSpecificity": 0.25, "hardGatePassRate": 0.3, "responsiveQuality": 0.2, "accessibility": 0.15, "stability": 0.1 },
+    "promotionGates": { "minimumRepetitions": 3, "minimumNoSkillDelta": 10, "minimumOldSkillDelta": 0, "maximumPassRateStdDev": 0.15, "minimumBlindPreferenceShare": 0.6 }
+  },
+  "artifactContract": {
+    "screenshots": ["390x844", "1440x900"],
+    "requiredMetadata": ["skillId", "skillVersion", "skillChecksum", "model", "fixture", "command", "durationMs"],
+    "optionalArtifacts": ["designBrief", "designDirection", "verificationReport", "responsiveMatrix", "axeJson", "manualA11yChecklist"]
+  }
+}

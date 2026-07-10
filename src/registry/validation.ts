@@ -444,6 +444,41 @@ export const validateSkillManifest = (
     }
   }
 
+  if (input.execution !== undefined) {
+    if (!isRecord(input.execution)) {
+      issues.push({ path: "execution", message: "Must be an object when present." });
+    } else {
+      if (input.execution.contractVersion !== "1.0") {
+        issues.push({ path: "execution.contractVersion", message: "Must be 1.0." });
+      }
+      for (const key of ["inputSchema", "outputSchema", "workflow", "gates", "evals"] as const) {
+        const value = input.execution[key];
+        if (
+          typeof value !== "string" ||
+          value.trim() === "" ||
+          path.isAbsolute(value) ||
+          hasPathTraversal(value)
+        ) {
+          issues.push({ path: `execution.${key}`, message: "Must be a safe relative path." });
+        } else if (context.skillRoot && !existsSync(path.join(context.skillRoot, value))) {
+          issues.push({ path: `execution.${key}`, message: `Referenced file does not exist: ${value}.` });
+        }
+      }
+      const profiles = input.execution.modelProfiles;
+      const allowedProfiles = new Set(["constrained", "standard", "advanced"]);
+      if (
+        !isStringArray(profiles) ||
+        profiles.length === 0 ||
+        !profiles.every((profile) => allowedProfiles.has(profile))
+      ) {
+        issues.push({
+          path: "execution.modelProfiles",
+          message: "Must contain constrained, standard, or advanced profiles.",
+        });
+      }
+    }
+  }
+
   if (!isRecord(input.source)) {
     issues.push({ path: "source", message: "Must be an object." });
   } else {

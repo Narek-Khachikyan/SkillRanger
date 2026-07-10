@@ -54,6 +54,15 @@
     "requiredCapabilities": ["browser", "screenshots"],
     "fallback": "unverified"
   },
+  "execution": {
+    "contractVersion": "1.0",
+    "inputSchema": "input.schema.json",
+    "outputSchema": "output.schema.json",
+    "workflow": "workflow.json",
+    "gates": "gates.json",
+    "evals": "evals.json",
+    "modelProfiles": ["constrained", "standard", "advanced"]
+  },
   "freshness": {
     "lastReviewedAt": "2026-07-10",
     "targetFrameworkVersions": {

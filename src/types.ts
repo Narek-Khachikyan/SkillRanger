@@ -40,6 +40,7 @@ export type RiskLevel = "low" | "medium" | "high" | "block";
 export type CompatibilityLevel = "native" | "convertible" | "packageable" | "unsupported";
 export type EvaluationStatus = "none" | "trigger-eval" | "task-eval" | "real-project-smoke" | "curated";
 export type VerificationStatus = "ready" | "unverified" | "blocked";
+export type ModelCapabilityProfile = "constrained" | "standard" | "advanced";
 export const skillLanes = [
   "framework",
   "design",
@@ -101,6 +102,15 @@ export type SkillManifest = {
   verification?: {
     requiredCapabilities: string[];
     fallback: Exclude<VerificationStatus, "ready">;
+  };
+  execution?: {
+    contractVersion: "1.0";
+    inputSchema: string;
+    outputSchema: string;
+    workflow: string;
+    gates: string;
+    evals: string;
+    modelProfiles: ModelCapabilityProfile[];
   };
   freshness?: {
     lastReviewedAt?: string;

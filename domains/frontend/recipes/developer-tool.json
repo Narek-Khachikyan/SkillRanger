@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "id": "developer-tool",
+  "name": "Developer Tool",
+  "appropriateWhen": ["The primary task involves code, configuration, diagnostics, builds, logs, or technical workflows."],
+  "inappropriateWhen": ["The experience is primarily lifestyle discovery or long-form editorial reading."],
+  "domainSignals": ["developer", "code", "cli", "configuration", "diagnostic", "logs", "build", "skill", "repository"],
+  "layoutModels": ["split-pane", "structured-list", "table"],
+  "densityRange": ["compact", "balanced"],
+  "hierarchyStrategies": ["action-first", "exception-first", "data-first"],
+  "mobileStrategy": ["Turn simultaneous panes into an explicit list-detail sequence and keep commands copyable."],
+  "requiredStates": ["loading", "empty", "error", "permission-denied", "running"],
+  "signatureMovePatterns": ["Use repository evidence, command output, diffs, or capability state as the visual grammar."],
+  "forbiddenDefaults": ["Marketing metric cards", "fake terminal output", "neon glow without state meaning", "decorative code snippets"],
+  "validationRules": ["Commands and evidence are distinguishable", "Failure recovery is explicit", "Technical content wraps or scrolls intentionally"]
+}
