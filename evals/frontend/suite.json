@@ -1,10 +1,10 @@
 {
   "schemaVersion": "1.0",
   "name": "frontend-skill-quality-v1",
-  "targetCounts": {
-    "triggerPrompts": 87,
-    "taskEvals": 49
-  },
+    "targetCounts": {
+    "triggerPrompts": 102,
+    "taskEvals": 51
+    },
   "triggerPrompts": [
     {
       "id": "trigger-playwright-flake",
@@ -805,6 +805,141 @@
       "text": "Review the whole frontend slice after implementation and give a scorecard for release blockers, evidence gaps, browser checks, a11y, perf, responsive states, and visual quality.",
       "routingExpected": {
         "expectedSkill": "frontend.audit"
+      }
+    },
+    {
+      "id": "trigger-frontend-preflight-audit",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.audit",
+      "text": "Run a preflight audit on this feature covering a11y, perf, responsive layout, and visual quality.",
+      "routingExpected": {
+        "expectedSkill": "frontend.audit"
+      }
+    },
+    {
+      "id": "trigger-frontend-gate-review",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.audit",
+      "text": "Do a go/no-go frontend quality gate review before we ship this feature.",
+      "routingExpected": {
+        "expectedSkill": "frontend.audit"
+      }
+    },
+    {
+      "id": "trigger-frontend-final-ship-review",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.audit",
+      "text": "Run a final ship review with a frontend scorecard for release blockers.",
+      "routingExpected": {
+        "expectedSkill": "frontend.audit"
+      }
+    },
+    {
+      "id": "nontrigger-narrow-review-a11y",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.accessibility-review",
+      "text": "Review this component for accessibility issues.",
+      "routingExpected": {
+        "expectedSkill": "frontend.accessibility-review"
+      }
+    },
+    {
+      "id": "nontrigger-narrow-review-layout",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.visual-design-polish",
+      "text": "Review this page and fix the layout bug.",
+      "routingExpected": {
+        "expectedSkill": "frontend.visual-design-polish"
+      }
+    },
+    {
+      "id": "trigger-ux-critique-info-architecture",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.ux-critique",
+      "text": "Evaluate the information architecture of this settings page for findability and task completion.",
+      "routingExpected": {
+        "expectedSkill": "frontend.ux-critique"
+      }
+    },
+    {
+      "id": "trigger-ux-critique-cognitive-load",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.ux-critique",
+      "text": "Critique the cognitive load of this multi-step form with recovery and error states.",
+      "routingExpected": {
+        "expectedSkill": "frontend.ux-critique"
+      }
+    },
+    {
+      "id": "trigger-ux-critique-navigation-search",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.ux-critique",
+      "text": "Review the navigation and search usability on this dashboard for wayfinding issues.",
+      "routingExpected": {
+        "expectedSkill": "frontend.ux-critique"
+      }
+    },
+    {
+      "id": "trigger-ux-critique-empty-recovery",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.ux-critique",
+      "text": "The empty state and error recovery on this settings page are confusing; improve the user flow.",
+      "routingExpected": {
+        "expectedSkill": "frontend.ux-critique"
+      }
+    },
+    {
+      "id": "trigger-visual-art-direction",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.visual-design-polish",
+      "text": "Define the art direction and visual language for this landing page with a style guide and subject-specific design thesis.",
+      "routingExpected": {
+        "expectedSkill": "frontend.visual-design-polish"
+      }
+    },
+    {
+      "id": "trigger-tailwind-responsive-fix",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.tailwind-ui-polish",
+      "text": "Fix the Tailwind responsive breakpoints and cleanup className bundles on this card component.",
+      "routingExpected": {
+        "expectedSkill": "frontend.tailwind-ui-polish"
+      }
+    },
+    {
+      "id": "trigger-motion-design-system",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.motion-design",
+      "text": "Create a product-specific motion system with purposeful page transitions, component choreography, spatially meaningful easing, and a reduced-motion path instead of template effects.",
+      "routingExpected": {
+        "expectedSkill": "frontend.motion-design"
+      }
+    },
+    {
+      "id": "trigger-motion-design-russian",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.motion-design",
+      "text": "Создай продуктовую систему анимации: осмысленные переходы между страницами, хореографию компонентов и выразительный easing без шаблонных эффектов, с поддержкой reduced motion.",
+      "routingExpected": {
+        "expectedSkill": "frontend.motion-design"
+      }
+    },
+    {
+      "id": "trigger-motion-audit",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.motion-audit",
+      "text": "Audit the existing route and component animation for jank, reduced-motion support, generic decorative motion, evidence quality, and release blockers before shipping.",
+      "routingExpected": {
+        "expectedSkill": "frontend.motion-audit"
+      }
+    },
+    {
+      "id": "trigger-interaction-polish-explicit-motion",
+      "kind": "should-trigger",
+      "expectedSkill": "frontend.interaction-polish",
+      "text": "Use interaction polish for this drawer and toast: its local motion needs to feel less abrupt while keyboard behavior and focus return stay correct.",
+      "routingExpected": {
+        "expectedSkill": "frontend.interaction-polish"
       }
     }
   ],
@@ -1909,7 +2044,60 @@
           ]
         }
       ]
-    }
+    },
+  {
+    "id": "motion-quality",
+    "targetCount": 2,
+    "seedTasks": [
+      {
+        "id": "motion-design-product-brief",
+        "prompt": "Create a product-specific motion design brief for a frontend with page transitions, component choreography, easing, and reduced-motion. Include a before/after motion comparison and trace or performance evidence for the implemented path.",
+        "assertions": [
+          {
+            "text": "The motion brief connects animation choices to product purpose and spatial relationships rather than decorative defaults.",
+            "graderType": "human"
+          },
+          {
+            "text": "Reduced-motion equivalents are part of the brief, not an afterthought.",
+            "graderType": "human"
+          },
+          {
+            "text": "Screenshots or rendered evidence demonstrate the motion system across at least two surfaces.",
+            "graderType": "screenshot",
+            "requiredArtifacts": [
+              "screenshots",
+              "responsiveMatrix"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "motion-audit-release-gate",
+        "prompt": "Audit an existing frontend animation set for purpose, product fit, reduced-motion support, performance cost, and anti-generic animation risk before release.",
+        "assertions": [
+          {
+            "text": "Each animation has a stated purpose or is flagged as decorative.",
+            "graderType": "human"
+          },
+          {
+            "text": "Reduced-motion support is verified in code or browser evidence.",
+            "graderType": "human"
+          },
+          {
+            "text": "Performance evidence (trace, profiling, or Lighthouse) is referenced or requested for animations that affect layout or main-thread work.",
+            "graderType": "lighthouse",
+            "requiredArtifacts": [
+              "lighthouseReport"
+            ]
+          },
+          {
+            "text": "Release-blocking animation issues are separated from non-blocking polish.",
+            "graderType": "human"
+          }
+        ]
+      }
+    ]
+  }
   ],
   "scoring": {
     "utilityWeights": {

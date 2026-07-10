@@ -7,6 +7,22 @@ description: Refine frontend interaction states, motion, microinteractions, load
 
 Use this skill when a frontend interaction feels abrupt, unclear, jumpy, slow, inaccessible, or unfinished: modals, drawers, menus, toasts, tabs, accordions, hover/focus states, loading transitions, optimistic updates, and microinteractions. Do not use it for broad visual redesigns or Playwright debugging unless the main issue is interaction quality.
 
+## Escalation Heuristic
+
+If the interaction involves 3+ independent surfaces needing coordinated motion (a modal
+opening that also shifts a nav indicator, triggers a toast, and animates a page title),
+the work is cross-surface choreography — escalate to `frontend.motion-design`. If only
+one component or local state is involved (one drawer, one menu, one toast, one modal),
+keep it here. When uncertain, start here and escalate when surface coordination or
+cross-component timing is required.
+
+## Scope Boundary
+
+Product-wide motion systems, choreography, and page/view transition language go to
+`frontend.motion-design`; evidence-led audits and release gates go to
+`frontend.motion-audit`. This skill retains specific modal, drawer, menu, toast, drag,
+and local state work.
+
 ## Verification Outcome
 
 - Report `verified` only after keyboard, pointer, reduced-motion, and relevant focus-return behavior are exercised in a rendered surface.
@@ -115,3 +131,12 @@ Use this skill when a frontend interaction feels abrupt, unclear, jumpy, slow, i
 - State and motion changes made or recommended.
 - Keyboard, pointer, viewport, reduced-motion, and Playwright/manual interaction checks.
 - Remaining interaction risk.
+
+## References
+
+- Use the project's existing component motion conventions, shared transition utilities,
+  and nearby component state styling as primary references.
+- Refer to MDN `prefers-reduced-motion`, WCAG 2.3.3 Animation from Interactions, and
+  WCAG 2.2.2 Pause/Stop/Hide for accessibility requirements.
+- Use the Chrome DevTools Animations panel and Performance panel for timing and
+  performance inspection.

@@ -7,6 +7,12 @@ description: Critique frontend user flows for task completion, information archi
 
 Use this skill when reviewing a frontend flow, screen, form, onboarding path, checkout path, navigation model, or task workflow for usability. Do not use it for visual styling-only polish, framework review, or pure accessibility audits unless the request is about user flow and comprehension.
 
+## Verification Outcome
+
+- Report `verified` only when the primary flow and relevant recovery states were observed in a rendered surface or supported by equivalent user evidence.
+- Without browser, analytics, or research evidence, return a hypothesis-led critique with `blocked` for scored or release conclusions. If an approved change is implemented before observation, mark it `implemented-unverified` and list the exact flow-state checks.
+- Screenshots support hierarchy findings but do not prove task completion; distinguish static evidence from exercised behavior.
+
 ## Evidence Ledger
 
 For every finding, label the source as **observed** (code, rendered UI, analytics, or research), **inferred** (a reasoned hypothesis), or **assumed** (missing product evidence). Only observed evidence can justify a release blocker or a scored verdict. When browser access, analytics, or user research is absent, describe usability concerns as hypotheses with a concrete validation step rather than fabricated certainty.
@@ -105,6 +111,11 @@ If the screen cannot be mapped to this flow, treat that as a UX finding rather t
 - Fixes should be testable with a user action or visible state.
 - Recommended copy should be plain, action-oriented, and consistent across control, confirmation, toast, and error states.
 - If screenshots or a running app are unavailable, state which flow states still need observation.
+
+## References
+
+- Prefer project-local research, analytics, support evidence, product terminology, and adjacent flows.
+- Use established usability heuristics as decision aids, not as a substitute for observing the product's actual users, objects, and completion criteria.
 
 ## Output Contract
 

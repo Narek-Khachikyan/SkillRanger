@@ -159,6 +159,7 @@ export type Recommendation = {
     stackMatch: number;
     userIntentMatch: number;
     qualityScore: number;
+    effectiveQualityScore: number;
     securityScore: number;
     freshnessScore: number;
     compatibilityScore: number;

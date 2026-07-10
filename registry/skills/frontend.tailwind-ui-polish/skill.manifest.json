@@ -24,7 +24,7 @@
     "registry": "local",
     "path": "./registry/skills/frontend.tailwind-ui-polish"
   },
-  "version": "0.2.0",
+  "version": "0.3.0",
   "riskLevel": "low",
   "permissions": {
     "filesystem": [
@@ -55,7 +55,7 @@
     "fallback": "unverified"
   },
   "freshness": {
-    "lastReviewedAt": "2026-07-07",
+    "lastReviewedAt": "2026-07-10",
     "targetFrameworkVersions": {
       "tailwindcss": "3-4"
     }

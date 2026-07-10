@@ -7,6 +7,12 @@ description: Review frontend web app performance for rendering cost, bundle size
 
 Use this skill when reviewing frontend web app changes that may affect runtime performance, loading speed, bundle size, rendering cost, data fetching, image delivery, caching, or Core Web Vitals. Do not use it for backend-only profiling, database query tuning, or infrastructure capacity planning with no browser-facing surface.
 
+## Verification Outcome
+
+- Report `verified` only when the claimed result is backed by the relevant before/after browser measurement, trace, profiler, bundle, network, or field artifact.
+- Without measurement capability, report risks and hypotheses but not wins. Return `implemented-unverified` for an approved change with the exact measurement still required, or `blocked` when evidence is necessary to choose a safe fix.
+- A Lighthouse score alone does not verify every runtime concern; name the user flow and metric represented by each artifact.
+
 ## Decision Rules
 
 - Start from user-visible performance impact before suggesting micro-optimizations.

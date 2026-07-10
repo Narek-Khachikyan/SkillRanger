@@ -27,7 +27,7 @@
     "registry": "local",
     "path": "./registry/skills/frontend.audit"
   },
-  "version": "0.1.0",
+  "version": "0.2.0",
   "riskLevel": "low",
   "permissions": {
     "filesystem": [
@@ -54,7 +54,7 @@
     }
   },
   "freshness": {
-    "lastReviewedAt": "2026-07-08"
+    "lastReviewedAt": "2026-07-10"
   },
   "installTargets": [
     "repo",
@@ -78,6 +78,10 @@
   },
   "conflictsWith": [],
   "supersedes": [],
+  "verification": {
+    "requiredCapabilities": ["browser", "screenshots"],
+    "fallback": "unverified"
+  },
   "maintainer": {
     "name": "local-curated",
     "trustTier": "curated"

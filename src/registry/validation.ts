@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { skillLanes, type EvaluationStatus, type RiskLevel, type SkillLane, type SkillManifest } from "../types.ts";
 
@@ -624,6 +625,204 @@ export const validateSkillManifest = (
 
   return issues;
 };
+
+export const extractMarkdownLinks = (
+  skillText: string,
+): Array<{ path: string; lineNumber: number }> => {
+  const links: Array<{ path: string; lineNumber: number }> = [];
+  const lines = skillText.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const refMatch = line.match(/^\[([^\]]+)\]:\s*(\S+)/);
+    if (refMatch) {
+      links.push({ path: refMatch[2], lineNumber: i + 1 });
+      continue;
+    }
+    const inlineRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
+    let match;
+    while ((match = inlineRegex.exec(line)) !== null) {
+      links.push({ path: match[2], lineNumber: i + 1 });
+    }
+  }
+  return links;
+};
+
+const isExternalOrAnchorPath = (value: string): boolean =>
+  /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(value) ||
+  /^mailto:/i.test(value) ||
+  value.startsWith("#");
+
+const OVERSIZED_THRESHOLD = 200;
+
+const markdownDestination = (rawValue: string) => {
+  const trimmed = rawValue.trim();
+  if (trimmed.startsWith("<")) {
+    const closing = trimmed.indexOf(">");
+    return closing === -1 ? trimmed : trimmed.slice(1, closing);
+  }
+  return trimmed.match(/^(\S+)(?:\s+["'(].*)?$/)?.[1] ?? trimmed;
+};
+
+export const validateSkillReferences = (
+  skillText: string,
+  skillRoot: string,
+): RegistryValidationIssue[] => {
+  const issues: RegistryValidationIssue[] = [];
+  const links = extractMarkdownLinks(skillText);
+  for (const { path: rawLinkPath, lineNumber } of links) {
+    const linkPath = markdownDestination(rawLinkPath);
+    if (isExternalOrAnchorPath(linkPath)) continue;
+    const filePath = linkPath.split(/[?#]/, 1)[0] ?? linkPath;
+    if (hasPathTraversal(filePath)) {
+      issues.push({
+        path: `SKILL.md:${lineNumber}`,
+        message: `Reference path traversal not allowed: ${filePath}.`,
+      });
+      continue;
+    }
+    const resolved = path.resolve(skillRoot, filePath);
+    if (!resolved.startsWith(skillRoot + path.sep) && resolved !== skillRoot) {
+      issues.push({
+        path: `SKILL.md:${lineNumber}`,
+        message: `Reference path escapes skill package: ${linkPath}.`,
+      });
+      continue;
+    }
+    if (!existsSync(resolved)) {
+      issues.push({
+        path: `SKILL.md:${lineNumber}`,
+        message: `Reference path does not resolve: ${linkPath}.`,
+      });
+    }
+  }
+  return issues;
+};
+
+export const validateContentContracts = (
+  skillText: string,
+): RegistryValidationIssue[] => {
+  const issues: RegistryValidationIssue[] = [];
+  const hasTrigger = /\bUse\s+(this\s+)?skill\s+(?:when|for|to)\b/i.test(
+    skillText,
+  );
+  const hasNonTrigger = /\bDo\s+not\s+use\b/i.test(skillText);
+  if (!hasTrigger && !hasNonTrigger) {
+    issues.push({
+      path: "SKILL.md.content",
+      message:
+        "Must define an explicit trigger/non-trigger boundary (use when / do not use).",
+    });
+  }
+  const requiredSections = [
+    { heading: "Workflow" },
+    { heading: "Validation" },
+    { heading: "Output Contract" },
+  ];
+  for (const { heading } of requiredSections) {
+    if (!skillText.includes(`## ${heading}`)) {
+      issues.push({
+        path: "SKILL.md.content",
+        message: `Must include a ## ${heading} section.`,
+      });
+    }
+  }
+  const hasReferencesSection = skillText.includes("## References");
+  const hasNoReferencesJustification = /\bno\s+packaged\s+references?\b/i.test(
+    skillText,
+  );
+  if (!hasReferencesSection && !hasNoReferencesJustification) {
+    issues.push({
+      path: "SKILL.md.content",
+      message:
+        "Must include a ## References section or an explicit 'no packaged references' justification.",
+    });
+  }
+  return issues;
+};
+
+export const validateLaneAwareContracts = (
+  skillText: string,
+  lane?: string,
+  requiredCapabilities: string[] = [],
+): RegistryValidationIssue[] => {
+  const issues: RegistryValidationIssue[] = [];
+  const requiresRenderedEvidence = requiredCapabilities.some((capability) =>
+    ["browser", "screenshots", "lighthouse", "measurement"].includes(
+      capability,
+    ),
+  );
+  const hasVerificationOutcome = /## Verification Outcome/.test(skillText);
+  if ((lane === "design" || requiresRenderedEvidence) && !hasVerificationOutcome) {
+    issues.push({
+      path: "SKILL.md.content",
+      message:
+        "Design lane skills and skills that require rendered evidence must include a ## Verification Outcome section.",
+    });
+  }
+  return issues;
+};
+
+export const validateOversizedSkill = (
+  skillText: string,
+): RegistryValidationIssue[] => {
+  const issues: RegistryValidationIssue[] = [];
+  const lines = skillText.split("\n").length;
+  if (lines > OVERSIZED_THRESHOLD) {
+    issues.push({
+      path: "SKILL.md",
+      message: `SKILL.md is ${lines} lines (threshold: ${OVERSIZED_THRESHOLD}). Consider splitting references into separate files.`,
+    });
+  }
+  return issues;
+};
+
+export const validateCrossSkillReferences = (
+  skills: Array<{
+    manifest: { id: string; conflictsWith: string[] };
+  }>,
+): RegistryValidationIssue[] => {
+  const issues: RegistryValidationIssue[] = [];
+  const allIds = new Set(skills.map((s) => s.manifest.id));
+  for (const skill of skills) {
+    for (const ref of skill.manifest.conflictsWith) {
+      if (ref && !allIds.has(ref)) {
+        issues.push({
+          path: `skills/${skill.manifest.id}/skill.manifest.json`,
+          message: `conflictsWith references unknown skill id: ${ref}.`,
+        });
+      }
+    }
+  }
+  return issues;
+};
+
+export const validateSkillContent = (
+  skillText: string,
+  skillRoot: string,
+  context: {
+    lane?: string;
+    skillId?: string;
+    requiredCapabilities?: string[];
+    enforceContracts?: boolean;
+  } = {},
+): RegistryValidationIssue[] => {
+  const issues: RegistryValidationIssue[] = [];
+  issues.push(...validateSkillReferences(skillText, skillRoot));
+  if (context.enforceContracts === false) return issues;
+  issues.push(...validateContentContracts(skillText));
+  issues.push(
+    ...validateLaneAwareContracts(
+      skillText,
+      context.lane,
+      context.requiredCapabilities,
+    ),
+  );
+  if (context.skillId) {
+    issues.push(...validateOversizedSkill(skillText));
+  }
+  return issues;
+};
+
 
 export const assertValidSkillManifest = (
   input: unknown,

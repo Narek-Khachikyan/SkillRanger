@@ -26,7 +26,7 @@
     "registry": "local",
     "path": "./registry/skills/frontend.interaction-polish"
   },
-  "version": "0.1.0",
+  "version": "0.2.0",
   "riskLevel": "low",
   "permissions": {
     "filesystem": [
@@ -57,7 +57,7 @@
     "fallback": "unverified"
   },
   "freshness": {
-    "lastReviewedAt": "2026-07-07",
+    "lastReviewedAt": "2026-07-10",
     "targetFrameworkVersions": {
       "tailwindcss": "3-4",
       "react": "18-19"

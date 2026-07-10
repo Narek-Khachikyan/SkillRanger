@@ -137,6 +137,42 @@ const frontendIntentTokens = new Set([
   "ui",
 ]);
 
+const motionAuditVerbTokens = new Set([
+  "audit",
+  "review",
+  "аудит",
+  "проверить",
+  "проверь",
+  "проверьте",
+  "проверка",
+  "ревью",
+]);
+
+const motionSubjectTokens = new Set([
+  "animation",
+  "animations",
+  "motion",
+  "анимация",
+  "анимации",
+  "анимаций",
+  "анимацию",
+  "моушн",
+]);
+
+const isMotionAuditIntent = (intent?: string) => {
+  if (!intent) return false;
+  const tokens = tokenize(intent);
+  return (
+    hasAnyToken(tokens, motionAuditVerbTokens) &&
+    hasAnyToken(tokens, motionSubjectTokens)
+  );
+};
+
+const intentGatedSkillIds = new Set([
+  "frontend.motion-audit",
+  "frontend.motion-design",
+]);
+
 const specializedIntentHints: Record<string, string[]> = {
   "frontend.accessibility-review": [
     "accessibility",
@@ -195,15 +231,48 @@ const specializedIntentHints: Record<string, string[]> = {
     "supplied product screenshot",
   ],
   "frontend.interaction-polish": [
-    "animation",
     "drag",
     "drawer",
     "drop",
     "focus correctly",
+    "interaction polish",
     "modal",
-    "motion",
     "toast",
-    "transition",
+  ],
+  "frontend.motion-audit": [
+    "animation audit",
+    "animation performance",
+    "generic decorative motion",
+    "jank",
+    "motion audit",
+    "motion review",
+    "reduced-motion accessibility",
+    "reduced-motion support",
+    "review motion",
+    "аудит анимаций",
+    "проверить анимации",
+    "джанк",
+  ],
+  "frontend.motion-design": [
+    "animation",
+    "animations",
+    "motion",
+    "motion design",
+    "motion system",
+    "choreography",
+    "easing",
+    "page transition",
+    "page transitions",
+    "view transition",
+    "view transitions",
+    "transition system",
+    "transitions",
+    "reduced-motion",
+    "анимация",
+    "анимации",
+    "система анимаций",
+    "хореография",
+    "переходы",
   ],
   "frontend.next-app-router-review": [
     "app router",
@@ -258,7 +327,6 @@ const specializedIntentHints: Record<string, string[]> = {
     "data flow",
     "derived during render",
     "effect",
-    "effects",
     "provider",
     "react app",
     "state ownership",
@@ -270,6 +338,9 @@ const specializedIntentHints: Record<string, string[]> = {
     "390px",
     "active state",
     "arbitrary colors",
+    "breakpoint fix",
+    "className cleanup",
+    "css repair",
     "empty",
     "error states",
     "icons shift",
@@ -280,9 +351,12 @@ const specializedIntentHints: Record<string, string[]> = {
     "overlaps",
     "radii",
     "responsive",
+    "responsive fix",
     "spacing",
     "state styling",
     "tailwind",
+    "tailwind class",
+    "tailwind fix",
     "wrapping",
   ],
   "frontend.testing-strategy": [
@@ -298,36 +372,63 @@ const specializedIntentHints: Record<string, string[]> = {
   "frontend.ux-critique": [
     "affordance",
     "checkout",
+    "cognitive load",
     "completion blocker",
     "confusing",
+    "empty state",
+    "error recovery",
+    "error state",
+    "findability",
     "flow",
+    "form usability",
+    "information architecture",
+    "navigation",
     "onboarding",
+    "recovery",
+    "search results",
+    "search usability",
+    "settings page",
+    "settings usability",
+    "task completion",
+    "task flow",
+    "usability",
+    "user flow",
     "ux",
+    "wayfinding",
   ],
   "frontend.visual-design-polish": [
+    "art direction",
     "before-after",
+    "brand direction",
     "crowded",
+    "design language",
     "design.md",
     "editorial",
     "generic",
     "hierarchy",
     "layout bug",
+    "look and feel",
     "looks",
     "looks off",
     "manga",
     "product fit",
-    "redesign",
     "rebrand",
+    "redesign",
     "refresh",
     "revamp",
     "modernize",
     "редизайн",
     "ребрендинг",
     "screenshot looks off",
+    "style guide",
+    "subject-specific",
     "tell me what to change",
     "visual",
     "visual direction",
+    "visual identity",
+    "visual language",
     "visual regression",
+    "visual thesis",
   ],
 };
 
@@ -340,10 +441,20 @@ const designIntentPhrases = [
 const frontendAuditIntentPhrases = [
   "cross-cutting frontend",
   "final frontend review",
+  "final ship review",
   "frontend audit",
   "frontend scorecard",
+  "go no-go",
+  "go or no go",
+  "go/no-go",
+  "preflight audit",
+  "preflight check",
+  "preflight frontend",
+  "preflight review",
+  "quality gate",
   "release readiness",
   "release-readiness",
+  "ship readiness",
   "whole frontend",
 ];
 
@@ -414,7 +525,7 @@ const isBackendOnlyIntent = (intent?: string) => {
 };
 
 const intentLaneAdjustment = (lane: SkillLane, intent?: string) => {
-  if (!intent) return 0;
+  if (!intent) return lane === "framework" ? 0.02 : 0;
   const normalizedIntent = intent.toLowerCase();
   const tokens = tokenize(intent);
   if (lane === "agent-context" && normalizedIntent.includes("agents.md")) return 0.08;
@@ -446,6 +557,7 @@ const specializedIntentScore = (skill: RegistrySkill, intent?: string) => {
 
 const hasSpecializedIntent = (intent?: string) => {
   if (!intent) return false;
+  if (isMotionAuditIntent(intent)) return true;
   const normalizedIntent = intent.toLowerCase();
   const tokens = tokenize(intent);
   return Object.values(specializedIntentHints)
@@ -454,15 +566,23 @@ const hasSpecializedIntent = (intent?: string) => {
 };
 
 const intentSkillAdjustment = (skill: RegistrySkill, intent?: string) => {
+  const specializedScore = specializedIntentScore(skill, intent);
+  if (
+    intentGatedSkillIds.has(skill.manifest.id) &&
+    (!intent || specializedScore === 0)
+  ) {
+    // Motion Design/Audit must not displace framework/default leaders or unrelated visual tasks without a matching motion request.
+    return -0.01;
+  }
   if (!intent) return 0;
   if (skill.manifest.id === "frontend.audit") {
     return isFrontendAuditIntent(intent) ? 0.25 : 0;
   }
-  const specializedScore = specializedIntentScore(skill, intent);
   if (skill.manifest.id === "frontend.playwright-debug") {
     return specializedScore >= 0.5 ? 0.18 * specializedScore : -0.18;
   }
-  if (!hasSpecializedIntent(intent)) return 0;
+  const hasSpec = hasSpecializedIntent(intent);
+  if (!hasSpec) return 0;
   return specializedScore > 0 ? 0.18 * specializedScore : -0.14;
 };
 
@@ -517,8 +637,52 @@ const verificationFor = (skill: RegistrySkill, hostCapabilities: Set<string>) =>
   };
 };
 
-const evaluationPenalty = (skill: RegistrySkill) =>
-  skill.manifest.evaluation?.status === "curated" ? 0 : 0.03;
+const evaluationConfidence = (skill: RegistrySkill) => {
+  switch (skill.manifest.evaluation?.status) {
+    case "curated":
+      return 1;
+    case "task-eval":
+      return 0.7;
+    case "trigger-eval":
+      return 0.25;
+    case "real-project-smoke":
+      // A project smoke proves viability, not broad task quality across the frozen suite.
+      return 0.25;
+    default:
+      return 0.25;
+  }
+};
+
+const effectiveQualityScore = (skill: RegistrySkill) => {
+  const editorialScore = clamp(skill.manifest.qualityScore);
+  const confidence = evaluationConfidence(skill);
+  const confidenceAdjusted = 0.5 + (editorialScore - 0.5) * confidence;
+  const benchmarkScore = skill.manifest.evaluation?.score;
+  if (
+    ["task-eval", "curated"].includes(
+      skill.manifest.evaluation?.status ?? "none",
+    ) &&
+    benchmarkScore !== undefined
+  ) {
+    return clamp((confidenceAdjusted + benchmarkScore) / 2);
+  }
+  return clamp(confidenceAdjusted);
+};
+
+const evaluationPenalty = (skill: RegistrySkill) => {
+  switch (skill.manifest.evaluation?.status) {
+    case "curated":
+      return 0;
+    case "task-eval":
+      return 0.01;
+    case "trigger-eval":
+      return 0.02;
+    case "real-project-smoke":
+      return 0.02;
+    default:
+      return 0.03;
+  }
+};
 
 const rounded = (value: number) => Number(value.toFixed(3));
 
@@ -635,6 +799,7 @@ export const recommendSkills = (
       const userIntentMatch = intentScore(skill, options.userIntent);
       const hasEvaluationEvidence = skill.manifest.evaluation?.status === "curated";
       const qualityScore = clamp(skill.manifest.qualityScore);
+      const scoredQuality = effectiveQualityScore(skill);
       const unverifiedEvaluationPenalty = evaluationPenalty(skill);
       const securityScore = clamp(skill.manifest.securityScore);
       const freshScore = freshnessScore(
@@ -646,6 +811,16 @@ export const recommendSkills = (
       if (
         skill.manifest.id === "frontend.audit" &&
         !isFrontendAuditIntent(options.userIntent)
+      ) {
+        return [];
+      }
+      if (
+        intentGatedSkillIds.has(skill.manifest.id) &&
+        specializedIntentScore(skill, options.userIntent) === 0 &&
+        !(
+          skill.manifest.id === "frontend.motion-audit" &&
+          isMotionAuditIntent(options.userIntent)
+        )
       ) {
         return [];
       }
@@ -665,7 +840,7 @@ export const recommendSkills = (
       const score =
         0.3 * stackMatch +
         0.2 * userIntentMatch +
-        0.15 * qualityScore +
+        0.15 * scoredQuality +
         0.15 * securityScore +
         0.08 * freshScore +
         0.07 * agentCompatibilityScore -
@@ -688,14 +863,18 @@ export const recommendSkills = (
       if (skillAdjustment > 0)
         reasons.push("specialized intent boost");
       if (laneAdjustment > 0)
-        reasons.push(`${lane} lane matches intent`);
+        reasons.push(
+          options.userIntent
+            ? `${lane} lane matches intent`
+            : `${lane} lane matches detected stack`,
+        );
       if (verification.missingCapabilities.length > 0) {
         reasons.push(
           `verified completion needs ${verification.missingCapabilities.join(", ")}`,
         );
       }
       if (!hasEvaluationEvidence) {
-        reasons.push("evaluation evidence missing; ranking penalty applied");
+          reasons.push("evaluation evidence missing; ranking penalty applied");
       }
       if (skill.manifest.riskLevel === "low")
         reasons.push("low-risk instruction-only skill");
@@ -713,6 +892,7 @@ export const recommendSkills = (
             stackMatch: rounded(stackMatch),
             userIntentMatch: rounded(userIntentMatch),
             qualityScore: rounded(qualityScore),
+            effectiveQualityScore: rounded(scoredQuality),
             securityScore: rounded(securityScore),
             freshnessScore: rounded(freshScore),
             compatibilityScore: rounded(agentCompatibilityScore),
@@ -734,7 +914,12 @@ export const recommendSkills = (
       ];
     })
     .filter((recommendation) => recommendation.score > 0.25)
-    .sort((a, b) => b.score - a.score || a.skillId.localeCompare(b.skillId));
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.scoreBreakdown.qualityScore - a.scoreBreakdown.qualityScore ||
+        a.skillId.localeCompare(b.skillId),
+    );
 
   const laneRecommendations = options.lane
     ? rankedRecommendations.filter(

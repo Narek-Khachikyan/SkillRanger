@@ -64,9 +64,11 @@ export type FrontendTaskEvidenceStatus = "passed" | "failed" | "not-assessed";
 export type FrontendTaskEvidence = {
   schemaVersion: "1.0";
   suiteName: string;
+  baselines?: string[];
   runs: Array<{
     runId: string;
     taskId: string;
+    baseline?: string;
     skillId: string;
     skillVersion: string;
     skillChecksum: string;
@@ -74,6 +76,9 @@ export type FrontendTaskEvidence = {
     fixture: string;
     command: string;
     durationMs: number;
+    exitCode?: number | null;
+    signal?: string | null;
+    expectedArtifacts?: string[];
     artifacts: Array<{
       name: string;
       path: string;
@@ -90,6 +95,8 @@ export type FrontendTaskEvidenceReport = {
   metrics: {
     expectedTasks: number;
     recordedTasks: number;
+    expectedRuns: number;
+    recordedRuns: number;
     artifactCount: number;
     passedAssertions: number;
     failedAssertions: number;
@@ -371,6 +378,7 @@ export const validateFrontendTaskEvidence = (
   const tasks = (suite.taskBands ?? []).flatMap((band) => band.seedTasks ?? []);
   const taskById = new Map(tasks.map((task) => [task.id, task]));
   const seenRunIds = new Set<string>();
+  const seenRunKeys = new Set<string>();
   const recordedTaskIds = new Set<string>();
   let artifactCount = 0;
   let passedAssertions = 0;
@@ -381,6 +389,12 @@ export const validateFrontendTaskEvidence = (
   if (evidence.suiteName !== suite.name) issues.push(`task evidence suiteName must equal ${suite.name}`);
   if (!Array.isArray(evidence.runs)) {
     issues.push("task evidence runs must be an array");
+  }
+  const expectedBaselines = Array.isArray(evidence.baselines)
+    ? [...new Set(evidence.baselines)]
+    : [];
+  if (expectedBaselines.some((baseline) => !baseline?.trim())) {
+    issues.push("task evidence baselines must be non-empty strings");
   }
 
   for (const run of Array.isArray(evidence.runs) ? evidence.runs : []) {
@@ -393,14 +407,56 @@ export const validateFrontendTaskEvidence = (
       issues.push(`task evidence references unknown task: ${run.taskId}`);
       continue;
     }
-    if (recordedTaskIds.has(run.taskId)) issues.push(`duplicate task evidence taskId: ${run.taskId}`);
     recordedTaskIds.add(run.taskId);
+    if (expectedBaselines.length > 0 && !run.baseline?.trim()) {
+      issues.push(`task evidence ${run.taskId} baseline is required`);
+    }
+    if (
+      run.baseline &&
+      expectedBaselines.length > 0 &&
+      !expectedBaselines.includes(run.baseline)
+    ) {
+      issues.push(`task evidence ${run.taskId} references unknown baseline: ${run.baseline}`);
+    }
+    const runKey = expectedBaselines.length > 0
+      ? `${run.taskId}::${run.baseline ?? ""}`
+      : run.taskId;
+    if (seenRunKeys.has(runKey)) {
+      issues.push(`duplicate task evidence run: ${runKey}`);
+    }
+    seenRunKeys.add(runKey);
 
     for (const key of ["skillId", "skillVersion", "skillChecksum", "model", "fixture", "command"] as const) {
       if (!run[key]?.trim()) issues.push(`task evidence ${run.taskId} ${key} is required`);
     }
     if (!Number.isFinite(run.durationMs) || run.durationMs <= 0) {
       issues.push(`task evidence ${run.taskId} durationMs must be positive`);
+    }
+    if (run.exitCode !== undefined && run.exitCode !== 0) {
+      issues.push(
+        `task evidence ${run.taskId}${run.baseline ? `::${run.baseline}` : ""} command failed with exit code ${run.exitCode}`,
+      );
+    }
+    if (
+      expectedBaselines.length > 0 &&
+      run.baseline !== "without-skill" &&
+      [run.skillId, run.skillVersion, run.skillChecksum].some(
+        (value) => !value?.trim() || value === "(none)",
+      )
+    ) {
+      issues.push(
+        `task evidence ${run.taskId}::${run.baseline} requires skill id, version, and checksum`,
+      );
+    }
+    if (
+      expectedBaselines.length > 0 &&
+      [run.model, run.fixture].some(
+        (value) => !value?.trim() || value === "(none)",
+      )
+    ) {
+      issues.push(
+        `task evidence ${run.taskId}::${run.baseline} requires model and fixture metadata`,
+      );
     }
 
     if (!Array.isArray(run.artifacts)) {
@@ -454,7 +510,17 @@ export const validateFrontendTaskEvidence = (
   }
 
   for (const task of tasks) {
-    if (!recordedTaskIds.has(task.id)) issues.push(`task evidence is missing task: ${task.id}`);
+    if (expectedBaselines.length === 0) {
+      if (!recordedTaskIds.has(task.id)) {
+        issues.push(`task evidence is missing task: ${task.id}`);
+      }
+      continue;
+    }
+    for (const baseline of expectedBaselines) {
+      if (!seenRunKeys.has(`${task.id}::${baseline}`)) {
+        issues.push(`task evidence is missing task/baseline: ${task.id}::${baseline}`);
+      }
+    }
   }
 
   return {
@@ -462,6 +528,8 @@ export const validateFrontendTaskEvidence = (
     metrics: {
       expectedTasks: tasks.length,
       recordedTasks: recordedTaskIds.size,
+      expectedRuns: tasks.length * Math.max(expectedBaselines.length, 1),
+      recordedRuns: seenRunKeys.size,
       artifactCount,
       passedAssertions,
       failedAssertions,

@@ -7,6 +7,12 @@ description: Review frontend changes for semantic HTML, keyboard behavior, focus
 
 Use this skill when the task touches user-facing UI, forms, navigation, modals, interactive controls, or content structure. Do not use it for backend-only, database-only, or copy-only changes unless the copy affects labels, instructions, or error recovery.
 
+## Verification Outcome
+
+- Report `verified` only when the affected rendered states and primary keyboard/focus path were exercised; identify screen reader, contrast, reflow, or forced-colors checks that remain manual.
+- Without a browser, source review can identify risks but cannot prove interaction accessibility. Return `implemented-unverified` after an approved code fix, or `blocked` when missing rendered evidence prevents a safe conclusion.
+- A clean automated report is supporting evidence, never a substitute for the relevant manual checks.
+
 ## Decision Rules
 
 - Prefer native semantic elements before custom ARIA.

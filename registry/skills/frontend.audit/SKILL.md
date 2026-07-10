@@ -7,6 +7,12 @@ description: Run a final frontend release-readiness audit across accessibility, 
 
 Use this skill when a frontend feature, page, redesign, or app slice needs a final cross-cutting quality audit before the work is treated as complete. Use it after implementation or during review when the question is broader than one specialist lane. Do not use it as a substitute for deep specialist work when the task is specifically Next.js routing, React architecture, Tailwind polish, accessibility conformance, Playwright debugging, or visual redesign; call those skills for detailed findings and use this skill to summarize release readiness.
 
+## Verification Outcome
+
+- Return `verified` only when the verdict is backed by rendered mobile and desktop evidence plus the relevant accessibility, runtime, test, and performance artifacts.
+- Return `blocked` when the app cannot run or missing evidence prevents a release decision. Use `implemented-unverified` only for an approved fix whose exact browser and artifact checks remain outstanding.
+- Never turn an unverified scorecard dimension into a passing verdict by averaging it with stronger dimensions.
+
 ## Decision Rules
 
 - Audit measurable implementation quality first, then subjective polish. A beautiful screen with broken keyboard access, layout overflow, or missing error states is not release-ready.

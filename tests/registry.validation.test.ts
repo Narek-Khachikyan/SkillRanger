@@ -87,7 +87,7 @@ const writeSkillPackage = async (
 test("local registry validation accepts curated skills", async () => {
   const report = await validateLocalRegistry("registry");
   assert.equal(report.ok, true);
-  assert.equal(report.skills.length, 15);
+  assert.equal(report.skills.length, 17);
 });
 
 test("curated skills carry derived quality rubric metadata", async () => {
@@ -288,7 +288,7 @@ test("local registry loader rejects duplicate skill names", async () => {
     await writeSkillPackage(registryRoot, id, {
       manifest: validManifest(id, "duplicate-name"),
       skillText:
-        "---\nname: duplicate-name\ndescription: Review frontend code for quality, accessibility, and maintainability.\n---\n# Bad\n",
+        "---\nname: duplicate-name\ndescription: Review frontend code for quality, accessibility, and maintainability.\n---\n# Duplicate\n\nUse this skill when reviewing frontend code. Do not use it for backend work.\n\n## Workflow\n\n1. Review the code.\n\n## Validation\n\nValidate findings.\n\n## Output Contract\n\nReturn findings.\n\n## References\n\nNo packaged references are required for this test skill.\n",
     });
   }
 

@@ -31,7 +31,7 @@ The local quality rubric should stay strict:
 - `portability`: is not unnecessarily tied to one host, OS, or private convention.
 - `safety`: remains separate from `qualityScore` and must block risky packages.
 
-Quality scores are editorial until backed by frozen eval artifacts. Each curated frontend manifest now carries `evaluation.status`; keep status at `none` until trigger and task eval evidence exists, even when the skill text is strong.
+Quality scores are editorial until backed by frozen eval artifacts. Each curated frontend manifest now carries `evaluation.status`; keep status at `none` until trigger and task eval evidence exists, even when the skill text is strong. The recommender confidence-adjusts editorial quality toward a neutral score until frozen task evidence exists, then increasingly trusts task and curated evidence. A real-project smoke proves viability but does not receive a broad ranking advantage across unrelated tasks.
 
 ## External Sourcing Shortlist
 
@@ -129,7 +129,7 @@ Design-lane boundaries are part of routing quality: `frontend.visual-design-poli
 
 ## Eval Set
 
-Use `evals/frontend/suite.json` as the frozen coverage target before increasing `qualityScore`: 87 trigger prompts and 49 task eval seeds across greenfield UI, existing-project modification, repair, and polish. Run it against repeatable fixtures before claiming benchmark-backed quality:
+Use `evals/frontend/suite.json` as the frozen coverage target before increasing `qualityScore`: 102 trigger prompts and 51 task eval seeds across greenfield UI, existing-project modification, repair, polish, and motion quality. Run it against repeatable fixtures before claiming benchmark-backed quality:
 
 - `fixtures/next-react-ts`: Next.js, React, TypeScript, Tailwind, Playwright.
 - `fixtures/vite-react-ts`: Vite, React, TypeScript, existing `AGENTS.md`.
@@ -178,8 +178,98 @@ Do not increase `qualityScore` from prose review alone; derive it from the froze
 
 The `frontend.playwright-debug` promotion pilot is recorded at `evals/frontend/results/frontend.playwright-debug-promotion-pilot-2026-07-05.json`.
 
-`frontend.playwright-debug` remains at `evaluation.status: real-project-smoke`. Its historical pilot used the former 80-prompt/40-task suite and is not promotion evidence for the current frozen 87-prompt/49-task suite.
+`frontend.playwright-debug` remains at `evaluation.status: real-project-smoke`. Its historical pilot used the former 80-prompt/40-task suite and is not promotion evidence for the current frozen 102-prompt/51-task suite.
 
-Do not promote to `curated` yet. The repo validates the 49 task seeds plus traceable evidence and blinded human-review manifests, but does not execute agents or calculate no-skill/old-skill deltas. Those gates must not be inferred from routing or smoke artifacts.
+Do not promote to `curated` yet. The repo validates the 51 task seeds plus traceable evidence and blinded human-review manifests, but does not calculate scores or human preference automatically. Those gates must not be inferred from routing or smoke artifacts.
 
-Next step: wire a task runner for a user-provided real project that executes the 49 task seeds against no-skill, old-skill, and current-skill baselines, then feeds its artifacts into these validators before any curated decision.
+## Task Eval Runner
+
+The `src/evals/runner.ts` module closes the execution gap. It generates a deterministic run plan for all seed tasks across named baselines, executes a user-supplied command template per task with safe `spawn`-based substitution (no shell concatenation), and records suite/task/baseline metadata, exit status, duration, model/fixture info, skill id/version/checksum, and stdout/stderr artifact paths into the existing `FrontendTaskEvidence` format.
+
+The runner does **not** score or review. All assertion statuses are set to `not-assessed`; automated scoring and human review remain separate gates.
+
+### Usage
+
+Generate a run plan for 51 task seeds across two baselines:
+
+```bash
+node src/cli/index.ts eval:frontend --run-tasks \
+  --project fixtures/next-react-ts \
+  --baselines without-skill,current-skill \
+  --command 'npx agent run --task "{{taskId}}" --prompt "{{prompt}}" --baseline "{{baseline}}" --output-dir "{{outputDir}}"'
+```
+
+Dry-run (plan only, no execution, no agent executable required):
+
+```bash
+node src/cli/index.ts eval:frontend --run-tasks \
+  --project fixtures/next-react-ts \
+  --baselines without-skill,current-skill \
+  --command 'echo "task={{taskId}} baseline={{baseline}}"' \
+  --output /tmp/my-eval-run \
+  --dry-run
+```
+
+Attach per-baseline fixture metadata (model, skill identity):
+
+```bash
+node src/cli/index.ts eval:frontend --run-tasks \
+  --project fixtures/next-react-ts \
+  --baselines without-skill,current-skill \
+  --command 'npx agent run --task "{{taskId}}" --prompt "{{prompt}}" --baseline "{{baseline}}"' \
+  --output /tmp/frontend-eval-results \
+  --baseline-fixture-metadata '{
+    "without-skill": {"model": "claude-3.5-sonnet", "fixture": "next-react-ts"},
+    "current-skill": {"model": "claude-4-sonnet", "fixture": "next-react-ts", "skillId": "frontend.visual-design-polish", "skillVersion": "1.0.0", "skillChecksum": "sha256:abc123"}
+  }'
+```
+
+Filter to specific task ids and resume a partial run:
+
+```bash
+node src/cli/index.ts eval:frontend --run-tasks \
+  --project fixtures/next-react-ts \
+  --baselines without-skill,current-skill \
+  --filter "greenfield-crm,existing-shadcn" \
+  --command 'npx agent run --task "{{taskId}}" --prompt "{{prompt}}"' \
+  --output /tmp/frontend-eval-results \
+  --resume \
+  --json
+```
+
+### Available Placeholders for `--command`
+
+| Placeholder | Description |
+|---|---|
+| `{{taskId}}` | Seed task identifier (e.g. `greenfield-crm-first-screen`) |
+| `{{baseline}}` | Baseline kind (`without-skill`, `old-skill`, `current-skill`) |
+| `{{prompt}}` | Task prompt text |
+| `{{bandId}}` | Task band identifier (e.g. `greenfield-ui`) |
+| `{{outputDir}}` | Per-run isolated output directory |
+
+### Output Structure
+
+```
+<output-dir>/
+  task-evidence.json          # Aggregated FrontendTaskEvidence
+  <taskId>/
+    <baseline>/
+      stdout.log              # Captured stdout
+      stderr.log              # Captured stderr
+      task-meta.json          # { exitCode, signal, durationMs }
+```
+
+The aggregated `task-evidence.json` preserves each task/baseline pair as a distinct run and passes structural validation. Assertion statuses remain `not-assessed`, so it is not promotion-ready until required artifacts are attached and the assertions are reviewed.
+
+### Security
+
+- Uses `spawn` with `argv` array — no shell is invoked.
+- Placeholder substitution is per-argv-element string replacement; no concatenation or eval.
+- The command template structure is fixed at parse time; only placeholders vary between runs.
+- Output paths are validated through `path.join` and contained under `outputDir`.
+
+### Architecture
+
+- `src/evals/runner.ts` — `generateRunPlan()`, `executeRunPlan()`, `printRunPlan()`
+- `src/cli/index.ts` — `eval:frontend --run-tasks` subcommand invoking the runner
+- `tests/frontend-eval.test.ts` — 12 unit/integration tests covering plan generation, dry-run, execution, resume, metadata injection, and evidence compatibility

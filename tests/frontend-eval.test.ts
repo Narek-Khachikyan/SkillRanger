@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -57,9 +57,9 @@ test("frontend eval suite validates and summarizes seed coverage", async () => {
 
   const summary = summarizeFrontendEvalSuite(suite);
   assert.equal(summary.triggerPrompts.total, summary.triggerPrompts.target);
-  assert.equal(summary.triggerPrompts.target, 87);
+  assert.equal(summary.triggerPrompts.target, 102);
   assert.equal(summary.taskEvals.seedTasks, summary.taskEvals.target);
-  assert.equal(summary.taskEvals.target, 49);
+  assert.equal(summary.taskEvals.target, 51);
   assert.equal(
     summary.triggerPrompts.shouldTrigger + summary.triggerPrompts.shouldNotTrigger + summary.triggerPrompts.ambiguous,
     summary.triggerPrompts.total,
@@ -69,6 +69,7 @@ test("frontend eval suite validates and summarizes seed coverage", async () => {
     "existing-project-modification",
     "repair",
     "polish",
+    "motion-quality",
   ]);
 });
 
@@ -282,6 +283,8 @@ test("frontend task evidence requires traceable metadata, task coverage, and ass
     metrics: {
       expectedTasks: 1,
       recordedTasks: 1,
+      expectedRuns: 1,
+      recordedRuns: 1,
       artifactCount: 1,
       passedAssertions: 1,
       failedAssertions: 0,
@@ -426,8 +429,8 @@ test("eval:frontend CLI reports suite summary as JSON", async () => {
   };
   assert.equal(report.ok, true);
   assert.deepEqual(report.issues, []);
-  assert.equal(report.summary.triggerPrompts.target, 87);
-  assert.equal(report.summary.taskEvals.target, 49);
+  assert.equal(report.summary.triggerPrompts.target, 102);
+  assert.equal(report.summary.taskEvals.target, 51);
   assert.equal("routingEval" in report, false);
 });
 
@@ -600,4 +603,265 @@ test("eval:frontend exits non-zero when routing evaluation fails", async () => {
       return true;
     },
   );
+});
+
+import {
+  BASELINE_KINDS,
+  executeRunPlan,
+  generateRunPlan,
+  type BaselineConfigMap,
+} from "../src/evals/runner.ts";
+
+const fullSuite = () => loadFrontendEvalSuite();
+
+const smallSuite = (): FrontendEvalSuite => ({
+  schemaVersion: "1.0",
+  name: "runner-test",
+  targetCounts: { triggerPrompts: 0, taskEvals: 2 },
+  triggerPrompts: [],
+  taskBands: [
+    {
+      id: "test-band",
+      targetCount: 2,
+      seedTasks: [
+        { id: "task-a", prompt: "Do task A", assertions: ["Task A assertion"] },
+        { id: "task-b", prompt: "Do task B", assertions: ["Task B assertion"] },
+      ],
+    },
+  ],
+  scoring: { utilityWeights: { functionalCorrectness: 1 }, promotionGates: {} },
+});
+
+test("runner generates correct plan size for all baselines", async () => {
+  const suite = await fullSuite();
+  const plan = generateRunPlan(suite, { baselines: ["without-skill", "current-skill"] });
+  assert.equal(plan.suiteName, suite.name);
+  assert.equal(plan.entries.length, (suite.taskBands ?? []).reduce((c, b) => c + b.seedTasks.length, 0) * 2);
+});
+
+test("runner generates correct plan size with three baselines", async () => {
+  const suite = await fullSuite();
+  const plan = generateRunPlan(suite, { baselines: ["without-skill", "old-skill", "current-skill"] });
+  const taskCount = (suite.taskBands ?? []).reduce((c, b) => c + b.seedTasks.length, 0);
+  assert.equal(plan.entries.length, taskCount * 3);
+});
+
+test("runner generates plan with single baseline", async () => {
+  const suite = await fullSuite();
+  const plan = generateRunPlan(suite, { baselines: ["current-skill"] });
+  const taskCount = (suite.taskBands ?? []).reduce((c, b) => c + b.seedTasks.length, 0);
+  assert.equal(plan.entries.length, taskCount);
+  assert.ok(plan.entries.every((e) => e.baselineKind === "current-skill"));
+});
+
+test("runner plan respects task id filter", async () => {
+  const suite = await fullSuite();
+  const plan = generateRunPlan(suite, {
+    baselines: ["without-skill"],
+    filter: ["greenfield-crm-first-screen"],
+  });
+  assert.equal(plan.entries.length, 1);
+  assert.equal(plan.entries[0]!.taskId, "greenfield-crm-first-screen");
+});
+
+test("runner plan filter matches substring", async () => {
+  const suite = await fullSuite();
+  const plan = generateRunPlan(suite, {
+    baselines: ["without-skill"],
+    filter: ["greenfield"],
+  });
+  assert.ok(plan.entries.length > 0);
+  assert.ok(plan.entries.every((e) => e.taskId.includes("greenfield")));
+});
+
+test("runner plan exposes prompt and bandId", async () => {
+  const plan = generateRunPlan(smallSuite(), { baselines: ["without-skill"] });
+  assert.equal(plan.entries.length, 2);
+  assert.equal(plan.entries[0]!.prompt, "Do task A");
+  assert.equal(plan.entries[0]!.bandId, "test-band");
+  assert.equal(plan.entries[0]!.assertions.length, 1);
+});
+
+test("runner dry run does not execute or write output", async () => {
+  const suite = smallSuite();
+  const plan = generateRunPlan(suite, { baselines: ["without-skill"] });
+  const outputDir = await mkdtemp(path.join(tmpdir(), "runner-dry-run-"));
+  try {
+    const evidence = await executeRunPlan({
+      plan, commandTemplate: 'echo "hello"', outputDir, dryRun: true, baselinesConfig: {}, projectRoot: ".",
+    });
+    assert.equal(evidence.runs.length, 2);
+    assert.equal(evidence.runs[0]!.durationMs, 0);
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("runner rejects an unterminated command quote", async () => {
+  const plan = generateRunPlan(smallSuite(), {
+    baselines: ["without-skill"],
+  });
+  await assert.rejects(
+    executeRunPlan({
+      plan,
+      commandTemplate: 'node -e "broken',
+      outputDir: path.join(tmpdir(), "runner-invalid-command"),
+      dryRun: true,
+      baselinesConfig: {},
+    }),
+    /unterminated quote/,
+  );
+});
+
+test("eval task runner emits clean JSON in dry-run mode", async () => {
+  const suite = smallSuite();
+  const dir = await mkdtemp(path.join(tmpdir(), "runner-json-"));
+  const suitePath = path.join(dir, "suite.json");
+  await writeFile(suitePath, JSON.stringify(suite));
+  try {
+    const { stdout } = await execFileAsync("node", [
+      "src/cli/index.ts",
+      "eval:frontend",
+      "--suite",
+      suitePath,
+      "--run-tasks",
+      "--project",
+      ".",
+      "--baselines",
+      "without-skill,current-skill",
+      "--command",
+      'echo "{{taskId}}:{{baseline}}"',
+      "--dry-run",
+      "--json",
+    ]);
+    const evidence = JSON.parse(stdout) as FrontendTaskEvidence;
+    assert.equal(evidence.runs.length, 4);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runner executes command and records stdout/stderr", async () => {
+  const suite = smallSuite();
+  const plan = generateRunPlan(suite, { baselines: ["without-skill"] });
+  const outputDir = await mkdtemp(path.join(tmpdir(), "runner-exec-"));
+  try {
+    const evidence = await executeRunPlan({
+      plan, commandTemplate: 'echo "task={{taskId}} baseline={{baseline}}"', outputDir, baselinesConfig: {}, projectRoot: ".",
+    });
+    assert.equal(evidence.runs.length, 2);
+    for (const run of evidence.runs) {
+      assert.ok(run.durationMs > 0);
+      assert.ok(run.artifacts.length >= 2);
+      const stdoutContent = await readFile(run.artifacts.find((a) => a.name === "stdout")!.path, "utf8");
+      assert.ok(stdoutContent.includes(`task=${run.taskId}`));
+    }
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("runner records exit code and signal in task-meta.json", async () => {
+  const suite = smallSuite();
+  const plan = generateRunPlan(suite, { baselines: ["without-skill"] });
+  const outputDir = await mkdtemp(path.join(tmpdir(), "runner-meta-"));
+  try {
+    await executeRunPlan({
+      plan, commandTemplate: 'node -e "process.exit(42)"', outputDir, baselinesConfig: {}, projectRoot: ".",
+    });
+    const metaPath = path.join(outputDir, "task-a", "without-skill", "task-meta.json");
+    const meta = JSON.parse(await readFile(metaPath, "utf8"));
+    assert.equal(meta.exitCode, 42);
+    assert.ok(meta.durationMs > 0);
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("runner respects resume flag and skips completed runs", async () => {
+  const suite = smallSuite();
+  const plan = generateRunPlan(suite, { baselines: ["without-skill"] });
+  const outputDir = await mkdtemp(path.join(tmpdir(), "runner-resume-"));
+  try {
+    await executeRunPlan({
+      plan, commandTemplate: 'echo "first"', outputDir, baselinesConfig: {}, projectRoot: ".",
+    });
+    const evidence2 = await executeRunPlan({
+      plan, commandTemplate: 'echo "second"', outputDir, resume: true, baselinesConfig: {}, projectRoot: ".",
+    });
+    assert.equal(evidence2.runs.length, 2);
+    for (const run of evidence2.runs) assert.ok(run.durationMs > 0);
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("runner includes metadata from baseline config", async () => {
+  const suite = smallSuite();
+  const plan = generateRunPlan(suite, { baselines: ["current-skill"] });
+  const outputDir = await mkdtemp(path.join(tmpdir(), "runner-meta-config-"));
+  const baselinesConfig: BaselineConfigMap = {
+    "current-skill": { kind: "current-skill", skillId: "frontend.test-skill", skillVersion: "1.0.0", skillChecksum: "sha256:abc", model: "test-model", fixture: "test-fixture" },
+  };
+  try {
+    const evidence = await executeRunPlan({
+      plan, commandTemplate: 'echo "test"', outputDir, baselinesConfig, projectRoot: ".",
+    });
+    assert.equal(evidence.runs.length, 2);
+    const run = evidence.runs[0]!;
+    assert.equal(run.skillId, "frontend.test-skill");
+    assert.equal(run.skillVersion, "1.0.0");
+    assert.equal(run.skillChecksum, "sha256:abc");
+    assert.equal(run.model, "test-model");
+    assert.equal(run.fixture, "test-fixture");
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("runner output is compatible with validateFrontendTaskEvidence", async () => {
+  const suite = smallSuite();
+  const plan = generateRunPlan(suite, { baselines: ["current-skill"] });
+  const outputDir = await mkdtemp(path.join(tmpdir(), "runner-compat-"));
+  const baselinesConfig: BaselineConfigMap = {
+    "current-skill": { kind: "current-skill", skillId: "frontend.test-skill", skillVersion: "1.0.0", skillChecksum: "sha256:abc", model: "test-model", fixture: "test-fixture" },
+  };
+  try {
+    const evidence = await executeRunPlan({
+      plan, commandTemplate: 'echo "test"', outputDir, baselinesConfig, projectRoot: ".",
+    });
+    const report = validateFrontendTaskEvidence(suite, evidence);
+    assert.equal(report.metrics.expectedTasks, report.metrics.recordedTasks);
+    assert.equal(report.metrics.expectedRuns, report.metrics.recordedRuns);
+    assert.equal(report.metrics.passedAssertions, 0);
+    assert.equal(report.metrics.unassessedAssertions, 2);
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("runner evidence keeps each baseline as a distinct run", async () => {
+  const suite = smallSuite();
+  const plan = generateRunPlan(suite, {
+    baselines: ["without-skill", "current-skill"],
+  });
+  const outputDir = await mkdtemp(path.join(tmpdir(), "runner-baselines-"));
+  try {
+    const evidence = await executeRunPlan({
+      plan,
+      commandTemplate: 'echo "{{baseline}}"',
+      outputDir,
+      baselinesConfig: {},
+      projectRoot: ".",
+    });
+    const report = validateFrontendTaskEvidence(suite, evidence);
+    assert.deepEqual(evidence.baselines, ["without-skill", "current-skill"]);
+    assert.equal(report.metrics.expectedTasks, 2);
+    assert.equal(report.metrics.recordedTasks, 2);
+    assert.equal(report.metrics.expectedRuns, 4);
+    assert.equal(report.metrics.recordedRuns, 4);
+    assert.ok(!report.issues.some((issue) => issue.includes("duplicate")));
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
 });

@@ -7,9 +7,44 @@ description: Audit, extract, and apply frontend design-system conventions for Ta
 
 Use this skill when a frontend project needs token cleanup, shadcn/Tailwind theme review, component variant extraction, repeated class consolidation, or consistency checks across buttons, inputs, cards, badges, navigation, and layout primitives. Do not use it for one-off visual taste work unless the task is about making the system consistent.
 
+## Verification Outcome
+
+- Report `verified` only after a system change is rendered across at least two representative components or states, including relevant themes and viewports.
+- Without browser or screenshot evidence, source-level token and API analysis can proceed, but material visual changes remain `implemented-unverified`; return `blocked` when missing evidence makes a broad migration unsafe.
+- Record the representative components, themes, and states still requiring comparison.
+
 ## Systemization Gate
 
 Extract a token, variant, or primitive only when the same semantic need appears in at least two current product surfaces or has a confirmed near-term owner. For throwaway prototypes, a single local exception, or a visibly inconsistent legacy baseline, prefer a small local repair and record the candidate pattern instead of normalizing existing noise into a system. Preserve deliberate distinctive values by giving them a semantic role when they repeat; do not flatten them into default shadcn neutrals.
+
+## Invariant Anatomy vs Themeable Surface
+
+Every component has invariant anatomy (roles, states, accessibility contract) and a
+themeable surface (type, color, radius, spacing, motion, imagery). Separate them
+explicitly:
+
+- **Invariant anatomy** — never changes across products or themes:
+  - Semantic roles: label, input, validation, action, status, selection.
+  - State model: default, hover, focus-visible, active, disabled, loading, error,
+    selected, read-only.
+  - Accessibility contract: ARIA roles, keyboard interaction, focus management, screen
+    reader announcements, reduced-motion path.
+  - Layout structure: position of label relative to input, action button alignment,
+    error message placement, empty/loading/error state containers.
+- **Themeable surface** — changes with product identity:
+  - Typography: font family, weight, size, line-height, tracking, case.
+  - Color: surface, text, border, accent, status, data palettes.
+  - Shape: border radius, border weight, icon stroke, shadow elevation.
+  - Spacing: padding, gap, density mode.
+  - Motion: duration, easing, choreography pattern.
+  - Imagery: icon style, illustration system, photography treatment.
+- **When building or auditing a system:** separate invariant anatomy into shared types,
+  hooks, or component contracts. Keep themeable values in semantic tokens. Never encode
+  themeable values inside invariant anatomy logic.
+- **When adding a variant:** first confirm the anatomy is invariant; then add only
+  themeable surface overrides. If a variant changes the anatomy (different layout
+  structure, different state model, different accessibility contract), it is a new
+  component, not a variant.
 
 ## Decision Rules
 
@@ -103,3 +138,11 @@ Extract a token, variant, or primitive only when the same semantic need appears 
 - Minimal system change proposed or made.
 - Components/states verified.
 - Deferred migration notes when full cleanup is larger than the task.
+
+## References
+
+- Use the project's `tailwind.config.*`, global CSS, `components.json`, shadcn setup,
+  `cn` helpers, CVA/variant utilities, shared components, and adjacent screens as
+  primary system references.
+- Refer to the shadcn/ui theming docs and Tailwind CSS documentation for token and
+  theme architecture guidance.

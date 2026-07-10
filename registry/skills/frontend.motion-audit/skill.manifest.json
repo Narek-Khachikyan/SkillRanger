@@ -1,21 +1,21 @@
 {
-  "id": "frontend.visual-design-polish",
-  "name": "visual-design-polish",
-  "displayName": "Visual Design Polish",
-  "description": "Improve frontend visual design with subject-specific direction, hierarchy, typography, spacing, palette, density, responsive screenshot QA, and anti-generic UI critique.",
+  "id": "frontend.motion-audit",
+  "name": "motion-audit",
+  "displayName": "Motion Audit",
+  "description": "Audit frontend motion for purpose, product fit, accessibility, performance, and anti-generic animation risk using code and rendered evidence.",
   "stackTags": [
     "frontend",
     "web-app",
     "react",
-    "typescript",
-    "tailwind"
+    "typescript"
   ],
   "taskTags": [
-    "visual-design",
-    "ui-quality",
-    "responsive-design",
-    "styling",
-    "critique"
+    "motion-audit",
+    "animation",
+    "motion-quality",
+    "accessibility",
+    "performance",
+    "qa"
   ],
   "supportedAgents": [
     "codex",
@@ -24,9 +24,9 @@
   "source": {
     "type": "curated",
     "registry": "local",
-    "path": "./registry/skills/frontend.visual-design-polish"
+    "path": "./registry/skills/frontend.motion-audit"
   },
-  "version": "0.3.0",
+  "version": "0.2.0",
   "riskLevel": "low",
   "permissions": {
     "filesystem": [
@@ -38,28 +38,30 @@
   },
   "scripts": [],
   "dependencies": [],
-  "qualityScore": 0.88,
-  "securityScore": 0.95,
+  "qualityScore": 0.89,
+  "securityScore": 0.96,
   "quality": {
     "rubricVersion": "1.0",
     "scores": {
       "usefulness": 0.91,
-      "triggerSpecificity": 0.88,
+      "triggerSpecificity": 0.92,
       "progressiveDisclosure": 0.87,
-      "safety": 0.95,
-      "verifiability": 0.89,
-      "maintainability": 0.86,
-      "portability": 0.84
+      "safety": 0.96,
+      "verifiability": 0.93,
+      "maintainability": 0.88,
+      "portability": 0.85
     }
   },
   "verification": {
-    "requiredCapabilities": ["browser", "screenshots"],
+    "requiredCapabilities": [
+      "browser",
+      "screenshots"
+    ],
     "fallback": "unverified"
   },
   "freshness": {
     "lastReviewedAt": "2026-07-10",
     "targetFrameworkVersions": {
-      "tailwindcss": "3-4",
       "react": "18-19"
     }
   },
@@ -91,8 +93,8 @@
   },
   "license": "MIT",
   "routing": {
-    "lane": "design",
-    "category": "visual-design-polish"
+    "lane": "qa",
+    "category": "motion-audit"
   },
   "evaluation": {
     "status": "none",

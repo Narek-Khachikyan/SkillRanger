@@ -4,17 +4,45 @@ Read this only for material visual direction, an unfamiliar domain, or when the 
 
 ## Domain And Direction
 
-Anchor a visual thesis in observed domain nouns, verbs, artifacts, data shapes, user stakes, and brand voice. If those are unknown, use neutral product-native structure and record the assumption; do not manufacture a world from plausible-sounding details.
+Anchor a visual thesis in observed domain nouns, verbs, artifacts, data shapes, user
+stakes, and brand voice. If those are unknown, use neutral product-native structure and
+record the assumption; do not manufacture a world from plausible-sounding details.
 
-Useful direction patterns:
+### Operational Positive Direction Method
 
-- **Dense operations:** compact tables, exception queues, timestamps, split panes, signal colors, and audit trails.
-- **Editorial product story:** typographic contrast, asymmetric grid, proof near claims, art-directed imagery, varied rhythm.
-- **Tactile commerce:** close product crops, honest specs, variant clarity, trust near purchase decisions.
-- **Clinical or regulated:** quiet high-contrast surfaces, stable forms, recovery copy, evidence trails, restrained motion.
-- **Technical control room:** mono metadata, status rails, diagrams, calibrated live-state accents, high-density scanning.
+Replace anti-pattern prohibitions with grounded positive guidance from product evidence:
 
-Choose a direction because it aids the product task, not because it is fashionable. A single justified aesthetic risk is enough: stronger type, a data-specific treatment, domain material, composition, or feedback. State why restraint is better if no risk is warranted.
+1. **Collect product evidence:** domain objects, user verbs, data shapes, artifact types,
+   trust signals, frequency metrics, stakes (financial, safety, compliance, identity).
+2. **Identify the visual job:** scan, compare, decide, create, monitor, purchase, learn,
+   or navigate. Each job implies a different layout model, density target, and hierarchy
+   logic.
+3. **Choose a treatment from observed patterns** and adapt it with the product's
+   specific constraints:
+   - Dense operations: compact tables, exception queues, timestamps, split panes,
+     signal colors, audit trails.
+   - Editorial product story: typographic contrast, asymmetric grid, proof near claims,
+     art-directed imagery, varied rhythm.
+   - Tactile commerce: close product crops, honest specs, variant clarity, trust near
+     purchase decisions.
+   - Clinical or regulated: quiet high-contrast surfaces, stable forms, recovery copy,
+     evidence trails, restrained motion.
+   - Technical control room: mono metadata, status rails, diagrams, calibrated
+     live-state accents, high-density scanning.
+4. **Derive constraints from observation:** If the product has 50+ items per screen,
+   choose compact density; if the product needs trust signals at decision points, place
+   proof adjacent to the CTA; if the audience scans for exceptions, use signal color as
+   a left-border rail not background decoration.
+5. **Verify against product evidence:** Does the treatment serve the observed user
+   workflow? Does it communicate the real data shapes? Does it encode domain meaning
+   rather than abstract decoration?
+
+### Direction Integrity
+
+Choose a direction because it aids the product task, not because it is fashionable.
+A single justified aesthetic risk is enough: stronger type, a data-specific treatment,
+domain material, composition, or feedback. State why restraint is better if no risk is
+warranted.
 
 ## Composition And Type
 

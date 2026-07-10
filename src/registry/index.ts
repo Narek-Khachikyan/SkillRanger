@@ -5,6 +5,8 @@ import type { RegistrySkill } from "../types.ts";
 import {
   assertValidSkillManifest,
   RegistryValidationError,
+  validateCrossSkillReferences,
+  validateSkillContent,
   type RegistryValidationIssue,
 } from "./validation.ts";
 
@@ -227,6 +229,30 @@ export const loadLocalRegistry = async (
       skillRoot,
       skillText,
     });
+    const contentIssues = validateSkillContent(skillText, skillRoot, {
+      lane: manifest.routing?.lane,
+      skillId: manifest.id,
+      requiredCapabilities: manifest.verification?.requiredCapabilities,
+      enforceContracts: manifest.source.type === "curated",
+    });
+    const warningIssues = contentIssues.filter(
+      (issue) => issue.path === "SKILL.md" && issue.message.includes("threshold"),
+    );
+    const contentErrors = contentIssues.filter(
+      (i) => !warningIssues.includes(i),
+    );
+    for (const issue of warningIssues) {
+      console.warn(`${manifest.id}/${issue.path}: ${issue.message}`);
+    }
+    if (contentErrors.length > 0) {
+      const detail = contentErrors
+        .map((issue) => `${issue.path}: ${issue.message}`)
+        .join("; ");
+      throw new RegistryValidationError(
+        `Invalid skill content at ${skillPath}: ${detail}`,
+        contentErrors,
+      );
+    }
     const checksum = await computeSkillChecksum(skillRoot);
     skills.push({
       manifest: { ...manifest, checksum },
@@ -239,6 +265,10 @@ export const loadLocalRegistry = async (
   assertNoRegistryIssues(
     resolvedRegistryRoot,
     collectRegistryDuplicateIssues(skills),
+  );
+  assertNoRegistryIssues(
+    resolvedRegistryRoot,
+    validateCrossSkillReferences(skills),
   );
   return skills.sort((a, b) => a.manifest.id.localeCompare(b.manifest.id));
 };

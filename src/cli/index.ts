@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import path from "node:path";
+import { writeFile } from "node:fs/promises";
 import * as readline from "node:readline";
 import { fileURLToPath } from "node:url";
 import { scanProject } from "../scanner/index.ts";
@@ -19,6 +20,14 @@ import {
   validateFrontendEvalSuite,
 } from "../evals/frontend.ts";
 import { defaultRegistryRoot, packageRoot } from "../paths.ts";
+import {
+  BASELINE_KINDS,
+  executeRunPlan,
+  generateRunPlan,
+  printRunPlan,
+  type BaselineConfigMap,
+  type BaselineKind,
+} from "../evals/runner.ts";
 import { skillLanes, type InstallPlan, type ProjectFingerprint, type Recommendation, type RegistrySkill, type SkillLane } from "../types.ts";
 
 const supportedSetupTargets = ["claude-code", "codex", "opencode", "cursor", "gemini-cli"] as const;
@@ -135,7 +144,7 @@ const formatScoreBreakdown = (recommendation: { scoreBreakdown: Record<string, n
   return [
     `stack ${breakdown.stackMatch.toFixed(3)}`,
     `intent ${breakdown.userIntentMatch.toFixed(3)}`,
-    `quality ${breakdown.qualityScore.toFixed(3)}`,
+    `quality ${breakdown.effectiveQualityScore.toFixed(3)} (editorial ${breakdown.qualityScore.toFixed(3)})`,
     `security ${breakdown.securityScore.toFixed(3)}`,
     `freshness ${breakdown.freshnessScore.toFixed(3)}`,
     `compatibility ${breakdown.compatibilityScore.toFixed(3)}`,
@@ -726,6 +735,7 @@ const run = async () => {
     const suite = await loadFrontendEvalSuite(suitePath);
     const issues = validateFrontendEvalSuite(suite);
     const runRouting = Boolean(args.flags["run-routing"]);
+    const runTasks = Boolean(args.flags["run-tasks"]);
     const projectRoot = typeof args.flags.project === "string" ? path.resolve(args.flags.project) : undefined;
     const taskEvidencePath = typeof args.flags["verify-task-evidence"] === "string"
       ? path.resolve(args.flags["verify-task-evidence"])
@@ -734,6 +744,95 @@ const run = async () => {
       ? path.resolve(args.flags["verify-pairwise-review"])
       : undefined;
     const targetAgent = asString(args.flags.target, "codex");
+
+    if (runTasks) {
+      if (issues.length > 0) {
+        throw new Error(
+          `Frontend eval suite validation failed: ${issues.join("; ")}`,
+        );
+      }
+      const baselinesRaw = asString(args.flags.baselines, "without-skill,current-skill");
+      const parsedBaselines = baselinesRaw
+        .split(",")
+        .map((baseline) => baseline.trim())
+        .filter(Boolean);
+      for (const baseline of parsedBaselines) {
+        if (!BASELINE_KINDS.includes(baseline as BaselineKind)) {
+          throw new Error(`Invalid baseline: ${baseline}. Must be one of: ${BASELINE_KINDS.join(", ")}`);
+        }
+      }
+      const baselines = parsedBaselines as BaselineKind[];
+      const commandTemplate = typeof args.flags.command === "string" ? args.flags.command : undefined;
+      if (!commandTemplate) throw new Error("--command is required with --run-tasks.");
+      const outputDir = typeof args.flags.output === "string"
+        ? path.resolve(args.flags.output)
+        : path.resolve("evals", "frontend", "results", "run-" + Date.now());
+      const dryRun = Boolean(args.flags["dry-run"]);
+      const resume = Boolean(args.flags.resume);
+      const filterRaw = typeof args.flags.filter === "string" ? args.flags.filter : undefined;
+      const filter = filterRaw ? filterRaw.split(",").map((f) => f.trim()).filter(Boolean) : undefined;
+      const baselineFixtureMetadata: Record<string, { kind: string; skillId?: string; skillVersion?: string; skillChecksum?: string; model?: string; fixture?: string }> = typeof args.flags["baseline-fixture-metadata"] === "string"
+        ? JSON.parse(args.flags["baseline-fixture-metadata"])
+        : {};
+      for (const baseline of baselines) {
+        if (!baselineFixtureMetadata[baseline]) {
+          baselineFixtureMetadata[baseline] = { kind: baseline };
+        }
+      }
+      if (!projectRoot) throw new Error("--project is required with --run-tasks.");
+
+      const plan = generateRunPlan(suite, { baselines, filter });
+
+      if (!dryRun && !resume) {
+        const existingTasks = await loadFrontendTaskEvidence(
+          path.join(outputDir, "task-evidence.json"),
+        ).catch(() => undefined);
+        if (existingTasks) {
+          console.error("Output directory " + outputDir + " already contains task evidence. Use --resume to continue or remove the directory first.");
+          process.exitCode = 1;
+          return;
+        }
+      }
+
+      if (!args.flags.json) {
+        console.log("Run plan:");
+        printRunPlan(plan, baselineFixtureMetadata);
+        if (dryRun) {
+          console.log("Dry-run mode. No commands were executed.");
+          return;
+        }
+        if (resume) {
+          console.log("Resume mode: skipping tasks with existing results.");
+        }
+        console.log("Executing " + plan.entries.length + " runs...");
+      }
+
+      const evidence = await executeRunPlan({
+        plan,
+        commandTemplate,
+        outputDir,
+        projectRoot,
+        dryRun,
+        resume,
+        baselinesConfig: baselineFixtureMetadata,
+        quiet: Boolean(args.flags.json),
+      });
+
+      if (args.flags.json) {
+        console.log(JSON.stringify(evidence, null, 2));
+        return;
+      }
+
+      if (!dryRun) {
+        const evidencePath = path.join(outputDir, "task-evidence.json");
+        await writeFile(evidencePath, JSON.stringify(evidence, null, 2));
+        console.log("\nDone. Evidence written to " + evidencePath);
+      } else {
+        console.log("\nDry-run mode. No commands were executed.");
+      }
+      return;
+    }
+
     if (runRouting && !projectRoot) throw new Error("--project is required with --run-routing.");
     if (args.flags["verify-task-evidence"] === true) {
       throw new Error("--verify-task-evidence requires a JSON evidence path.");

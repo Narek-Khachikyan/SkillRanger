@@ -140,7 +140,7 @@ test("recommender reports when visual verification capabilities are missing", as
   });
 });
 
-test("recommender applies an evidence penalty until a skill is curated", async () => {
+test("recommender confidence-adjusts editorial quality without task evidence", async () => {
   const recommendations = await nextFixtureRecommendations({
     userIntent: "Redesign this product page with stronger visual hierarchy.",
   });
@@ -149,7 +149,39 @@ test("recommender applies an evidence penalty until a skill is curated", async (
   );
 
   assert.equal(visualDesign?.scoreBreakdown.qualityScore, 0.88);
+  assert.equal(visualDesign?.scoreBreakdown.effectiveQualityScore, 0.595);
   assert.equal(visualDesign?.scoreBreakdown.evaluationPenalty, 0.03);
+});
+
+test("recommender gives frozen task evidence more weight than editorial score alone", async () => {
+  const fingerprint = await scanProject("fixtures/next-react-ts");
+  const skills = await loadLocalRegistry("registry");
+  const visualDesign = skills.find(
+    (skill) => skill.manifest.id === "frontend.visual-design-polish",
+  );
+  assert.ok(visualDesign);
+
+  const withoutEvidence = recommendSkills(fingerprint, skills, {
+    targetAgent: "codex",
+    userIntent: "Redesign this product page with stronger visual hierarchy.",
+  }).find((item) => item.skillId === visualDesign.manifest.id);
+
+  visualDesign.manifest.evaluation = {
+    status: "task-eval",
+    benchmarkVersion: "frontend-skill-quality-v1",
+    evidenceUri: "evals/frontend/results/task-evidence.json",
+    score: 0.9,
+  };
+  const withEvidence = recommendSkills(fingerprint, skills, {
+    targetAgent: "codex",
+    userIntent: "Redesign this product page with stronger visual hierarchy.",
+  }).find((item) => item.skillId === visualDesign.manifest.id);
+
+  assert.ok(
+    (withEvidence?.scoreBreakdown.effectiveQualityScore ?? 0) >
+      (withoutEvidence?.scoreBreakdown.effectiveQualityScore ?? 0),
+  );
+  assert.equal(withEvidence?.scoreBreakdown.evaluationPenalty, 0.01);
 });
 
 test("recommender composes a visual task around one primary and compatible companions", async () => {
@@ -179,8 +211,8 @@ test("recommender includes the full curated frontend MVP pack for Next.js fixtur
       "frontend.tailwind-ui-polish",
       "frontend.visual-design-polish",
       "frontend.react-app-review",
-      "frontend.design-system",
       "frontend.accessibility-review",
+      "frontend.design-system",
       "frontend.design-to-code",
       "frontend.interaction-polish",
       "frontend.react-component-design",
@@ -198,8 +230,8 @@ test("recommender includes the full curated frontend MVP pack for Next.js fixtur
       ["frontend.tailwind-ui-polish", "design", "tailwind-ui-polish"],
       ["frontend.visual-design-polish", "design", "visual-design-polish"],
       ["frontend.react-app-review", "implementation", "react-app-review"],
-      ["frontend.design-system", "design", "design-system"],
       ["frontend.accessibility-review", "qa", "accessibility-review"],
+      ["frontend.design-system", "design", "design-system"],
       ["frontend.design-to-code", "design", "design-to-code"],
       ["frontend.interaction-polish", "design", "interaction-polish"],
       ["frontend.react-component-design", "implementation", "react-component-design"],
@@ -469,4 +501,66 @@ test("recommender avoids Next-specific skills for Vite React fixture", async () 
 test("recommender does not return frontend pack for backend Node fixture", async () => {
   const recommendations = await fixtureRecommendations("fixtures/backend-node");
   assert.deepEqual(recommendations, []);
+});
+
+test("recommender routes UX critique for information architecture and cognitive load", async () => {
+  for (const userIntent of [
+    "Evaluate the information architecture of this settings page for findability and task completion.",
+    "Critique the cognitive load of this multi-step form with recovery and error states.",
+    "Review the navigation and search usability on this dashboard for wayfinding issues.",
+    "The empty state and error recovery on this settings page are confusing; improve the user flow.",
+  ]) {
+    const recommendations = await nextFixtureRecommendations({ userIntent });
+    assert.equal(recommendations[0]?.skillId, "frontend.ux-critique", userIntent);
+  }
+});
+
+test("recommender routes preflight and quality-gate audit for comprehensive wording", async () => {
+  for (const userIntent of [
+    "Run a preflight audit on this feature covering a11y, perf, responsive layout, and visual quality.",
+    "Do a go/no-go frontend quality gate review before we ship this feature.",
+    "Run a final ship review with a frontend scorecard for release blockers.",
+  ]) {
+    const recommendations = await nextFixtureRecommendations({ userIntent });
+    assert.equal(recommendations[0]?.skillId, "frontend.audit", userIntent);
+  }
+});
+
+test("recommender prevents narrow review phrases from routing to audit", async () => {
+  for (const userIntent of [
+    "Review this component for accessibility issues.",
+    "Review this page and fix the layout bug.",
+    "Can you review the navigation on mobile?",
+  ]) {
+    const recommendations = await nextFixtureRecommendations({ userIntent });
+    assert.equal(
+      recommendations.some((r) => r.skillId === "frontend.audit"),
+      false,
+      userIntent,
+    );
+  }
+});
+
+test("recommender distinguishes art direction from Tailwind implementation", async () => {
+  const artDirection = await nextFixtureRecommendations({
+    userIntent: "Define the art direction and visual language for this landing page with a style guide and subject-specific design thesis.",
+  });
+  assert.equal(artDirection[0]?.skillId, "frontend.visual-design-polish");
+
+  const tailwindFix = await nextFixtureRecommendations({
+    userIntent: "Fix the Tailwind responsive breakpoints and cleanup className bundles on this card component.",
+  });
+  assert.equal(tailwindFix[0]?.skillId, "frontend.tailwind-ui-polish");
+
+  const cssRepair = await nextFixtureRecommendations({
+    userIntent: "Repair the CSS spacing and wrapping on this navigation so labels don't overflow on mobile.",
+  });
+  assert.equal(cssRepair[0]?.skillId, "frontend.tailwind-ui-polish");
+});
+
+test("recommender routes navigation fix to tailwind not UX critique", async () => {
+  const recommendations = await nextFixtureRecommendations({
+    userIntent: "Fix the navigation bar on mobile — labels overlap and the active state is invisible.",
+  });
+  assert.equal(recommendations[0]?.skillId, "frontend.tailwind-ui-polish");
 });

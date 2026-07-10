@@ -7,6 +7,15 @@ description: Improve Tailwind-based UI through screenshot-driven visual QA, resp
 
 Use this skill when Tailwind classes, local Tailwind components, shadcn/Tailwind tokens, or Tailwind-driven layouts are the implementation surface for visual polish, responsive repair, density tuning, or state styling. Do not use it for pure backend work, non-visual refactors, brand redesign from scratch, illustration work, or projects where Tailwind is not part of the UI layer.
 
+## Ownership Boundary
+
+Tailwind-ui-polish **implements or repairs an existing visual direction** through
+Tailwind classes. It does not choose open-ended art direction, layout models, density
+targets, or type/color systems. If the task requires a new broad direction or the user
+asks for subjective visual direction without a reference, hand off to
+`frontend.visual-design-polish`. Keep this skill focused on execution class tuning and
+responsive/states/overflow repair of an existing direction.
+
 ## Project Archetype
 
 Classify the project before prescribing tokens: **shadcn-backed**, **Tailwind with local semantic tokens**, or **Tailwind/CSS-first without a system**. Use shadcn names only in the first case; reuse local roles in the second; keep changes page-local in the third until repetition proves a system boundary. Do not turn a prototype or an inconsistent baseline into a token migration by default.
@@ -20,8 +29,8 @@ Classify the project before prescribing tokens: **shadcn-backed**, **Tailwind wi
 ## Decision Rules
 
 - Start from the product's subject, audience, and primary job. A manga library, CRM dashboard, and health portal should not receive the same palette, density, typography, or decorative moves.
-- If the project has `DESIGN.md`, use it as the visual source for Tailwind class choices. If it does not and the task is subjective, infer a compact mini-DESIGN spec before changing classes.
-- Match the existing app style before introducing a new visual direction, unless the request explicitly asks to move the direction.
+- If the project has `DESIGN.md`, use it as the visual source for Tailwind class choices. Otherwise infer only the bounded implementation rules supported by adjacent screens. If a new visual thesis is required, hand off to `frontend.visual-design-polish`.
+- Match the existing app style. If the request explicitly asks to move the direction, hand off before changing classes.
 - Treat screenshots, rendered browser state, and real viewport checks as required evidence for visual/layout changes. Code inspection alone is not enough to close Tailwind polish work unless browser access is blocked.
 - Prioritize layout stability, readable density, hierarchy, and state coverage over decorative changes.
 - Treat overflow, wrapping, contrast, focus visibility, sticky overlap, and responsive breakage as correctness issues.
@@ -31,7 +40,7 @@ Classify the project before prescribing tokens: **shadcn-backed**, **Tailwind wi
 - Avoid inherited model house styles unless the brief earns them. Warm cream plus serif plus terracotta, purple gradients, dark neon glass, and bento-card grids are defaults, not decisions.
 - For subjective polish, set the design dials first: design variance, motion intensity, and visual density. A dense admin table, consumer landing page, and onboarding flow should not receive the same Tailwind treatment.
 - Keep dashboard, CRM, admin, and operational tools compact and scannable. Save hero-scale type, large imagery, and editorial spacing for content that actually needs it.
-- Keep boundaries sharp: use `frontend.design-system` for token/theme architecture, `frontend.visual-design-polish` for broad visual direction, `frontend.ux-critique` for task-flow redesign, and `frontend.interaction-polish` for motion systems beyond local state styling.
+- Keep boundaries sharp: use `frontend.design-system` for token/theme architecture, `frontend.visual-design-polish` for broad visual direction, `frontend.ux-critique` for task-flow redesign, `frontend.interaction-polish` for local component motion, and `frontend.motion-design` for product-wide motion systems.
 - Use Tailwind as an implementation language for a visual thesis, not as a source of generic styling. The class list should express layout, hierarchy, state, token roles, and responsive behavior.
 - Every new raw color, radius, shadow, gradient, or arbitrary spacing should map to a token role or mini-DESIGN rule. If it cannot, remove it or keep it page-local with a clear product reason.
 - Prefer semantic tokens and static variant maps over raw palette classes, hard-coded neutrals, dynamic class construction, and one-off arbitrary values.
@@ -61,7 +70,7 @@ Do not start from a decorative class pass. Start from hierarchy, states, respons
    - density target: compact tool, balanced product UI, or editorial/marketing page;
    - one allowed visual move and what it communicates;
    - one generic Tailwind/shadcn default you are avoiding.
-   For open-ended subjective polish, compare 2-3 possible directions briefly before choosing; for direct implementation requests, choose and proceed.
+   If these rules cannot be derived from an existing direction, reference, or adjacent UI, stop and hand off instead of inventing 2-3 directions here.
 4. Render or request visual evidence. Check at minimum `320px` or `390px`, desktop, and `768px` when layout, tables, sidebars, modals, or dense toolbars are involved. Prefer before/after screenshots for existing UI.
 5. Audit visual hierarchy:
    - primary action/content is obvious;
@@ -94,47 +103,9 @@ Do not start from a decorative class pass. Start from hierarchy, states, respons
    - preserve behavior, routing, data fetching, and component ownership boundaries.
 10. Verify with screenshots or state the exact manual/browser checks still needed.
 
-## Tailwind Token Discipline
-
-- In shadcn/Tailwind projects, prefer `bg-background`, `text-foreground`, `bg-card`, `text-card-foreground`, `text-muted-foreground`, `border-border`, `ring-ring`, `bg-primary`, and `text-primary-foreground` over raw `slate-*`, `zinc-*`, or hex values.
-- When a project `DESIGN.md` defines token roles, map them to Tailwind theme variables or local semantic classes before adding page-level utilities.
-- Preserve foreground pairs: `primary`/`primary-foreground`, `card`/`card-foreground`, `accent`/`accent-foreground`, `popover`/`popover-foreground`, and `destructive`/`destructive-foreground`.
-- For Tailwind v4, inspect CSS-first `@theme`, `@theme inline`, custom variants, and CSS variable namespaces before adding classes.
-- Prefer OKLCH or semantic CSS variables for new color ramps when the project already uses CSS variables.
-- Theme shadcn components through `:root` and `.dark` tokens rather than scattering hard-coded `dark:*` palette overrides.
-- Keep `--radius` or the project's radius scale as source of truth; do not invent unrelated corner values for one component.
-- Define reusable animations with theme variables or local utilities before using many one-off `animate-[...]` classes.
-
-## Class Quality Rules
-
-- Group classes by intent: layout, sizing, spacing, typography, color, border/effects, state, responsive.
-- Split repeated class bundles into existing components, variant maps, `cn` helpers, or local primitives when repetition has semantic meaning.
-- Do not hide everything behind opaque custom CSS classes; Tailwind should remain readable unless third-party markup or a true primitive needs CSS.
-- Use arbitrary values for genuine one-offs, CSS variable references, masks, complex grids, or layout math; promote repeated arbitrary values into tokens.
-- Avoid `transition-all`; prefer `transition-colors`, `transition-opacity`, `transition-shadow`, or `transition-transform`.
-- Use `motion-safe:` for decorative motion and `motion-reduce:` to remove or simplify non-essential movement.
-- Use `data-*`, `aria-*`, `open:`, `disabled:`, `invalid:`, `has-*`, `group-*`, and `peer-*` variants to style state instead of manually toggling brittle class strings.
-- Use `contrast-more:`, `forced-colors:`, and `not-forced-colors:` when high-contrast environments are relevant.
-- Avoid global `important` and widespread `!` modifiers; fix specificity or component boundaries instead.
-
-## Container And Responsive Rules
-
-- Use viewport breakpoints for page-level layout and container queries for cards, panels, dashboard tiles, embedded widgets, sidebars, and reusable components.
-- Mark reusable component shells with `@container` and use named containers when nested contexts matter.
-- Unprefixed utilities are the mobile baseline. Do not use `sm:` as the mobile style.
-- Test around actual breakpoint edges, not only at ideal desktop and phone widths.
-- Use `min-w-0`, `max-w-*`, `truncate`, `line-clamp`, wrapping, and explicit grid/flex constraints for long labels, translated strings, and user-generated content.
-
-## Mechanical UI Checks
-
-- Flex and grid children that contain text should usually have `min-w-0` plus intentional wrapping, truncation, or `line-clamp` behavior.
-- Buttons, tabs, badges, table cells, nav items, and icon buttons should keep stable dimensions across hover, focus, active, disabled, loading, and selected states.
-- Images and media shells need reserved dimensions, `aspect-*`, or explicit sizing so loading does not shift layout.
-- Full-bleed and fixed-position layouts should account for mobile safe areas when controls sit near viewport edges.
-- Avoid `overflow-x-hidden` as a blanket fix for real overflow. Fix the child constraint, table strategy, sticky element, or long-content behavior first.
-- If theming changes touch the page shell, check `color-scheme`, native form controls, scrollbars, and theme-color behavior where the project supports dark mode.
-- Format dates, numbers, currencies, and units through project helpers or `Intl.*` conventions before polishing spacing around hard-coded text.
-- Preserve deep-linkable UI state for tabs, filters, pagination, and selected records when the product expects shareable or restorable state; style should not hide broken state ownership.
+For detailed class-level, layout-mechanical, and container guidance, read
+[the mechanical rules reference](references/mechanical-rules.md). The workflow below
+covers the essential audit structure — use the reference for specific class patterns.
 
 ## Hard Failure Gates
 
@@ -166,19 +137,8 @@ Before closing a Tailwind polish task, inspect the result for slop and revise in
 - Check focus-visible, disabled, loading, empty, error, selected/current, hover, and active states when they exist.
 - Treat screenshot differences as useful only when they improve hierarchy, task completion, readability, accessibility, or robustness. Decoration alone is not a win.
 
-## Tailwind Fix Patterns
-
-- Replace raw hex or arbitrary color values with project tokens unless the visual direction explicitly needs a new token.
-- In shadcn projects, prefer semantic tokens for reusable UI: `background`, `foreground`, `card`, `popover`, `primary`, `secondary`, `muted`, `accent`, `destructive`, `border`, `input`, and `ring` before hard-coded neutral palettes.
-- Prefer `gap`, `space-*`, grid tracks, and flex wrapping over hard-coded margins between repeated items.
-- Use `min-w-0`, `max-w-*`, `truncate`, `line-clamp`, stable icon sizes, and explicit grid/flex constraints for long content.
-- Use `focus-visible:*` styles that are visible against the actual background, not only the default light surface.
-- Use mobile-first Tailwind: unprefixed utilities define the narrow layout; `sm:`, `md:`, `lg:`, and larger prefixes progressively enhance it. Do not use `sm:` as the mobile style.
-- Use container queries for reusable components whose layout depends on parent width more than viewport width.
-- Keep cards shallow: use cards for repeated items or framed tools, not for every section inside another card.
-- Keep button and control dimensions stable across states. Loading text/spinners should not resize the control.
-- Use semantic variants for repeated states such as intent, size, tone, density, and selected/active.
-- Preserve native semantics: anchors navigate, buttons perform actions, form controls keep labels and accessible names.
+For token discipline, class construction, responsive, layout-mechanical, and fix-pattern
+guidance, read [the mechanical rules reference](references/mechanical-rules.md).
 
 ## References
 

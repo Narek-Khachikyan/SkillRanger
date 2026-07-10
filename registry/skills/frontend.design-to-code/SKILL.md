@@ -1,11 +1,11 @@
 ---
 name: design-to-code
-description: Translate screenshots, mocks, Figma-style briefs, or visual references into React/Tailwind UI that preserves project conventions, responsiveness, states, and visual fidelity.
+description: Translate screenshots, mocks, Figma-style briefs, or visual references into React UI using the project's styling system, including Tailwind when present, while preserving conventions, responsiveness, states, and visual fidelity.
 ---
 
 # Design To Code
 
-Use this skill when implementing a supplied design, screenshot, mock, Figma-style brief, or visual reference in an existing frontend project. Do not use it for open-ended redesigns without a reference, pure component API refactors, or backend behavior.
+Use this skill when implementing a supplied design, screenshot, mock, Figma-style brief, or visual reference in an existing frontend project, using its existing styling system rather than requiring Tailwind. Do not use it for open-ended redesigns without a reference, pure component API refactors, or backend behavior.
 
 ## Reference Intake
 
@@ -30,6 +30,21 @@ Classify the input before implementation: **user-owned specification**, **produc
 - Extract the reference's attributes, not its protected or brand-specific expression. Do not clone a competitor, brand identity, mascot, proprietary composition, or single-source layout.
 - Preserve the reference's structural idea while changing enough implementation details to fit the local product: information architecture, token system, typography roles, copy, responsive behavior, and state model.
 - If the reference is only visually attractive but not product-appropriate, adapt the useful attributes and reject the rest.
+
+## Guard Against Invented Assets
+
+- Never invent stock photography subjects, stock people, brand marks, product logos,
+  fake company names, or domain artifacts not supplied by the reference or project.
+- Do not generate placeholder user photos, avatars, reviews, testimonials, chart data,
+  or metrics that imply real people or transactions.
+- When a reference lacks specific assets, use neutral structural placeholders and state
+  the substitution. Flag the need for real content before release.
+- For AI-generated references (DALL-E, Midjourney, etc.), treat the output as a mood
+  attribute source, not an implementable spec. Extract composition, color temperature,
+  hierarchy model, and material treatment. Do not reproduce AI-invented people,
+  products, brand marks, impossible UI patterns, or decorative elements that lack a
+  functional UI explanation. Decompose the AI output into individual design decisions
+  before coding.
 
 ## Ethical Reference Handling
 
@@ -87,3 +102,10 @@ Classify the input before implementation: **user-owned specification**, **produc
 - Comparison evidence: reference, implemented screenshot, responsive adaptation, or blocker.
 - Viewports and states verified.
 - Known fidelity gaps and next visual QA checks.
+
+## References
+
+- Use [the reference-to-DESIGN.md extraction guide](references/reference-to-design-md.md)
+  when translating a reference into a DESIGN.md-style brief.
+- Use the project's existing components, tokens, Tailwind config, global CSS, and
+  adjacent screens as primary implementation references.
