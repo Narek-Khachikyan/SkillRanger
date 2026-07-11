@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { cp, mkdtemp, rm, stat } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -89,6 +89,86 @@ test("setup CLI applies recommendations non-interactively with --yes and explici
     assert.match(stdout, /Done\. Installed \d+ skills\./);
     assert.equal(await exists(path.join(projectRoot, ".agents/skills/next-app-router-review/SKILL.md")), true);
     assert.equal(await exists(path.join(projectRoot, "skillranger.lock.json")), true);
+    assert.match(stdout, /AGENTS\.md/);
+    assert.match(await readFile(path.join(projectRoot, "AGENTS.md"), "utf8"), /skillranger run:begin/);
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("setup CLI preserves AGENTS user text and does not duplicate its block on rerun", async () => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-setup-"));
+  const projectRoot = path.join(tmpRoot, "project");
+  await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
+  const agentPath = path.join(projectRoot, "AGENTS.md");
+  const preamble = "# User rules\n\nKeep this byte-for-byte.\n\n";
+  await writeFile(agentPath, preamble);
+  const setupArgs = [
+    "src/cli/index.ts",
+    "setup",
+    projectRoot,
+    "--target",
+    "codex,opencode",
+    "--intent",
+    "Review this Next.js App Router's route handlers, Server Actions, and RSC boundaries.",
+    "--scope",
+    "repo",
+    "--yes",
+  ];
+
+  try {
+    await execFileAsync(process.execPath, setupArgs);
+    await execFileAsync(process.execPath, setupArgs);
+    const text = await readFile(agentPath, "utf8");
+    assert.ok(text.startsWith(preamble));
+    assert.equal(text.match(/<!-- SKILLRANGER_START -->/g)?.length, 1);
+    assert.equal(text.match(/<!-- SKILLRANGER_END -->/g)?.length, 1);
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("setup CLI supports opting out of agent context", async () => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-setup-"));
+  const projectRoot = path.join(tmpRoot, "project");
+  await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
+
+  try {
+    await execFileAsync(process.execPath, [
+      "src/cli/index.ts", "setup", projectRoot,
+      "--target", "codex",
+      "--intent", "Review this Next.js App Router's route handlers, Server Actions, and RSC boundaries.",
+      "--scope", "repo", "--no-agent-context", "--yes",
+    ]);
+    assert.equal(await exists(path.join(projectRoot, "AGENTS.md")), false);
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("setup CLI does not write project agent context for user scope", async () => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-setup-"));
+  const projectRoot = path.join(tmpRoot, "project");
+  await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
+
+  try {
+    await execFileAsync(
+      process.execPath,
+      [
+        "src/cli/index.ts", "setup", projectRoot,
+        "--target", "codex",
+        "--intent", "Review this Next.js App Router's route handlers, Server Actions, and RSC boundaries.",
+        "--scope", "user", "--copy", "--yes",
+      ],
+      {
+        env: {
+          ...process.env,
+          HOME: tmpRoot,
+          CODEX_HOME: path.join(tmpRoot, ".codex"),
+        },
+      },
+    );
+    assert.equal(await exists(path.join(projectRoot, "AGENTS.md")), false);
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
   }

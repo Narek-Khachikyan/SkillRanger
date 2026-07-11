@@ -8,6 +8,7 @@ import { loadLocalRegistry, findSkill, validateLocalRegistry } from "../registry
 import { groupRecommendationsByLane, recommendSkills } from "../recommender/index.ts";
 import { auditSkill } from "../audit/index.ts";
 import { detectInstalledAgents, getAdapter } from "../installers/codex.ts";
+import { planSkillRangerAgentContext, upsertSkillRangerAgentContext } from "../installers/agent-context.ts";
 import { readLockfile } from "../lockfile/index.ts";
 import {
   loadFrontendEvalSuite,
@@ -154,7 +155,7 @@ const printHelp = () => {
   skillranger run:complete [project] --run <id> --status implemented|failed|blocked [--artifacts name=path,...] [--json]
   skillranger run:verify [project] --run <id> --report <path> [--json]
   skillranger run:inspect [project] --run <id> [--json]
-  skillranger setup [project] [--target codex[,claude-code,opencode,cursor,gemini-cli]] [--intent "..."] [--scope repo|user] [--copy] [--yes] [--lane <lane>] [--limit-per-lane <n>]
+  skillranger setup [project] [--target codex[,claude-code,opencode,cursor,gemini-cli]] [--intent "..."] [--scope repo|user] [--copy] [--yes] [--no-agent-context] [--lane <lane>] [--limit-per-lane <n>]
 	  skillranger audit <skill-id> [--json]
 	  skillranger validate:registry [--json]
 	  skillranger audit:registry [--json]
@@ -461,10 +462,13 @@ const parseSetupTargets = (targetFlag: string | boolean | undefined): SupportedS
   return [...new Set(parsedTargets)] as SupportedSetupTarget[];
 };
 
-const printSetupPlanSummary = (plans: InstallPlan[], projectRoot: string) => {
+const printSetupPlanSummary = (plans: InstallPlan[], projectRoot: string, additionalWrites: string[] = []) => {
   console.log("\nPlanned changes:");
   console.log("Would write:");
   for (const write of plans.flatMap((plan) => plan.writes)) {
+    console.log(`- ${formatProjectPath(projectRoot, write)}`);
+  }
+  for (const write of additionalWrites) {
     console.log(`- ${formatProjectPath(projectRoot, write)}`);
   }
   console.log("Would update:");
@@ -862,7 +866,15 @@ const run = async () => {
         plans.push(await adapter.planInstall(skill, { projectRoot, targetAgent, scope, dryRun: true, mode }));
       }
     }
-    printSetupPlanSummary(plans, projectRoot);
+    const shouldInstallAgentContext = scope === "repo" && !args.flags["no-agent-context"];
+    const agentContextPlan = shouldInstallAgentContext
+      ? await planSkillRangerAgentContext(projectRoot)
+      : undefined;
+    printSetupPlanSummary(
+      plans,
+      projectRoot,
+      agentContextPlan?.changed ? [agentContextPlan.path] : [],
+    );
 
     const confirmed = autoConfirm || await promptYesNo("Install selected skills into this project?");
     if (!confirmed) {
@@ -890,10 +902,17 @@ const run = async () => {
       }
     }
 
+    const agentContextResult = shouldInstallAgentContext
+      ? await upsertSkillRangerAgentContext(projectRoot)
+      : undefined;
+
     console.log("");
     console.log("Wrote:");
     for (const write of appliedPlans.flatMap((plan) => plan.writes)) {
       console.log(`- ${formatProjectPath(projectRoot, write)}`);
+    }
+    if (agentContextResult?.changed) {
+      console.log(`- ${formatProjectPath(projectRoot, agentContextResult.path)}`);
     }
     console.log("Updated:");
     for (const update of [...new Set(appliedPlans.flatMap((plan) => plan.lockfileUpdates))]) {
