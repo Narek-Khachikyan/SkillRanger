@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1.0",
   "name": "frontend-skill-quality-v1",
-    "targetCounts": {
-    "triggerPrompts": 102,
-    "taskEvals": 51
+  "targetCounts": {
+    "triggerPrompts": 157,
+    "taskEvals": 54
     },
   "triggerPrompts": [
     {
@@ -941,12 +941,67 @@
       "routingExpected": {
         "expectedSkill": "frontend.interaction-polish"
       }
-    }
+    },
+    {"id":"ru-accessibility-review-direct-1","kind":"should-trigger","expectedSkill":"frontend.accessibility-review","text":"Проверь доступность формы и управление с клавиатуры.","routingExpected":{"expectedSkill":"frontend.accessibility-review"}},
+    {"id":"ru-accessibility-review-direct-2","kind":"should-trigger","expectedSkill":"frontend.accessibility-review","text":"Найди проблемы WCAG, контраста и фокуса в интерфейсе.","routingExpected":{"expectedSkill":"frontend.accessibility-review"}},
+    {"id":"ru-accessibility-review-direct-3","kind":"should-trigger","expectedSkill":"frontend.accessibility-review","text":"Проверь ARIA и ловушку фокуса в модальном окне.","routingExpected":{"expectedSkill":"frontend.accessibility-review"}},
+    {"id":"ru-accessibility-review-ambiguous","kind":"ambiguous","expectedSkill":"frontend.accessibility-review","text":"Форма неудобна с клавиатуры и непонятна пользователю.","routingExpected":{"triageOnly":true,"acceptableAlternates":["frontend.accessibility-review","frontend.ux-critique","frontend.tailwind-ui-polish"]}},
+    {"id":"ru-accessibility-review-nontrigger","kind":"should-not-trigger","text":"Спроектируй схему базы данных для учета проверок доступности.","routingExpected":{"shouldNotTrigger":true,"falsePositiveSeverity":"high"}},
+    {"id":"ru-audit-direct-1","kind":"should-trigger","expectedSkill":"frontend.audit","text":"Сделай финальный аудит фронтенда перед релизом.","routingExpected":{"expectedSkill":"frontend.audit"}},
+    {"id":"ru-audit-direct-2","kind":"should-trigger","expectedSkill":"frontend.audit","text":"Проведи финальный аудит фронтенда и проверку готовности к релизу.","routingExpected":{"expectedSkill":"frontend.audit"}},
+    {"id":"ru-audit-direct-3","kind":"should-trigger","expectedSkill":"frontend.audit","text":"Можно ли выпускать фронтенд: дай итоговый вердикт.","routingExpected":{"expectedSkill":"frontend.audit"}},
+    {"id":"ru-audit-ambiguous","kind":"ambiguous","expectedSkill":"frontend.audit","text":"Проверь весь интерфейс перед выпуском и оцени основные риски.","routingExpected":{"triageOnly":true,"acceptableAlternates":["frontend.audit","frontend.accessibility-review","frontend.performance-review","frontend.tailwind-ui-polish"]}},
+    {"id":"ru-audit-nontrigger","kind":"should-not-trigger","text":"Проведи аудит SQL-запросов базы данных перед релизом.","routingExpected":{"shouldNotTrigger":true,"falsePositiveSeverity":"high"}},
+    {"id":"ru-design-system-direct-1","kind":"should-trigger","expectedSkill":"frontend.design-system","text":"Приведи дизайн систему и семантические токены в порядок.","routingExpected":{"expectedSkill":"frontend.design-system"}},
+    {"id":"ru-design-system-direct-2","kind":"should-trigger","expectedSkill":"frontend.design-system","text":"Убери жестко заданные цвета и настрой темную тему.","routingExpected":{"expectedSkill":"frontend.design-system"}},
+    {"id":"ru-design-system-direct-3","kind":"should-trigger","expectedSkill":"frontend.design-system","text":"Проверь варианты компонентов и токены темы.","routingExpected":{"expectedSkill":"frontend.design-system"}},
+    {"id":"ru-design-system-ambiguous","kind":"ambiguous","expectedSkill":"frontend.design-system","text":"После обновления темы кнопки и карточки выглядят несогласованно.","routingExpected":{"triageOnly":true,"acceptableAlternates":["frontend.design-system","frontend.tailwind-ui-polish","frontend.visual-design-polish"]}},
+    {"id":"ru-design-system-nontrigger","kind":"should-not-trigger","text":"Спроектируй систему токенов авторизации для backend API.","routingExpected":{"shouldNotTrigger":true,"falsePositiveSeverity":"high"}},
+    {"id":"ru-design-to-code-direct-1","kind":"should-trigger","expectedSkill":"frontend.design-to-code","text":"Нужно перенести дизайн в код и реализовать по макету Figma для React.","routingExpected":{"expectedSkill":"frontend.design-to-code"}},
+    {"id":"ru-design-to-code-direct-2","kind":"should-trigger","expectedSkill":"frontend.design-to-code","text":"Нужно сверстать по скриншоту и реализовать по макету экран React.","routingExpected":{"expectedSkill":"frontend.design-to-code"}},
+    {"id":"ru-design-to-code-direct-3","kind":"should-trigger","expectedSkill":"frontend.design-to-code","text":"Перенеси дизайн из мокапа Figma в код с адаптивом.","routingExpected":{"expectedSkill":"frontend.design-to-code"}},
+    {"id":"ru-design-to-code-ambiguous","kind":"ambiguous","expectedSkill":"frontend.design-to-code","text":"Макет нужно перенести в React и аккуратно настроить Tailwind.","routingExpected":{"triageOnly":true,"acceptableAlternates":["frontend.design-to-code","frontend.tailwind-ui-polish"]}},
+    {"id":"ru-design-to-code-nontrigger","kind":"should-not-trigger","text":"Перенеси схему SQL из диаграммы в миграцию базы данных.","routingExpected":{"shouldNotTrigger":true,"falsePositiveSeverity":"high"}},
+    {"id":"ru-interaction-polish-direct-1","kind":"should-trigger","expectedSkill":"frontend.interaction-polish","text":"Улучши взаимодействие с модалкой и возврат фокуса.","routingExpected":{"expectedSkill":"frontend.interaction-polish"}},
+    {"id":"ru-interaction-polish-direct-2","kind":"should-trigger","expectedSkill":"frontend.interaction-polish","text":"Отполируй состояния кнопки и поведение тоста.","routingExpected":{"expectedSkill":"frontend.interaction-polish"}},
+    {"id":"ru-interaction-polish-direct-3","kind":"should-trigger","expectedSkill":"frontend.interaction-polish","text":"Улучши взаимодействие: исправь открытие дровера, тост и состояния кнопки.","routingExpected":{"expectedSkill":"frontend.interaction-polish"}},
+    {"id":"ru-interaction-polish-ambiguous","kind":"ambiguous","expectedSkill":"frontend.interaction-polish","text":"Модалка ощущается резкой и плохо работает с клавиатуры.","routingExpected":{"triageOnly":true,"acceptableAlternates":["frontend.interaction-polish","frontend.accessibility-review","frontend.motion-design"]}},
+    {"id":"ru-interaction-polish-nontrigger","kind":"should-not-trigger","text":"Добавь интерактивный режим в нативный CLI на Swift.","routingExpected":{"shouldNotTrigger":true,"falsePositiveSeverity":"high"}},
+    {"id":"ru-motion-audit-direct-1","kind":"should-trigger","expectedSkill":"frontend.motion-audit","text":"Проведи аудит анимаций интерфейса перед релизом.","routingExpected":{"expectedSkill":"frontend.motion-audit"}},
+    {"id":"ru-motion-audit-direct-2","kind":"should-trigger","expectedSkill":"frontend.motion-audit","text":"Проверь анимации на джанк и производительность.","routingExpected":{"expectedSkill":"frontend.motion-audit"}},
+    {"id":"ru-motion-audit-direct-3","kind":"should-trigger","expectedSkill":"frontend.motion-audit","text":"Проведи аудит анимаций: проверь джанк и поддержку reduced motion в переходах.","routingExpected":{"expectedSkill":"frontend.motion-audit"}},
+    {"id":"ru-motion-audit-ambiguous","kind":"ambiguous","expectedSkill":"frontend.motion-audit","text":"Существующие анимации дергаются и мешают взаимодействию.","routingExpected":{"triageOnly":true,"acceptableAlternates":["frontend.motion-audit","frontend.motion-design","frontend.performance-review","frontend.interaction-polish"]}},
+    {"id":"ru-motion-audit-nontrigger","kind":"should-not-trigger","text":"Проверь производительность миграции SQL без интерфейса.","routingExpected":{"shouldNotTrigger":true,"falsePositiveSeverity":"high"}},
+    {"id":"ru-motion-design-direct-1","kind":"should-trigger","expectedSkill":"frontend.motion-design","text":"Создай систему анимаций, переходы и хореографию для интерфейса.","routingExpected":{"expectedSkill":"frontend.motion-design"}},
+    {"id":"ru-motion-design-direct-2","kind":"should-trigger","expectedSkill":"frontend.motion-design","text":"Спроектируй переходы между страницами и хореографию.","routingExpected":{"expectedSkill":"frontend.motion-design"}},
+    {"id":"ru-motion-design-direct-3","kind":"should-trigger","expectedSkill":"frontend.motion-design","text":"Добавь осмысленный моушн и плавные анимации компонентов.","routingExpected":{"expectedSkill":"frontend.motion-design"}},
+    {"id":"ru-motion-design-ambiguous","kind":"ambiguous","expectedSkill":"frontend.motion-design","text":"Переходы модалки должны стать выразительнее и удобнее.","routingExpected":{"triageOnly":true,"acceptableAlternates":["frontend.motion-design","frontend.interaction-polish"]}},
+    {"id":"ru-motion-design-nontrigger","kind":"should-not-trigger","text":"Добавь анимацию прогресса в консольный CLI.","routingExpected":{"shouldNotTrigger":true,"falsePositiveSeverity":"high"}},
+    {"id":"ru-performance-review-direct-1","kind":"should-trigger","expectedSkill":"frontend.performance-review","text":"Проверь производительность медленной страницы.","routingExpected":{"expectedSkill":"frontend.performance-review"}},
+    {"id":"ru-performance-review-direct-2","kind":"should-trigger","expectedSkill":"frontend.performance-review","text":"Исследуй LCP и INP в интерфейсе.","routingExpected":{"expectedSkill":"frontend.performance-review"}},
+    {"id":"ru-performance-review-direct-3","kind":"should-trigger","expectedSkill":"frontend.performance-review","text":"Страница тормозит: проверь размер бандла и Lighthouse.","routingExpected":{"expectedSkill":"frontend.performance-review"}},
+    {"id":"ru-performance-review-ambiguous","kind":"ambiguous","expectedSkill":"frontend.performance-review","text":"Анимации тормозят страницу и ухудшают INP.","routingExpected":{"triageOnly":true,"acceptableAlternates":["frontend.performance-review","frontend.motion-audit","frontend.motion-design"]}},
+    {"id":"ru-performance-review-nontrigger","kind":"should-not-trigger","text":"Оптимизируй медленный SQL-запрос backend API.","routingExpected":{"shouldNotTrigger":true,"falsePositiveSeverity":"high"}},
+    {"id":"ru-tailwind-ui-polish-direct-1","kind":"should-trigger","expectedSkill":"frontend.tailwind-ui-polish","text":"Почини адаптив и классы Tailwind на странице.","routingExpected":{"expectedSkill":"frontend.tailwind-ui-polish"}},
+    {"id":"ru-tailwind-ui-polish-direct-2","kind":"should-trigger","expectedSkill":"frontend.tailwind-ui-polish","text":"Исправь отступы и переполнение в мобильной версии.","routingExpected":{"expectedSkill":"frontend.tailwind-ui-polish"}},
+    {"id":"ru-tailwind-ui-polish-direct-3","kind":"should-trigger","expectedSkill":"frontend.tailwind-ui-polish","text":"Интерфейс ломается на мобильном: отполируй Tailwind.","routingExpected":{"expectedSkill":"frontend.tailwind-ui-polish"}},
+    {"id":"ru-tailwind-ui-polish-ambiguous","kind":"ambiguous","expectedSkill":"frontend.tailwind-ui-polish","text":"После редизайна адаптивные отступы выглядят плохо.","routingExpected":{"triageOnly":true,"acceptableAlternates":["frontend.tailwind-ui-polish","frontend.visual-design-polish"]}},
+    {"id":"ru-tailwind-ui-polish-nontrigger","kind":"should-not-trigger","text":"Добавь флаг адаптивного вывода в CLI на Swift.","routingExpected":{"shouldNotTrigger":true,"falsePositiveSeverity":"high"}},
+    {"id":"ru-ux-critique-direct-1","kind":"should-trigger","expectedSkill":"frontend.ux-critique","text":"Проведи UX критику пользовательского сценария.","routingExpected":{"expectedSkill":"frontend.ux-critique"}},
+    {"id":"ru-ux-critique-direct-2","kind":"should-trigger","expectedSkill":"frontend.ux-critique","text":"Найди проблемы юзабилити и непонятную навигацию.","routingExpected":{"expectedSkill":"frontend.ux-critique"}},
+    {"id":"ru-ux-critique-direct-3","kind":"should-trigger","expectedSkill":"frontend.ux-critique","text":"Оцени онбординг, когнитивную нагрузку и путь пользователя.","routingExpected":{"expectedSkill":"frontend.ux-critique"}},
+    {"id":"ru-ux-critique-ambiguous","kind":"ambiguous","expectedSkill":"frontend.ux-critique","text":"Навигация неудобна и визуальная иерархия сбивает пользователя.","routingExpected":{"triageOnly":true,"acceptableAlternates":["frontend.ux-critique","frontend.visual-design-polish","frontend.tailwind-ui-polish"]}},
+    {"id":"ru-ux-critique-nontrigger","kind":"should-not-trigger","text":"Оцени удобство команд backend CLI без графического интерфейса.","routingExpected":{"shouldNotTrigger":true,"falsePositiveSeverity":"high"}},
+    {"id":"ru-visual-design-polish-direct-1","kind":"should-trigger","expectedSkill":"frontend.visual-design-polish","text":"Задай визуальное направление и освежи дизайн страницы.","routingExpected":{"expectedSkill":"frontend.visual-design-polish"}},
+    {"id":"ru-visual-design-polish-direct-2","kind":"should-trigger","expectedSkill":"frontend.visual-design-polish","text":"Сделай редизайн интерфейса и улучши иерархию.","routingExpected":{"expectedSkill":"frontend.visual-design-polish"}},
+    {"id":"ru-visual-design-polish-direct-3","kind":"should-trigger","expectedSkill":"frontend.visual-design-polish","text":"Убери типовой AI интерфейс и создай современный визуал.","routingExpected":{"expectedSkill":"frontend.visual-design-polish"}},
+    {"id":"ru-visual-design-polish-ambiguous","kind":"ambiguous","expectedSkill":"frontend.visual-design-polish","text":"Страница выглядит устаревшей и отступы нарушают иерархию.","routingExpected":{"triageOnly":true,"acceptableAlternates":["frontend.visual-design-polish","frontend.tailwind-ui-polish"]}},
+    {"id":"ru-visual-design-polish-nontrigger","kind":"should-not-trigger","text":"Сделай редизайн схемы базы данных для backend сервиса.","routingExpected":{"shouldNotTrigger":true,"falsePositiveSeverity":"high"}}
   ],
   "taskBands": [
     {
       "id": "greenfield-ui",
-      "targetCount": 13,
+      "targetCount": 14,
       "seedTasks": [
         {
           "id": "greenfield-crm-first-screen",
@@ -1228,12 +1283,22 @@
               ]
             }
           ]
+        },
+        {
+          "id": "ru-visual-direction-reference",
+          "prompt": "Используй frontend скиллы: задай визуальное направление и реализуй React-экран по приложенному макету. Если продуктовый контекст или состояния существенно неясны, сначала запроси уточнение.",
+          "assertions": [
+            {"text":"Ответ явно объявляет использование навыка визуального направления или design-to-code.","graderType":"human"},
+            {"text":"При материальной неопределенности зафиксирован уточняющий вопрос или явно отделены допущения.","graderType":"human"},
+            {"text":"Мобильный и десктопный скриншоты подтверждают визуальное направление и адаптивность.","graderType":"screenshot","requiredArtifacts":["screenshots","responsiveMatrix"]},
+            {"text":"Итог содержит результат проверки и отделяет подтвержденное от непроверенного.","graderType":"human"}
+          ]
         }
       ]
     },
     {
       "id": "existing-project-modification",
-      "targetCount": 12,
+      "targetCount": 13,
       "seedTasks": [
         {
           "id": "animebounty-library-filter",
@@ -1495,6 +1560,16 @@
               ]
             }
           ]
+        },
+        {
+          "id": "ru-tailwind-responsive-execution",
+          "prompt": "Используй frontend скиллы: почини адаптив, отступы и состояния существующей Tailwind-страницы. Если область изменения существенно неоднозначна, сначала уточни ее.",
+          "assertions": [
+            {"text":"Ответ явно объявляет использование навыка Tailwind UI polish.","graderType":"human"},
+            {"text":"Материальная неоднозначность приводит к уточнению или к явному ограничению области работ.","graderType":"human"},
+            {"text":"До/после на мобильном и десктопном размерах подтверждает отсутствие переполнения и регрессий.","graderType":"screenshot","requiredArtifacts":["beforeAfterScreenshots","responsiveMatrix"]},
+            {"text":"Итог сообщает результат проверки, включая оставшиеся риски или успешный исход.","graderType":"human"}
+          ]
         }
       ]
     },
@@ -1748,7 +1823,7 @@
     },
     {
       "id": "polish",
-      "targetCount": 13,
+      "targetCount": 14,
       "seedTasks": [
         {
           "id": "generic-landing-page-polish",
@@ -2042,6 +2117,16 @@
               ]
             }
           ]
+        },
+        {
+          "id": "ru-frontend-release-audit",
+          "prompt": "Используй frontend скиллы и проведи финальный аудит фронтенда перед релизом. Если критерии выпуска или доступные артефакты существенно неясны, сначала запроси уточнение.",
+          "assertions": [
+            {"text":"Ответ явно объявляет использование навыка frontend audit.","graderType":"human"},
+            {"text":"При материально неясных критериях или доказательствах запрошено уточнение либо зафиксирован блокер.","graderType":"human"},
+            {"text":"Аудит использует мобильные и десктопные скриншоты как доказательство responsive и visual проверки.","graderType":"screenshot","requiredArtifacts":["screenshots","responsiveMatrix"]},
+            {"text":"Итог содержит проверенный release verdict и явно перечисляет непроверенные риски.","graderType":"human"}
+          ]
         }
       ]
     },
@@ -2108,7 +2193,8 @@
         "greenfield-ops-command-center",
         "greenfield-niche-domain-uncertainty",
         "existing-vite-marketing-hero",
-        "existing-stale-generic-design-md"
+        "existing-stale-generic-design-md",
+        "ru-visual-direction-reference"
       ],
       "triggerPromptIds": [
         "trigger-visual-polish",
@@ -2126,7 +2212,8 @@
         "next-tailwind-dashboard-density",
         "existing-shadcn-billing-table",
         "existing-tailwind-without-shadcn",
-        "mobile-overlap-action-bar"
+        "mobile-overlap-action-bar",
+        "ru-tailwind-responsive-execution"
       ],
       "triggerPromptIds": [
         "trigger-tailwind-screenshot-qa",
@@ -2140,7 +2227,8 @@
       "id": "design-to-code",
       "skillId": "frontend.design-to-code",
       "taskIds": [
-        "greenfield-single-reference-fidelity"
+        "greenfield-single-reference-fidelity",
+        "ru-visual-direction-reference"
       ],
       "triggerPromptIds": [
         "trigger-design-to-code",

@@ -18,6 +18,8 @@ import {
   validateFrontendTaskEvidence,
   validateFrontendEvalSuite,
 } from "../src/evals/frontend.ts";
+import { frontendDomainManifest } from "../src/domains/frontend/routing.ts";
+import { loadLocalRegistry } from "../src/registry/index.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -58,9 +60,9 @@ test("frontend eval suite validates and summarizes seed coverage", async () => {
 
   const summary = summarizeFrontendEvalSuite(suite);
   assert.equal(summary.triggerPrompts.total, summary.triggerPrompts.target);
-  assert.equal(summary.triggerPrompts.target, 102);
+  assert.equal(summary.triggerPrompts.target, 157);
   assert.equal(summary.taskEvals.seedTasks, summary.taskEvals.target);
-  assert.equal(summary.taskEvals.target, 51);
+  assert.equal(summary.taskEvals.target, 54);
   assert.equal(
     summary.triggerPrompts.shouldTrigger + summary.triggerPrompts.shouldNotTrigger + summary.triggerPrompts.ambiguous,
     summary.triggerPrompts.total,
@@ -72,6 +74,42 @@ test("frontend eval suite validates and summarizes seed coverage", async () => {
     "polish",
     "motion-quality",
   ]);
+});
+
+test("frontend suite freezes Russian routing coverage for every owned skill", async () => {
+  const [suite, skills] = await Promise.all([
+    loadFrontendEvalSuite(),
+    loadLocalRegistry("registry"),
+  ]);
+  const owned = new Set(
+    frontendDomainManifest.ownership.flatMap((rule) => [rule.primarySkill, ...rule.supportingSkills]),
+  );
+  for (const skillId of owned) {
+    const prompts = suite.triggerPrompts.filter(
+      (prompt) => /[А-Яа-яЁё]/u.test(prompt.text) &&
+        (prompt.expectedSkill === skillId || prompt.routingExpected?.expectedSkill === skillId),
+    );
+    assert.equal(prompts.filter((prompt) => prompt.kind === "should-trigger").length >= 3, true, skillId);
+    assert.equal(prompts.filter((prompt) => prompt.kind === "ambiguous").length >= 1, true, skillId);
+  }
+  const russianTaskIds = new Set(
+    suite.taskBands
+      .flatMap((band) => band.seedTasks)
+      .filter((task) => /[А-Яа-яЁё]/u.test(task.prompt))
+      .map((task) => task.id),
+  );
+  assert.equal(russianTaskIds.size >= 3, true);
+  const promoted = skills.filter((skill) =>
+    ["task-eval", "curated"].includes(skill.manifest.evaluation?.status ?? "none"),
+  );
+  for (const skill of promoted) {
+    const slice = suite.skillSlices?.find((item) => item.skillId === skill.manifest.id);
+    assert.equal(
+      slice?.taskIds.some((taskId) => russianTaskIds.has(taskId)),
+      true,
+      `${skill.manifest.id} needs Russian task evidence`,
+    );
+  }
 });
 
 test("dedicated design skill eval suites each provide five valid tasks", async () => {
@@ -488,8 +526,8 @@ test("eval:frontend CLI reports suite summary as JSON", async () => {
   };
   assert.equal(report.ok, true);
   assert.deepEqual(report.issues, []);
-  assert.equal(report.summary.triggerPrompts.target, 102);
-  assert.equal(report.summary.taskEvals.target, 51);
+  assert.equal(report.summary.triggerPrompts.target, 157);
+  assert.equal(report.summary.taskEvals.target, 54);
   assert.equal("routingEval" in report, false);
 });
 
@@ -749,7 +787,7 @@ test("runner filters a skill slice and expands deterministic repetitions", async
     repetitions: 3,
   });
   assert.equal(plan.repetitions, 3);
-  assert.equal(plan.entries.length, 5 * 3 * 3);
+  assert.equal(plan.entries.length, 6 * 3 * 3);
   assert.deepEqual([...new Set(plan.entries.map((entry) => entry.repetition))], [1, 2, 3]);
   assert.ok(plan.entries.every((entry) => entry.taskId !== "greenfield-single-reference-fidelity"));
 });
@@ -871,7 +909,7 @@ test("task evidence validates only the declared skill slice across repetitions",
     projectRoot: ".",
   });
   assert.equal(evidence.skillSlice, "design-to-code");
-  assert.equal(evidence.runs.length, 2);
+  assert.equal(evidence.runs.length, 4);
   for (const run of evidence.runs) {
     run.durationMs = 1;
     run.exitCode = 0;
@@ -882,8 +920,8 @@ test("task evidence validates only the declared skill slice across repetitions",
     for (const assertion of run.assertions) assertion.status = "passed";
   }
   const report = validateFrontendTaskEvidence(suite, evidence);
-  assert.equal(report.metrics.expectedTasks, 1);
-  assert.equal(report.metrics.expectedRuns, 2);
+  assert.equal(report.metrics.expectedTasks, 2);
+  assert.equal(report.metrics.expectedRuns, 4);
   assert.deepEqual(report.issues, []);
 });
 

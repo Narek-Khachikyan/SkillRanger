@@ -2,6 +2,7 @@ import { defaultDomainsRoot } from "../../paths.ts";
 import type { ProjectFingerprint, Recommendation, RegistrySkill, SkillLane } from "../../types.ts";
 import { registerDomainPack } from "../registry.ts";
 import type { DomainPackManifest, DomainRoutingPolicy } from "../types.ts";
+import { analyzeFrontendIntent, type CanonicalFrontendIntent } from "./intents/index.ts";
 
 const tokenize = (input: string) =>
   new Set(
@@ -127,13 +128,6 @@ const specializedIntentHints: Record<string, string[]> = {
 
 const designIntentPhrases = ["make this app better", "make this page better", "make the page better"];
 
-const auditIntentPhrases = [
-  "cross-cutting frontend", "final frontend review", "final ship review", "frontend audit",
-  "frontend scorecard", "go no-go", "go or no go", "go/no-go", "preflight audit", "preflight check",
-  "preflight frontend", "preflight review", "quality gate", "release readiness", "release-readiness",
-  "ship readiness", "whole frontend",
-];
-
 const implementationDesignPhrases = [
   "component api", "controlled and uncontrolled", "data model", "render props", "state ownership",
 ];
@@ -146,6 +140,24 @@ const designIntentTokens = new Set([
 
 const intentGatedSkillIds = new Set(["frontend.motion-audit", "frontend.motion-design"]);
 const requiredStackTags = new Set(["nextjs", "vite", "react", "tailwind", "playwright"]);
+
+const canonicalIntentBySkillId: Partial<Record<string, CanonicalFrontendIntent>> = {
+  "frontend.accessibility-review": "accessibility-review",
+  "frontend.audit": "audit",
+  "frontend.design-system": "design-system",
+  "frontend.design-to-code": "design-to-code",
+  "frontend.interaction-polish": "interaction-polish",
+  "frontend.motion-audit": "motion-audit",
+  "frontend.motion-design": "motion-design",
+  "frontend.performance-review": "performance-review",
+  "frontend.tailwind-ui-polish": "tailwind-ui-polish",
+  "frontend.ux-critique": "ux-critique",
+  "frontend.visual-design-polish": "visual-design-polish",
+};
+
+const legacySpecializedIntentHints = Object.fromEntries(
+  Object.entries(specializedIntentHints).filter(([skillId]) => !canonicalIntentBySkillId[skillId]),
+) as Record<string, string[]>;
 
 const companionSkillIds: Record<string, string[]> = {
   "frontend.visual-design-polish": [
@@ -166,9 +178,8 @@ const isMotionAuditIntent = (intent?: string) => {
   return hasAnyToken(tokens, motionAuditVerbTokens) && hasAnyToken(tokens, motionSubjectTokens);
 };
 
-const specializedIntentScore = (skill: RegistrySkill, intent?: string) => {
-  if (!intent) return 0;
-  const hints = specializedIntentHints[skill.manifest.id] ?? [];
+const legacySpecializedIntentScore = (skillId: string, intent: string) => {
+  const hints = legacySpecializedIntentHints[skillId] ?? [];
   if (hints.length === 0) return 0;
   const normalizedIntent = intent.toLowerCase();
   const tokens = tokenize(intent);
@@ -183,18 +194,62 @@ const specializedIntentScore = (skill: RegistrySkill, intent?: string) => {
   return Math.max(0, Math.min(1, score / 2));
 };
 
+const specializedIntentScore = (skill: RegistrySkill, intent?: string) => {
+  if (!intent) return 0;
+  const expected = canonicalIntentBySkillId[skill.manifest.id];
+  if (expected) return analyzeFrontendIntent(intent).intents.has(expected) ? 1 : 0;
+  return legacySpecializedIntentScore(skill.manifest.id, intent);
+};
+
+const canonicalIntentPriority: CanonicalFrontendIntent[] = [
+  "motion-audit", "audit", "accessibility-review", "design-to-code", "design-system",
+  "performance-review", "interaction-polish", "motion-design", "visual-design-polish",
+  "tailwind-ui-polish", "ux-critique",
+];
+
+const primaryCanonicalIntent = (intent: string): CanonicalFrontendIntent | undefined => {
+  const analysis = analyzeFrontendIntent(intent);
+  const hasStrongLegacySpecialist = Object.keys(legacySpecializedIntentHints)
+    .some((skillId) => legacySpecializedIntentScore(skillId, intent) > 0.5);
+  if (hasStrongLegacySpecialist) return undefined;
+  const intents = analysis.intents;
+  if (
+    intents.has("interaction-polish") &&
+    /\b(interaction polish|polish this modal|drag|drop|drawer|toast|взаимодействие|дровер|тост)\b/u.test(analysis.normalized)
+  ) return "interaction-polish";
+  if (
+    intents.has("ux-critique") &&
+    /\b(critique|usability|onboarding|cognitive|wayfinding|user flow|information architecture|ux|юзабилити|онбординг|сценарий|путь пользователя)\b/u.test(analysis.normalized)
+  ) return "ux-critique";
+  if (
+    intents.has("tailwind-ui-polish") &&
+    !["audit", "accessibility-review", "design-system", "design-to-code"]
+      .some((candidate) => intents.has(candidate as CanonicalFrontendIntent)) &&
+    /\btailwind\b/u.test(analysis.normalized)
+  ) {
+    return "tailwind-ui-polish";
+  }
+  if (
+    intents.has("tailwind-ui-polish") &&
+    intents.has("accessibility-review") &&
+    !/\b(accessibility|aria|contrast|focus|focus-visible|keyboard|wcag|доступность|клавиатура|фокус|контраст)\b/u.test(analysis.normalized)
+  ) return "tailwind-ui-polish";
+  return canonicalIntentPriority.find((candidate) => intents.has(candidate));
+};
+
 const hasSpecializedIntent = (intent?: string) => {
   if (!intent) return false;
+  if (analyzeFrontendIntent(intent).intents.size > 0) return true;
   if (isMotionAuditIntent(intent)) return true;
   const normalizedIntent = intent.toLowerCase();
   const tokens = tokenize(intent);
-  return Object.values(specializedIntentHints)
+  return Object.values(legacySpecializedIntentHints)
     .flat()
     .some((hint) => hint.includes(" ") ? normalizedIntent.includes(hint) : tokens.has(hint));
 };
 
 const isAuditIntent = (intent?: string) =>
-  Boolean(intent && auditIntentPhrases.some((phrase) => intent.toLowerCase().includes(phrase)));
+  Boolean(intent && primaryCanonicalIntent(intent) === "audit");
 
 const hasRequiredStackTags = (fingerprint: ProjectFingerprint, skill: RegistrySkill) => {
   const fingerprintTags = new Set(fingerprint.tags);
@@ -223,7 +278,15 @@ const routing: DomainRoutingPolicy = {
     if (implementationDesignPhrases.some((phrase) => normalizedIntent.includes(phrase))) {
       return lane === "design" ? -0.08 : 0;
     }
+    const canonicalIntent = primaryCanonicalIntent(intent);
     const hasDesignIntent =
+      canonicalIntent === "design-system" ||
+      canonicalIntent === "design-to-code" ||
+      canonicalIntent === "interaction-polish" ||
+      canonicalIntent === "motion-design" ||
+      canonicalIntent === "tailwind-ui-polish" ||
+      canonicalIntent === "ux-critique" ||
+      canonicalIntent === "visual-design-polish" ||
       hasAnyToken(tokens, designIntentTokens) ||
       designIntentPhrases.some((phrase) => normalizedIntent.includes(phrase));
     if (!hasDesignIntent) return 0;
@@ -233,11 +296,14 @@ const routing: DomainRoutingPolicy = {
     const specializedScore = specializedIntentScore(skill, intent);
     if (intentGatedSkillIds.has(skill.manifest.id) && (!intent || specializedScore === 0)) return -0.01;
     if (!intent) return 0;
-    if (skill.manifest.id === "frontend.audit") return isAuditIntent(intent) ? 0.25 : 0;
+    if (skill.manifest.id === "frontend.audit") return isAuditIntent(intent) ? 0.32 : 0;
     if (skill.manifest.id === "frontend.playwright-debug") {
       return specializedScore >= 0.5 ? 0.18 * specializedScore : -0.18;
     }
     if (!hasSpecializedIntent(intent)) return 0;
+    const expected = canonicalIntentBySkillId[skill.manifest.id];
+    if (expected && primaryCanonicalIntent(intent) !== expected) return -0.14;
+    if (expected && specializedScore > 0) return 0.25 * specializedScore;
     return specializedScore > 0 ? 0.18 * specializedScore : -0.14;
   },
   includeSkill(fingerprint, skill, intent) {

@@ -79,6 +79,26 @@ test("generic recommender preserves frontend routing through the domain adapter"
   assert.equal(recommendations[0]?.skillId, "frontend.design-to-code");
 });
 
+test("frontend routing selects Russian accessibility, performance, and audit intents", async () => {
+  const [fingerprint, skills] = await Promise.all([
+    scanProject(path.resolve("fixtures/next-react-ts")),
+    loadLocalRegistry("registry"),
+  ]);
+  const cases = [
+    ["Проверь доступность формы, клавиатуру, фокус и контраст", "frontend.accessibility-review"],
+    ["Страница тормозит: проверь LCP, INP и размер бандла", "frontend.performance-review"],
+    ["Сделай финальный аудит фронтенда перед релизом", "frontend.audit"],
+  ] as const;
+  for (const [intent, expected] of cases) {
+    const recommendations = recommendSkills(fingerprint, skills, {
+      domainId: "frontend",
+      userIntent: intent,
+      targetAgent: "generic-agent-skills",
+    });
+    assert.equal(recommendations[0]?.skillId, expected);
+  }
+});
+
 test("core source does not contain concrete frontend skill ids", async () => {
   const coreFiles = [
     "src/recommender/index.ts",
