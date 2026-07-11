@@ -324,11 +324,12 @@ const routing: DomainRoutingPolicy = {
   compose(recommendations: Recommendation[]) {
     const primary = recommendations[0];
     if (!primary) return recommendations;
-    const allowed = new Set(companionSkillIds[primary.skillId] ?? []);
-    const companions = recommendations
-      .filter((recommendation) => allowed.has(recommendation.skillId))
-      .slice(0, 2)
-      .map((recommendation) => ({ ...recommendation, role: "companion" as const }));
+    const companions = (companionSkillIds[primary.skillId] ?? [])
+      .flatMap((skillId) => {
+        const recommendation = recommendations.find((candidate) => candidate.skillId === skillId);
+        return recommendation ? [{ ...recommendation, role: "companion" as const }] : [];
+      })
+      .slice(0, 2);
     return [{ ...primary, role: "primary" as const }, ...companions];
   },
 };
