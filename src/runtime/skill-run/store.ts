@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, readdir, rename, rmdir, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { SkillRunError, type SkillRun } from "./types.ts";
@@ -11,6 +11,9 @@ const staleLockMs = 30_000;
 const isErrno = (error: unknown, code: string): error is NodeJS.ErrnoException => (
   error instanceof Error && "code" in error && error.code === code
 );
+
+type OwnedLock = { path: string; token: string };
+type LockGuard = { path: string; entryPath: string };
 
 export class SkillRunStore {
   private readonly projectRoot: string;
@@ -28,51 +31,161 @@ export class SkillRunStore {
     return `${this.runPath(runId).slice(0, -5)}.lock`;
   }
 
-  private async acquireLock(runId: string): Promise<{ path: string; token: string }> {
+  private async guardOwnerIsAlive(entryPath: string, entryName: string): Promise<boolean> {
+    try {
+      const parsed = JSON.parse(await readFile(entryPath, "utf8")) as unknown;
+      if (
+        typeof parsed !== "object"
+        || parsed === null
+        || (parsed as { token?: unknown }).token !== entryName
+        || !Number.isInteger((parsed as { pid?: unknown }).pid)
+      ) return true;
+      const pid = (parsed as { pid: number }).pid;
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch (error) {
+        return !isErrno(error, "ESRCH");
+      }
+    } catch (error) {
+      return !isErrno(error, "ENOENT");
+    }
+  }
+
+  private async reclaimGuardIfAbandoned(guardPath: string): Promise<void> {
+    let guardStat;
+    let entries: string[];
+    try {
+      [guardStat, entries] = await Promise.all([stat(guardPath), readdir(guardPath)]);
+    } catch (error) {
+      if (isErrno(error, "ENOENT")) return;
+      throw error;
+    }
+    const stale = Date.now() - guardStat.mtimeMs > staleLockMs;
+    const ownersDead = entries.length > 0 && (await Promise.all(
+      entries.map((entry) => this.guardOwnerIsAlive(path.join(guardPath, entry), entry)),
+    )).every((alive) => !alive);
+    if (!stale && !ownersDead) return;
+
+    for (const entry of entries) {
+      await unlink(path.join(guardPath, entry)).catch((error: unknown) => {
+        if (!isErrno(error, "ENOENT")) throw error;
+      });
+    }
+    await rmdir(guardPath).catch((error: unknown) => {
+      if (!isErrno(error, "ENOENT") && !isErrno(error, "ENOTEMPTY")) throw error;
+    });
+  }
+
+  private async acquireGuard(lockPath: string, startedAt: number): Promise<LockGuard> {
+    const guardPath = `${lockPath}.guard`;
+    while (true) {
+      const token = randomUUID();
+      try {
+        await mkdir(guardPath);
+        const entryPath = path.join(guardPath, token);
+        try {
+          await writeFile(entryPath, JSON.stringify({ token, pid: process.pid }), { encoding: "utf8", flag: "wx" });
+          return { path: guardPath, entryPath };
+        } catch (error) {
+          await rmdir(guardPath).catch(() => undefined);
+          if (isErrno(error, "ENOENT")) continue;
+          throw error;
+        }
+      } catch (error) {
+        if (!isErrno(error, "EEXIST")) throw error;
+        await this.reclaimGuardIfAbandoned(guardPath);
+      }
+      if (Date.now() - startedAt >= lockTimeoutMs) {
+        throw new SkillRunError("run-integrity", "Timed out waiting for run lock");
+      }
+      await delay(25);
+    }
+  }
+
+  private async releaseGuard(guard: LockGuard): Promise<void> {
+    await unlink(guard.entryPath).catch((error: unknown) => {
+      if (!isErrno(error, "ENOENT")) throw error;
+    });
+    await rmdir(guard.path).catch((error: unknown) => {
+      if (!isErrno(error, "ENOENT") && !isErrno(error, "ENOTEMPTY")) throw error;
+    });
+  }
+
+  private async withLockGuard<T>(lockPath: string, startedAt: number, apply: () => Promise<T>): Promise<T> {
+    const guard = await this.acquireGuard(lockPath, startedAt);
+    try {
+      return await apply();
+    } finally {
+      await this.releaseGuard(guard);
+    }
+  }
+
+  private async createLockWhileGuarded(lockPath: string, token: string): Promise<OwnedLock | undefined> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      let handle;
+      try {
+        handle = await open(lockPath, "wx");
+      } catch (error) {
+        if (!isErrno(error, "EEXIST")) throw error;
+        try {
+          const lockStat = await stat(lockPath);
+          if (Date.now() - lockStat.mtimeMs <= staleLockMs) return undefined;
+          await unlink(lockPath);
+          continue;
+        } catch (statError) {
+          if (isErrno(statError, "ENOENT")) continue;
+          throw statError;
+        }
+      }
+
+      try {
+        await handle.writeFile(token, "utf8");
+        await handle.close();
+        return { path: lockPath, token };
+      } catch (error) {
+        await handle.close().catch(() => undefined);
+        await unlink(lockPath).catch((unlinkError: unknown) => {
+          if (!isErrno(unlinkError, "ENOENT")) throw unlinkError;
+        });
+        throw error;
+      }
+    }
+    return undefined;
+  }
+
+  private async acquireLock(runId: string): Promise<OwnedLock> {
     const lockPath = this.lockPath(runId);
     await mkdir(path.dirname(lockPath), { recursive: true });
     const startedAt = Date.now();
     while (true) {
       const token = randomUUID();
       try {
-        const handle = await open(lockPath, "wx");
-        try {
-          await handle.writeFile(token, "utf8");
-        } catch (error) {
-          await handle.close();
-          await unlink(lockPath).catch(() => undefined);
-          throw error;
-        }
-        await handle.close();
-        return { path: lockPath, token };
+        const lock = await this.withLockGuard(lockPath, startedAt, () => this.createLockWhileGuarded(lockPath, token));
+        if (lock) return lock;
       } catch (error) {
-        if (!isErrno(error, "EEXIST")) {
-          if (error instanceof SkillRunError) throw error;
-          throw new SkillRunError("run-integrity", `Could not acquire run lock: ${(error as Error).message}`);
-        }
-        try {
-          const lockStat = await stat(lockPath);
-          if (Date.now() - lockStat.mtimeMs > staleLockMs) {
-            await unlink(lockPath);
-            continue;
-          }
-        } catch (statError) {
-          if (isErrno(statError, "ENOENT")) continue;
-          throw new SkillRunError("run-integrity", `Could not inspect run lock: ${(statError as Error).message}`);
-        }
-        if (Date.now() - startedAt >= lockTimeoutMs) {
-          throw new SkillRunError("run-integrity", "Timed out waiting for run lock");
-        }
-        await delay(25);
+        if (error instanceof SkillRunError) throw error;
+        throw new SkillRunError("run-integrity", `Could not acquire run lock: ${(error as Error).message}`);
       }
+      if (Date.now() - startedAt >= lockTimeoutMs) {
+        throw new SkillRunError("run-integrity", "Timed out waiting for run lock");
+      }
+      await delay(25);
     }
   }
 
-  private async releaseLock(lock: { path: string; token: string }): Promise<void> {
+  private async releaseLock(lock: OwnedLock): Promise<void> {
     try {
-      if (await readFile(lock.path, "utf8") === lock.token) await unlink(lock.path);
+      await this.withLockGuard(lock.path, Date.now(), async () => {
+        try {
+          if (await readFile(lock.path, "utf8") === lock.token) await unlink(lock.path);
+        } catch (error) {
+          if (!isErrno(error, "ENOENT")) throw error;
+        }
+      });
     } catch (error) {
-      if (!isErrno(error, "ENOENT")) throw error;
+      if (error instanceof SkillRunError) throw error;
+      throw new SkillRunError("run-integrity", `Could not release run lock: ${(error as Error).message}`);
     }
   }
 

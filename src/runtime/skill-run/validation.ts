@@ -204,8 +204,15 @@ export const assertValidSkillRun: (input: unknown) => asserts input is SkillRun 
   const selectedIds = selected.map((skill) => skill.skillId);
   if (new Set(selectedIds).size !== selectedIds.length) fail("Selected skill IDs must be unique.");
   if (new Set(recommendations.map((skill) => skill.skillId)).size !== recommendations.length) fail("Recommended skill IDs must be unique.");
-  if (state !== "created" && mandatoryIds.some((id) => !selectedIds.includes(id))) fail("Policy mandatory skill IDs must reference selected skills.");
-  if (state !== "created" && mandatoryIds.some((id) => !selected.find((skill) => skill.skillId === id)?.mandatory)) fail("Policy mandatory skills must be marked mandatory.");
+  if (state !== "created") {
+    const selectedMandatoryIds = selected.filter((skill) => skill.mandatory).map((skill) => skill.skillId);
+    if (
+      mandatoryIds.length !== selectedMandatoryIds.length
+      || mandatoryIds.some((id) => !selectedMandatoryIds.includes(id))
+    ) {
+      fail("Policy mandatory skill IDs must exactly match selected mandatory skills.");
+    }
+  }
 
   const reads = array(value.skillReads, "skill run.skillReads").map((read, index) => {
     const readPath = `skill run.skillReads[${index}]`;
@@ -219,6 +226,13 @@ export const assertValidSkillRun: (input: unknown) => asserts input is SkillRun 
     return item;
   });
   if (new Set(reads.map((read) => read.skillId)).size !== reads.length) fail("Skill read IDs must be unique.");
+  const readIds = new Set(reads.map((read) => read.skillId));
+  if (
+    ["running", "implemented", "verified", "implemented-unverified", "failed", "blocked"].includes(state)
+    && mandatoryIds.some((id) => !readIds.has(id))
+  ) {
+    fail("Running and terminal skill runs require matching reads for every mandatory skill.");
+  }
 
   const clarification = keys(value.clarification, ["status", "questions", "answers", "declinedFields", "assumptions"], [], "skill run.clarification");
   const clarificationStatus = enumeration(clarification.status, clarificationStatuses, "skill run.clarification.status");
@@ -242,6 +256,29 @@ export const assertValidSkillRun: (input: unknown) => asserts input is SkillRun 
   if (assumptions.length !== declinedFields.length || assumptions.some((assumption) => !assumption.trim())) fail("Each declined field requires one non-empty assumption.");
   if (!clarificationRequired && clarificationStatus !== "not-required") fail("Optional clarification must have not-required status.");
   if (clarificationRequired && clarificationStatus === "not-required") fail("Required clarification cannot have not-required status.");
+  if (clarificationRequired) {
+    const answeredIds = new Set(answers.map((answer) => answer.questionId));
+    const declined = new Set(declinedFields);
+    const fullyResolved = policyQuestions.every((question) => (
+      answeredIds.has(question.id as string)
+      || ((question.fields as string[]).length > 0 && (question.fields as string[]).every((field) => declined.has(field)))
+    ));
+    if (clarificationStatus === "pending" && (answers.length > 0 || declinedFields.length > 0 || assumptions.length > 0)) {
+      fail("Pending clarification cannot contain resolution records.");
+    }
+    if (clarificationStatus === "resolved" && (declinedFields.length > 0 || !fullyResolved)) {
+      fail("Resolved clarification requires every question to be answered and no declined fields.");
+    }
+    if (clarificationStatus === "declined" && (declinedFields.length === 0 || !fullyResolved)) {
+      fail("Declined clarification requires every unanswered question field to be permissibly declined.");
+    }
+    if (
+      ["clarified", "running", "implemented", "verified", "implemented-unverified", "failed", "blocked"].includes(state)
+      && (clarificationStatus === "pending" || !fullyResolved)
+    ) {
+      fail("Clarification must be fully resolved before running or reaching a terminal state.");
+    }
+  }
 
   array(value.artifacts, "skill run.artifacts").forEach((artifact, index) => validateArtifact(artifact, `skill run.artifacts[${index}]`));
   if (Object.hasOwn(value, "verification")) {

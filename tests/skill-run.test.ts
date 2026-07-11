@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { mkdtemp, readFile, readdir, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rmdir, unlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   SkillRunStore,
   SkillRunError,
@@ -320,6 +321,58 @@ test("validates every persisted field and rejects unknown nested properties", ()
   );
 });
 
+test("persisted selected mandatory skills exactly match policy mandatory ids", () => {
+  const input = {
+    ...fixtureInput,
+    policy: { ...fixtureInput.policy, mandatorySkillIds: [fixtureSkills[0].skillId] },
+  };
+  const corrupted = reduceSkillRun(createSkillRun(input), { type: "select-skills", skills: fixtureSkills });
+  assert.throws(
+    () => assertValidSkillRun(corrupted),
+    (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",
+  );
+});
+
+test("running and terminal persisted runs require every mandatory skill read", () => {
+  const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
+  const reportSha256 = `sha256:${createHash("sha256").update(canonicalizeVerificationReport(fixtureReport), "utf8").digest("hex")}`;
+  const verified = reduceSkillRun(implemented, {
+    type: "record-verification",
+    reportPath: "report.json",
+    reportSha256,
+    report: fixtureReport,
+  });
+  for (const run of [runningRun, implemented, verified]) {
+    assert.throws(
+      () => assertValidSkillRun({ ...run, skillReads: run.skillReads.slice(0, 1) }),
+      (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",
+    );
+  }
+});
+
+test("running persisted runs require complete clarification with matching status", () => {
+  const corruptions: SkillRun[] = [
+    { ...runningRun, clarification: { ...runningRun.clarification, status: "pending" } },
+    { ...runningRun, clarification: { ...runningRun.clarification, status: "resolved", answers: [] } },
+    {
+      ...runningRun,
+      clarification: {
+        ...runningRun.clarification,
+        status: "resolved",
+        answers: [],
+        declinedFields: ["primaryUserOrActor"],
+        assumptions: ["Primary user is a frontend developer"],
+      },
+    },
+  ];
+  for (const corrupted of corruptions) {
+    assert.throws(
+      () => assertValidSkillRun(corrupted),
+      (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",
+    );
+  }
+});
+
 test("validates report domain, nested shapes, gate counts, and verified evidence", () => {
   const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
   assert.doesNotThrow(() => validateVerificationReportForRun(implemented, fixtureReport));
@@ -439,6 +492,59 @@ test("stale run locks are reclaimed before updating", async () => {
   const updated = await store.update(run.runId, (current) => reduceSkillRun(current, { type: "select-skills", skills: fixtureSkills }));
   assert.equal(updated.state, "skills-selected");
   assert.equal((await readdir(path.dirname(lockPath))).includes(path.basename(lockPath)), false);
+});
+
+test("competing stale-lock reclaimers preserve both updates and recover a crashed guard", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const firstStore = new SkillRunStore(projectRoot);
+  const secondStore = new SkillRunStore(projectRoot);
+  const run = reduceSkillRun(createSkillRun(fixtureInput), { type: "select-skills", skills: fixtureSkills });
+  await firstStore.create(run);
+  const lockPath = path.join(projectRoot, ".skillranger/runs", `${run.runId}.lock`);
+  const guardPath = `${lockPath}.guard`;
+  const guardEntry = path.join(guardPath, "abandoned-guard-owner");
+  await writeFile(lockPath, "abandoned-lock-owner", "utf8");
+  await mkdir(guardPath);
+  await writeFile(guardEntry, JSON.stringify({ token: "abandoned-guard-owner", pid: 999_999 }), "utf8");
+  const stale = new Date(Date.now() - 31_000);
+  await utimes(lockPath, stale, stale);
+  await utimes(guardEntry, stale, stale);
+  await utimes(guardPath, stale, stale);
+
+  await Promise.all([
+    firstStore.update(run.runId, (current) => ({ ...current, artifacts: [...current.artifacts, { kind: "test", description: "first" }] })),
+    secondStore.update(run.runId, (current) => ({ ...current, artifacts: [...current.artifacts, { kind: "test", description: "second" }] })),
+  ]);
+
+  const updated = await firstStore.read(run.runId);
+  assert.deepEqual(new Set(updated.artifacts.map((artifact) => artifact.description)), new Set(["first", "second"]));
+  assert.equal(updated.revision, 2);
+  assert.equal((await readdir(path.dirname(lockPath))).some((name) => name === path.basename(lockPath) || name === path.basename(guardPath)), false);
+});
+
+test("replacement acquisition waits while lock cleanup guard is owned", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  const run = createSkillRun(fixtureInput);
+  await store.create(run);
+  const lockPath = path.join(projectRoot, ".skillranger/runs", `${run.runId}.lock`);
+  const guardPath = `${lockPath}.guard`;
+  const guardToken = "cleanup-owner";
+  const guardEntry = path.join(guardPath, guardToken);
+  await mkdir(guardPath);
+  await writeFile(guardEntry, JSON.stringify({ token: guardToken, pid: process.pid }), "utf8");
+
+  let replacementEntered = false;
+  const replacement = store.update(run.runId, (current) => {
+    replacementEntered = true;
+    return current;
+  });
+  await delay(75);
+  assert.equal(replacementEntered, false);
+  await unlink(guardEntry);
+  await rmdir(guardPath);
+  await replacement;
+  assert.equal((await readdir(path.dirname(lockPath))).some((name) => name === path.basename(lockPath) || name === path.basename(guardPath)), false);
 });
 
 test("lock timeout preserves the previous run", async () => {
