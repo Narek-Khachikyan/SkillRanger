@@ -24,7 +24,7 @@ const verificationSkillIds = new Set([
 ]);
 
 const newBuildPattern = /\b(new (?:frontend|landing|page|site|app|ui)|build (?:a )?new|from scratch)\b|(?:с нуля|нов(?:ый|ую|ое) (?:фронтенд|лендинг|страниц|сайт|приложен|интерфейс))/u;
-const redesignPattern = /\b(?:redesign|rebrand)\b|(?:редизайн|ребрендинг)/u;
+const redesignPattern = /\b(?:redesign|rebrand|refresh|revamp|modernize)\b|(?:редизайн|ребрендинг|освежить дизайн)/u;
 const provenancePattern = /\b(?:metrics?|benchmarks?|testimonials?|quotes?|brands?)\b|(?:метрик\p{L}*|бенчмарк\p{L}*|отзыв\p{L}*|цитат\p{L}*|бренд\p{L}*|показател\p{L}*)/u;
 
 const unknown = (value: unknown) =>
@@ -32,9 +32,15 @@ const unknown = (value: unknown) =>
 
 const hasSourcedObservation = (value: unknown) => {
   const brief = asDesignBrief(value);
-  return brief?.evidence?.observed?.some((entry) =>
-    typeof entry?.source === "string" && entry.source.trim() !== ""
-  ) ?? false;
+  const observed = brief?.evidence?.observed;
+  if (!Array.isArray(observed)) return false;
+  return observed.some((entry) =>
+    typeof entry === "object"
+    && entry !== null
+    && !Array.isArray(entry)
+    && typeof entry.source === "string"
+    && entry.source.trim() !== ""
+  );
 };
 
 export const evaluateFrontendRunPolicy = (
@@ -43,7 +49,7 @@ export const evaluateFrontendRunPolicy = (
   const analysis = analyzeFrontendIntent(input.intent);
   const brief = asDesignBrief(input.artifacts?.designBrief);
   const material = input.recommendations.some(({ skillId }) => materialSkillIds.has(skillId))
-    || redesignPattern.test(analysis.normalized)
+    || (analysis.intents.has("visual-design-polish") && redesignPattern.test(analysis.normalized))
     || newBuildPattern.test(analysis.normalized);
   const questions: SkillRunPolicyDecision["clarification"]["questions"] = [];
 

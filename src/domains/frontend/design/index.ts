@@ -9,13 +9,17 @@ export * from "./validation.ts";
 export * from "./browser.ts";
 export * from "./source-validation.ts";
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 export const asDesignBrief = (value: unknown): DesignBrief | undefined => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (!isRecord(value)) return undefined;
   const candidate = value as Partial<DesignBrief>;
   return candidate.schemaVersion === "1.0"
-    && Boolean(candidate.product && typeof candidate.product === "object")
-    && Boolean(candidate.surface && typeof candidate.surface === "object")
-    && Boolean(candidate.evidence && typeof candidate.evidence === "object")
+    && isRecord(candidate.product)
+    && isRecord(candidate.surface)
+    && isRecord(candidate.evidence)
+    && Array.isArray(candidate.evidence.observed)
     ? candidate as DesignBrief
     : undefined;
 };

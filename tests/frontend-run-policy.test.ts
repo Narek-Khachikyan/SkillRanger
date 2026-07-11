@@ -93,6 +93,33 @@ test("Russian new frontend generation is material without a material skill", () 
   assert.equal(decision.clarification.required, true);
 });
 
+test("English revamp aliases are material without a material recommendation", () => {
+  const decision = evaluateFrontendRunPolicy({
+    intent: "Revamp the landing",
+    recommendations: tailwindRecommendations,
+  });
+  assert.equal(decision.lifecycleRequired, true);
+  assert.equal(decision.clarification.required, true);
+});
+
+test("Russian refresh aliases are material without a material recommendation", () => {
+  const decision = evaluateFrontendRunPolicy({
+    intent: "Освежить дизайн лендинга",
+    recommendations: tailwindRecommendations,
+  });
+  assert.equal(decision.lifecycleRequired, true);
+  assert.equal(decision.clarification.required, true);
+});
+
+test("generic design-system intent is not material by itself", () => {
+  const decision = evaluateFrontendRunPolicy({
+    intent: "Review the design tokens",
+    recommendations: tailwindRecommendations,
+  });
+  assert.equal(decision.lifecycleRequired, false);
+  assert.equal(decision.clarification.required, false);
+});
+
 test("frontend registration preserves its optional run policy", () => {
   const pack = getDomainPack("frontend");
   assert.equal(typeof pack?.runPolicy?.evaluate, "function");
@@ -227,6 +254,22 @@ test("unsupported Russian brand and testimonial aliases require provenance", () 
     intent: "Добавь отзывы клиентов и бренды на лендинг",
     recommendations: tailwindRecommendations,
     artifacts: { designBrief: completeBrief },
+  });
+  const provenance = decision.clarification.questions.find((question) =>
+    question.fields.includes("contentProvenance"));
+  assert.equal(provenance?.allowDecline, false);
+});
+
+test("malformed observed evidence is treated as unsourced without throwing", () => {
+  const decision = evaluateFrontendRunPolicy({
+    intent: "Add benchmark metrics to this landing page",
+    recommendations: tailwindRecommendations,
+    artifacts: {
+      designBrief: {
+        ...completeBrief,
+        evidence: { ...completeBrief.evidence, observed: "analytics/benchmark.csv" },
+      },
+    },
   });
   const provenance = decision.clarification.questions.find((question) =>
     question.fields.includes("contentProvenance"));
