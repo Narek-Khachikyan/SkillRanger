@@ -19,11 +19,18 @@ export type McpToolResult = {
 export type McpToolErrorCode =
   | "audit-blocked"
   | "confirmation-required"
+  | "clarification-required"
   | "invalid-arguments"
+  | "invalid-transition"
+  | "mandatory-skill-unread"
+  | "run-integrity"
+  | "run-not-found"
   | "skill-not-found"
+  | "stale-skill-checksum"
   | "stale-plan"
   | "unsupported-target"
-  | "unknown-tool";
+  | "unknown-tool"
+  | "verification-blocked";
 
 export class McpToolError extends Error {
   code: McpToolErrorCode;

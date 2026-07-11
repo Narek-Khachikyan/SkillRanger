@@ -1,11 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { cp, mkdir, mkdtemp, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { callMcpTool, mcpTools } from "../src/mcp/tools.ts";
+import { mapSkillRunError } from "../src/mcp/tools/runs.ts";
 import { getAdapter } from "../src/installers/codex.ts";
 import { findSkill } from "../src/registry/index.ts";
+import {
+  SkillRunError,
+  type SkillRun,
+  type SkillRunErrorCode,
+} from "../src/runtime/skill-run/index.ts";
+import type { VerificationReport } from "../src/runtime/types.ts";
+
+const execFileAsync = promisify(execFile);
 
 const parseStructuredContent = <T>(result: { structuredContent: unknown }) => result.structuredContent as T;
 
@@ -37,8 +48,204 @@ test("MCP exposes the project, install, and domain workflow tool set", () => {
       "verify_frontend_result",
       "repair_frontend_result",
       "run_domain_eval",
+      "start_skill_run",
+      "record_skill_read",
+      "resolve_skill_run_clarifications",
+      "begin_skill_run_execution",
+      "complete_skill_run",
+      "verify_skill_run",
+      "inspect_skill_run",
     ]
   );
+});
+
+test("MCP exposes the complete skill run lifecycle", () => {
+  const names = new Set(mcpTools.map((tool) => tool.name));
+  for (const name of [
+    "start_skill_run",
+    "record_skill_read",
+    "resolve_skill_run_clarifications",
+    "begin_skill_run_execution",
+    "complete_skill_run",
+    "verify_skill_run",
+    "inspect_skill_run",
+  ]) {
+    assert.equal(names.has(name), true, name);
+  }
+});
+
+const pickRunContract = (value: SkillRun) => ({
+  domain: value.domain,
+  targetAgent: value.targetAgent,
+  locale: value.locale,
+  state: value.state,
+  policy: value.policy,
+  selectedSkills: value.selectedSkills.map(({ skillId, role, version, checksum, mandatory }) => ({
+    skillId,
+    role,
+    version,
+    checksum,
+    mandatory,
+  })),
+  skillReads: value.skillReads.map(({ skillId, version, checksum }) => ({ skillId, version, checksum })),
+  clarification: value.clarification,
+  artifacts: value.artifacts,
+  verification: value.verification && {
+    reportSha256: value.verification.reportSha256,
+    report: value.verification.report,
+  },
+});
+
+const runCli = async (args: string[]) => {
+  const result = await execFileAsync(process.execPath, ["src/cli/index.ts", ...args]);
+  return JSON.parse(result.stdout) as { run: SkillRun };
+};
+
+test("MCP and CLI produce equivalent run states", async () => {
+  const cliProjectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-cli-run-"));
+  const mcpProjectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-mcp-run-"));
+  await Promise.all([
+    cp("fixtures/next-react-ts", cliProjectRoot, { recursive: true }),
+    cp("fixtures/next-react-ts", mcpProjectRoot, { recursive: true }),
+  ]);
+  const intent = "Проверь доступность формы и используй скиллы";
+  const cliRun = (await runCli([
+    "run:start",
+    cliProjectRoot,
+    "--target",
+    "opencode",
+    "--domain",
+    "frontend",
+    "--intent",
+    intent,
+    "--json",
+  ])).run;
+  const result = await callMcpTool("start_skill_run", {
+    projectRoot: mcpProjectRoot,
+    targetAgent: "opencode",
+    domain: "frontend",
+    intent,
+  });
+  const mcpRun = parseStructuredContent<SkillRun>(result);
+
+  assert.equal(result.isError, false);
+  assert.match(result.content[0]?.text ?? "", /^run_[^:]+: skills-selected$/);
+  assert.deepEqual(pickRunContract(mcpRun), pickRunContract(cliRun));
+});
+
+test("MCP and CLI preserve parity through the complete skill run lifecycle", async () => {
+  const cliProjectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-cli-lifecycle-"));
+  const mcpProjectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-mcp-lifecycle-"));
+  await Promise.all([
+    cp("fixtures/next-react-ts", cliProjectRoot, { recursive: true }),
+    cp("fixtures/next-react-ts", mcpProjectRoot, { recursive: true }),
+  ]);
+  const intent = "Проверь доступность формы и используй скиллы";
+  let cliRun = (await runCli([
+    "run:start", cliProjectRoot, "--target", "opencode", "--domain", "frontend", "--intent", intent, "--json",
+  ])).run;
+  let mcpRun = parseStructuredContent<SkillRun>(await callMcpTool("start_skill_run", {
+    projectRoot: mcpProjectRoot,
+    targetAgent: "opencode",
+    domain: "frontend",
+    intent,
+  }));
+
+  for (const cliSkill of cliRun.selectedSkills) {
+    cliRun = (await runCli([
+      "run:record-read", cliProjectRoot, "--run", cliRun.runId, "--skill", cliSkill.skillId, "--json",
+    ])).run;
+  }
+  for (const mcpSkill of mcpRun.selectedSkills) {
+    const result = await callMcpTool("record_skill_read", {
+      projectRoot: mcpProjectRoot,
+      runId: mcpRun.runId,
+      skillId: mcpSkill.skillId,
+      checksum: mcpSkill.checksum,
+    });
+    assert.equal(result.isError, false);
+    mcpRun = parseStructuredContent<SkillRun>(result);
+  }
+  assert.deepEqual(pickRunContract(mcpRun), pickRunContract(cliRun));
+
+  assert.equal(cliRun.clarification.status, "not-required");
+  cliRun = (await runCli(["run:begin", cliProjectRoot, "--run", cliRun.runId, "--json"])).run;
+  mcpRun = parseStructuredContent<SkillRun>(await callMcpTool("begin_skill_run_execution", {
+    projectRoot: mcpProjectRoot,
+    runId: mcpRun.runId,
+  }));
+  assert.deepEqual(pickRunContract(mcpRun), pickRunContract(cliRun));
+
+  cliRun = (await runCli([
+    "run:complete",
+    cliProjectRoot,
+    "--run",
+    cliRun.runId,
+    "--status",
+    "implemented",
+    "--artifacts",
+    "result=artifacts/result.json",
+    "--json",
+  ])).run;
+  mcpRun = parseStructuredContent<SkillRun>(await callMcpTool("complete_skill_run", {
+    projectRoot: mcpProjectRoot,
+    runId: mcpRun.runId,
+    status: "implemented",
+    artifacts: [{ kind: "result", path: "artifacts/result.json", description: "result" }],
+  }));
+  assert.deepEqual(pickRunContract(mcpRun), pickRunContract(cliRun));
+
+  const report: VerificationReport = {
+    schemaVersion: "1.0",
+    domain: "frontend",
+    workflowId: "frontend-accessibility-review",
+    iteration: 0,
+    capabilityStatus: "ready",
+    executionStatus: "implemented",
+    verificationStatus: "passed",
+    outcome: "verified",
+    findings: [],
+    gates: { hardPassed: true, criticalFindings: 0, highFindings: 0 },
+    evidence: [{ kind: "test", path: "artifacts/result.json", description: "Accessibility assertions passed." }],
+    residualRisks: [],
+  };
+  const cliReportPath = path.join(cliProjectRoot, "verification.json");
+  await writeFile(cliReportPath, `${JSON.stringify(report, null, 2)}\n`);
+  cliRun = (await runCli([
+    "run:verify", cliProjectRoot, "--run", cliRun.runId, "--report", cliReportPath, "--json",
+  ])).run;
+  mcpRun = parseStructuredContent<SkillRun>(await callMcpTool("verify_skill_run", {
+    projectRoot: mcpProjectRoot,
+    runId: mcpRun.runId,
+    reportPath: "verification.json",
+    report,
+  }));
+  const inspected = await callMcpTool("inspect_skill_run", {
+    projectRoot: mcpProjectRoot,
+    runId: mcpRun.runId,
+  });
+
+  assert.deepEqual(pickRunContract(mcpRun), pickRunContract(cliRun));
+  assert.deepEqual(parseStructuredContent<SkillRun>(inspected), mcpRun);
+  assert.equal(mcpRun.state, "verified");
+});
+
+test("MCP maps every lifecycle error code without a generic fallback", () => {
+  const codes: SkillRunErrorCode[] = [
+    "run-not-found",
+    "invalid-transition",
+    "mandatory-skill-unread",
+    "stale-skill-checksum",
+    "clarification-required",
+    "verification-blocked",
+    "run-integrity",
+  ];
+
+  for (const code of codes) {
+    const mapped = mapSkillRunError(new SkillRunError(code, `message for ${code}`));
+    assert.equal(mapped.code, code);
+    assert.equal(mapped.message, `message for ${code}`);
+  }
 });
 
 test("MCP analyze_project returns a project fingerprint", async () => {

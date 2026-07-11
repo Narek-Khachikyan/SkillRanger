@@ -14,6 +14,10 @@ import {
   domainToolDefinitions,
   domainToolHandlers,
 } from "./tools/domains.ts";
+import {
+  runToolDefinitions,
+  runToolHandlers,
+} from "./tools/runs.ts";
 import type {
   JsonObject,
   McpToolDefinition,
@@ -33,6 +37,7 @@ export const mcpTools: McpToolDefinition[] = [
   ...registryToolDefinitions,
   ...installToolDefinitions,
   ...domainToolDefinitions,
+  ...runToolDefinitions,
 ];
 
 const mcpToolHandlers: Record<string, McpToolHandler> = {
@@ -40,6 +45,7 @@ const mcpToolHandlers: Record<string, McpToolHandler> = {
   ...registryToolHandlers,
   ...installToolHandlers,
   ...domainToolHandlers,
+  ...runToolHandlers,
 };
 
 export const callMcpTool = async (
