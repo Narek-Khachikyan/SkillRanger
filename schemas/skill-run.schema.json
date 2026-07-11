@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/schemas/skill-run.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "domain", "targetAgent", "locale", "state", "revision", "createdAt", "updatedAt", "intent", "policy", "recommendations", "selectedSkills", "skillReads", "clarification", "artifacts"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "runId": { "type": "string", "minLength": 1 },
+    "domain": { "type": "string", "minLength": 1 },
+    "targetAgent": { "type": "string", "minLength": 1 },
+    "locale": { "enum": ["en", "ru", "mixed", "unknown"] },
+    "state": { "enum": ["created", "skills-selected", "skills-read", "clarified", "running", "implemented", "verified", "implemented-unverified", "failed", "blocked"] },
+    "revision": { "type": "integer", "minimum": 0 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "normalizedGoal"],
+      "properties": {
+        "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "normalizedGoal": { "type": "string" },
+        "raw": { "type": "string" }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lifecycleRequired", "mandatorySkillIds", "clarification", "verificationRequired"],
+      "properties": {
+        "lifecycleRequired": { "type": "boolean" },
+        "mandatorySkillIds": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "clarification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required", "questions"],
+          "properties": {
+            "required": { "type": "boolean" },
+            "questions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "fields", "text", "allowDecline"],
+                "properties": {
+                  "id": { "type": "string" },
+                  "fields": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+                  "text": { "type": "string" },
+                  "allowDecline": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "verificationRequired": { "type": "boolean" }
+      }
+    },
+    "recommendations": { "type": "array", "items": { "$ref": "#/$defs/skill" } },
+    "selectedSkills": { "type": "array", "items": { "$ref": "#/$defs/skill" } },
+    "skillReads": { "type": "array", "items": { "$ref": "#/$defs/skillRead" } },
+    "clarification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "questions", "answers", "declinedFields", "assumptions"],
+      "properties": {
+        "status": { "enum": ["not-required", "pending", "resolved", "declined"] },
+        "questions": { "$ref": "#/properties/policy/properties/clarification/properties/questions" },
+        "answers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["questionId", "answer"],
+            "properties": { "questionId": { "type": "string" }, "answer": { "type": "string" } }
+          }
+        },
+        "declinedFields": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "assumptions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "description"],
+        "properties": { "kind": { "type": "string" }, "path": { "type": "string" }, "description": { "type": "string" } }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reportPath", "reportSha256", "report"],
+      "properties": {
+        "reportPath": { "type": "string" },
+        "reportSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "report": { "$ref": "#/$defs/verificationReport" }
+      }
+    }
+  },
+  "$defs": {
+    "skill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skillId", "role", "version", "checksum", "mandatory"],
+      "properties": {
+        "skillId": { "type": "string" },
+        "role": { "enum": ["primary", "companion"] },
+        "version": { "type": "string" },
+        "checksum": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "mandatory": { "type": "boolean" }
+      }
+    },
+    "skillRead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skillId", "version", "checksum", "recordedAt"],
+      "properties": {
+        "skillId": { "type": "string" },
+        "version": { "type": "string" },
+        "checksum": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "recordedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "description"],
+      "properties": { "kind": { "type": "string" }, "path": { "type": "string" }, "description": { "type": "string" } }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "code", "source", "severity", "gate", "message", "evidence", "remediation", "autofixable"],
+      "properties": {
+        "id": { "type": "string" }, "code": { "type": "string" }, "source": { "type": "string" },
+        "severity": { "enum": ["critical", "high", "medium", "low", "info"] }, "gate": { "enum": ["hard", "soft"] },
+        "message": { "type": "string" }, "evidence": { "type": "array", "items": { "type": "string" } },
+        "affectedSurface": { "type": "string" }, "remediation": { "type": "string" }, "autofixable": { "type": "boolean" }
+      }
+    },
+    "verificationReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "domain", "workflowId", "iteration", "capabilityStatus", "executionStatus", "verificationStatus", "outcome", "findings", "gates", "evidence", "residualRisks"],
+      "properties": {
+        "schemaVersion": { "const": "1.0" }, "domain": { "type": "string" }, "workflowId": { "type": "string" },
+        "iteration": { "type": "integer", "minimum": 0 }, "capabilityStatus": { "enum": ["ready", "degraded", "unavailable"] },
+        "executionStatus": { "enum": ["not-started", "running", "implemented", "failed", "blocked"] },
+        "verificationStatus": { "enum": ["not-run", "passed", "failed", "partial"] },
+        "outcome": { "enum": ["verified", "implemented-unverified", "failed", "blocked"] },
+        "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+        "gates": {
+          "type": "object", "additionalProperties": false, "required": ["hardPassed", "criticalFindings", "highFindings"],
+          "properties": { "hardPassed": { "type": "boolean" }, "criticalFindings": { "type": "integer", "minimum": 0 }, "highFindings": { "type": "integer", "minimum": 0 } }
+        },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
+        "residualRisks": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}
