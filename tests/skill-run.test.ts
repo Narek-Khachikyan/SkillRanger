@@ -1,9 +1,23 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { mkdtemp, readFile, readdir, utimes, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
+  SkillRunStore,
   SkillRunError,
+  assertValidSkillRun,
+  canonicalizeVerificationReport,
+  completeSkillRun,
   createSkillRun,
+  recordSkillRead,
+  resolveSkillRunClarifications,
+  startSkillRun,
+  startSkillRunExecution,
+  validateVerificationReportForRun,
+  verifySkillRun,
   reduceSkillRun,
   type CreateSkillRunInput,
   type SkillRun,
@@ -257,4 +271,196 @@ test("skill-run JSON schema represents the complete contract", () => {
   for (const objectSchema of [schema.properties.intent, schema.properties.policy, schema.properties.policy.properties.clarification, schema.properties.policy.properties.clarification.properties.questions.items, schema.$defs.skill, schema.$defs.skillRead, schema.properties.clarification, schema.properties.clarification.properties.answers.items, schema.properties.verification]) {
     assert.equal(objectSchema.additionalProperties, false);
   }
+});
+
+test("store writes atomically under .skillranger/runs and reloads the same run", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const fixtureRun = createSkillRun(fixtureInput);
+  const store = new SkillRunStore(projectRoot);
+  await store.create(fixtureRun);
+  assert.deepEqual(await store.read(fixtureRun.runId), fixtureRun);
+  assert.equal((await readdir(path.join(projectRoot, ".skillranger/runs"))).some((name) => name.endsWith(".tmp")), false);
+});
+
+test("failed update preserves the previous valid run", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const fixtureRun = createSkillRun(fixtureInput);
+  const store = new SkillRunStore(projectRoot);
+  await store.create(fixtureRun);
+  const runId = fixtureRun.runId;
+  const before = await store.read(runId);
+  await assert.rejects(store.update(runId, () => { throw new SkillRunError("invalid-transition", "bad transition"); }));
+  assert.deepEqual(await store.read(runId), before);
+});
+
+test("concurrent updates preserve both skill reads and monotonic revisions", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  let run = reduceSkillRun(createSkillRun(fixtureInput), { type: "select-skills", skills: fixtureSkills });
+  await store.create(run);
+  await Promise.all(fixtureSkills.map((skill) => recordSkillRead(store, run.runId, {
+    skillId: skill.skillId,
+    checksum: skill.checksum,
+  })));
+  run = await store.read(run.runId);
+  assert.deepEqual(new Set(run.skillReads.map((read) => read.skillId)), new Set(fixtureSkills.map((skill) => skill.skillId)));
+  assert.equal(run.revision, 2);
+});
+
+test("validates every persisted field and rejects unknown nested properties", () => {
+  const valid = reduceSkillRun(createSkillRun(fixtureInput), { type: "select-skills", skills: fixtureSkills });
+  assert.doesNotThrow(() => assertValidSkillRun(valid));
+  assert.throws(
+    () => assertValidSkillRun({ ...valid, intent: { ...valid.intent, extra: true } }),
+    (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",
+  );
+  assert.throws(
+    () => assertValidSkillRun({ ...valid, selectedSkills: [{ ...valid.selectedSkills[0], checksum: "not-a-digest" }, valid.selectedSkills[1]] }),
+    (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",
+  );
+});
+
+test("validates report domain, nested shapes, gate counts, and verified evidence", () => {
+  const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
+  assert.doesNotThrow(() => validateVerificationReportForRun(implemented, fixtureReport));
+  for (const report of [
+    { ...fixtureReport, domain: "backend" },
+    { ...fixtureReport, gates: { ...fixtureReport.gates, highFindings: 1 } },
+    { ...fixtureReport, findings: [{ id: "x", code: "x", source: "test", severity: "high", gate: "soft", message: "x", evidence: [], remediation: "fix", autofixable: false, extra: true }] },
+  ]) {
+    assert.throws(() => validateVerificationReportForRun(implemented, report), (error: unknown) => error instanceof SkillRunError);
+  }
+  assert.throws(
+    () => validateVerificationReportForRun(implemented, { ...fixtureReport, evidence: [] }),
+    (error: unknown) => error instanceof SkillRunError && error.code === "verification-blocked",
+  );
+});
+
+test("canonical report serialization recursively sorts object keys and preserves arrays", () => {
+  const canonical = canonicalizeVerificationReport({
+    ...fixtureReport,
+    evidence: [{ description: "proof", kind: "test", path: "a" }],
+  });
+  assert.equal(canonical.startsWith('{"capabilityStatus"'), true);
+  assert.equal(canonical.includes('"evidence":[{"description":"proof","kind":"test","path":"a"}]'), true);
+});
+
+test("store-backed lifecycle hashes intent and canonical verification before persistence", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  let run = await startSkillRun(store, {
+    runId: fixtureInput.runId,
+    domain: fixtureInput.domain,
+    targetAgent: fixtureInput.targetAgent,
+    locale: fixtureInput.locale,
+    rawIntent: " redesign the landing ",
+    normalizedGoal: fixtureInput.intent.normalizedGoal,
+    storeRawIntent: false,
+    policy: fixtureInput.policy,
+    selectedSkills: fixtureSkills,
+    now: fixtureInput.now,
+  });
+  assert.equal(run.intent.sha256, `sha256:${createHash("sha256").update(" redesign the landing ", "utf8").digest("hex")}`);
+  assert.equal(run.intent.raw, undefined);
+  await Promise.all(fixtureSkills.map((skill) => recordSkillRead(store, run.runId, { skillId: skill.skillId, checksum: skill.checksum })));
+  run = await resolveSkillRunClarifications(store, run.runId, { answers: fixtureAnswers, declinedFields: [], assumptions: [] });
+  run = await startSkillRunExecution(store, run.runId);
+  run = await completeSkillRun(store, run.runId, { status: "implemented", artifacts: [] });
+  run = await verifySkillRun(store, run.runId, { reportPath: "report.json", report: fixtureReport });
+  assert.equal(run.state, "verified");
+  assert.equal(run.verification?.reportSha256, `sha256:${createHash("sha256").update(canonicalizeVerificationReport(fixtureReport), "utf8").digest("hex")}`);
+  assert.deepEqual(JSON.parse(await readFile(path.join(projectRoot, ".skillranger/runs", `${run.runId}.json`), "utf8")), run);
+});
+
+test("validates verification reports before canonicalizing runtime input", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
+  await store.create(implemented);
+  const invalidReport = { ...fixtureReport, iteration: 0n } as unknown as VerificationReport;
+  await assert.rejects(
+    verifySkillRun(store, implemented.runId, { reportPath: "report.json", report: invalidReport }),
+    (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",
+  );
+});
+
+test("read rejects corrupted persisted runs without rewriting them", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  const run = createSkillRun(fixtureInput);
+  await store.create(run);
+  const runPath = path.join(projectRoot, ".skillranger/runs", `${run.runId}.json`);
+  await writeFile(runPath, JSON.stringify({ ...run, revision: -1 }), "utf8");
+  await assert.rejects(store.read(run.runId), (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity");
+  assert.equal(JSON.parse(await readFile(runPath, "utf8")).revision, -1);
+});
+
+test("persisted verification digest must match canonical report content", () => {
+  const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
+  const corrupted = reduceSkillRun(implemented, {
+    type: "record-verification",
+    reportPath: "report.json",
+    reportSha256: reportChecksum,
+    report: fixtureReport,
+  });
+  assert.throws(
+    () => assertValidSkillRun(corrupted),
+    (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",
+  );
+});
+
+test("persisted raw intent must match its digest", () => {
+  const run = createSkillRun({
+    ...fixtureInput,
+    intent: { ...fixtureInput.intent, raw: "different raw intent" },
+  });
+  assert.throws(
+    () => assertValidSkillRun(run),
+    (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",
+  );
+});
+
+test("persisted timestamps require RFC 3339 date-time values", () => {
+  assert.throws(
+    () => assertValidSkillRun({ ...createSkillRun(fixtureInput), createdAt: "0" }),
+    (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",
+  );
+});
+
+test("stale run locks are reclaimed before updating", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  const run = createSkillRun(fixtureInput);
+  await store.create(run);
+  const lockPath = path.join(projectRoot, ".skillranger/runs", `${run.runId}.lock`);
+  await writeFile(lockPath, "abandoned-owner", "utf8");
+  const stale = new Date(Date.now() - 31_000);
+  await utimes(lockPath, stale, stale);
+  const updated = await store.update(run.runId, (current) => reduceSkillRun(current, { type: "select-skills", skills: fixtureSkills }));
+  assert.equal(updated.state, "skills-selected");
+  assert.equal((await readdir(path.dirname(lockPath))).includes(path.basename(lockPath)), false);
+});
+
+test("lock timeout preserves the previous run", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  const run = createSkillRun(fixtureInput);
+  await store.create(run);
+  const lockPath = path.join(projectRoot, ".skillranger/runs", `${run.runId}.lock`);
+  await writeFile(lockPath, "active-owner", "utf8");
+  await assert.rejects(
+    store.update(run.runId, (current) => current),
+    (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity" && error.message === "Timed out waiting for run lock",
+  );
+  assert.deepEqual(await store.read(run.runId), run);
+  assert.equal(await readFile(lockPath, "utf8"), "active-owner");
+});
+
+test("run ids cannot escape the runs directory", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  await assert.rejects(
+    store.read("../../outside"),
+    (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",
+  );
 });
