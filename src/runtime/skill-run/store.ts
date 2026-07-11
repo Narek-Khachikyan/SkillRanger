@@ -7,6 +7,7 @@ import { assertValidSkillRun, runIdPattern } from "./validation.ts";
 
 const lockTimeoutMs = 5_000;
 const staleLockMs = 30_000;
+const emptyGuardStaleMs = 250;
 
 const isErrno = (error: unknown, code: string): error is NodeJS.ErrnoException => (
   error instanceof Error && "code" in error && error.code === code
@@ -14,6 +15,7 @@ const isErrno = (error: unknown, code: string): error is NodeJS.ErrnoException =
 
 type OwnedLock = { path: string; token: string };
 type LockGuard = { path: string; entryPath: string };
+type LockOwnerMetadata = { token: string; pid: number };
 
 export class SkillRunStore {
   private readonly projectRoot: string;
@@ -31,24 +33,39 @@ export class SkillRunStore {
     return `${this.runPath(runId).slice(0, -5)}.lock`;
   }
 
-  private async guardOwnerIsAlive(entryPath: string, entryName: string): Promise<boolean> {
+  private processIsAlive(pid: number): boolean {
     try {
-      const parsed = JSON.parse(await readFile(entryPath, "utf8")) as unknown;
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      return !isErrno(error, "ESRCH");
+    }
+  }
+
+  private parseOwnerMetadata(source: string, expectedToken?: string): LockOwnerMetadata | undefined {
+    try {
+      const parsed = JSON.parse(source) as unknown;
       if (
         typeof parsed !== "object"
         || parsed === null
-        || (parsed as { token?: unknown }).token !== entryName
+        || typeof (parsed as { token?: unknown }).token !== "string"
+        || (expectedToken !== undefined && (parsed as { token: string }).token !== expectedToken)
         || !Number.isInteger((parsed as { pid?: unknown }).pid)
-      ) return true;
-      const pid = (parsed as { pid: number }).pid;
-      try {
-        process.kill(pid, 0);
-        return true;
-      } catch (error) {
-        return !isErrno(error, "ESRCH");
-      }
+        || (parsed as { pid: number }).pid <= 0
+      ) return undefined;
+      return parsed as LockOwnerMetadata;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async guardOwnerState(entryPath: string, entryName: string): Promise<boolean | undefined> {
+    try {
+      const owner = this.parseOwnerMetadata(await readFile(entryPath, "utf8"), entryName);
+      return owner === undefined ? undefined : this.processIsAlive(owner.pid);
     } catch (error) {
-      return !isErrno(error, "ENOENT");
+      if (isErrno(error, "ENOENT")) return false;
+      throw error;
     }
   }
 
@@ -61,11 +78,16 @@ export class SkillRunStore {
       if (isErrno(error, "ENOENT")) return;
       throw error;
     }
-    const stale = Date.now() - guardStat.mtimeMs > staleLockMs;
-    const ownersDead = entries.length > 0 && (await Promise.all(
-      entries.map((entry) => this.guardOwnerIsAlive(path.join(guardPath, entry), entry)),
-    )).every((alive) => !alive);
-    if (!stale && !ownersDead) return;
+    const age = Date.now() - guardStat.mtimeMs;
+    if (entries.length === 0) {
+      if (age <= emptyGuardStaleMs) return;
+    } else {
+      const ownerStates = await Promise.all(
+        entries.map((entry) => this.guardOwnerState(path.join(guardPath, entry), entry)),
+      );
+      if (ownerStates.some((alive) => alive === true)) return;
+      if (ownerStates.some((alive) => alive === undefined) && age <= staleLockMs) return;
+    }
 
     for (const entry of entries) {
       await unlink(path.join(guardPath, entry)).catch((error: unknown) => {
@@ -77,7 +99,7 @@ export class SkillRunStore {
     });
   }
 
-  private async acquireGuard(lockPath: string, startedAt: number): Promise<LockGuard> {
+  private async acquireGuard(lockPath: string, startedAt?: number): Promise<LockGuard> {
     const guardPath = `${lockPath}.guard`;
     while (true) {
       const token = randomUUID();
@@ -96,7 +118,7 @@ export class SkillRunStore {
         if (!isErrno(error, "EEXIST")) throw error;
         await this.reclaimGuardIfAbandoned(guardPath);
       }
-      if (Date.now() - startedAt >= lockTimeoutMs) {
+      if (startedAt !== undefined && Date.now() - startedAt >= lockTimeoutMs) {
         throw new SkillRunError("run-integrity", "Timed out waiting for run lock");
       }
       await delay(25);
@@ -112,7 +134,7 @@ export class SkillRunStore {
     });
   }
 
-  private async withLockGuard<T>(lockPath: string, startedAt: number, apply: () => Promise<T>): Promise<T> {
+  private async withLockGuard<T>(lockPath: string, startedAt: number | undefined, apply: () => Promise<T>): Promise<T> {
     const guard = await this.acquireGuard(lockPath, startedAt);
     try {
       return await apply();
@@ -129,8 +151,10 @@ export class SkillRunStore {
       } catch (error) {
         if (!isErrno(error, "EEXIST")) throw error;
         try {
-          const lockStat = await stat(lockPath);
-          if (Date.now() - lockStat.mtimeMs <= staleLockMs) return undefined;
+          const [lockStat, source] = await Promise.all([stat(lockPath), readFile(lockPath, "utf8")]);
+          const owner = this.parseOwnerMetadata(source);
+          if (owner !== undefined && this.processIsAlive(owner.pid)) return undefined;
+          if (owner === undefined && Date.now() - lockStat.mtimeMs <= staleLockMs) return undefined;
           await unlink(lockPath);
           continue;
         } catch (statError) {
@@ -140,7 +164,7 @@ export class SkillRunStore {
       }
 
       try {
-        await handle.writeFile(token, "utf8");
+        await handle.writeFile(JSON.stringify({ token, pid: process.pid }), "utf8");
         await handle.close();
         return { path: lockPath, token };
       } catch (error) {
@@ -176,9 +200,11 @@ export class SkillRunStore {
 
   private async releaseLock(lock: OwnedLock): Promise<void> {
     try {
-      await this.withLockGuard(lock.path, Date.now(), async () => {
+      await this.withLockGuard(lock.path, undefined, async () => {
         try {
-          if (await readFile(lock.path, "utf8") === lock.token) await unlink(lock.path);
+          const source = await readFile(lock.path, "utf8");
+          const owner = this.parseOwnerMetadata(source);
+          if ((owner?.token ?? source) === lock.token) await unlink(lock.path);
         } catch (error) {
           if (!isErrno(error, "ENOENT")) throw error;
         }

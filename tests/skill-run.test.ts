@@ -373,6 +373,30 @@ test("running persisted runs require complete clarification with matching status
   }
 });
 
+test("optional clarification persists no answer, decline, or assumption records", () => {
+  const optionalInput: CreateSkillRunInput = {
+    ...fixtureInput,
+    policy: {
+      ...fixtureInput.policy,
+      clarification: { required: false, questions: fixtureInput.policy.clarification.questions },
+    },
+  };
+  const run = createSkillRun(optionalInput);
+  for (const clarification of [
+    { ...run.clarification, answers: fixtureAnswers },
+    {
+      ...run.clarification,
+      declinedFields: ["primaryUserOrActor"],
+      assumptions: ["Primary user is a frontend developer"],
+    },
+  ]) {
+    assert.throws(
+      () => assertValidSkillRun({ ...run, clarification }),
+      (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",
+    );
+  }
+});
+
 test("validates report domain, nested shapes, gate counts, and verified evidence", () => {
   const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
   assert.doesNotThrow(() => validateVerificationReportForRun(implemented, fixtureReport));
@@ -545,6 +569,105 @@ test("replacement acquisition waits while lock cleanup guard is owned", async ()
   await rmdir(guardPath);
   await replacement;
   assert.equal((await readdir(path.dirname(lockPath))).some((name) => name === path.basename(lockPath) || name === path.basename(guardPath)), false);
+});
+
+test("a live long-running owner is not reclaimed after its lock mtime becomes stale", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const firstStore = new SkillRunStore(projectRoot);
+  const secondStore = new SkillRunStore(projectRoot);
+  const run = reduceSkillRun(createSkillRun(fixtureInput), { type: "select-skills", skills: fixtureSkills });
+  await firstStore.create(run);
+  let markFirstEntered!: () => void;
+  const firstEntered = new Promise<void>((resolve) => { markFirstEntered = resolve; });
+  let releaseFirst!: () => void;
+  const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+  const first = firstStore.update(run.runId, async (current) => {
+    markFirstEntered();
+    await firstGate;
+    return { ...current, artifacts: [...current.artifacts, { kind: "test", description: "first" }] };
+  });
+  await firstEntered;
+  const lockPath = path.join(projectRoot, ".skillranger/runs", `${run.runId}.lock`);
+  const stale = new Date(Date.now() - 31_000);
+  await utimes(lockPath, stale, stale);
+
+  let secondEntered = false;
+  const second = secondStore.update(run.runId, (current) => {
+    secondEntered = true;
+    return { ...current, artifacts: [...current.artifacts, { kind: "test", description: "second" }] };
+  });
+  try {
+    await delay(75);
+    assert.equal(secondEntered, false);
+  } finally {
+    releaseFirst();
+    await Promise.allSettled([first, second]);
+  }
+
+  const updated = await firstStore.read(run.runId);
+  assert.deepEqual(new Set(updated.artifacts.map((artifact) => artifact.description)), new Set(["first", "second"]));
+  assert.equal(updated.revision, 2);
+});
+
+test("release contention cannot turn a committed update into a timeout", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  const run = createSkillRun(fixtureInput);
+  await store.create(run);
+  const lockPath = path.join(projectRoot, ".skillranger/runs", `${run.runId}.lock`);
+  const guardPath = `${lockPath}.guard`;
+  const guardToken = "release-contender";
+  const guardEntry = path.join(guardPath, guardToken);
+  const realDateNow = Date.now;
+  let cleanup: Promise<void> | undefined;
+  try {
+    const update = store.update(run.runId, async (current) => {
+      await mkdir(guardPath);
+      await writeFile(guardEntry, JSON.stringify({ token: guardToken, pid: process.pid }), "utf8");
+      const baseline = realDateNow();
+      let calls = 0;
+      Date.now = () => baseline + (calls++ === 0 ? 0 : 6_000);
+      cleanup = delay(75).then(async () => {
+        await unlink(guardEntry);
+        await rmdir(guardPath);
+      });
+      return { ...current, artifacts: [...current.artifacts, { kind: "test", description: "committed" }] };
+    });
+    const updated = await update;
+    assert.equal(updated.revision, 1);
+    assert.equal(updated.artifacts.at(-1)?.description, "committed");
+  } finally {
+    await cleanup;
+    Date.now = realDateNow;
+    await unlink(guardEntry).catch(() => undefined);
+    await rmdir(guardPath).catch(() => undefined);
+  }
+  assert.equal((await readdir(path.dirname(lockPath))).some((name) => name === path.basename(lockPath) || name === path.basename(guardPath)), false);
+  assert.equal((await store.read(run.runId)).revision, 1);
+});
+
+test("an empty crashed guard is recovered before the acquisition timeout", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  const run = createSkillRun(fixtureInput);
+  await store.create(run);
+  const lockPath = path.join(projectRoot, ".skillranger/runs", `${run.runId}.lock`);
+  const guardPath = `${lockPath}.guard`;
+  await mkdir(guardPath);
+  const abandoned = new Date(Date.now() - 1_000);
+  await utimes(guardPath, abandoned, abandoned);
+  let entered = false;
+  const update = store.update(run.runId, (current) => {
+    entered = true;
+    return current;
+  });
+  try {
+    await delay(75);
+    assert.equal(entered, true);
+  } finally {
+    await rmdir(guardPath).catch(() => undefined);
+    await update;
+  }
 });
 
 test("lock timeout preserves the previous run", async () => {

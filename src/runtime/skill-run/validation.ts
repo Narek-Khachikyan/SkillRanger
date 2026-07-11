@@ -255,6 +255,9 @@ export const assertValidSkillRun: (input: unknown) => asserts input is SkillRun 
   }
   if (assumptions.length !== declinedFields.length || assumptions.some((assumption) => !assumption.trim())) fail("Each declined field requires one non-empty assumption.");
   if (!clarificationRequired && clarificationStatus !== "not-required") fail("Optional clarification must have not-required status.");
+  if (!clarificationRequired && (answers.length > 0 || declinedFields.length > 0 || assumptions.length > 0)) {
+    fail("Optional clarification cannot contain answer, decline, or assumption records.");
+  }
   if (clarificationRequired && clarificationStatus === "not-required") fail("Required clarification cannot have not-required status.");
   if (clarificationRequired) {
     const answeredIds = new Set(answers.map((answer) => answer.questionId));
