@@ -4,6 +4,9 @@ import path from "node:path";
 
 const startMarker = "<!-- SKILLRANGER_START -->";
 const endMarker = "<!-- SKILLRANGER_END -->";
+const startMarkerBytes = Buffer.from(startMarker, "ascii");
+const endMarkerBytes = Buffer.from(endMarker, "ascii");
+const newlineBytes = Buffer.from("\n", "ascii");
 
 export type SkillRangerAgentContextPlan = {
   path: string;
@@ -21,7 +24,7 @@ const isErrno = (error: unknown, code: string): error is NodeJS.ErrnoException =
   error instanceof Error && "code" in error && error.code === code
 );
 
-const markerOffsets = (source: string, marker: string) => {
+const markerOffsets = (source: Buffer, marker: Buffer) => {
   const offsets: number[] = [];
   let offset = source.indexOf(marker);
   while (offset !== -1) {
@@ -31,26 +34,36 @@ const markerOffsets = (source: string, marker: string) => {
   return offsets;
 };
 
-const updatedSource = (source: string) => {
-  const starts = markerOffsets(source, startMarker);
-  const ends = markerOffsets(source, endMarker);
+const updatedSource = (source: Buffer) => {
+  const starts = markerOffsets(source, startMarkerBytes);
+  const ends = markerOffsets(source, endMarkerBytes);
+  const managedBlock = Buffer.from(renderSkillRangerAgentBlock(), "utf8");
   const hasNoMarkers = starts.length === 0 && ends.length === 0;
   if (hasNoMarkers) {
-    const separator = source.length > 0 && !source.endsWith("\n") ? "\n" : "";
-    return `${source}${separator}${renderSkillRangerAgentBlock()}\n`;
+    const needsSeparator = source.length > 0 && source[source.length - 1] !== newlineBytes[0];
+    return Buffer.concat([
+      source,
+      ...(needsSeparator ? [newlineBytes] : []),
+      managedBlock,
+      newlineBytes,
+    ]);
   }
   if (starts.length !== 1 || ends.length !== 1 || starts[0] > ends[0]) {
     throw new Error("malformed SkillRanger markers in AGENTS.md");
   }
-  const managedEnd = ends[0] + endMarker.length;
-  return `${source.slice(0, starts[0])}${renderSkillRangerAgentBlock()}${source.slice(managedEnd)}`;
+  const managedEnd = ends[0] + endMarkerBytes.length;
+  return Buffer.concat([
+    source.subarray(0, starts[0]),
+    managedBlock,
+    source.subarray(managedEnd),
+  ]);
 };
 
 const readAgentContext = async (agentPath: string) => {
   try {
-    return await readFile(agentPath, "utf8");
+    return await readFile(agentPath);
   } catch (error) {
-    if (isErrno(error, "ENOENT")) return "";
+    if (isErrno(error, "ENOENT")) return Buffer.alloc(0);
     throw error;
   }
 };
@@ -60,7 +73,7 @@ export const planSkillRangerAgentContext = async (projectRoot: string): Promise<
   const source = await readAgentContext(agentPath);
   return {
     path: agentPath,
-    changed: updatedSource(source) !== source,
+    changed: !updatedSource(source).equals(source),
   };
 };
 
@@ -68,12 +81,12 @@ export const upsertSkillRangerAgentContext = async (projectRoot: string): Promis
   const agentPath = path.join(path.resolve(projectRoot), "AGENTS.md");
   const source = await readAgentContext(agentPath);
   const next = updatedSource(source);
-  if (next === source) return { path: agentPath, changed: false };
+  if (next.equals(source)) return { path: agentPath, changed: false };
 
   const temporary = `${agentPath}.${process.pid}.${randomUUID()}.tmp`;
   await mkdir(path.dirname(agentPath), { recursive: true });
   try {
-    await writeFile(temporary, next, { encoding: "utf8", flag: "wx" });
+    await writeFile(temporary, next, { flag: "wx" });
     await rename(temporary, agentPath);
   } finally {
     await unlink(temporary).catch((error: unknown) => {

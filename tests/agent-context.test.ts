@@ -66,6 +66,36 @@ test("preserves user text byte-for-byte outside the managed block", async () => 
   assert.equal(await readFile(agentPath, "utf8"), `${prefix}${renderSkillRangerAgentBlock()}${suffix}`);
 });
 
+test("preserves non-UTF-8 prefix and suffix bytes across repeated upserts", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-agent-context-"));
+  const agentPath = path.join(projectRoot, "AGENTS.md");
+  const prefix = Buffer.concat([
+    Buffer.from("# User bytes\n"),
+    Buffer.from([0xff, 0xfe, 0x80]),
+    Buffer.from("\n"),
+  ]);
+  const suffix = Buffer.concat([
+    Buffer.from("\nTrailing bytes: "),
+    Buffer.from([0xc3, 0x28, 0xf5]),
+  ]);
+  await writeFile(agentPath, Buffer.concat([
+    prefix,
+    Buffer.from("<!-- SKILLRANGER_START -->\nold managed text\n<!-- SKILLRANGER_END -->"),
+    suffix,
+  ]));
+  const expected = Buffer.concat([
+    prefix,
+    Buffer.from(renderSkillRangerAgentBlock()),
+    suffix,
+  ]);
+
+  await upsertSkillRangerAgentContext(projectRoot);
+  assert.deepEqual(await readFile(agentPath), expected);
+
+  await upsertSkillRangerAgentContext(projectRoot);
+  assert.deepEqual(await readFile(agentPath), expected);
+});
+
 test("rejects malformed marker pairs without changing the file", async (t) => {
   const malformed = [
     "prefix\n<!-- SKILLRANGER_START -->\nbroken\n",
