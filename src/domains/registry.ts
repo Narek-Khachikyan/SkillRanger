@@ -95,6 +95,7 @@ export const registerDomainPack = (registration: DomainPackRegistration): Domain
   const pack: DomainPack = {
     manifest: registration.manifest,
     routing: registration.routing,
+    ...(registration.runPolicy ? { runPolicy: registration.runPolicy } : {}),
     root: registration.root ?? "",
   };
   registered.set(pack.manifest.id, pack);

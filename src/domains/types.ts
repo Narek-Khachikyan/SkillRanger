@@ -1,4 +1,5 @@
 import type { ProjectFingerprint, Recommendation, RegistrySkill, SkillLane } from "../types.ts";
+import type { SkillRunPolicyDecision } from "../runtime/skill-run/types.ts";
 
 export type DomainCapability =
   | "project-signals"
@@ -46,14 +47,26 @@ export type DomainRoutingPolicy = {
   compose(recommendations: Recommendation[]): Recommendation[];
 };
 
+export type DomainRunPolicyInput = {
+  intent: string;
+  recommendations: Recommendation[];
+  artifacts?: Record<string, unknown>;
+};
+
+export type DomainRunPolicy = {
+  evaluate(input: DomainRunPolicyInput): SkillRunPolicyDecision;
+};
+
 export type DomainPack = {
   manifest: DomainPackManifest;
   root: string;
   routing: DomainRoutingPolicy;
+  runPolicy?: DomainRunPolicy;
 };
 
 export type DomainPackRegistration = {
   manifest: DomainPackManifest;
   routing: DomainRoutingPolicy;
+  runPolicy?: DomainRunPolicy;
   root?: string;
 };

@@ -9,6 +9,17 @@ export * from "./validation.ts";
 export * from "./browser.ts";
 export * from "./source-validation.ts";
 
+export const asDesignBrief = (value: unknown): DesignBrief | undefined => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const candidate = value as Partial<DesignBrief>;
+  return candidate.schemaVersion === "1.0"
+    && Boolean(candidate.product && typeof candidate.product === "object")
+    && Boolean(candidate.surface && typeof candidate.surface === "object")
+    && Boolean(candidate.evidence && typeof candidate.evidence === "object")
+    ? candidate as DesignBrief
+    : undefined;
+};
+
 const recipesRoot = path.join(defaultDomainsRoot, "frontend", "recipes");
 const recipeFiles = [
   "operational-command-center.json",

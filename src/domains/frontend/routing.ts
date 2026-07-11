@@ -3,6 +3,7 @@ import type { ProjectFingerprint, Recommendation, RegistrySkill, SkillLane } fro
 import { registerDomainPack } from "../registry.ts";
 import type { DomainPackManifest, DomainRoutingPolicy } from "../types.ts";
 import { analyzeFrontendIntent, type CanonicalFrontendIntent } from "./intents/index.ts";
+import { evaluateFrontendRunPolicy } from "./run-policy.ts";
 
 const tokenize = (input: string) =>
   new Set(
@@ -375,5 +376,6 @@ export const registerFrontendDomainPack = () =>
   registerDomainPack({
     manifest: frontendDomainManifest,
     routing,
+    runPolicy: { evaluate: evaluateFrontendRunPolicy },
     root: `${defaultDomainsRoot}/frontend`,
   });
