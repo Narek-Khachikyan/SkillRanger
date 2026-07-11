@@ -16,12 +16,19 @@ const isErrno = (error: unknown, code: string): error is NodeJS.ErrnoException =
 type OwnedLock = { path: string; token: string };
 type LockGuard = { path: string; entryPath: string };
 type LockOwnerMetadata = { token: string; pid: number };
+type SkillRunStoreHooks = {
+  beforeGuardPublish?: (input: { guardPath: string; candidatePath: string; token: string }) => void | Promise<void>;
+  guardEntered?: () => void | Promise<void>;
+  guardExited?: () => void | Promise<void>;
+};
 
 export class SkillRunStore {
   private readonly projectRoot: string;
+  private readonly hooks: SkillRunStoreHooks;
 
-  constructor(projectRoot: string) {
+  constructor(projectRoot: string, hooks: SkillRunStoreHooks = {}) {
     this.projectRoot = projectRoot;
+    this.hooks = hooks;
   }
 
   private runPath(runId: string): string {
@@ -103,20 +110,54 @@ export class SkillRunStore {
     const guardPath = `${lockPath}.guard`;
     while (true) {
       const token = randomUUID();
+      const candidatePath = `${guardPath}.${token}.pending`;
+      const candidateEntryPath = path.join(candidatePath, token);
       try {
-        await mkdir(guardPath);
-        const entryPath = path.join(guardPath, token);
+        await mkdir(candidatePath);
         try {
-          await writeFile(entryPath, JSON.stringify({ token, pid: process.pid }), { encoding: "utf8", flag: "wx" });
-          return { path: guardPath, entryPath };
+          await this.hooks.beforeGuardPublish?.({ guardPath, candidatePath, token });
+          await writeFile(candidateEntryPath, JSON.stringify({ token, pid: process.pid }), { encoding: "utf8", flag: "wx" });
+          const candidateIdentity = await stat(candidatePath);
+          let published = false;
+          try {
+            await rename(candidatePath, guardPath);
+            published = true;
+          } catch (error) {
+            if (!isErrno(error, "EEXIST") && !isErrno(error, "ENOTEMPTY")) throw error;
+            await this.reclaimGuardIfAbandoned(guardPath);
+          }
+          if (published) {
+            const publishedIdentity = await stat(guardPath).catch((error: unknown) => {
+              if (isErrno(error, "ENOENT")) return undefined;
+              throw error;
+            });
+            if (
+              publishedIdentity !== undefined
+              && publishedIdentity.dev === candidateIdentity.dev
+              && publishedIdentity.ino === candidateIdentity.ino
+            ) {
+              return { path: guardPath, entryPath: path.join(guardPath, token) };
+            }
+            await unlink(path.join(guardPath, token)).catch((error: unknown) => {
+              if (!isErrno(error, "ENOENT")) throw error;
+            });
+            await rmdir(guardPath).catch((error: unknown) => {
+              if (!isErrno(error, "ENOENT") && !isErrno(error, "ENOTEMPTY")) throw error;
+            });
+          }
         } catch (error) {
-          await rmdir(guardPath).catch(() => undefined);
-          if (isErrno(error, "ENOENT")) continue;
           throw error;
+        } finally {
+          await unlink(candidateEntryPath).catch((error: unknown) => {
+            if (!isErrno(error, "ENOENT")) throw error;
+          });
+          await rmdir(candidatePath).catch((error: unknown) => {
+            if (!isErrno(error, "ENOENT")) throw error;
+          });
         }
       } catch (error) {
-        if (!isErrno(error, "EEXIST")) throw error;
-        await this.reclaimGuardIfAbandoned(guardPath);
+        if (isErrno(error, "EEXIST")) continue;
+        throw error;
       }
       if (startedAt !== undefined && Date.now() - startedAt >= lockTimeoutMs) {
         throw new SkillRunError("run-integrity", "Timed out waiting for run lock");
@@ -137,7 +178,12 @@ export class SkillRunStore {
   private async withLockGuard<T>(lockPath: string, startedAt: number | undefined, apply: () => Promise<T>): Promise<T> {
     const guard = await this.acquireGuard(lockPath, startedAt);
     try {
-      return await apply();
+      await this.hooks.guardEntered?.();
+      try {
+        return await apply();
+      } finally {
+        await this.hooks.guardExited?.();
+      }
     } finally {
       await this.releaseGuard(guard);
     }
@@ -153,8 +199,8 @@ export class SkillRunStore {
         try {
           const [lockStat, source] = await Promise.all([stat(lockPath), readFile(lockPath, "utf8")]);
           const owner = this.parseOwnerMetadata(source);
+          if (Date.now() - lockStat.mtimeMs <= staleLockMs) return undefined;
           if (owner !== undefined && this.processIsAlive(owner.pid)) return undefined;
-          if (owner === undefined && Date.now() - lockStat.mtimeMs <= staleLockMs) return undefined;
           await unlink(lockPath);
           continue;
         } catch (statError) {
@@ -200,6 +246,7 @@ export class SkillRunStore {
 
   private async releaseLock(lock: OwnedLock): Promise<void> {
     try {
+      // Release has no acquisition deadline: a committed rename must not surface a preservation-guaranteed timeout.
       await this.withLockGuard(lock.path, undefined, async () => {
         try {
           const source = await readFile(lock.path, "utf8");

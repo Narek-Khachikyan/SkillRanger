@@ -670,6 +670,104 @@ test("an empty crashed guard is recovered before the acquisition timeout", async
   }
 });
 
+test("guard publication identity prevents overlapping critical sections after replacement", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const setupStore = new SkillRunStore(projectRoot);
+  const run = createSkillRun(fixtureInput);
+  await setupStore.create(run);
+  let pauseFirstPublish!: () => void;
+  const firstPublishPaused = new Promise<void>((resolve) => { pauseFirstPublish = resolve; });
+  let resumeFirstPublish!: () => void;
+  const firstPublishGate = new Promise<void>((resolve) => { resumeFirstPublish = resolve; });
+  let markSecondEntered!: () => void;
+  const secondEntered = new Promise<void>((resolve) => { markSecondEntered = resolve; });
+  let releaseSecond!: () => void;
+  const secondGate = new Promise<void>((resolve) => { releaseSecond = resolve; });
+  let activeCriticalSections = 0;
+  let maxCriticalSections = 0;
+  let firstHook = true;
+  let blockSecond = true;
+  const entered = async (shouldBlock: boolean) => {
+    activeCriticalSections += 1;
+    maxCriticalSections = Math.max(maxCriticalSections, activeCriticalSections);
+    if (shouldBlock && blockSecond) {
+      blockSecond = false;
+      markSecondEntered();
+      await secondGate;
+    }
+  };
+  const exited = () => { activeCriticalSections -= 1; };
+  const firstStore = new SkillRunStore(projectRoot, {
+    beforeGuardPublish: async ({ candidatePath }: { candidatePath: string }) => {
+      if (!firstHook) return;
+      firstHook = false;
+      const old = new Date(Date.now() - 1_000);
+      await utimes(candidatePath, old, old);
+      pauseFirstPublish();
+      await firstPublishGate;
+    },
+    guardEntered: () => entered(false),
+    guardExited: exited,
+  });
+  const secondStore = new SkillRunStore(projectRoot, {
+    guardEntered: () => entered(true),
+    guardExited: exited,
+  });
+  const first = firstStore.update(run.runId, (current) => current);
+  let second: Promise<SkillRun> | undefined;
+  try {
+    await Promise.race([firstPublishPaused, delay(150).then(() => { throw new Error("first publication did not pause"); })]);
+    second = secondStore.update(run.runId, (current) => current);
+    await Promise.race([secondEntered, delay(150).then(() => { throw new Error("replacement owner did not enter"); })]);
+    resumeFirstPublish();
+    await delay(75);
+    assert.equal(maxCriticalSections, 1);
+  } finally {
+    resumeFirstPublish();
+    releaseSecond();
+    await Promise.allSettled([first, ...(second ? [second] : [])]);
+  }
+});
+
+test("fresh dead-owner lock metadata is preserved until the stale threshold", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  const run = createSkillRun(fixtureInput);
+  await store.create(run);
+  const lockPath = path.join(projectRoot, ".skillranger/runs", `${run.runId}.lock`);
+  const deadOwner = JSON.stringify({ token: "dead-owner", pid: 999_999 });
+  await writeFile(lockPath, deadOwner, "utf8");
+  const realDateNow = Date.now;
+  const baseline = realDateNow();
+  let calls = 0;
+  Date.now = () => baseline + (calls++ === 0 ? 0 : 6_000);
+  try {
+    await assert.rejects(
+      store.update(run.runId, (current) => current),
+      (error: unknown) => error instanceof SkillRunError && error.message === "Timed out waiting for run lock",
+    );
+  } finally {
+    Date.now = realDateNow;
+  }
+  assert.deepEqual(await store.read(run.runId), run);
+  assert.equal(await readFile(lockPath, "utf8"), deadOwner);
+  await unlink(lockPath);
+});
+
+test("stale dead-owner lock metadata is recovered", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  const run = createSkillRun(fixtureInput);
+  await store.create(run);
+  const lockPath = path.join(projectRoot, ".skillranger/runs", `${run.runId}.lock`);
+  await writeFile(lockPath, JSON.stringify({ token: "dead-owner", pid: 999_999 }), "utf8");
+  const stale = new Date(Date.now() - 31_000);
+  await utimes(lockPath, stale, stale);
+  const updated = await store.update(run.runId, (current) => current);
+  assert.equal(updated.revision, 1);
+  assert.equal((await readdir(path.dirname(lockPath))).includes(path.basename(lockPath)), false);
+});
+
 test("lock timeout preserves the previous run", async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
   const store = new SkillRunStore(projectRoot);
