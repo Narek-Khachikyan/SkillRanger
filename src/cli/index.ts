@@ -50,6 +50,7 @@ import {
   type BaselineKind,
 } from "../evals/runner.ts";
 import { skillLanes, type InstallPlan, type ProjectFingerprint, type Recommendation, type RegistrySkill, type SkillLane } from "../types.ts";
+import { handleRunCliCommand } from "./runs.ts";
 
 const supportedSetupTargets = ["claude-code", "codex", "opencode", "cursor", "gemini-cli"] as const;
 type SupportedSetupTarget = (typeof supportedSetupTargets)[number];
@@ -146,6 +147,13 @@ const printHelp = () => {
   skillranger design:repair --report <path> [--max-iterations <n>] [--json]
   skillranger design:compile --brief <path> --direction <path> [--report <path>] [--output <path>] [--json]
   skillranger recommend [project] [--target codex|claude-code|opencode|cursor|gemini-cli] [--intent "..."] [--capabilities browser,screenshots] [--lane <lane>] [--limit-per-lane <n>] [--explain] [--json]
+  skillranger run:start [project] --target <agent> --domain <id> --intent <text> [--brief <path>] [--store-intent] [--json]
+  skillranger run:record-read [project] --run <id> --skill <id> [--json]
+  skillranger run:resolve-clarifications [project] --run <id> --answers <json-path> [--json]
+  skillranger run:begin [project] --run <id> [--json]
+  skillranger run:complete [project] --run <id> --status implemented|failed|blocked [--artifacts name=path,...] [--json]
+  skillranger run:verify [project] --run <id> --report <path> [--json]
+  skillranger run:inspect [project] --run <id> [--json]
   skillranger setup [project] [--target codex[,claude-code,opencode,cursor,gemini-cli]] [--intent "..."] [--scope repo|user] [--copy] [--yes] [--lane <lane>] [--limit-per-lane <n>]
 	  skillranger audit <skill-id> [--json]
 	  skillranger validate:registry [--json]
@@ -512,6 +520,13 @@ const run = async () => {
     printHelp();
     return;
   }
+
+  if (await handleRunCliCommand({
+    command,
+    positionals: args.positionals,
+    flags: args.flags,
+    registryRoot,
+  })) return;
 
   if (command === "mcp") {
     const { startMcpServer } = await import("../mcp/server.ts");
