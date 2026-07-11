@@ -153,6 +153,20 @@ test("rejects declined fields without one assumption per field", () => {
   );
 });
 
+for (const [name, assumption] of [["an empty", ""], ["a whitespace-only", "   "]] as const) {
+  test(`rejects declined fields with ${name} assumption`, () => {
+    assert.throws(
+      () => reduceSkillRun(toSkillsRead(), {
+        type: "resolve-clarification",
+        answers: [],
+        declinedFields: ["primaryUserOrActor"],
+        assumptions: [assumption],
+      }),
+      (error: unknown) => error instanceof SkillRunError && error.code === "clarification-required",
+    );
+  });
+}
+
 test("rejects decline for provenance questions", () => {
   const provenanceInput: CreateSkillRunInput = {
     ...fixtureInput,
@@ -213,17 +227,33 @@ test("maps non-verified verification outcomes to run states", () => {
 
 test("skill-run JSON schema represents the complete contract", () => {
   const schema = JSON.parse(readFileSync(new URL("../schemas/skill-run.schema.json", import.meta.url), "utf8")) as any;
+  const assertRequired = (objectSchema: any, fields: string[]) => {
+    assert.deepEqual(new Set(objectSchema.required), new Set(fields));
+  };
   assert.equal(schema.$schema, "https://json-schema.org/draft/2020-12/schema");
   assert.equal(schema.$id, "https://skillranger.local/schemas/skill-run.schema.json");
   assert.equal(schema.additionalProperties, false);
-  assert.deepEqual(new Set(schema.required), new Set([
+  assertRequired(schema, [
     "schemaVersion", "runId", "domain", "targetAgent", "locale", "state", "revision", "createdAt", "updatedAt", "intent", "policy", "recommendations", "selectedSkills", "skillReads", "clarification", "artifacts",
-  ]));
+  ]);
+  assertRequired(schema.properties.intent, ["sha256", "normalizedGoal"]);
+  assertRequired(schema.properties.policy, ["lifecycleRequired", "mandatorySkillIds", "clarification", "verificationRequired"]);
+  assertRequired(schema.properties.policy.properties.clarification, ["required", "questions"]);
+  assertRequired(schema.properties.policy.properties.clarification.properties.questions.items, ["id", "fields", "text", "allowDecline"]);
+  assertRequired(schema.$defs.skill, ["skillId", "role", "version", "checksum", "mandatory"]);
+  assertRequired(schema.$defs.skillRead, ["skillId", "version", "checksum", "recordedAt"]);
+  assertRequired(schema.properties.clarification, ["status", "questions", "answers", "declinedFields", "assumptions"]);
+  assertRequired(schema.properties.clarification.properties.answers.items, ["questionId", "answer"]);
+  assertRequired(schema.properties.artifacts.items, ["kind", "description"]);
+  assertRequired(schema.properties.verification, ["reportPath", "reportSha256", "report"]);
+  assertRequired(schema.$defs.verificationReport, ["schemaVersion", "domain", "workflowId", "iteration", "capabilityStatus", "executionStatus", "verificationStatus", "outcome", "findings", "gates", "evidence", "residualRisks"]);
+  assertRequired(schema.$defs.finding, ["id", "code", "source", "severity", "gate", "message", "evidence", "remediation", "autofixable"]);
+  assertRequired(schema.$defs.verificationReport.properties.gates, ["hardPassed", "criticalFindings", "highFindings"]);
+  assertRequired(schema.$defs.artifact, ["kind", "description"]);
   assert.deepEqual(new Set(schema.properties.state.enum), new Set(["created", "skills-selected", "skills-read", "clarified", "running", "implemented", "verified", "implemented-unverified", "failed", "blocked"]));
   assert.equal(schema.properties.revision.minimum, 0);
   assert.equal(schema.properties.intent.properties.sha256.pattern, "^sha256:[a-f0-9]{64}$");
   assert.equal(schema.properties.artifacts.items.additionalProperties, false);
-  assert.deepEqual(new Set(schema.properties.artifacts.items.required), new Set(["kind", "description"]));
   for (const objectSchema of [schema.properties.intent, schema.properties.policy, schema.properties.policy.properties.clarification, schema.properties.policy.properties.clarification.properties.questions.items, schema.$defs.skill, schema.$defs.skillRead, schema.properties.clarification, schema.properties.clarification.properties.answers.items, schema.properties.verification]) {
     assert.equal(objectSchema.additionalProperties, false);
   }

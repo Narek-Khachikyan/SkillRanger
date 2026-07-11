@@ -154,8 +154,11 @@ export const reduceSkillRun = (run: SkillRun, event: SkillRunEvent): SkillRun =>
           fail("clarification-required", `Clarification field ${field} cannot be declined.`);
         }
       }
-      if (event.assumptions.length !== event.declinedFields.length) {
-        fail("clarification-required", "Each declined field requires exactly one assumption.");
+      if (
+        event.assumptions.length !== event.declinedFields.length
+        || event.assumptions.some((assumption) => !assumption.trim())
+      ) {
+        fail("clarification-required", "Each declined field requires exactly one non-empty explicit assumption.");
       }
       const declined = new Set(event.declinedFields);
       const unresolved = run.clarification.questions.some(
