@@ -938,7 +938,7 @@ export const summarizeFrontendEvalSuite = (
 };
 
 const cyrillicPattern = /\p{Script=Cyrillic}/u;
-const latinPattern = /[A-Za-z]/u;
+const latinPattern = /\p{Script=Latin}/u;
 
 export const selectFrontendTriggerPrompts = (
   suite: FrontendEvalSuite,

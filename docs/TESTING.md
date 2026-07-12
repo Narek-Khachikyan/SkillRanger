@@ -113,7 +113,7 @@ npm run release:check
 
 `eval:frontend:ru` must select Cyrillic and mixed Cyrillic/Latin prompts, exclude English-only prompts, pass routing, and cover at least one evaluated prompt for every frontend-owned canonical skill. `--locale en` must contain Latin text and no Cyrillic. `--locale all` must preserve all 157 frozen routing prompts. Invalid locale values must exit non-zero with `--locale must be one of: en, ru, all.`
 
-External model comparison is analytical rather than a local release blocker. Use the same `fixtures/next-react-ts` copy, frozen Russian task slice, `opencode` target, installed skill versions/checksums, and at least three repetitions per model. Keep GLM and DeepSeek under separate exact model labels and output directories.
+External model comparison is analytical rather than a local release blocker. The exact Russian-only filter is `ru-visual-direction-reference,ru-tailwind-responsive-execution,ru-frontend-release-audit`; it is not a declared promotion slice. For promotion-ready variance, run the complete real `visual-direction`, `tailwind-execution`, and `design-to-code` slices separately with `fixtures/next-react-ts`, the `opencode` target, identical installed versions/checksums, all three baselines, and at least three repetitions per pinned model. Keep GLM and DeepSeek under separate exact model labels and output directories, then grade evidence and run `--verify-task-evidence ... --summarize-variance` for each complete slice.
 
 ## Lifecycle acceptance checks
 

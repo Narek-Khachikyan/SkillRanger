@@ -34,6 +34,27 @@ test("release check includes bilingual frontend routing evidence", () => {
   assert.match(packageJson.scripts["release:check"], /npm run eval:frontend:ru/);
 });
 
+test("Russian OpenCode profile names executable frozen tasks and real promotion slices", async () => {
+  const [suite, qualityDoc] = await Promise.all([
+    loadFrontendEvalSuite(),
+    readFile("docs/FRONTEND_SKILL_QUALITY.md", "utf8"),
+  ]);
+  const sliceIds = new Set((suite.skillSlices ?? []).map((slice) => slice.id));
+
+  assert.doesNotMatch(qualityDoc, /<frozen-russian-slice>/);
+  for (const sliceId of ["visual-direction", "tailwind-execution", "design-to-code"]) {
+    assert.equal(sliceIds.has(sliceId), true, `${sliceId} must remain a real selectable slice`);
+    assert.match(qualityDoc, new RegExp(`--skill-slice ${sliceId}`));
+  }
+  assert.match(
+    qualityDoc,
+    /--filter ru-visual-direction-reference,ru-tailwind-responsive-execution,ru-frontend-release-audit/,
+  );
+  assert.match(qualityDoc, /--baselines without-skill,old-skill,current-skill/);
+  assert.match(qualityDoc, /--repetitions 3/);
+  assert.match(qualityDoc, /--summarize-variance/);
+});
+
 const routingSuite = (triggerPrompts: FrontendEvalSuite["triggerPrompts"]): FrontendEvalSuite => ({
   schemaVersion: "1.0",
   name: "frontend-routing-test",
@@ -88,19 +109,23 @@ test("frontend eval suite validates and summarizes seed coverage", async () => {
 test("frontend eval locale selection assigns Cyrillic and mixed prompts to Russian", () => {
   const suite = routingSuite([
     { id: "english", kind: "should-trigger", text: "Review the frontend layout." },
+    { id: "latin", kind: "should-trigger", text: "É" },
     { id: "russian", kind: "should-trigger", text: "Проверь доступность формы." },
     { id: "cyrillic", kind: "should-trigger", text: "І" },
     { id: "mixed", kind: "ambiguous", text: "Проверь Tailwind layout." },
+    { id: "armenian", kind: "should-not-trigger", text: "Հայերեն" },
     { id: "symbols", kind: "should-not-trigger", text: "1234 — ?" },
   ]);
 
   assert.deepEqual(selectFrontendTriggerPrompts(suite, "ru").map((prompt) => prompt.id), ["russian", "cyrillic", "mixed"]);
-  assert.deepEqual(selectFrontendTriggerPrompts(suite, "en").map((prompt) => prompt.id), ["english"]);
+  assert.deepEqual(selectFrontendTriggerPrompts(suite, "en").map((prompt) => prompt.id), ["english", "latin"]);
   assert.deepEqual(selectFrontendTriggerPrompts(suite, "all").map((prompt) => prompt.id), [
     "english",
+    "latin",
     "russian",
     "cyrillic",
     "mixed",
+    "armenian",
     "symbols",
   ]);
 });

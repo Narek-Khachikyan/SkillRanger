@@ -276,22 +276,62 @@ The aggregated `task-evidence.json` preserves each task/baseline pair as a disti
 
 ## Russian OpenCode Comparison Profile
 
-Use a controlled profile when comparing external models. Keep one fixture (`fixtures/next-react-ts`), the frozen Russian task slice, the `opencode` target, and identical installed skill versions and SHA-256 checksums across every run. Run each model at least three times with the same prompts, task order, capabilities, and assertion rubric. Record GLM and DeepSeek under separate model labels; never merge their repetitions into one aggregate.
+Use a controlled profile when comparing external models. Keep one fixture (`fixtures/next-react-ts`), the `opencode` target, and identical installed skill versions and SHA-256 checksums across every run. Run each model at least three times with the same prompts, task order, capabilities, and assertion rubric. Record GLM and DeepSeek under separate pinned model labels; never merge their repetitions into one aggregate.
 
-The recommended runner shape is:
+The frozen Russian-only analytical set is exactly these three real task IDs:
+
+- `ru-visual-direction-reference`
+- `ru-tailwind-responsive-execution`
+- `ru-frontend-release-audit`
+
+Run that exact set for each pinned model (once with the GLM model selected in OpenCode and once with the DeepSeek model selected):
 
 ```bash
 node src/cli/index.ts eval:frontend --run-tasks \
   --project fixtures/next-react-ts \
   --target opencode \
-  --skill-slice <frozen-russian-slice> \
+  --filter ru-visual-direction-reference,ru-tailwind-responsive-execution,ru-frontend-release-audit \
   --baselines without-skill,old-skill,current-skill \
   --repetitions 3 \
   --command 'opencode run "{{prompt}}"' \
-  --output evals/frontend/results/<model-label>
+  --output evals/frontend/results/glm-pinned/russian-tasks
 ```
 
-Use distinct output labels such as `glm-<version>` and `deepseek-<version>`, and record the exact model version, fixture, skill version, and checksum in baseline metadata. External GLM/DeepSeek evidence is analytical comparison evidence: it informs promotion review but does not block the deterministic local build, test, registry, audit, or routing gates.
+Repeat with `--output evals/frontend/results/deepseek-pinned/russian-tasks`. Before each run, pin the corresponding model in OpenCode and record the exact model id plus the installed old/current skill-pack versions and SHA-256 checksums alongside the output. The Russian-only filter is analytical evidence: the current evidence schema cannot declare an arbitrary combined task slice, so do not present this filtered output as promotion-ready suite evidence.
+
+Promotion and variance validation require a complete declared slice. The three existing selectable profiles that contain frozen Russian evidence are `--skill-slice visual-direction`, `--skill-slice tailwind-execution`, and `--skill-slice design-to-code`. Run each complete slice separately for GLM and DeepSeek with the same three baselines and three repetitions. Pass `--baseline-fixture-metadata` JSON that uses one pinned model id and `fixtures/next-react-ts` for all three baselines, plus the exact installed `skillId`, `skillVersion`, and `skillChecksum` for `old-skill` and `current-skill`. For example, a complete profile run has this shape:
+
+Create `baseline-glm-visual-direction.json` from the actual installed snapshots (replace the illustrative ids, versions, and canonical checksums before running):
+
+```json
+{
+  "without-skill": { "kind": "without-skill", "model": "glm-pinned", "fixture": "fixtures/next-react-ts" },
+  "old-skill": { "kind": "old-skill", "skillId": "frontend.visual-design-polish", "skillVersion": "recorded-old-version", "skillChecksum": "sha256:recorded-old-checksum", "model": "glm-pinned", "fixture": "fixtures/next-react-ts" },
+  "current-skill": { "kind": "current-skill", "skillId": "frontend.visual-design-polish", "skillVersion": "recorded-current-version", "skillChecksum": "sha256:recorded-current-checksum", "model": "glm-pinned", "fixture": "fixtures/next-react-ts" }
+}
+```
+
+```bash
+node src/cli/index.ts eval:frontend --run-tasks \
+  --project fixtures/next-react-ts \
+  --target opencode \
+  --skill-slice visual-direction \
+  --baselines without-skill,old-skill,current-skill \
+  --repetitions 3 \
+  --baseline-fixture-metadata "$(node -p 'JSON.stringify(require(process.argv[1]))' ./baseline-glm-visual-direction.json)" \
+  --command 'opencode run "{{prompt}}"' \
+  --output evals/frontend/results/glm-pinned/visual-direction
+```
+
+Use the same command with `--skill-slice tailwind-execution` and `--skill-slice design-to-code`, their matching baseline metadata files, and separate output directories. After grading every assertion and attaching the required artifacts, calculate the promotion comparison for each complete slice:
+
+```bash
+node src/cli/index.ts eval:frontend \
+  --verify-task-evidence evals/frontend/results/glm-pinned/visual-direction/task-evidence.json \
+  --summarize-variance --json
+```
+
+The report must be promotion-ready and compare `current-skill` against both `without-skill` and `old-skill`; repeat it for every GLM/DeepSeek slice output. External GLM/DeepSeek evidence remains analytical comparison evidence: it informs promotion review but does not block deterministic local build, test, registry, audit, or routing gates.
 
 ## Release Gates
 
