@@ -204,6 +204,7 @@ export const assertValidSkillRun: (input: unknown) => asserts input is SkillRun 
   const selectedIds = selected.map((skill) => skill.skillId);
   if (new Set(selectedIds).size !== selectedIds.length) fail("Selected skill IDs must be unique.");
   if (new Set(recommendations.map((skill) => skill.skillId)).size !== recommendations.length) fail("Recommended skill IDs must be unique.");
+  if (state === "created" && selected.length > 0) fail("Created skill runs cannot contain a selected skill snapshot.");
   if (state !== "created") {
     const selectedMandatoryIds = selected.filter((skill) => skill.mandatory).map((skill) => skill.skillId);
     if (
@@ -228,10 +229,10 @@ export const assertValidSkillRun: (input: unknown) => asserts input is SkillRun 
   if (new Set(reads.map((read) => read.skillId)).size !== reads.length) fail("Skill read IDs must be unique.");
   const readIds = new Set(reads.map((read) => read.skillId));
   if (
-    ["running", "implemented", "verified", "implemented-unverified", "failed", "blocked"].includes(state)
+    ["skills-read", "clarified", "running", "implemented", "verified", "implemented-unverified", "failed", "blocked"].includes(state)
     && mandatoryIds.some((id) => !readIds.has(id))
   ) {
-    fail("Running and terminal skill runs require matching reads for every mandatory skill.");
+    fail("Prepared, running, and terminal skill runs require matching reads for every mandatory skill.");
   }
 
   const clarification = keys(value.clarification, ["status", "questions", "answers", "declinedFields", "assumptions"], [], "skill run.clarification");

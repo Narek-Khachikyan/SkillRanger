@@ -78,6 +78,7 @@ const pickRunContract = (value: SkillRun) => ({
   domain: value.domain,
   targetAgent: value.targetAgent,
   locale: value.locale,
+  intent: value.intent,
   state: value.state,
   policy: value.policy,
   selectedSkills: value.selectedSkills.map(({ skillId, role, version, checksum, mandatory }) => ({
@@ -96,6 +97,26 @@ const pickRunContract = (value: SkillRun) => ({
   },
 });
 
+const designBrief = () => ({
+  schemaVersion: "1.0",
+  product: {
+    domain: "developer tooling",
+    primaryUserOrActor: "Skill author",
+    primaryTask: "Review lifecycle state",
+    contentTypes: [],
+    usageFrequency: "frequent",
+    stakes: [],
+  },
+  surface: {
+    type: "landing page",
+    primaryAction: "Start a verified run",
+    supportedViewports: [390, 1440],
+    requiredStates: ["loading", "empty", "error", "success"],
+  },
+  direction: { requestedTone: [], antiGoals: [], existingDirection: "existing" },
+  evidence: { observed: [], inferred: [], assumed: [], unknown: [] },
+});
+
 const runCli = async (args: string[]) => {
   const result = await execFileAsync(process.execPath, ["src/cli/index.ts", ...args]);
   return JSON.parse(result.stdout) as { run: SkillRun };
@@ -109,6 +130,9 @@ test("MCP and CLI produce equivalent run states", async () => {
     cp("fixtures/next-react-ts", mcpProjectRoot, { recursive: true }),
   ]);
   const intent = "Проверь доступность формы и используй скиллы";
+  const brief = designBrief();
+  const briefPath = path.join(cliProjectRoot, "brief.json");
+  await writeFile(briefPath, `${JSON.stringify(brief, null, 2)}\n`);
   const cliRun = (await runCli([
     "run:start",
     cliProjectRoot,
@@ -118,6 +142,9 @@ test("MCP and CLI produce equivalent run states", async () => {
     "frontend",
     "--intent",
     intent,
+    "--brief",
+    briefPath,
+    "--store-intent",
     "--json",
   ])).run;
   const result = await callMcpTool("start_skill_run", {
@@ -125,12 +152,15 @@ test("MCP and CLI produce equivalent run states", async () => {
     targetAgent: "opencode",
     domain: "frontend",
     intent,
+    designBrief: brief,
+    storeIntent: true,
   });
   const mcpRun = parseStructuredContent<SkillRun>(result);
 
   assert.equal(result.isError, false);
   assert.match(result.content[0]?.text ?? "", /^run_[^:]+: skills-selected$/);
   assert.deepEqual(pickRunContract(mcpRun), pickRunContract(cliRun));
+  assert.equal(mcpRun.intent.raw, intent);
 });
 
 test("MCP and CLI preserve parity through the complete skill run lifecycle", async () => {

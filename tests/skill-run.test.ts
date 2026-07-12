@@ -333,6 +333,13 @@ test("persisted selected mandatory skills exactly match policy mandatory ids", (
   );
 });
 
+test("created persisted runs cannot contain a selected skill snapshot", () => {
+  assert.throws(
+    () => assertValidSkillRun({ ...createSkillRun(fixtureInput), selectedSkills: fixtureSkills }),
+    (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",
+  );
+});
+
 test("running and terminal persisted runs require every mandatory skill read", () => {
   const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
   const reportSha256 = `sha256:${createHash("sha256").update(canonicalizeVerificationReport(fixtureReport), "utf8").digest("hex")}`;
@@ -343,6 +350,15 @@ test("running and terminal persisted runs require every mandatory skill read", (
     report: fixtureReport,
   });
   for (const run of [runningRun, implemented, verified]) {
+    assert.throws(
+      () => assertValidSkillRun({ ...run, skillReads: run.skillReads.slice(0, 1) }),
+      (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",
+    );
+  }
+});
+
+test("skills-read and clarified persisted runs require every mandatory skill read", () => {
+  for (const run of [skillsReadRun, clarifiedRun]) {
     assert.throws(
       () => assertValidSkillRun({ ...run, skillReads: run.skillReads.slice(0, 1) }),
       (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",

@@ -1,25 +1,19 @@
-import { randomUUID } from "node:crypto";
 import path from "node:path";
 import "../../domains/bundled.ts";
-import { getDomainPack } from "../../domains/registry.ts";
-import { loadLocalRegistry } from "../../registry/index.ts";
-import { recommendSkills } from "../../recommender/index.ts";
+import { startPreparedSkillRun } from "../../runs/start.ts";
 import {
   completeSkillRun,
   recordSkillRead,
   resolveSkillRunClarifications,
   SkillRunError,
   SkillRunStore,
-  startSkillRun,
   startSkillRunExecution,
   verifySkillRun,
   type SkillRun,
   type SkillRunArtifact,
   type SkillRunErrorCode,
-  type SkillRunLocale,
 } from "../../runtime/skill-run/index.ts";
 import type { VerificationReport } from "../../runtime/types.ts";
-import { scanProject } from "../../scanner/index.ts";
 import { McpToolError, type McpToolDefinition, type McpToolErrorCode, type McpToolHandler } from "./types.ts";
 import {
   asString,
@@ -58,20 +52,6 @@ const runResult = (run: SkillRun) => ({
   structuredContent: run,
   isError: false,
 });
-
-const intentLocale = (intent: string): SkillRunLocale => {
-  const normalized = intent.normalize("NFKC").toLowerCase();
-  const hasCyrillic = /[а-яё]/u.test(normalized);
-  const hasLatin = /[a-z]/u.test(normalized);
-  return hasCyrillic && hasLatin ? "mixed" : hasCyrillic ? "ru" : hasLatin ? "en" : "unknown";
-};
-
-const summarizeGoal = (domainId: string, recommendations: Array<{ skillId: string }>) =>
-  `${domainId} lifecycle using ${recommendations.map(({ skillId }) => skillId).join(", ")}`;
-
-const recommendationTarget = (target: string) => (
-  ["opencode", "cursor", "gemini-cli"].includes(target) ? "generic-agent-skills" : target
-);
 
 const asProjectRoot = (value: unknown) => path.resolve(asString(value, "."));
 
@@ -125,63 +105,17 @@ const startRun: McpToolHandler = async (args) => {
   const targetAgent = requireString(args.targetAgent, "targetAgent");
   const domainId = requireString(args.domain, "domain");
   const intent = requireString(args.intent, "intent");
-  const domain = getDomainPack(domainId);
-  if (!domain) throw new SkillRunError("run-integrity", `Domain not found: ${domainId}`);
   const designBrief = args.designBrief === undefined
     ? undefined
     : requireObject(args.designBrief, "designBrief");
-  const [fingerprint, skills] = await Promise.all([
-    scanProject(projectRoot),
-    loadLocalRegistry(registryRoot),
-  ]);
-  const recommendations = recommendSkills(fingerprint, skills, {
-    targetAgent: recommendationTarget(targetAgent),
-    userIntent: intent,
-    domainId,
-  });
-  if (recommendations.length === 0) {
-    throw new SkillRunError(
-      "run-integrity",
-      `No compatible ${domainId} skills were recommended for target ${targetAgent}.`,
-    );
-  }
-  const policy = domain.runPolicy?.evaluate({
-    intent,
-    recommendations,
-    ...(designBrief === undefined ? {} : { artifacts: { designBrief } }),
-  }) ?? {
-    lifecycleRequired: false,
-    mandatorySkillIds: [],
-    clarification: { required: false, questions: [] },
-    verificationRequired: false,
-  };
-  const skillById = new Map(skills.map((skill) => [skill.manifest.id, skill]));
-  const selectedSkills = recommendations.map((recommendation, index) => {
-    const skill = skillById.get(recommendation.skillId);
-    if (!skill) {
-      throw new SkillRunError(
-        "run-integrity",
-        `Recommended skill is missing from the registry: ${recommendation.skillId}`,
-      );
-    }
-    return {
-      skillId: recommendation.skillId,
-      role: recommendation.role ?? (index === 0 ? "primary" as const : "companion" as const),
-      version: skill.manifest.version,
-      checksum: skill.checksum,
-      mandatory: policy.mandatorySkillIds.includes(recommendation.skillId),
-    };
-  });
-  return runResult(await startSkillRun(new SkillRunStore(projectRoot), {
-    runId: `run_${randomUUID()}`,
-    domain: domainId,
+  return runResult(await startPreparedSkillRun({
+    projectRoot,
+    registryRoot,
     targetAgent,
-    locale: intentLocale(intent),
-    rawIntent: intent,
-    normalizedGoal: summarizeGoal(domainId, recommendations),
+    domain: domainId,
+    intent,
+    ...(designBrief === undefined ? {} : { artifacts: { designBrief } }),
     storeRawIntent: asStoreIntent(args.storeIntent),
-    policy,
-    selectedSkills,
   }));
 };
 
