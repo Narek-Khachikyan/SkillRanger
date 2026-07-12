@@ -96,3 +96,29 @@ Manual review checklist:
 - Are permissions minimal?
 - Does it have examples/tests?
 - Does audit pass?
+
+## Release and bilingual routing gates
+
+Run focused and frozen routing checks before the full gate:
+
+```bash
+node --test tests/frontend-eval.test.ts
+npm run eval:frontend -- --run-routing --project fixtures/next-react-ts --locale all --json
+npm run eval:frontend:ru
+npm run check
+npm test
+npm run build
+npm run release:check
+```
+
+`eval:frontend:ru` must select Cyrillic and mixed Cyrillic/Latin prompts, exclude English-only prompts, pass routing, and cover at least one evaluated prompt for every frontend-owned canonical skill. `--locale en` must contain Latin text and no Cyrillic. `--locale all` must preserve all 157 frozen routing prompts. Invalid locale values must exit non-zero with `--locale must be one of: en, ru, all.`
+
+External model comparison is analytical rather than a local release blocker. Use the same `fixtures/next-react-ts` copy, frozen Russian task slice, `opencode` target, installed skill versions/checksums, and at least three repetitions per model. Keep GLM and DeepSeek under separate exact model labels and output directories.
+
+## Lifecycle acceptance checks
+
+- CLI: start an OpenCode-targeted frontend run, confirm raw intent is absent by default, record every selected skill read, resolve required clarification or its bounded fallback, begin immediately before implementation, complete with artifacts, and verify with hard-gate evidence.
+- MCP: replay the equivalent `start_skill_run` through `verify_skill_run` event sequence, including `begin_skill_run_execution`; compare normalized artifacts and the canonical verification digest with CLI.
+- Guarantee: assert that completion without evidence never reaches `verified`; external agents may bypass SkillRanger but cannot receive a SkillRanger `verified` outcome without evidence.
+- Persistence: confirm artifacts live under `.skillranger/runs/`; corrupt JSON returns `run-integrity` without replacement, after which recovery uses a trusted copy or a new run.
+- Managed context: run `skillranger setup` twice and confirm exactly one managed `AGENTS.md` block while preserving user text; verify `--no-agent-context` leaves agent context unmanaged and malformed markers fail safely.

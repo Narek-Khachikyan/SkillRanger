@@ -31,8 +31,9 @@
     "lint:skills": "node src/cli/index.ts lint:skills",
     "audit:registry": "node src/cli/index.ts audit:registry",
     "publish:check": "node src/cli/index.ts publish:check",
-    "release:check": "npm run build && npm run check && npm test && npm run validate:registry && npm run lint:skills && npm run audit:registry && npm run eval:frontend -- --run-routing --project fixtures/next-react-ts --json",
+    "release:check": "npm run build && npm run check && npm test && npm run validate:registry && npm run lint:skills && npm run audit:registry && npm run eval:frontend -- --run-routing --project fixtures/next-react-ts --json && npm run eval:frontend:ru",
     "eval:frontend": "node src/cli/index.ts eval:frontend",
+    "eval:frontend:ru": "node src/cli/index.ts eval:frontend --run-routing --project fixtures/next-react-ts --locale ru --json",
     "mcp": "node src/mcp/server.ts",
     "test": "node --test tests/*.test.ts",
     "check": "node --check src/cli/index.ts && node --check src/paths.ts && node --check src/evals/frontend.ts && node --check src/mcp/server.ts && node --check src/mcp/protocol.ts && node --check src/mcp/tools.ts && node --check src/mcp/tools/types.ts && node --check src/mcp/tools/utils.ts && node --check src/mcp/tools/project.ts && node --check src/mcp/tools/registry.ts && node --check src/mcp/tools/install.ts && node --check src/mcp/tools/domains.ts"

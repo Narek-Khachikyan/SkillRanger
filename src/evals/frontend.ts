@@ -23,6 +23,8 @@ export type GraderType =
 
 export type FrontendGraderType = GraderType;
 
+export type FrontendEvalLocale = "en" | "ru" | "all";
+
 export type FrontendRoutingExpected = {
   expectedSkill?: string;
   acceptableAlternates?: string[];
@@ -192,12 +194,14 @@ export type FrontendPairwiseReviewReport = {
 
 export type FrontendEvalSummary = {
   name: string;
+  locale: FrontendEvalLocale;
   triggerPrompts: {
     total: number;
     shouldTrigger: number;
     shouldNotTrigger: number;
     ambiguous: number;
     target: number;
+    suiteTarget: number;
   };
   taskEvals: {
     seedTasks: number;
@@ -236,6 +240,9 @@ export type FrontendRoutingEvalMetrics = {
 export type FrontendRoutingEvalReport = {
   projectRoot: string;
   targetAgent: string;
+  locale: FrontendEvalLocale;
+  selectedPrompts: number;
+  suitePrompts: number;
   metrics: FrontendRoutingEvalMetrics;
   failures: FrontendRoutingEvalFailure[];
 };
@@ -244,6 +251,7 @@ export type RunFrontendRoutingEvalOptions = {
   projectRoot: string;
   targetAgent?: string;
   registryRoot?: string;
+  locale?: FrontendEvalLocale;
 };
 
 const sum = (values: number[]) =>
@@ -904,17 +912,20 @@ export const validateFrontendPairwiseReview = (
 
 export const summarizeFrontendEvalSuite = (
   suite: FrontendEvalSuite,
+  locale: FrontendEvalLocale = "all",
 ): FrontendEvalSummary => {
-  const triggerPrompts = suite.triggerPrompts ?? [];
+  const triggerPrompts = selectFrontendTriggerPrompts(suite, locale);
   const taskBands = suite.taskBands ?? [];
   return {
     name: suite.name,
+    locale,
     triggerPrompts: {
       total: triggerPrompts.length,
       shouldTrigger: triggerPrompts.filter((prompt) => prompt.kind === "should-trigger").length,
       shouldNotTrigger: triggerPrompts.filter((prompt) => prompt.kind === "should-not-trigger").length,
       ambiguous: triggerPrompts.filter((prompt) => prompt.kind === "ambiguous").length,
-      target: suite.targetCounts.triggerPrompts,
+      target: triggerPrompts.length,
+      suiteTarget: suite.targetCounts.triggerPrompts,
     },
     taskEvals: {
       seedTasks: taskBands.reduce((count, band) => count + band.seedTasks.length, 0),
@@ -926,11 +937,26 @@ export const summarizeFrontendEvalSuite = (
   };
 };
 
+const cyrillicPattern = /\p{Script=Cyrillic}/u;
+const latinPattern = /[A-Za-z]/u;
+
+export const selectFrontendTriggerPrompts = (
+  suite: FrontendEvalSuite,
+  locale: FrontendEvalLocale,
+): FrontendTriggerPrompt[] => {
+  const prompts = suite.triggerPrompts ?? [];
+  if (locale === "all") return prompts;
+  if (locale === "ru") return prompts.filter((prompt) => cyrillicPattern.test(prompt.text));
+  return prompts.filter((prompt) => latinPattern.test(prompt.text) && !cyrillicPattern.test(prompt.text));
+};
+
 export const runFrontendRoutingEval = async (
   suite: FrontendEvalSuite,
   options: RunFrontendRoutingEvalOptions,
 ): Promise<FrontendRoutingEvalReport> => {
   const targetAgent = options.targetAgent ?? "codex";
+  const locale = options.locale ?? "all";
+  const selectedPrompts = selectFrontendTriggerPrompts(suite, locale);
   const fingerprint = await scanProject(options.projectRoot);
   const skills = await loadLocalRegistry(options.registryRoot ?? defaultRegistryRoot);
   const failures: FrontendRoutingEvalFailure[] = [];
@@ -942,7 +968,7 @@ export const runFrontendRoutingEval = async (
   let shouldNotTriggerEvaluated = 0;
   let shouldNotTriggerPassed = 0;
 
-  for (const prompt of suite.triggerPrompts ?? []) {
+  for (const prompt of selectedPrompts) {
     const routing = prompt.routingExpected;
     const expectedSkill = routing?.expectedSkill ?? prompt.expectedSkill;
     if (!routing && !expectedSkill) {
@@ -1001,8 +1027,11 @@ export const runFrontendRoutingEval = async (
   return {
     projectRoot: fingerprint.root,
     targetAgent,
+    locale,
+    selectedPrompts: selectedPrompts.length,
+    suitePrompts: (suite.triggerPrompts ?? []).length,
     metrics: {
-      total: (suite.triggerPrompts ?? []).length,
+      total: selectedPrompts.length,
       evaluated,
       skipped,
       passed,

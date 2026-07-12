@@ -20,6 +20,7 @@ import {
   validateFrontendPairwiseReview,
   validateFrontendTaskEvidence,
   validateFrontendEvalSuite,
+  type FrontendEvalLocale,
 } from "../evals/frontend.ts";
 import { defaultRegistryRoot, packageRoot } from "../paths.ts";
 import "../domains/bundled.ts";
@@ -161,10 +162,10 @@ const printHelp = () => {
 	  skillranger audit:registry [--json]
   skillranger lint:skills [--json]
   skillranger publish:check [--json]
-	  skillranger eval:frontend [--suite <path>] [--json]
+	  skillranger eval:frontend [--suite <path>] [--locale en|ru|all] [--json]
   skillranger eval:frontend --run-tasks --skill-slice <id> --repetitions <n> [--baselines without-skill,old-skill,current-skill] [--json]
   skillranger eval:frontend --verify-task-evidence <path> --summarize-variance [--json]
-  skillranger eval:frontend --run-routing --project <path> [--target codex] [--suite <path>] [--json]
+  skillranger eval:frontend --run-routing --project <path> [--target codex] [--suite <path>] [--locale en|ru|all] [--json]
   skillranger eval:frontend --verify-task-evidence <path> [--suite <path>] [--json]
   skillranger eval:frontend --verify-pairwise-review <path> [--suite <path>] [--json]
   skillranger install <skill-id> --project <path> [--target codex|claude-code|opencode|cursor|gemini-cli] [--scope repo|user] [--copy] [--dry-run] [--yes]
@@ -991,6 +992,11 @@ const run = async () => {
       ? path.resolve(args.flags["verify-pairwise-review"])
       : undefined;
     const targetAgent = asString(args.flags.target, "codex");
+    const localeValue = args.flags.locale ?? "all";
+    if (typeof localeValue !== "string" || !["en", "ru", "all"].includes(localeValue)) {
+      throw new Error("--locale must be one of: en, ru, all.");
+    }
+    const locale = localeValue as FrontendEvalLocale;
 
     if (runTasks) {
       if (issues.length > 0) {
@@ -1090,7 +1096,7 @@ const run = async () => {
       throw new Error("--verify-pairwise-review requires a JSON review path.");
     }
     const routingEval = runRouting && projectRoot
-      ? await runFrontendRoutingEval(suite, { projectRoot, targetAgent })
+      ? await runFrontendRoutingEval(suite, { projectRoot, targetAgent, locale })
       : undefined;
     const taskEvidence = taskEvidencePath
       ? validateFrontendTaskEvidence(suite, await loadFrontendTaskEvidence(taskEvidencePath))
@@ -1109,7 +1115,8 @@ const run = async () => {
         (!varianceSummary || varianceSummary.promotionReady) &&
         (!pairwiseReview || pairwiseReview.metrics.promotionReady),
       issues,
-      summary: summarizeFrontendEvalSuite(suite),
+      locale,
+      summary: summarizeFrontendEvalSuite(suite, locale),
       ...(routingEval ? { routingEval } : {}),
       ...(taskEvidence ? { taskEvidence } : {}),
       ...(varianceSummary ? { varianceSummary } : {}),
@@ -1119,7 +1126,8 @@ const run = async () => {
       printJson(report);
     } else {
       console.log(`Frontend eval suite: ${report.summary.name}`);
-      console.log(`Trigger prompts: ${report.summary.triggerPrompts.total}/${report.summary.triggerPrompts.target} seeded`);
+      console.log(`Locale: ${report.locale}`);
+      console.log(`Trigger prompts: ${report.summary.triggerPrompts.total}/${report.summary.triggerPrompts.target} selected; suite target: ${report.summary.triggerPrompts.suiteTarget}`);
       console.log(`Task evals: ${report.summary.taskEvals.seedTasks}/${report.summary.taskEvals.target} seeded`);
       console.log(`Task bands: ${report.summary.taskEvals.bands.join(", ")}`);
       console.log(`Promotion gates: ${report.summary.promotionGates.join(", ")}`);

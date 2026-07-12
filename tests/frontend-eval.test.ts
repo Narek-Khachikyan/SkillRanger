@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -12,6 +13,7 @@ import {
   type FrontendTaskEvidence,
   runFrontendRoutingEval,
   scoreSkillUtility,
+  selectFrontendTriggerPrompts,
   summarizeFrontendEvalSuite,
   summarizeFrontendVariance,
   validateFrontendPairwiseReview,
@@ -24,6 +26,13 @@ import { loadLocalRegistry } from "../src/registry/index.ts";
 const execFileAsync = promisify(execFile);
 
 const fixtureProject = path.resolve("fixtures/next-react-ts");
+
+test("release check includes bilingual frontend routing evidence", () => {
+  const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
+  assert.match(packageJson.scripts["eval:frontend:ru"], /--locale ru/);
+  assert.match(packageJson.scripts["eval:frontend:ru"], /--run-routing/);
+  assert.match(packageJson.scripts["release:check"], /npm run eval:frontend:ru/);
+});
 
 const routingSuite = (triggerPrompts: FrontendEvalSuite["triggerPrompts"]): FrontendEvalSuite => ({
   schemaVersion: "1.0",
@@ -74,6 +83,42 @@ test("frontend eval suite validates and summarizes seed coverage", async () => {
     "polish",
     "motion-quality",
   ]);
+});
+
+test("frontend eval locale selection assigns Cyrillic and mixed prompts to Russian", () => {
+  const suite = routingSuite([
+    { id: "english", kind: "should-trigger", text: "Review the frontend layout." },
+    { id: "russian", kind: "should-trigger", text: "Проверь доступность формы." },
+    { id: "cyrillic", kind: "should-trigger", text: "І" },
+    { id: "mixed", kind: "ambiguous", text: "Проверь Tailwind layout." },
+    { id: "symbols", kind: "should-not-trigger", text: "1234 — ?" },
+  ]);
+
+  assert.deepEqual(selectFrontendTriggerPrompts(suite, "ru").map((prompt) => prompt.id), ["russian", "cyrillic", "mixed"]);
+  assert.deepEqual(selectFrontendTriggerPrompts(suite, "en").map((prompt) => prompt.id), ["english"]);
+  assert.deepEqual(selectFrontendTriggerPrompts(suite, "all").map((prompt) => prompt.id), [
+    "english",
+    "russian",
+    "cyrillic",
+    "mixed",
+    "symbols",
+  ]);
+});
+
+test("frontend eval locale summary preserves selected and full-suite targets", async () => {
+  const suite = await loadFrontendEvalSuite();
+  const all = summarizeFrontendEvalSuite(suite, "all");
+  const russian = summarizeFrontendEvalSuite(suite, "ru");
+
+  assert.equal(all.locale, "all");
+  assert.equal(all.triggerPrompts.total, 157);
+  assert.equal(all.triggerPrompts.target, 157);
+  assert.equal(all.triggerPrompts.suiteTarget, 157);
+  assert.equal(russian.locale, "ru");
+  assert.equal(russian.triggerPrompts.total > 0, true);
+  assert.equal(russian.triggerPrompts.total < 157, true);
+  assert.equal(russian.triggerPrompts.target, russian.triggerPrompts.total);
+  assert.equal(russian.triggerPrompts.suiteTarget, 157);
 });
 
 test("frontend suite freezes Russian routing coverage for every owned skill", async () => {
@@ -205,6 +250,7 @@ test("frontend eval suite accepts routing expectations and artifact-aware assert
     shouldNotTrigger: 1,
     ambiguous: 0,
     target: 2,
+    suiteTarget: 2,
   });
   assert.equal(summary.taskEvals.seedTasks, 1);
   assert.deepEqual(summary.taskEvals.bands, ["repair"]);
@@ -513,6 +559,30 @@ test("frontend eval routing runner passes the full Next fixture suite", async ()
   assert.deepEqual(report.failures, []);
 });
 
+test("Russian routing report evaluates every frontend-owned canonical skill", async () => {
+  const suite = await loadFrontendEvalSuite();
+  const russianPrompts = selectFrontendTriggerPrompts(suite, "ru");
+  const report = await runFrontendRoutingEval(suite, {
+    projectRoot: fixtureProject,
+    locale: "ru",
+  });
+  const owned = new Set(frontendDomainManifest.ownership.map((rule) => rule.primarySkill));
+
+  assert.equal(report.locale, "ru");
+  assert.equal(report.selectedPrompts, russianPrompts.length);
+  assert.equal(report.suitePrompts, 157);
+  assert.equal(report.metrics.total, russianPrompts.length);
+  assert.equal(report.metrics.failed, 0);
+  for (const skillId of owned) {
+    assert.equal(
+      russianPrompts.some((prompt) =>
+        (prompt.routingExpected?.expectedSkill ?? prompt.expectedSkill) === skillId),
+      true,
+      `${skillId} needs an evaluated Russian routing prompt`,
+    );
+  }
+});
+
 test("eval:frontend CLI reports suite summary as JSON", async () => {
   const { stdout } = await execFileAsync("node", [
     "src/cli/index.ts",
@@ -575,6 +645,35 @@ test("eval:frontend --run-routing --json returns routing metrics", async () => {
   assert.equal(report.routingEval.metrics.evaluated, 2);
   assert.equal(report.routingEval.metrics.passed, 2);
   assert.equal(report.routingEval.metrics.overallPassRate, 1);
+});
+
+test("eval:frontend rejects an invalid locale", async () => {
+  await assert.rejects(
+    execFileAsync("node", [
+      "src/cli/index.ts",
+      "eval:frontend",
+      "--locale",
+      "mixed",
+      "--json",
+    ]),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match((error as Error & { stderr?: string }).stderr ?? "", /--locale must be one of: en, ru, all\./);
+      return true;
+    },
+  );
+});
+
+test("eval:frontend human output distinguishes selected and suite prompt targets", async () => {
+  const { stdout } = await execFileAsync("node", [
+    "src/cli/index.ts",
+    "eval:frontend",
+    "--locale",
+    "ru",
+  ]);
+
+  assert.match(stdout, /Locale: ru/);
+  assert.match(stdout, /Trigger prompts: 58\/58 selected; suite target: 157/);
 });
 
 test("eval:frontend verifies complete task evidence as a promotion gate", async () => {

@@ -129,7 +129,7 @@ Design-lane boundaries are part of routing quality: `frontend.visual-design-poli
 
 ## Eval Set
 
-Use `evals/frontend/suite.json` as the frozen coverage target before increasing `qualityScore`: 102 trigger prompts and 51 task eval seeds across greenfield UI, existing-project modification, repair, polish, and motion quality. Run it against repeatable fixtures before claiming benchmark-backed quality:
+Use `evals/frontend/suite.json` as the frozen coverage target before increasing `qualityScore`: 157 trigger prompts and 54 task eval seeds across greenfield UI, existing-project modification, repair, polish, and motion quality. Run it against repeatable fixtures before claiming benchmark-backed quality:
 
 - `fixtures/next-react-ts`: Next.js, React, TypeScript, Tailwind, Playwright.
 - `fixtures/vite-react-ts`: Vite, React, TypeScript, existing `AGENTS.md`.
@@ -178,9 +178,9 @@ Do not increase `qualityScore` from prose review alone; derive it from the froze
 
 The `frontend.playwright-debug` promotion pilot is recorded at `evals/frontend/results/frontend.playwright-debug-promotion-pilot-2026-07-05.json`.
 
-`frontend.playwright-debug` remains at `evaluation.status: real-project-smoke`. Its historical pilot used the former 80-prompt/40-task suite and is not promotion evidence for the current frozen 102-prompt/51-task suite.
+`frontend.playwright-debug` remains at `evaluation.status: real-project-smoke`. Its historical pilot used the former 80-prompt/40-task suite and is not promotion evidence for the current frozen 157-prompt/54-task suite.
 
-Do not promote to `curated` yet. The repo validates the 51 task seeds plus traceable evidence and blinded human-review manifests, but does not calculate scores or human preference automatically. Those gates must not be inferred from routing or smoke artifacts.
+Do not promote to `curated` yet. The repo validates the 54 task seeds plus traceable evidence and blinded human-review manifests, but does not calculate scores or human preference automatically. Those gates must not be inferred from routing or smoke artifacts.
 
 ## Task Eval Runner
 
@@ -190,7 +190,7 @@ The runner does **not** score or review. All assertion statuses are set to `not-
 
 ### Usage
 
-Generate a run plan for 51 task seeds across two baselines:
+Generate a run plan for 54 task seeds across two baselines:
 
 ```bash
 node src/cli/index.ts eval:frontend --run-tasks \
@@ -273,3 +273,32 @@ The aggregated `task-evidence.json` preserves each task/baseline pair as a disti
 - `src/evals/runner.ts` — `generateRunPlan()`, `executeRunPlan()`, `printRunPlan()`
 - `src/cli/index.ts` — `eval:frontend --run-tasks` subcommand invoking the runner
 - `tests/frontend-eval.test.ts` — 12 unit/integration tests covering plan generation, dry-run, execution, resume, metadata injection, and evidence compatibility
+
+## Russian OpenCode Comparison Profile
+
+Use a controlled profile when comparing external models. Keep one fixture (`fixtures/next-react-ts`), the frozen Russian task slice, the `opencode` target, and identical installed skill versions and SHA-256 checksums across every run. Run each model at least three times with the same prompts, task order, capabilities, and assertion rubric. Record GLM and DeepSeek under separate model labels; never merge their repetitions into one aggregate.
+
+The recommended runner shape is:
+
+```bash
+node src/cli/index.ts eval:frontend --run-tasks \
+  --project fixtures/next-react-ts \
+  --target opencode \
+  --skill-slice <frozen-russian-slice> \
+  --baselines without-skill,old-skill,current-skill \
+  --repetitions 3 \
+  --command 'opencode run "{{prompt}}"' \
+  --output evals/frontend/results/<model-label>
+```
+
+Use distinct output labels such as `glm-<version>` and `deepseek-<version>`, and record the exact model version, fixture, skill version, and checksum in baseline metadata. External GLM/DeepSeek evidence is analytical comparison evidence: it informs promotion review but does not block the deterministic local build, test, registry, audit, or routing gates.
+
+## Release Gates
+
+```bash
+npm run eval:frontend -- --run-routing --project fixtures/next-react-ts --locale all --json
+npm run eval:frontend:ru
+npm run release:check
+```
+
+The full route uses all 157 frozen prompts. The Russian route selects every prompt containing Cyrillic, including mixed Cyrillic/Latin prompts, and confirms that every frontend-owned canonical skill has Russian routing evidence. English selection requires Latin text and excludes Cyrillic. Slice reports show their selected prompt count separately from the full-suite target, so a slice is never presented as satisfying the 157-prompt suite by itself.
