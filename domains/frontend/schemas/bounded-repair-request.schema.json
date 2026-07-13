@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/domains/frontend/bounded-repair-request.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "id", "workflowId", "targetVariantId", "sourceEvidenceId", "iteration", "maxIterations", "findings", "allowedFiles", "allowedChanges", "protectedInvariants", "passCriteria"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "id": { "type": "string" },
+    "workflowId": { "type": "string" },
+    "targetVariantId": { "type": "string" },
+    "sourceEvidenceId": { "type": "string" },
+    "iteration": { "type": "number" },
+    "maxIterations": { "type": "number" },
+    "stopReason": { "enum": ["hard-gates-passed", "iteration-limit", "blocked"] },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "code", "source", "severity", "gate", "message", "evidence", "remediation", "autofixable"],
+        "properties": {
+          "id": { "type": "string" },
+          "code": { "type": "string" },
+          "source": { "type": "string" },
+          "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
+          "gate": { "enum": ["hard", "soft"] },
+          "message": { "type": "string" },
+          "evidence": { "type": "array", "items": { "type": "string" } },
+          "affectedSurface": { "type": "string" },
+          "remediation": { "type": "string" },
+          "autofixable": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "allowedFiles": { "type": "array", "items": { "type": "string" } },
+    "allowedChanges": {
+      "type": "array",
+      "items": { "enum": ["spacing", "typography", "color-role", "responsive-layout", "state-presentation", "focus", "motion", "local-primitive", "composition", "copy", "behavior"] }
+    },
+    "protectedInvariants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "description"],
+        "properties": {
+          "kind": { "enum": ["behavior", "content", "art-direction", "public-api", "state", "accessibility", "route"] },
+          "description": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "passCriteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["findingId", "code", "expected", "evidenceKinds"],
+        "properties": {
+          "findingId": { "type": "string" },
+          "code": { "type": "string" },
+          "expected": { "type": "string" },
+          "evidenceKinds": { "type": "array", "items": { "enum": ["screenshot", "browser-check", "mechanical-check", "test"] } }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

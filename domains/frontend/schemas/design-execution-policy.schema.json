@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/domains/frontend/design-execution-policy.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "requestedMode", "effectiveMode", "profile", "capabilityClassId", "downgradeReasons", "variantLimit", "recipeSelection", "allowedRecipeIds", "freedoms", "implementationStrategy", "requiredRuleFamilies", "structuredDirectionRequired", "independentCriticRequired", "repairRequired", "maxRepairIterations", "requiredViewports", "requiredStates"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "requestedMode": { "enum": ["repair", "refine", "explore", "reimagine"] },
+    "effectiveMode": { "enum": ["repair", "refine", "explore", "reimagine"] },
+    "profile": { "enum": ["constrained", "standard", "advanced"] },
+    "capabilityClassId": { "type": "string" },
+    "downgradeReasons": { "type": "array", "items": { "type": "string" } },
+    "variantLimit": { "enum": [1, 2, 3] },
+    "recipeSelection": { "enum": ["top-only", "ranked-set", "open-with-evidence"] },
+    "allowedRecipeIds": { "type": "array", "items": { "type": "string" } },
+    "freedoms": {
+      "type": "object",
+      "required": ["composition", "visualLanguage", "primitives", "tokens", "motion"],
+      "properties": {
+        "composition": { "enum": ["preserve", "recipe-layouts", "free"] },
+        "visualLanguage": { "enum": ["preserve", "rule-bound", "free"] },
+        "primitives": { "enum": ["existing-only", "local-variants", "new-primitives"] },
+        "tokens": { "enum": ["existing-only", "role-library", "new-role-system"] },
+        "motion": { "enum": ["preserve", "bounded", "free"] }
+      },
+      "additionalProperties": false
+    },
+    "implementationStrategy": { "enum": ["verified-patterns-only", "patterns-preferred", "free"] },
+    "requiredRuleFamilies": {
+      "type": "array",
+      "items": { "enum": ["typography", "layout", "responsive", "color", "state", "signature-move"] }
+    },
+    "structuredDirectionRequired": { "const": true },
+    "independentCriticRequired": { "const": true },
+    "repairRequired": { "const": true },
+    "maxRepairIterations": { "type": "integer", "minimum": 1, "maximum": 5 },
+    "requiredViewports": {
+      "type": "array",
+      "prefixItems": [{ "const": 390 }, { "const": 768 }, { "const": 1440 }],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "requiredStates": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}
