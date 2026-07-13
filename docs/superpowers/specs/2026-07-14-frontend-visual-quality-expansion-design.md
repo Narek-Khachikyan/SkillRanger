@@ -94,7 +94,8 @@ tools, and skills call the same domain services and validators.
 `.design/execution-policy.json` records:
 
 - `schemaVersion: "1.0"`;
-- `mode: "repair" | "refine" | "explore" | "reimagine"`;
+- requested and effective mode from
+  `"repair" | "refine" | "explore" | "reimagine"`, plus downgrade reasons;
 - `profile: "constrained" | "standard" | "advanced"`;
 - `capabilityClassId` and the evidence source that selected it;
 - `variantLimit`;
@@ -106,7 +107,10 @@ tools, and skills call the same domain services and validators.
 
 The resolver combines the requested mode, configured or benchmark-derived capability
 class, project evidence, and workflow risk. It always chooses the stricter value when
-two constraints disagree.
+two constraints disagree. `repair` and `refine` resolve to one direction because they
+operate on a selected design. The two-to-three variant requirement applies to
+`explore` and `reimagine`; a constrained profile downgrades both to `refine`, and a
+standard profile downgrades `reimagine` to `explore`.
 
 ### DesignVariant
 
@@ -213,7 +217,8 @@ profiles are downgraded to the nearest safe scope.
 
 ### standard
 
-- Two or three variants according to the resolved capability record.
+- Two or three variants for `explore` and effective `reimagine`, according to the
+  resolved capability record; `repair` and `refine` keep one selected direction.
 - Bounded composition changes from the selected recipes' supported layout models.
 - Bounded visual-language changes through verified rules and project tokens.
 - New local variants are allowed; new cross-project primitive families are not.
@@ -224,6 +229,8 @@ profiles are downgraded to the nearest safe scope.
 
 - Free art direction within product evidence, provenance, safety, and accessibility
   constraints.
+- Two or three variants for `explore` and `reimagine`; one selected direction for
+  `repair` and `refine`.
 - May introduce new primitives and composition grammar.
 - Must state destructive critique and migration impact for new primitives.
 - May use bold signature moves when they remain meaningful across mobile, desktop,
@@ -485,7 +492,8 @@ runtime selection from empirical results.
 ## Acceptance Criteria
 
 - A constrained run cannot use more than one recipe or skip a corrective pass.
-- A standard run cannot produce fewer than two or more than three comparable variants.
+- A standard `explore` run cannot produce fewer than two or more than three comparable
+  variants; standard `repair` and `refine` runs use exactly one selected direction.
 - An advanced run may create primitives but cannot bypass evidence, critic, repair, or
   verification gates.
 - Every requested change mode resolves to an explicit allowed/protected scope.
