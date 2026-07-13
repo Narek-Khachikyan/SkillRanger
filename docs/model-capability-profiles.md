@@ -9,3 +9,18 @@ Profiles change autonomy, not quality gates.
 `advanced` may propose a new composition grammar only with observed product evidence and destructive critique. It passes the same browser, accessibility, runtime, responsive, state, and reduced-motion gates.
 
 Select profiles through user configuration, known benchmark history, or host capability probes. Do not infer capability only from provider branding.
+
+## Effective-mode precedence
+
+The resolver applies the following downgrade matrix before choosing variants:
+
+| Requested mode | `constrained` | `standard` | `advanced` |
+| --- | --- | --- | --- |
+| `repair` | `repair` | `repair` | `repair` |
+| `refine` | `refine` | `refine` | `refine` |
+| `explore` | `refine` | `explore` | `explore` |
+| `reimagine` | `refine` | `explore` | `reimagine` |
+
+`repair` and `refine` always select one variant. `standard` can select two ranked variants for exploration, while `advanced` can select up to three and supports evidence-backed open composition.
+
+Empirical capability evidence can only reduce freedom: its variant cap, recipe allowlist, composition limit, primitive limit, and implementation strategy bound the configured profile. An explicit recipe allowlist must intersect ranked recipes; otherwise policy resolution fails rather than expanding selection beyond the evidence.

@@ -7,6 +7,10 @@ import type {
   BoundedRepairRequest,
   DesignExecutionPolicy,
 } from "../src/domains/frontend/design/index.ts";
+import {
+  resolveDesignExecutionPolicy,
+  validateImplementationPrerequisites,
+} from "../src/domains/frontend/design/index.ts";
 
 // @ts-expect-error Canonical policy caps variants at three.
 const unsupportedVariantLimit: DesignExecutionPolicy["variantLimit"] = 4;
@@ -78,4 +82,100 @@ test("publishes both schemas in the frontend domain manifest", async () => {
   const manifest = JSON.parse(await readFile("domains/frontend/domain.manifest.json", "utf8"));
   assert.ok(manifest.artifacts.schemas.includes("schemas/design-execution-policy.schema.json"));
   assert.ok(manifest.artifacts.schemas.includes("schemas/bounded-repair-request.schema.json"));
+});
+
+const ranked = ["saas-workspace", "operational-command-center", "developer-tool"];
+
+test("constrained downgrades exploration and forces one recipe", () => {
+  const policy = resolveDesignExecutionPolicy({ mode: "reimagine", profile: "constrained", rankedRecipeIds: ranked });
+  assert.equal(policy.effectiveMode, "refine");
+  assert.equal(policy.variantLimit, 1);
+  assert.deepEqual(policy.allowedRecipeIds, ["saas-workspace"]);
+  assert.equal(policy.implementationStrategy, "verified-patterns-only");
+  assert.equal(policy.freedoms.primitives, "existing-only");
+});
+
+test("standard explores two variants but keeps repair singular", () => {
+  assert.equal(resolveDesignExecutionPolicy({ mode: "explore", profile: "standard", rankedRecipeIds: ranked }).variantLimit, 2);
+  assert.equal(resolveDesignExecutionPolicy({ mode: "repair", profile: "standard", rankedRecipeIds: ranked }).variantLimit, 1);
+  assert.equal(resolveDesignExecutionPolicy({ mode: "reimagine", profile: "standard", rankedRecipeIds: ranked }).effectiveMode, "explore");
+});
+
+test("advanced allows free composition and new primitives", () => {
+  const policy = resolveDesignExecutionPolicy({ mode: "reimagine", profile: "advanced", rankedRecipeIds: ranked });
+  assert.equal(policy.effectiveMode, "reimagine");
+  assert.equal(policy.freedoms.composition, "free");
+  assert.equal(policy.freedoms.primitives, "new-primitives");
+});
+
+test("empirical capability constraints can only reduce freedom", () => {
+  const policy = resolveDesignExecutionPolicy({
+    mode: "reimagine",
+    profile: "advanced",
+    rankedRecipeIds: ranked,
+    capability: {
+      id: "unstable-sample",
+      maxVariants: 1,
+      allowedRecipeIds: ["developer-tool"],
+      maxCompositionFreedom: "recipe-layouts",
+      maxPrimitiveFreedom: "existing-only",
+      implementationStrategy: "verified-patterns-only",
+    },
+  });
+  assert.equal(policy.variantLimit, 1);
+  assert.deepEqual(policy.allowedRecipeIds, ["developer-tool"]);
+  assert.equal(policy.freedoms.composition, "recipe-layouts");
+});
+
+test("empirical capability constraints cannot expand a profile", () => {
+  const policy = resolveDesignExecutionPolicy({
+    mode: "explore",
+    profile: "standard",
+    rankedRecipeIds: ranked,
+    capability: {
+      id: "overstated-sample",
+      maxVariants: 3,
+      maxCompositionFreedom: "free",
+      maxPrimitiveFreedom: "new-primitives",
+      implementationStrategy: "free",
+    },
+  });
+  assert.equal(policy.variantLimit, 2);
+  assert.equal(policy.freedoms.composition, "recipe-layouts");
+  assert.equal(policy.freedoms.primitives, "local-variants");
+  assert.equal(policy.implementationStrategy, "patterns-preferred");
+});
+
+test("rejects capability recipe constraints that exclude every ranked recipe", () => {
+  assert.throws(
+    () => resolveDesignExecutionPolicy({
+      mode: "refine",
+      profile: "standard",
+      rankedRecipeIds: ranked,
+      capability: {
+        id: "mismatched-sample",
+        maxVariants: 2,
+        allowedRecipeIds: ["consumer-discovery"],
+        maxCompositionFreedom: "recipe-layouts",
+        maxPrimitiveFreedom: "local-variants",
+        implementationStrategy: "patterns-preferred",
+      },
+    }),
+    /capability allowedRecipeIds do not include any ranked recipe/,
+  );
+});
+
+test("blocks arbitrary JSX before a direction and verified pattern selection", () => {
+  const policy = resolveDesignExecutionPolicy({ mode: "refine", profile: "constrained", rankedRecipeIds: ranked });
+  const findings = validateImplementationPrerequisites({
+    policy,
+    directions: [],
+    selectedRuleIds: [],
+    implementationKind: "arbitrary-jsx-css",
+  });
+  assert.deepEqual(findings.map(({ code }) => code), [
+    "structured-direction-missing",
+    "verified-pattern-selection-missing",
+    "implementation-strategy-violation",
+  ]);
 });
