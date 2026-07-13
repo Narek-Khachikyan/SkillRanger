@@ -1,10 +1,32 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { promisify } from "node:util";
 import type {
   BoundedRepairRequest,
   DesignExecutionPolicy,
 } from "../src/domains/frontend/design/index.ts";
+
+// @ts-expect-error Canonical policy caps variants at three.
+const unsupportedVariantLimit: DesignExecutionPolicy["variantLimit"] = 4;
+const execFileAsync = promisify(execFile);
+
+test("checks canonical policy constraints at compile time", async () => {
+  await execFileAsync(process.execPath, [
+    "node_modules/typescript/bin/tsc",
+    "--ignoreConfig",
+    "--noEmit",
+    "--strict",
+    "--skipLibCheck",
+    "--target", "ES2023",
+    "--module", "NodeNext",
+    "--moduleResolution", "NodeNext",
+    "--allowImportingTsExtensions",
+    "--types", "node",
+    "tests/frontend-design-policy.test.ts",
+  ]);
+});
 
 test("exports the frontend policy and bounded repair contracts", () => {
   const policy: DesignExecutionPolicy = {

@@ -349,6 +349,7 @@ export const frontendDomainManifest: DomainPackManifest = {
     intents: ["intents/ownership.json"],
     schemas: [
       "schemas/design-brief.schema.json", "schemas/design-direction.schema.json",
+      "schemas/design-execution-policy.schema.json", "schemas/bounded-repair-request.schema.json",
       "schemas/verification-report.schema.json",
     ],
     recipes: [
