@@ -10,6 +10,7 @@
     "state": { "$ref": "#/$defs/state" },
     "variantIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
     "selectedVariantId": { "type": "string", "minLength": 1 },
+    "critiqueRepairFindingCount": { "type": "integer", "minimum": 0 },
     "artifacts": {
       "type": "object",
       "properties": {

@@ -26,6 +26,7 @@ export type VisualRun = {
   state: VisualRunState;
   variantIds: string[];
   selectedVariantId?: string;
+  critiqueRepairFindingCount?: number;
   artifacts: {
     initialEvidenceId?: string;
     critiqueId?: string;
