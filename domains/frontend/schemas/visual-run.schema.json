@@ -2,11 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://skillranger.local/domains/frontend/visual-run.schema.json",
   "type": "object",
-  "required": ["schemaVersion", "id", "policyPath", "state", "variantIds", "artifacts", "history"],
+  "required": ["schemaVersion", "id", "policyPath", "policyDigest", "state", "variantIds", "artifacts", "history"],
   "properties": {
     "schemaVersion": { "const": "1.0" },
     "id": { "type": "string", "minLength": 1 },
     "policyPath": { "type": "string", "minLength": 1 },
+    "policyDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "state": { "$ref": "#/$defs/state" },
     "variantIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
     "selectedVariantId": { "type": "string", "minLength": 1 },

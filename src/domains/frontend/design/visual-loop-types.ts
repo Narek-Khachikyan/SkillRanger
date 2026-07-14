@@ -23,6 +23,7 @@ export type VisualRun = {
   schemaVersion: "1.0";
   id: string;
   policyPath: string;
+  policyDigest: string;
   state: VisualRunState;
   variantIds: string[];
   selectedVariantId?: string;

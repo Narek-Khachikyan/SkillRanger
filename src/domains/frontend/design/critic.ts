@@ -8,6 +8,7 @@ import type {
   VisualRun,
   VisualRunEvent,
 } from "./visual-loop-types.ts";
+import { containsProhibitedCommandLine } from "./command-line-classifier.ts";
 
 const criteria: VisualCriterion[] = [
   "product-specificity",
@@ -23,9 +24,6 @@ const criteria: VisualCriterion[] = [
 ];
 
 const codeShape = /```(?:jsx|tsx|css|html|javascript|typescript)|(?:^|\n)(?:diff --git|@@ |\+\+\+ |--- )|<\/?[a-z][^>]*>|\bclassName\s*=|\b(?:git|npm|pnpm|yarn)\s+(?:add|commit|run)\b/i;
-const shellFenceShape = /```(?:sh|bash|zsh|shell)\b/i;
-const shellCommandPrefix = /^(?:rm\s+-[a-z]*r[a-z]*f\b|curl\b|wget\b|python\d*\b|node\b|bash\b|zsh\b|sh\b|git\s+push\b)/i;
-const operatorCommandPrefix = /^(?:npm|pnpm|yarn|git|rm|curl|wget|python\d*|node|bash|zsh|sh|cat|sed|awk|tee|cp|mv|find|docker|npx|bun|deno)\b/i;
 
 const aiSlopCodes = new Set<AiSlopCode>([
   "generic-hero-copy",
@@ -85,44 +83,6 @@ const reportStrings = (value: unknown, seen = new Set<object>()): string[] => {
   if (Array.isArray(value)) return value.flatMap((entry) => reportStrings(entry, seen));
   return Object.values(value).flatMap((entry) => reportStrings(entry, seen));
 };
-
-const unwrapCommandPrefix = (line: string) => {
-  const tokens = line.trim().split(/\s+/);
-  const assignment = /^[A-Za-z_][A-Za-z0-9_]*=\S+$/;
-  let changed = true;
-  while (changed && tokens.length > 0) {
-    changed = false;
-    while (tokens[0] && assignment.test(tokens[0])) {
-      tokens.shift();
-      changed = true;
-    }
-    if (tokens[0] === "env") {
-      tokens.shift();
-      while (tokens[0]?.startsWith("-")) {
-        const option = tokens.shift();
-        if (option === "-u" && tokens.length > 0) tokens.shift();
-      }
-      changed = true;
-    }
-    if (tokens[0] === "sudo") {
-      tokens.shift();
-      while (tokens[0]?.startsWith("-")) {
-        const option = tokens.shift();
-        if (["-u", "-g", "-h", "-p", "-C", "-T", "-R", "-D"].includes(option ?? "")
-          && tokens.length > 0) tokens.shift();
-      }
-      changed = true;
-    }
-  }
-  return tokens.join(" ");
-};
-
-const containsShellCommand = (value: string) => shellFenceShape.test(value)
-  || value.split(/\r?\n/).some((line) => {
-    const command = unwrapCommandPrefix(line);
-    if (shellCommandPrefix.test(command)) return true;
-    return operatorCommandPrefix.test(command) && /(?:\s\|\s|\s(?:>|>>|<)\s)\S/.test(command);
-  });
 
 const hasOnlyKeys = (value: Record<string, unknown>, allowed: readonly string[]) =>
   Object.keys(value).every((key) => allowed.includes(key));
@@ -493,7 +453,7 @@ export const validateVisualCriticReport = (
       "Return code-free visual analysis and leave implementation to the generator.",
     ));
   }
-  if (reportStrings(report).some(containsShellCommand)) {
+  if (reportStrings(report).some(containsProhibitedCommandLine)) {
     findings.push(hardFinding(
       "critic-shell-output",
       "The critic report contains a shell command or command pipeline.",

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { canonicalizeJson } from "../../../runtime/skill-run/validation.ts";
 import type { DesignExecutionPolicy } from "./policy-types.ts";
 import type { VisualRun, VisualRunEvent, VisualRunState } from "./visual-loop-types.ts";
 
@@ -31,6 +33,9 @@ const targetStateByEvent: Record<VisualRunEvent["type"], VisualRunState> = {
   blocked: "blocked",
   failed: "failed",
 };
+
+export const digestDesignExecutionPolicy = (policy: DesignExecutionPolicy): string =>
+  `sha256:${createHash("sha256").update(canonicalizeJson(policy), "utf8").digest("hex")}`;
 
 const nonEmpty: (value: unknown, label: string) => asserts value is string = (value, label) => {
   if (typeof value !== "string" || value.trim() === "") throw new Error(`${label} must be non-empty`);
@@ -66,11 +71,12 @@ const snapshotInvariant: (condition: unknown, message: string) => asserts condit
 const validateStoredRun = (run: VisualRun, policy: DesignExecutionPolicy) => {
   if (run?.schemaVersion !== "1.0") throw new Error("visual run schemaVersion must be 1.0");
   hasOnlyKeys(run, [
-    "schemaVersion", "id", "policyPath", "state", "variantIds", "selectedVariantId",
+    "schemaVersion", "id", "policyPath", "policyDigest", "state", "variantIds", "selectedVariantId",
     "critiqueRepairFindingCount", "artifacts", "history",
   ], "visual run");
   nonEmpty(run.id, "visual run id");
   nonEmpty(run.policyPath, "visual run policy path");
+  if (!/^sha256:[a-f0-9]{64}$/.test(run.policyDigest)) throw new Error("visual run policy digest is invalid");
   if (!Object.hasOwn(transitionByState, run.state)) throw new Error("visual run state is invalid");
   validateStringIds(run.variantIds, "visual run variant ids", true);
   if (run.selectedVariantId !== undefined) {
@@ -248,6 +254,10 @@ const validateEventPayload = (event: VisualRunEvent) => {
     case "implementation-recorded": {
       if (!Array.isArray(event.implementations)) throw new Error("implementation references must be an array");
       for (const implementation of event.implementations) {
+        if (typeof implementation !== "object" || implementation === null || Array.isArray(implementation)) {
+          throw new Error("implementation reference must be an object");
+        }
+        hasOnlyKeys(implementation, ["variantId", "artifactId"], "implementation reference");
         nonEmpty(implementation?.variantId, "implementation variant id");
         nonEmpty(implementation?.artifactId, "implementation artifact id");
       }
@@ -279,14 +289,16 @@ export const allowedVisualRunEvents = (state: VisualRunState): string[] =>
 export const createVisualRun = (input: {
   id: string;
   policyPath: string;
+  policy: DesignExecutionPolicy;
 }): VisualRun => {
-  hasOnlyKeys(input, ["id", "policyPath"], "visual run input");
+  hasOnlyKeys(input, ["id", "policyPath", "policy"], "visual run input");
   nonEmpty(input.id, "visual run id");
   nonEmpty(input.policyPath, "visual run policy path");
   return {
     schemaVersion: "1.0",
     id: input.id,
     policyPath: input.policyPath,
+    policyDigest: digestDesignExecutionPolicy(input.policy),
     state: "policy-resolved",
     variantIds: [],
     artifacts: {},
@@ -299,6 +311,9 @@ const validateEvent = (
   event: VisualRunEvent,
   policy: DesignExecutionPolicy,
 ) => {
+  if (run?.policyDigest !== digestDesignExecutionPolicy(policy)) {
+    throw new Error("Visual run policy digest mismatch.");
+  }
   validateStoredRun(run, policy);
   validateEventPayload(event);
   if (!transitionByState[run.state].includes(event.type)) {
@@ -387,7 +402,7 @@ export const applyVisualRunEvent = (
       next.variantIds = [...event.variantIds];
       break;
     case "implementation-recorded":
-      next.artifacts.implementations = event.implementations.map((implementation) => ({ ...implementation }));
+      next.artifacts.implementations = event.implementations.map(({ variantId, artifactId }) => ({ variantId, artifactId }));
       break;
     case "initial-evidence-recorded":
       next.artifacts.initialEvidenceId = event.evidenceId;

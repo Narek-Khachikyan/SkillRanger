@@ -11,6 +11,7 @@ import {
   allowedVisualRunEvents,
   applyVisualRunEvent,
   createVisualRun,
+  digestDesignExecutionPolicy,
   resolveDesignExecutionPolicy,
 } from "../src/domains/frontend/design/index.ts";
 
@@ -41,7 +42,7 @@ const runThroughCritique = (
   selectedVariantId?: string,
 ) => {
   const variantIds = ["v1", "v2", "v3"].slice(0, policy.variantLimit);
-  let run = createVisualRun({ id: "run-path", policyPath: ".design/execution-policy.json" });
+  let run = createVisualRun({ id: "run-path", policyPath: ".design/execution-policy.json", policy });
   run = applyVisualRunEvent(run, { type: "directions-validated", ...event(1), variantIds }, policy);
   run = applyVisualRunEvent(run, {
     type: "implementation-recorded",
@@ -77,6 +78,7 @@ test("exports immutable visual orchestration artifacts", () => {
     schemaVersion: "1.0",
     id: "visual-run-1",
     policyPath: ".design/execution-policy.json",
+    policyDigest: digestDesignExecutionPolicy(constrained),
     state: "implemented",
     variantIds: [variant.id],
     artifacts: {},
@@ -108,6 +110,8 @@ test("visual contracts are strict and bound critic scores", async () => {
   assert.equal(criticSchema.properties.confidence.minimum, 0);
   assert.equal(criticSchema.properties.confidence.maximum, 1);
   assert.equal(runSchema.additionalProperties, false);
+  assert.ok(runSchema.required.includes("policyDigest"));
+  assert.equal(runSchema.properties.policyDigest.pattern, "^sha256:[a-f0-9]{64}$");
   assert.equal(runSchema.properties.variantIds.uniqueItems, true);
   assert.equal(runSchema.properties.critiqueRepairFindingCount.type, "integer");
   assert.equal(runSchema.properties.critiqueRepairFindingCount.minimum, 0);
@@ -127,6 +131,40 @@ test("verification events retain their report artifact path", () => {
     reportPath: ".design/verification-report.json",
   };
   assert.equal(event.reportPath, ".design/verification-report.json");
+});
+
+test("binds a visual run to the complete canonical execution policy", () => {
+  const sameLimitStandard = resolveDesignExecutionPolicy({
+    mode: "refine", profile: "standard", rankedRecipeIds: ["developer-tool"],
+  });
+  assert.equal(sameLimitStandard.variantLimit, constrained.variantLimit);
+  const run = createVisualRun({ id: "policy-bound", policyPath: "policy.json", policy: constrained });
+  const before = structuredClone(run);
+  assert.throws(() => applyVisualRunEvent(run, {
+    type: "directions-validated", ...event(1), variantIds: ["v1"],
+  }, sameLimitStandard), /policy digest mismatch/i);
+  assert.deepEqual(run, before);
+
+  const reordered = Object.fromEntries(
+    Object.entries(constrained).reverse().map(([key, value]) => [
+      key,
+      key === "freedoms" ? Object.fromEntries(Object.entries(value).reverse()) : value,
+    ]),
+  ) as typeof constrained;
+  assert.equal(digestDesignExecutionPolicy(reordered), digestDesignExecutionPolicy(constrained));
+  assert.equal(run.policyDigest, digestDesignExecutionPolicy(constrained));
+});
+
+test("policy digest covers calibration and all other policy fields", () => {
+  const run = createVisualRun({ id: "policy-complete", policyPath: "policy.json", policy: constrained });
+  const calibrated = {
+    ...constrained,
+    capabilityClassId: `${constrained.capabilityClassId}-calibrated`,
+  };
+  assert.equal(calibrated.variantLimit, constrained.variantLimit);
+  assert.throws(() => applyVisualRunEvent(run, {
+    type: "directions-validated", ...event(1), variantIds: ["v1"],
+  }, calibrated), /policy digest mismatch/i);
 });
 
 test("requires the complete constrained visual correction path and retains artifacts", () => {
@@ -194,7 +232,7 @@ test("allows the standard no-repair branch only for a critique with zero finding
 });
 
 test("rejects variant counts and duplicate variant ids that disagree with policy", () => {
-  const run = createVisualRun({ id: "run-count", policyPath: ".design/execution-policy.json" });
+  const run = createVisualRun({ id: "run-count", policyPath: ".design/execution-policy.json", policy: standard });
   for (const variantIds of [["v1"], ["v1", "v1"]]) {
     const before = structuredClone(run);
     assert.throws(
@@ -206,7 +244,7 @@ test("rejects variant counts and duplicate variant ids that disagree with policy
 });
 
 test("rejects implementations and critique selections outside the validated variants", () => {
-  let run = createVisualRun({ id: "run-membership", policyPath: ".design/execution-policy.json" });
+  let run = createVisualRun({ id: "run-membership", policyPath: ".design/execution-policy.json", policy: standard });
   run = applyVisualRunEvent(run, {
     type: "directions-validated",
     ...event(1),
@@ -245,7 +283,7 @@ test("persists and validates the critique finding count for replay", () => {
   const next = applyVisualRunEvent(replayed, { type: "no-repair-needed", ...event(5) }, standard);
   assert.equal(next.state, "no-repair-needed");
 
-  let beforeCritique = createVisualRun({ id: "run-invalid-count", policyPath: "policy.json" });
+  let beforeCritique = createVisualRun({ id: "run-invalid-count", policyPath: "policy.json", policy: standard });
   beforeCritique = applyVisualRunEvent(beforeCritique, {
     type: "directions-validated", ...event(1), variantIds: ["v1", "v2"],
   }, standard);
@@ -270,7 +308,7 @@ test("persists and validates the critique finding count for replay", () => {
 });
 
 test("rejects skipped stages and leaves the original run unchanged", () => {
-  const run = createVisualRun({ id: "run-skip", policyPath: ".design/execution-policy.json" });
+  const run = createVisualRun({ id: "run-skip", policyPath: ".design/execution-policy.json", policy: constrained });
   const before = structuredClone(run);
   assert.throws(() => applyVisualRunEvent(run, {
     type: "final-audit-recorded",
@@ -294,7 +332,7 @@ test("requires a verified outcome and makes terminal states terminal", () => {
   }, standard), /verified outcome/);
 
   const blocked = applyVisualRunEvent(
-    createVisualRun({ id: "run-blocked", policyPath: "policy.json" }),
+    createVisualRun({ id: "run-blocked", policyPath: "policy.json", policy: constrained }),
     { type: "blocked", ...event(1) },
     constrained,
   );
@@ -312,7 +350,7 @@ test("publishes the exact allowed event table without exposing mutable internals
 });
 
 test("requires atomic exact implementation coverage for standard and advanced policies", () => {
-  let standardRun = createVisualRun({ id: "run-standard-coverage", policyPath: "policy.json" });
+  let standardRun = createVisualRun({ id: "run-standard-coverage", policyPath: "policy.json", policy: standard });
   standardRun = applyVisualRunEvent(standardRun, {
     type: "directions-validated", ...event(1), variantIds: ["v1", "v2"],
   }, standard);
@@ -359,7 +397,7 @@ test("requires atomic exact implementation coverage for standard and advanced po
     { variantId: "v1", artifactId: "a1" },
   ]);
 
-  let advancedRun = createVisualRun({ id: "run-advanced-coverage", policyPath: "policy.json" });
+  let advancedRun = createVisualRun({ id: "run-advanced-coverage", policyPath: "policy.json", policy: advanced });
   advancedRun = applyVisualRunEvent(advancedRun, {
     type: "directions-validated", ...event(1), variantIds: ["v1", "v2", "v3"],
   }, advanced);
@@ -408,7 +446,7 @@ test("rejects a stale repair id without mutation or artifact overwrite", () => {
 
 test("clones persisted implementation references across later transitions", () => {
   const implemented = (() => {
-    let run = createVisualRun({ id: "run-immutable-artifacts", policyPath: "policy.json" });
+    let run = createVisualRun({ id: "run-immutable-artifacts", policyPath: "policy.json", policy: standard });
     run = applyVisualRunEvent(run, {
       type: "directions-validated", ...event(1), variantIds: ["v1", "v2"],
     }, standard);
@@ -430,7 +468,7 @@ test("clones persisted implementation references across later transitions", () =
 });
 
 test("validates all visual event payload fields before mutation", () => {
-  const base = createVisualRun({ id: "run-payload", policyPath: "policy.json" });
+  const base = createVisualRun({ id: "run-payload", policyPath: "policy.json", policy: constrained });
   for (const bad of [
     { type: "directions-validated", id: "", at: event(1).at, variantIds: ["v1"] },
     { type: "directions-validated", id: "1", at: "not-a-date", variantIds: ["v1"] },
@@ -449,6 +487,12 @@ test("validates all visual event payload fields before mutation", () => {
   }, constrained), /artifact/i);
   assert.deepEqual(run, before);
 
+  assert.throws(() => applyVisualRunEvent(run, {
+    type: "implementation-recorded", ...event(2),
+    implementations: [{ variantId: "v1", artifactId: "diff:v1", injected: true }],
+  } as VisualRunEvent, constrained), /unknown field/i);
+  assert.deepEqual(run, before);
+
   const corrupt = { ...base, injected: true } as VisualRun;
   assert.throws(() => applyVisualRunEvent(corrupt, {
     type: "directions-validated", ...event(1), variantIds: ["v1"],
@@ -456,7 +500,7 @@ test("validates all visual event payload fields before mutation", () => {
 });
 
 test("deep-clones history snapshots across transitions", () => {
-  const first = createVisualRun({ id: "history-clone", policyPath: "policy.json" });
+  const first = createVisualRun({ id: "history-clone", policyPath: "policy.json", policy: constrained });
   const second = applyVisualRunEvent(first, {
     type: "directions-validated", ...event(1), variantIds: ["v1"],
   }, constrained);
@@ -466,7 +510,7 @@ test("deep-clones history snapshots across transitions", () => {
 });
 
 test("rejects forged persisted snapshots before any transition", () => {
-  let implemented = createVisualRun({ id: "coherence", policyPath: "policy.json" });
+  let implemented = createVisualRun({ id: "coherence", policyPath: "policy.json", policy: constrained });
   implemented = applyVisualRunEvent(implemented, { type: "directions-validated", ...event(1), variantIds: ["v1"] }, constrained);
   implemented = applyVisualRunEvent(implemented, {
     type: "implementation-recorded", ...event(2), implementations: [{ variantId: "v1", artifactId: "diff:v1" }],
@@ -515,6 +559,7 @@ test("rejects forged no-repair semantics and verified snapshots", () => {
   let noRepair = runThroughCritique(standard, 0, "v1");
   noRepair = applyVisualRunEvent(noRepair, { type: "no-repair-needed", ...event(5) }, standard);
   const constrainedForgery = structuredClone(noRepair);
+  constrainedForgery.policyDigest = digestDesignExecutionPolicy(constrained);
   assert.throws(() => applyVisualRunEvent(constrainedForgery, {
     type: "recheck-evidence-recorded", ...event(6), evidenceId: "e2",
   }, constrained), /snapshot invariant/i);

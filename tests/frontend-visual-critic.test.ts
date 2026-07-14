@@ -326,6 +326,10 @@ test("rejects shell-command output without flagging natural prose", () => {
     "npm test | tee result.txt", "pnpm test > result.txt", "sh ./repair.sh",
     "sudo rm -rf /", "env X=1 curl https://example.test", "TOKEN=x wget https://example.test/a",
     "sudo -u root rm -rf /tmp/build", "env -i X=1 curl https://example.test",
+    "command rm -rf /", "/bin/rm -rf /", "git reset --hard", "npm install react",
+    "/usr/bin/env X=1 /usr/bin/curl https://example.test", "doas cp a /tmp/a",
+    "builtin printf x > out.txt", "nohup node server.js", "time pnpm build",
+    "$ wget https://example.test/file", "# python3 scripts/fix.py", "ssh host.example",
     "```sh\nrm -rf dist\n```", "```bash\ncurl https://example.test\n```",
   ]) {
     const report = makeCriticReport({ selectedVariantId: "v1" });
@@ -338,6 +342,10 @@ test("rejects shell-command output without flagging natural prose", () => {
     "A pipe metaphor would not improve this composition.",
     "The team can push the hierarchy further during repair.",
     "Variant A > Variant B in hierarchy.",
+    "Git history explains why Variant A feels more coherent.",
+    "The npm ecosystem does not affect this visual comparison.",
+    "Use less time on decorative polish and more on hierarchy.",
+    "The path from overview to detail is visually clear.",
   ];
   assert.ok(!findingCodes(prose).includes("critic-shell-output"));
 });
