@@ -5,6 +5,7 @@ import type {
   VisualCriterion,
   VisualCriticInput,
   VisualCriticReport,
+  VisualRunEvent,
 } from "./visual-loop-types.ts";
 
 const criteria: VisualCriterion[] = [
@@ -21,6 +22,7 @@ const criteria: VisualCriterion[] = [
 ];
 
 const codeShape = /```(?:jsx|tsx|css|html|javascript|typescript)|(?:^|\n)(?:diff --git|@@ |\+\+\+ |--- )|<\/?[a-z][^>]*>|\bclassName\s*=|\b(?:git|npm|pnpm|yarn)\s+(?:add|commit|run)\b/i;
+const shellCommandShape = /(?:^|\n)\s*(?:(?:rm\s+-[a-z]*r[a-z]*f|curl(?:\s|$)|wget(?:\s|$)|(?:python\d*|node|bash|zsh|sh)\s+\S|git\s+push\b)|[^\n]*(?:\s\|\s|\s(?:>|>>|<)\s)\S)/i;
 
 const aiSlopCodes = new Set<AiSlopCode>([
   "generic-hero-copy",
@@ -81,11 +83,88 @@ const reportStrings = (value: unknown, seen = new Set<object>()): string[] => {
   return Object.values(value).flatMap((entry) => reportStrings(entry, seen));
 };
 
+const hasOnlyKeys = (value: Record<string, unknown>, allowed: readonly string[]) =>
+  Object.keys(value).every((key) => allowed.includes(key));
+
+const stringArray = (value: unknown, nonEmptyItems = false): value is string[] =>
+  Array.isArray(value) && value.every((item) =>
+    typeof item === "string" && (!nonEmptyItems || item.trim().length > 0));
+
+const validFinding = (value: unknown): value is VerificationFinding => {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    "id", "code", "source", "severity", "gate", "message", "evidence",
+    "affectedSurface", "remediation", "autofixable",
+  ])) return false;
+  return ["id", "code", "source", "message", "remediation"].every((key) => nonEmpty(value[key]))
+    && ["critical", "high", "medium", "low", "info"].includes(String(value.severity))
+    && (value.gate === "hard" || value.gate === "soft")
+    && stringArray(value.evidence, true) && value.evidence.length > 0
+    && (value.affectedSurface === undefined || nonEmpty(value.affectedSurface))
+    && typeof value.autofixable === "boolean";
+};
+
+const validReportContract = (value: unknown): value is VisualCriticReport => {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    "schemaVersion", "id", "generatorActorId", "criticActorId", "candidateVariantIds",
+    "evidenceIds", "comparisons", "outcome", "selectedVariantId", "repairFindings",
+    "confidence", "residualUncertainty", "containsImplementationCode",
+  ])) return false;
+  if (value.schemaVersion !== "1.0" || !nonEmpty(value.id) || !nonEmpty(value.generatorActorId)
+    || !nonEmpty(value.criticActorId) || !stringArray(value.candidateVariantIds, true)
+    || value.candidateVariantIds.length === 0
+    || new Set(value.candidateVariantIds).size !== value.candidateVariantIds.length
+    || !stringArray(value.evidenceIds, true)
+    || value.evidenceIds.length === 0 || !Array.isArray(value.comparisons)
+    || new Set(value.evidenceIds).size !== value.evidenceIds.length
+    || value.comparisons.length === 0 || !Array.isArray(value.repairFindings)
+    || !value.repairFindings.every(validFinding) || !stringArray(value.residualUncertainty)
+    || typeof value.confidence !== "number" || !Number.isFinite(value.confidence)
+    || value.confidence < 0 || value.confidence > 1
+    || typeof value.containsImplementationCode !== "boolean") return false;
+  return value.comparisons.every((comparison) => {
+    if (!isRecord(comparison) || !hasOnlyKeys(comparison, [
+      "variantId", "scores", "strengths", "weaknesses", "aiSlopFindings",
+    ]) || !nonEmpty(comparison.variantId) || !isRecord(comparison.scores)
+      || !stringArray(comparison.strengths, true) || !stringArray(comparison.weaknesses, true)
+      || !Array.isArray(comparison.aiSlopFindings)) return false;
+    const scorecard = comparison.scores as Record<string, unknown>;
+    if (!hasOnlyKeys(scorecard, criteria)
+      || criteria.some((criterion) => !Object.hasOwn(scorecard, criterion)
+        || typeof scorecard[criterion] !== "number"
+        || !Number.isFinite(scorecard[criterion])
+        || (scorecard[criterion] as number) < 0
+        || (scorecard[criterion] as number) > 1)) return false;
+    return comparison.aiSlopFindings.every((entry) => isRecord(entry)
+      && hasOnlyKeys(entry, ["code", "severity", "evidence", "explanation"])
+      && nonEmpty(entry.code) && aiSlopCodes.has(entry.code as AiSlopCode)
+      && typeof entry.severity === "string" && aiSlopSeverities.has(entry.severity)
+      && nonEmpty(entry.evidence) && nonEmpty(entry.explanation));
+  });
+};
+
 export const createVisualCriticInput = (
   input: Omit<VisualCriticInput, "schemaVersion"> & { schemaVersion?: "1.0" },
 ): VisualCriticInput => {
+  if (!nonEmpty(input.policyId) || !nonEmpty(input.generatorActorId) || !nonEmpty(input.criticActorId)
+    || !Array.isArray(input.candidates) || input.candidates.length === 0) {
+    throw new Error("Visual critic input requires non-empty policy, actors, and candidates.");
+  }
   if (input.generatorActorId === input.criticActorId) {
     throw new Error("Visual comparison requires an independent critic actor.");
+  }
+  const variantIds = new Set<string>();
+  const evidenceIds = new Set<string>();
+  for (const candidate of input.candidates) {
+    if (!isRecord(candidate) || !nonEmpty(candidate.variantId) || !nonEmpty(candidate.directionPath)
+      || !nonEmpty(candidate.evidenceId) || !stringArray(candidate.screenshotPaths, true)
+      || candidate.screenshotPaths.length === 0) {
+      throw new Error("Visual critic input candidates require non-empty artifact references and screenshots.");
+    }
+    if (variantIds.has(candidate.variantId) || evidenceIds.has(candidate.evidenceId)) {
+      throw new Error("Visual critic input candidate variantId and evidenceId values must be unique.");
+    }
+    variantIds.add(candidate.variantId);
+    evidenceIds.add(candidate.evidenceId);
   }
   return {
     schemaVersion: "1.0",
@@ -101,8 +180,85 @@ export const createVisualCriticInput = (
 
 export const validateVisualCriticReport = (
   input: VisualCriticInput,
-  report: VisualCriticReport,
+  report: unknown,
 ): VerificationFinding[] => {
+  if (!validReportContract(report)) {
+    const invalid = [hardFinding(
+      "critic-report-invalid",
+      "The visual critic report does not satisfy the complete required contract.",
+      "Provide every required report field, array, comparison scorecard, and verification finding in its published shape.",
+    )];
+    if (isRecord(report)) {
+      const candidateIds = input.candidates.map(({ variantId }) => variantId);
+      const evidenceIds = input.candidates.map(({ evidenceId }) => evidenceId);
+      if (Array.isArray(report.candidateVariantIds)) {
+        const mismatch = mismatchEvidence(candidateIds, report.candidateVariantIds.filter((id): id is string => typeof id === "string"));
+        if (mismatch.length > 0) invalid.push(hardFinding(
+          "critic-candidate-mismatch", "The report candidate set does not match the supplied variants.",
+          "Compare every supplied candidate exactly once and do not add candidates.", mismatch,
+        ));
+      }
+      if (Array.isArray(report.evidenceIds)) {
+        const mismatch = mismatchEvidence(evidenceIds, report.evidenceIds.filter((id): id is string => typeof id === "string"));
+        if (mismatch.length > 0) invalid.push(hardFinding(
+          "critic-evidence-mismatch", "The report evidence set does not match the supplied evidence.",
+          "Reference every supplied evidence id exactly once and do not add evidence ids.", mismatch,
+        ));
+      }
+      if (report.schemaVersion !== "1.0") invalid.push(hardFinding(
+        "critic-schema-version", "The visual critic report schemaVersion must be 1.0.",
+        "Regenerate the report with schemaVersion 1.0.",
+      ));
+      if (report.outcome !== "selected" && report.outcome !== "no-acceptable-variant") invalid.push(hardFinding(
+        "critic-outcome-invalid", "The visual critic report outcome is invalid.",
+        "Use selected or no-acceptable-variant as the report outcome.",
+      ));
+      if (typeof report.confidence !== "number" || !Number.isFinite(report.confidence)
+        || report.confidence < 0 || report.confidence > 1) invalid.push(hardFinding(
+        "critic-confidence-invalid", "The visual critic confidence must be a finite number between 0 and 1.",
+        "Provide a finite confidence score from 0 through 1.",
+      ));
+      if (Array.isArray(report.comparisons) && report.comparisons.some((comparison) =>
+        !isRecord(comparison) || !Array.isArray(comparison.aiSlopFindings)
+        || comparison.aiSlopFindings.some((entry) => !isRecord(entry)
+          || !nonEmpty(entry.code) || !aiSlopCodes.has(entry.code as AiSlopCode)
+          || typeof entry.severity !== "string" || !aiSlopSeverities.has(entry.severity)
+          || !nonEmpty(entry.evidence) || !nonEmpty(entry.explanation)))) {
+        invalid.push(hardFinding(
+          "critic-ai-slop-finding-invalid", "A comparison has a malformed AI-slop finding collection.",
+          "Provide aiSlopFindings as a valid array of complete findings.",
+        ));
+      }
+      if (Array.isArray(report.comparisons)) {
+        for (const candidateId of sortedUnique(candidateIds)) {
+          const count = report.comparisons.filter((comparison) => isRecord(comparison) && comparison.variantId === candidateId).length;
+          if (count !== 1) invalid.push(hardFinding(
+            "critic-comparison-missing", `Candidate ${candidateId} must have exactly one comparison.`,
+            "Supply exactly one complete scorecard for every candidate.", [candidateId],
+          ));
+        }
+        for (const comparison of report.comparisons) {
+          if (!isRecord(comparison) || !isRecord(comparison.scores)) continue;
+          for (const criterion of criteria) {
+            if (!Object.hasOwn(comparison.scores, criterion)) invalid.push(hardFinding(
+              "critic-criterion-missing", `A comparison is missing ${criterion}.`,
+              "Score every required visual criterion.", [criterion],
+            ));
+            else {
+              const score = comparison.scores[criterion];
+              if (typeof score !== "number" || !Number.isFinite(score) || score < 0 || score > 1) {
+                invalid.push(hardFinding(
+                  "critic-score-invalid", `A comparison has an invalid ${criterion} score.`,
+                  "Use a finite score between 0 and 1 for every criterion.", [criterion],
+                ));
+              }
+            }
+          }
+        }
+      }
+    }
+    return invalid;
+  }
   const findings: VerificationFinding[] = [];
   const candidateIds = input.candidates.map(({ variantId }) => variantId);
   const evidenceIds = input.candidates.map(({ evidenceId }) => evidenceId);
@@ -291,23 +447,50 @@ export const validateVisualCriticReport = (
       "Return code-free visual analysis and leave implementation to the generator.",
     ));
   }
+  if (reportStrings(report).some((value) => shellCommandShape.test(value))) {
+    findings.push(hardFinding(
+      "critic-shell-output",
+      "The critic report contains a shell command or command pipeline.",
+      "Return visual analysis only; do not include executable shell instructions.",
+    ));
+  }
 
   return findings;
 };
 
+export const createCritiqueRecordedEvent = (
+  input: VisualCriticInput,
+  report: unknown,
+  event: { id: string; at: string },
+): Extract<VisualRunEvent, { type: "critique-recorded" }> => {
+  const findings = validateVisualCriticReport(input, report);
+  if (findings.length > 0 || !validReportContract(report)) {
+    throw new Error("Cannot create a critique event from an invalid visual critic report.");
+  }
+  return {
+    type: "critique-recorded",
+    id: event.id,
+    at: event.at,
+    critiqueId: report.id,
+    ...(report.selectedVariantId === undefined ? {} : { selectedVariantId: report.selectedVariantId }),
+    repairFindingCount: report.repairFindings.length,
+  };
+};
+
 export const compareDesignVariants = (
   input: VisualCriticInput,
-  report: VisualCriticReport,
+  report: unknown,
 ): VariantComparisonResult => {
   const findings = validateVisualCriticReport(input, report);
   if (findings.some(({ severity, gate }) =>
     gate === "hard" && (severity === "critical" || severity === "high"))) {
     return { ok: false, findings };
   }
+  const validReport = report as VisualCriticReport;
   return {
     ok: true,
-    ...(report.selectedVariantId === undefined ? {} : { selectedVariantId: report.selectedVariantId }),
+    ...(validReport.selectedVariantId === undefined ? {} : { selectedVariantId: validReport.selectedVariantId }),
     findings,
-    report,
+    report: validReport,
   };
 };

@@ -32,27 +32,171 @@ const targetStateByEvent: Record<VisualRunEvent["type"], VisualRunState> = {
   failed: "failed",
 };
 
+const nonEmpty: (value: unknown, label: string) => asserts value is string = (value, label) => {
+  if (typeof value !== "string" || value.trim() === "") throw new Error(`${label} must be non-empty`);
+};
+
+const hasOnlyKeys = (value: object, allowed: readonly string[], label: string) => {
+  const unexpected = Object.keys(value).find((key) => !allowed.includes(key));
+  if (unexpected) throw new Error(`${label} contains unknown field ${unexpected}`);
+};
+
+const rfc3339 = (value: unknown, label: string) => {
+  nonEmpty(value, label);
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
+  if (!match) throw new Error(`${label} must be an RFC 3339 timestamp`);
+  const [, year, month, day, hour, minute, second, , offsetHour, offsetMinute] = match;
+  const validDay = Number(month) >= 1 && Number(month) <= 12
+    && Number(day) >= 1 && Number(day) <= new Date(Date.UTC(Number(year), Number(month), 0)).getUTCDate();
+  const validTime = Number(hour) <= 23 && Number(minute) <= 59 && Number(second) <= 60;
+  const validOffset = offsetHour === undefined || (Number(offsetHour) <= 23 && Number(offsetMinute) <= 59);
+  if (!validDay || !validTime || !validOffset) throw new Error(`${label} must be an RFC 3339 timestamp`);
+};
+
+const validateStringIds = (value: unknown, label: string, unique = false) => {
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
+  value.forEach((entry) => nonEmpty(entry, `${label} entry`));
+  if (unique && new Set(value).size !== value.length) throw new Error(`${label} must contain unique variant ids`);
+};
+
+const validateStoredRun = (run: VisualRun) => {
+  if (run?.schemaVersion !== "1.0") throw new Error("visual run schemaVersion must be 1.0");
+  hasOnlyKeys(run, [
+    "schemaVersion", "id", "policyPath", "state", "variantIds", "selectedVariantId",
+    "critiqueRepairFindingCount", "artifacts", "history",
+  ], "visual run");
+  nonEmpty(run.id, "visual run id");
+  nonEmpty(run.policyPath, "visual run policy path");
+  if (!Object.hasOwn(transitionByState, run.state)) throw new Error("visual run state is invalid");
+  validateStringIds(run.variantIds, "visual run variant ids", true);
+  if (run.selectedVariantId !== undefined) {
+    nonEmpty(run.selectedVariantId, "visual run selected variant id");
+    if (!run.variantIds.includes(run.selectedVariantId)) throw new Error("visual run selected variant is stale");
+  }
+  if (run.critiqueRepairFindingCount !== undefined
+    && (!Number.isInteger(run.critiqueRepairFindingCount) || run.critiqueRepairFindingCount < 0)) {
+    throw new Error("visual run critique repair finding count must be a non-negative integer");
+  }
+  if (typeof run.artifacts !== "object" || run.artifacts === null || Array.isArray(run.artifacts)) {
+    throw new Error("visual run artifacts must be an object");
+  }
+  hasOnlyKeys(run.artifacts, [
+    "implementations", "initialEvidenceId", "critiqueId", "repairId",
+    "repairImplementationArtifact", "recheckEvidenceId", "finalAuditReportPath",
+    "verificationReportPath",
+  ], "visual run artifacts");
+  for (const field of [
+    "initialEvidenceId", "critiqueId", "repairId", "repairImplementationArtifact",
+    "recheckEvidenceId", "finalAuditReportPath", "verificationReportPath",
+  ] as const) if (run.artifacts[field] !== undefined) nonEmpty(run.artifacts[field], `visual run artifact ${field}`);
+  if (run.artifacts.implementations !== undefined) {
+    if (!Array.isArray(run.artifacts.implementations)) throw new Error("visual run implementations must be an array");
+    const ids: string[] = [];
+    for (const implementation of run.artifacts.implementations) {
+      if (typeof implementation !== "object" || implementation === null || Array.isArray(implementation)) {
+        throw new Error("visual run implementation reference must be an object");
+      }
+      hasOnlyKeys(implementation, ["variantId", "artifactId"], "visual run implementation reference");
+      nonEmpty(implementation?.variantId, "visual run implementation variant id");
+      nonEmpty(implementation?.artifactId, "visual run implementation artifact id");
+      ids.push(implementation.variantId);
+    }
+    if (new Set(ids).size !== ids.length) throw new Error("visual run implementation variant ids must be unique");
+    if (ids.some((id) => !run.variantIds.includes(id))) throw new Error("visual run implementation variant reference is stale");
+  }
+  if (!Array.isArray(run.history)) throw new Error("visual run history must be an array");
+  for (const entry of run.history) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new Error("visual run history entry must be an object");
+    }
+    hasOnlyKeys(entry, ["state", "at", "eventId"], "visual run history entry");
+    if (!Object.hasOwn(transitionByState, entry?.state)) throw new Error("visual run history state is invalid");
+    rfc3339(entry.at, "visual run history timestamp");
+    if (entry.eventId !== undefined) nonEmpty(entry.eventId, "visual run history event id");
+  }
+};
+
+const validateEventPayload = (event: VisualRunEvent) => {
+  if (!event || typeof event !== "object" || !Object.hasOwn(targetStateByEvent, event.type)) {
+    throw new Error("visual run event type is invalid");
+  }
+  const fieldsByType: Record<VisualRunEvent["type"], string[]> = {
+    "directions-validated": ["type", "id", "at", "variantIds"],
+    "implementation-recorded": ["type", "id", "at", "implementations"],
+    "initial-evidence-recorded": ["type", "id", "at", "evidenceId"],
+    "critique-recorded": ["type", "id", "at", "critiqueId", "selectedVariantId", "repairFindingCount"],
+    "repair-requested": ["type", "id", "at", "repairId"],
+    "no-repair-needed": ["type", "id", "at"],
+    "repair-recorded": ["type", "id", "at", "repairId", "implementationArtifact"],
+    "recheck-evidence-recorded": ["type", "id", "at", "evidenceId"],
+    "final-audit-recorded": ["type", "id", "at", "reportPath"],
+    "verification-recorded": ["type", "id", "at", "outcome", "reportPath"],
+    blocked: ["type", "id", "at"],
+    failed: ["type", "id", "at"],
+  };
+  hasOnlyKeys(event, fieldsByType[event.type], "visual run event");
+  nonEmpty(event.id, "visual run event id");
+  rfc3339(event.at, "visual run event timestamp");
+  switch (event.type) {
+    case "directions-validated":
+      validateStringIds(event.variantIds, "directions variant ids", true);
+      break;
+    case "implementation-recorded": {
+      if (!Array.isArray(event.implementations)) throw new Error("implementation references must be an array");
+      for (const implementation of event.implementations) {
+        nonEmpty(implementation?.variantId, "implementation variant id");
+        nonEmpty(implementation?.artifactId, "implementation artifact id");
+      }
+      break;
+    }
+    case "initial-evidence-recorded": case "recheck-evidence-recorded":
+      nonEmpty(event.evidenceId, "evidence id");
+      break;
+    case "critique-recorded":
+      nonEmpty(event.critiqueId, "critique id");
+      if (event.selectedVariantId !== undefined) nonEmpty(event.selectedVariantId, "selected variant id");
+      break;
+    case "repair-requested":
+      nonEmpty(event.repairId, "repair id");
+      break;
+    case "repair-recorded":
+      nonEmpty(event.repairId, "repair id");
+      nonEmpty(event.implementationArtifact, "repair implementation artifact");
+      break;
+    case "final-audit-recorded": case "verification-recorded":
+      nonEmpty(event.reportPath, "report path");
+      break;
+  }
+};
+
 export const allowedVisualRunEvents = (state: VisualRunState): string[] =>
   [...transitionByState[state]];
 
 export const createVisualRun = (input: {
   id: string;
   policyPath: string;
-}): VisualRun => ({
-  schemaVersion: "1.0",
-  id: input.id,
-  policyPath: input.policyPath,
-  state: "policy-resolved",
-  variantIds: [],
-  artifacts: {},
-  history: [{ state: "policy-resolved", at: "1970-01-01T00:00:00.000Z" }],
-});
+}): VisualRun => {
+  hasOnlyKeys(input, ["id", "policyPath"], "visual run input");
+  nonEmpty(input.id, "visual run id");
+  nonEmpty(input.policyPath, "visual run policy path");
+  return {
+    schemaVersion: "1.0",
+    id: input.id,
+    policyPath: input.policyPath,
+    state: "policy-resolved",
+    variantIds: [],
+    artifacts: {},
+    history: [{ state: "policy-resolved", at: "1970-01-01T00:00:00.000Z" }],
+  };
+};
 
 const validateEvent = (
   run: VisualRun,
   event: VisualRunEvent,
   policy: DesignExecutionPolicy,
 ) => {
+  validateStoredRun(run);
+  validateEventPayload(event);
   if (!transitionByState[run.state].includes(event.type)) {
     throw new Error(`${event.type} is not allowed from ${run.state}`);
   }
@@ -131,7 +275,7 @@ export const applyVisualRunEvent = (
       ...run.artifacts,
       implementations: run.artifacts.implementations?.map((implementation) => ({ ...implementation })),
     },
-    history: [...run.history, { state: targetState, at: event.at, eventId: event.id }],
+    history: [...run.history.map((entry) => ({ ...entry })), { state: targetState, at: event.at, eventId: event.id }],
   };
 
   switch (event.type) {

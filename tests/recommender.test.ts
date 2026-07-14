@@ -90,6 +90,13 @@ test("visual critic routing requires rendered evidence and comparison intent", a
   );
 });
 
+test("visual critic routes in a non-Tailwind frontend fixture", async () => {
+  const recommendations = await fixtureRecommendations("fixtures/vite-react-ts", {
+    userIntent: "Compare these two rendered variants using their screenshots",
+  });
+  assert.equal(recommendations[0]?.skillId, "frontend.visual-critic");
+});
+
 test("recommender omits the final audit without an explicit audit intent", async () => {
   const recommendations = await nextFixtureRecommendations();
 

@@ -3,7 +3,7 @@
   "name": "visual-critic",
   "displayName": "Visual Critic",
   "description": "Critique and compare frontend visual candidates only after two rendered variants or screenshots exist, producing an independent code-free selection report.",
-  "stackTags": ["frontend", "web-app", "react", "typescript", "tailwind"],
+  "stackTags": ["frontend", "web-app"],
   "taskTags": ["visual-critique", "variant-comparison", "responsive-qa", "ai-slop-review"],
   "supportedAgents": ["codex", "generic-agent-skills"],
   "source": {

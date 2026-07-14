@@ -428,3 +428,39 @@ test("clones persisted implementation references across later transitions", () =
   assert.notEqual(next.artifacts.implementations?.[0], implemented.artifacts.implementations?.[0]);
   assert.deepEqual(next.artifacts.implementations, implemented.artifacts.implementations);
 });
+
+test("validates all visual event payload fields before mutation", () => {
+  const base = createVisualRun({ id: "run-payload", policyPath: "policy.json" });
+  for (const bad of [
+    { type: "directions-validated", id: "", at: event(1).at, variantIds: ["v1"] },
+    { type: "directions-validated", id: "1", at: "not-a-date", variantIds: ["v1"] },
+    { type: "directions-validated", ...event(1), variantIds: [""] },
+    { type: "directions-validated", ...event(1), variantIds: ["v1"], injected: true },
+  ]) {
+    const before = structuredClone(base);
+    assert.throws(() => applyVisualRunEvent(base, bad as VisualRunEvent, constrained), /non-empty|RFC 3339|unknown field/);
+    assert.deepEqual(base, before);
+  }
+
+  let run = applyVisualRunEvent(base, { type: "directions-validated", ...event(1), variantIds: ["v1"] }, constrained);
+  const before = structuredClone(run);
+  assert.throws(() => applyVisualRunEvent(run, {
+    type: "implementation-recorded", ...event(2), implementations: [{ variantId: "v1", artifactId: "" }],
+  }, constrained), /artifact/i);
+  assert.deepEqual(run, before);
+
+  const corrupt = { ...base, injected: true } as VisualRun;
+  assert.throws(() => applyVisualRunEvent(corrupt, {
+    type: "directions-validated", ...event(1), variantIds: ["v1"],
+  }, constrained), /unknown field/);
+});
+
+test("deep-clones history snapshots across transitions", () => {
+  const first = createVisualRun({ id: "history-clone", policyPath: "policy.json" });
+  const second = applyVisualRunEvent(first, {
+    type: "directions-validated", ...event(1), variantIds: ["v1"],
+  }, constrained);
+  assert.notEqual(second.history[0], first.history[0]);
+  second.history[0].at = "2027-01-01T00:00:00Z";
+  assert.equal(first.history[0].at, "1970-01-01T00:00:00.000Z");
+});

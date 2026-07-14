@@ -49,6 +49,28 @@ export type WorkflowStep = {
   gate?: string;
 };
 
+export type WorkflowBranchContext = {
+  criticOutcome: "selected" | "no-acceptable-variant";
+  profile: "constrained" | "standard" | "advanced";
+  repairFindingCount: number;
+};
+
+export type WorkflowBranch = {
+  id: string;
+  afterStepId: string;
+  convergeAt: string;
+  cases: Array<{
+    id: string;
+    when: {
+      criticOutcome: WorkflowBranchContext["criticOutcome"];
+      profiles?: WorkflowBranchContext["profile"][];
+      repairFindings?: "zero" | "positive";
+    };
+    stepIds: string[];
+    terminal?: boolean;
+  }>;
+};
+
 export type WorkflowDefinition = {
   schemaVersion: "1.0";
   id: string;
@@ -56,6 +78,7 @@ export type WorkflowDefinition = {
   requiredCapabilities: string[];
   maxRepairIterations: number;
   steps: WorkflowStep[];
+  branches?: WorkflowBranch[];
 };
 
 export type RepairRequest = {

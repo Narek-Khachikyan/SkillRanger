@@ -2,10 +2,19 @@
   "schemaVersion": "1.0",
   "id": "frontend.visual-design-polish",
   "maxRepairIterations": 3,
+  "branches": [{
+    "id": "critic-decision", "afterStepId": "require-selected-variant-or-block-no-acceptable-variant", "convergeAt": "capture-recheck-evidence",
+    "cases": [
+      { "id": "rejected", "when": { "criticOutcome": "no-acceptable-variant" }, "stepIds": ["block-no-acceptable-variant"], "terminal": true },
+      { "id": "constrained-repair", "when": { "criticOutcome": "selected", "profiles": ["constrained"] }, "stepIds": ["repair-requested", "bounded-repair"] },
+      { "id": "findings-repair", "when": { "criticOutcome": "selected", "profiles": ["standard", "advanced"], "repairFindings": "positive" }, "stepIds": ["repair-requested", "bounded-repair"] },
+      { "id": "clean-selection", "when": { "criticOutcome": "selected", "profiles": ["standard", "advanced"], "repairFindings": "zero" }, "stepIds": ["no-repair-needed"] }
+    ]
+  }],
   "profileInstructions": {
     "constrained": ["Resolve one top recipe and one structured direction with exactly six selected rule ids: one compatible id from each rule family.", "Compare the direction with the selected recipe good/bad example pack before implementation.", "Implement only from existing primitives and verified patterns.", "Run one mandatory corrective pass followed by fresh evidence.", "A no-acceptable-variant outcome must block without repair; a selected outcome always enters repair-requested."],
     "standard": ["Limit exploration to 2–3 recipe-compatible variants.", "Allow one bounded composition variation.", "Keep hard gates unchanged.", "A no-acceptable-variant outcome must block; a selected outcome with repair findings enters repair-requested, while zero repair findings enters no-repair-needed."],
     "advanced": ["Allow new primitives only with product evidence and destructive critique.", "Keep hard gates unchanged.", "A no-acceptable-variant outcome must block; a selected outcome with repair findings enters repair-requested, while zero repair findings enters no-repair-needed."]
   },
-  "steps": ["collect-evidence", "validate-brief", "resolve-execution-policy", "select-recipe", "select-compatible-rules", "compare-recipe-examples", "define-structured-direction", "validate-direction", "validate-implementation-prerequisites", "implement", "capture-initial-evidence", "independent-visual-critique", "require-selected-variant-or-block-no-acceptable-variant", "repair-requested", "bounded-repair", "no-repair-needed", "capture-recheck-evidence", "capture-recheck-evidence-390", "capture-recheck-evidence-768", "capture-recheck-evidence-1440", "final-audit", "final-verify", "final-report"]
+  "steps": ["collect-evidence", "validate-brief", "resolve-execution-policy", "select-recipe", "select-compatible-rules", "compare-recipe-examples", "define-structured-direction", "validate-direction", "validate-implementation-prerequisites", "implement", "capture-initial-evidence", "independent-visual-critique", "require-selected-variant-or-block-no-acceptable-variant", "block-no-acceptable-variant", "repair-requested", "bounded-repair", "no-repair-needed", "capture-recheck-evidence", "capture-recheck-evidence-390", "capture-recheck-evidence-768", "capture-recheck-evidence-1440", "final-audit", "final-verify", "final-report"]
 }

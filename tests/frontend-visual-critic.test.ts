@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   compareDesignVariants,
+  createCritiqueRecordedEvent,
   createVisualCriticInput,
   validateVisualCriticReport,
   type VisualCriticReport,
@@ -289,4 +290,72 @@ test("accepts a complete code-free comparison without mutating the report", () =
   assert.equal(result.selectedVariantId, "v2");
   assert.equal(result.report, report);
   assert.deepEqual(report, before);
+});
+
+test("treats the critic report as an untrusted complete contract", () => {
+  const malformed: unknown[] = [null, [], "report", {}, { schemaVersion: "1.0" }];
+  for (const value of malformed) {
+    assert.doesNotThrow(() => validateVisualCriticReport(input, value));
+    assert.ok(validateVisualCriticReport(input, value).some(({ code }) => code === "critic-report-invalid"));
+  }
+
+  for (const field of ["id", "repairFindings", "residualUncertainty"] as const) {
+    const report = asHostReport(makeCriticReport({ selectedVariantId: "v1" }));
+    delete report[field];
+    assert.ok(validateVisualCriticReport(input, report).some(({ code }) => code === "critic-report-invalid"), field);
+  }
+
+  for (const field of ["strengths", "weaknesses", "scores"] as const) {
+    const report = makeCriticReport({ selectedVariantId: "v1" });
+    delete (report.comparisons[0] as unknown as Record<string, unknown>)[field];
+    assert.ok(validateVisualCriticReport(input, report).some(({ code }) => code === "critic-report-invalid"), field);
+  }
+});
+
+test("validates repair finding shapes at the critic boundary", () => {
+  const report = makeCriticReport({ selectedVariantId: "v1" });
+  (report as unknown as Record<string, unknown>).repairFindings = [{ id: "incomplete" }];
+  assert.ok(validateVisualCriticReport(input, report).some(({ code }) => code === "critic-report-invalid"));
+});
+
+test("rejects shell-command output without flagging natural prose", () => {
+  for (const sample of [
+    "rm -rf dist", "curl -L https://example.test", "wget https://example.test/a",
+    "python scripts/fix.py", "node scripts/fix.mjs", "git push origin main",
+    "npm test | tee result.txt", "pnpm test > result.txt", "sh ./repair.sh",
+  ]) {
+    const report = makeCriticReport({ selectedVariantId: "v1" });
+    report.comparisons[0].weaknesses = [sample];
+    assert.ok(findingCodes(report).includes("critic-shell-output"), sample);
+  }
+  const prose = makeCriticReport({ selectedVariantId: "v1" });
+  prose.comparisons[0].weaknesses = [
+    "The shell-like frame distracts from the content.",
+    "A pipe metaphor would not improve this composition.",
+    "The team can push the hierarchy further during repair.",
+  ];
+  assert.ok(!findingCodes(prose).includes("critic-shell-output"));
+});
+
+test("rejects empty or duplicate critic input artifacts", () => {
+  const cases = [
+    { ...input, candidates: [] },
+    { ...input, candidates: [{ variantId: "", directionPath: "a", evidenceId: "e", screenshotPaths: ["a.png"] }] },
+    { ...input, candidates: [{ variantId: "v", directionPath: "a", evidenceId: "e", screenshotPaths: [] }] },
+    { ...input, candidates: [input.candidates[0], { ...input.candidates[1], variantId: "v1" }] },
+    { ...input, candidates: [input.candidates[0], { ...input.candidates[1], evidenceId: "e1" }] },
+  ];
+  for (const value of cases) assert.throws(() => createVisualCriticInput(value), /critic input/i);
+});
+
+test("maps a validated critic report into a drift-free critique event", () => {
+  const report = makeCriticReport({ selectedVariantId: "v2" });
+  report.repairFindings = [{
+    id: "repair-1", code: "spacing", source: "critic", severity: "medium", gate: "soft",
+    message: "Tighten spacing.", evidence: ["e2"], remediation: "Adjust the selected composition.", autofixable: false,
+  }];
+  assert.deepEqual(createCritiqueRecordedEvent(input, report, { id: "event-4", at: "2026-07-14T00:00:04Z" }), {
+    type: "critique-recorded", id: "event-4", at: "2026-07-14T00:00:04Z",
+    critiqueId: "critique-1", selectedVariantId: "v2", repairFindingCount: 1,
+  });
 });

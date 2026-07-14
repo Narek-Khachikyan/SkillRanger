@@ -8,10 +8,11 @@
     "id": { "type": "string", "minLength": 1 },
     "generatorActorId": { "type": "string", "minLength": 1 },
     "criticActorId": { "type": "string", "minLength": 1 },
-    "candidateVariantIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-    "evidenceIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "candidateVariantIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+    "evidenceIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
     "comparisons": {
       "type": "array",
+      "minItems": 1,
       "items": { "$ref": "#/$defs/comparison" }
     },
     "outcome": { "enum": ["selected", "no-acceptable-variant"] },
@@ -21,7 +22,7 @@
       "items": { "$ref": "#/$defs/verificationFinding" }
     },
     "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
-    "residualUncertainty": { "type": "array", "items": { "type": "string" } },
+    "residualUncertainty": { "type": "array", "items": { "type": "string", "minLength": 1 } },
     "containsImplementationCode": { "const": false }
   },
   "$defs": {
@@ -49,8 +50,8 @@
       "properties": {
         "code": { "enum": ["generic-hero-copy", "interchangeable-saas-layout", "excessive-generic-cards", "meaningless-effects", "invented-proof", "repeated-icon-grid", "arbitrary-radii-shadows", "weak-hierarchy", "meaningless-decoration"] },
         "severity": { "enum": ["critical", "high", "medium", "low"] },
-        "evidence": { "type": "string" },
-        "explanation": { "type": "string" }
+        "evidence": { "type": "string", "minLength": 1 },
+        "explanation": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false
     },
@@ -60,8 +61,8 @@
       "properties": {
         "variantId": { "type": "string", "minLength": 1 },
         "scores": { "$ref": "#/$defs/scores" },
-        "strengths": { "type": "array", "items": { "type": "string" } },
-        "weaknesses": { "type": "array", "items": { "type": "string" } },
+        "strengths": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "weaknesses": { "type": "array", "items": { "type": "string", "minLength": 1 } },
         "aiSlopFindings": { "type": "array", "items": { "$ref": "#/$defs/aiSlopFinding" } }
       },
       "additionalProperties": false
@@ -70,19 +71,29 @@
       "type": "object",
       "required": ["id", "code", "source", "severity", "gate", "message", "evidence", "remediation", "autofixable"],
       "properties": {
-        "id": { "type": "string" },
-        "code": { "type": "string" },
-        "source": { "type": "string" },
+        "id": { "type": "string", "minLength": 1 },
+        "code": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 },
         "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
         "gate": { "enum": ["hard", "soft"] },
-        "message": { "type": "string" },
-        "evidence": { "type": "array", "items": { "type": "string" } },
-        "affectedSurface": { "type": "string" },
-        "remediation": { "type": "string" },
+        "message": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+        "affectedSurface": { "type": "string", "minLength": 1 },
+        "remediation": { "type": "string", "minLength": 1 },
         "autofixable": { "type": "boolean" }
       },
       "additionalProperties": false
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "outcome": { "const": "selected" } }, "required": ["outcome"] },
+      "then": { "required": ["selectedVariantId"] }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "no-acceptable-variant" } }, "required": ["outcome"] },
+      "then": { "not": { "required": ["selectedVariantId"] } }
+    }
+  ],
   "additionalProperties": false
 }

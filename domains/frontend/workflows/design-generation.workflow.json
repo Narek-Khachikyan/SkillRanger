@@ -4,6 +4,17 @@
   "domain": "frontend",
   "requiredCapabilities": ["filesystem-read", "filesystem-write"],
   "maxRepairIterations": 3,
+  "branches": [{
+    "id": "critic-decision",
+    "afterStepId": "require-selected-variant-or-block-no-acceptable-variant",
+    "convergeAt": "capture-recheck-evidence",
+    "cases": [
+      { "id": "rejected", "when": { "criticOutcome": "no-acceptable-variant" }, "stepIds": ["block-no-acceptable-variant"], "terminal": true },
+      { "id": "constrained-repair", "when": { "criticOutcome": "selected", "profiles": ["constrained"] }, "stepIds": ["repair-requested", "bounded-repair"] },
+      { "id": "findings-repair", "when": { "criticOutcome": "selected", "profiles": ["standard", "advanced"], "repairFindings": "positive" }, "stepIds": ["repair-requested", "bounded-repair"] },
+      { "id": "clean-selection", "when": { "criticOutcome": "selected", "profiles": ["standard", "advanced"], "repairFindings": "zero" }, "stepIds": ["no-repair-needed"] }
+    ]
+  }],
   "steps": [
     { "id": "collect-evidence", "type": "collect", "requires": [], "produces": [".design/brief.json"], "gate": "product-evidence-present" },
     { "id": "validate-brief", "type": "validate", "requires": [".design/brief.json"], "produces": ["brief-findings"] },
@@ -16,6 +27,7 @@
     { "id": "capture-initial-evidence", "type": "verify", "requires": ["implementation-diff"], "produces": [".design/initial-evidence.json"], "gate": "responsive-verification" },
     { "id": "independent-visual-critique", "type": "validate", "requires": [".design/direction.json", ".design/initial-evidence.json"], "produces": [".design/visual-critic-report.json"], "gate": "independent-visual-critique-complete" },
     { "id": "require-selected-variant-or-block-no-acceptable-variant", "type": "validate", "requires": [".design/visual-critic-report.json"], "produces": [".design/selected-variant.json"], "gate": "critic-outcome-selected" },
+    { "id": "block-no-acceptable-variant", "type": "report", "requires": [".design/visual-critic-report.json"], "produces": [".design/blocked.json"], "gate": "critic-outcome-no-acceptable-variant" },
     { "id": "repair-requested", "type": "validate", "requires": [".design/selected-variant.json", ".design/visual-critic-report.json", ".design/execution-policy.json"], "produces": [".design/repair-request.json"], "gate": "constrained-or-repair-findings" },
     { "id": "bounded-repair", "type": "repair", "requires": [".design/repair-request.json"], "produces": [".design/bounded-repair.json", ".design/accepted-selection.json", "repair-diff"] },
     { "id": "no-repair-needed", "type": "validate", "requires": [".design/selected-variant.json", ".design/visual-critic-report.json", ".design/execution-policy.json"], "produces": [".design/accepted-selection.json"], "gate": "standard-or-advanced-zero-repair-findings" },

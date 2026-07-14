@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { resolveWorkflowStepIds, type WorkflowDefinition } from "../src/runtime/index.ts";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -149,6 +150,49 @@ test("material design workflows encode all post-critique policy branches", async
       ));
     }
   }
+});
+
+test("workflow branch resolver executes one critic decision path and converges", async () => {
+  for (const file of [
+    "domains/frontend/workflows/design-generation.workflow.json",
+    "registry/skills/frontend.visual-design-polish/workflow.json",
+    "registry/skills/frontend.design-to-code/workflow.json",
+  ]) {
+    const raw = JSON.parse(await readFile(file, "utf8"));
+    const workflow = {
+      ...raw,
+      requiredCapabilities: raw.requiredCapabilities ?? [],
+      steps: raw.steps.map((step: string | WorkflowDefinition["steps"][number]) =>
+        typeof step === "string" ? { id: step, type: "validate", requires: [], produces: [] } : step),
+    } as WorkflowDefinition;
+    const constrainedRepair = resolveWorkflowStepIds(workflow, { criticOutcome: "selected", profile: "constrained", repairFindingCount: 0 });
+    const standardRepair = resolveWorkflowStepIds(workflow, { criticOutcome: "selected", profile: "standard", repairFindingCount: 2 });
+    const noRepair = resolveWorkflowStepIds(workflow, { criticOutcome: "selected", profile: "standard", repairFindingCount: 0 });
+    const rejected = resolveWorkflowStepIds(workflow, { criticOutcome: "no-acceptable-variant", profile: "standard", repairFindingCount: 0 });
+    assert.equal(constrainedRepair.includes("bounded-repair"), true, file);
+    assert.equal(standardRepair.includes("bounded-repair"), true, file);
+    assert.equal(noRepair.includes("no-repair-needed"), true, file);
+    assert.equal(rejected.includes("block-no-acceptable-variant"), true, file);
+    for (const path of [constrainedRepair, standardRepair, noRepair]) {
+      assert.equal(path.filter((id) => ["bounded-repair", "no-repair-needed", "block-no-acceptable-variant"].includes(id)).length, 1, file);
+      assert.ok(path.includes("capture-recheck-evidence"), file);
+      assert.ok(path.includes("final-audit"), file);
+    }
+    assert.equal(rejected.includes("capture-recheck-evidence"), false, file);
+  }
+});
+
+test("domain and registry critic schemas retain overlapping strictness parity", async () => {
+  const [domain, registry] = await Promise.all([
+    readFile("domains/frontend/schemas/visual-critic-report.schema.json", "utf8"),
+    readFile("registry/skills/frontend.visual-critic/output.schema.json", "utf8"),
+  ]).then((texts) => texts.map(JSON.parse));
+  for (const field of ["candidateVariantIds", "evidenceIds", "comparisons"]) {
+    assert.equal(domain.properties[field].minItems, registry.properties[field].minItems, field);
+  }
+  assert.deepEqual(domain.allOf, registry.allOf);
+  assert.equal(domain.$defs.comparison.properties.strengths.items.minLength, 1);
+  assert.equal(domain.$defs.verificationFinding.properties.id.minLength, 1);
 });
 
 test("visual critic output schema binds selection id to outcome", async () => {
