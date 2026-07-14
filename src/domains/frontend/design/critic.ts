@@ -240,9 +240,17 @@ export const validateVisualCriticReport = (
     const variantEvidence = new Set(candidate
       ? [candidate.evidenceId, ...candidate.screenshotPaths]
       : []);
-    const aiSlopFindings = Array.isArray(comparison?.aiSlopFindings)
-      ? comparison.aiSlopFindings as unknown[]
-      : [];
+    if (!Array.isArray(comparison?.aiSlopFindings)) {
+      findings.push(hardFinding(
+        "critic-ai-slop-finding-invalid",
+        `Comparison ${variantId} must provide an AI-slop findings array.`,
+        "Provide aiSlopFindings as an array, using an empty array when no findings exist.",
+        [variantId, "collection"],
+        variantId,
+      ));
+      continue;
+    }
+    const aiSlopFindings = comparison.aiSlopFindings as unknown[];
     const invalidEvidence: string[] = [];
     for (const [index, entry] of aiSlopFindings.entries()) {
       if (

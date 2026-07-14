@@ -234,6 +234,30 @@ test("rejects malformed AI-slop entries without throwing or mutation", () => {
   }
 });
 
+test("rejects missing and non-array AI-slop collections without throwing", () => {
+  const cases: Array<[string, (comparison: Record<string, unknown>) => void]> = [
+    ["missing", (comparison) => { delete comparison.aiSlopFindings; }],
+    ["string", (comparison) => { comparison.aiSlopFindings = "none"; }],
+    ["object", (comparison) => { comparison.aiSlopFindings = {}; }],
+  ];
+
+  for (const [label, mutate] of cases) {
+    const report = makeCriticReport({ selectedVariantId: "v1" });
+    mutate(report.comparisons[0] as unknown as Record<string, unknown>);
+    const before = structuredClone(report);
+    let result: ReturnType<typeof compareDesignVariants> | undefined;
+    assert.doesNotThrow(() => { result = compareDesignVariants(input, report); }, label);
+    assert.equal(result?.ok, false, label);
+    const contractFinding = result?.findings.find(({ code }) => code === "critic-ai-slop-finding-invalid");
+    assert.deepEqual(
+      contractFinding && [contractFinding.source, contractFinding.severity, contractFinding.gate],
+      ["frontend.visual-critic", "high", "hard"],
+      label,
+    );
+    assert.deepEqual(report, before, label);
+  }
+});
+
 test("rejects invalid and inconsistent winner selections", () => {
   const outside = compareDesignVariants(input, makeCriticReport({ selectedVariantId: "v3" }));
   assert.equal(outside.ok, false);
