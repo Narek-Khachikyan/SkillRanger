@@ -1,6 +1,6 @@
-import { spawn } from "node:child_process";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { executeAdapterJson } from "./adapter.ts";
 import type { BrowserObservation, DesignBrief } from "./types.ts";
 
 export type BrowserObservationPlan = {
@@ -64,55 +64,6 @@ export const createBrowserObservationPlan = (input: {
   ),
 });
 
-const parseCommandTemplate = (template: string) => {
-  const args: string[] = [];
-  let current = "";
-  let quote: string | undefined;
-  for (const character of template) {
-    if (quote) {
-      if (character === quote) quote = undefined;
-      else current += character;
-    } else if (character === "'" || character === '"') {
-      quote = character;
-    } else if (/\s/.test(character)) {
-      if (current) {
-        args.push(current);
-        current = "";
-      }
-    } else {
-      current += character;
-    }
-  }
-  if (quote) throw new Error("Browser adapter command contains an unterminated quote.");
-  if (current) args.push(current);
-  if (args.length === 0) throw new Error("Browser adapter command must include an executable.");
-  return args;
-};
-
-const runAdapter = (
-  command: string,
-  args: string[],
-  cwd?: string,
-  timeoutMs?: number,
-): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd,
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: timeoutMs,
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
-    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
-    child.once("error", reject);
-    child.once("close", (code) => {
-      if (code === 0) resolve(stdout);
-      else reject(new Error(`Browser adapter exited with ${code ?? "no code"}: ${stderr.trim()}`));
-    });
-  });
-
 const asStringArray = (value: unknown, field: string) => {
   if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
     throw new Error(`Browser observation ${field} must be an array of strings.`);
@@ -171,7 +122,6 @@ export const executeBrowserObservationPlan = async (input: {
   projectRoot?: string;
   timeoutPerObservationMs?: number;
 }) => {
-  const template = parseCommandTemplate(input.commandTemplate);
   const observations: BrowserObservation[] = [];
   for (const entry of input.plan.entries) {
     if (!isPathWithin(input.plan.outputDir, entry.screenshotPath)) {
@@ -192,24 +142,19 @@ export const executeBrowserObservationPlan = async (input: {
       "{{state}}": entry.state,
       "{{screenshotPath}}": entry.screenshotPath,
     };
-    const substituted = template.map((argument) =>
-      Object.entries(replacements).reduce(
-        (result, [placeholder, replacement]) => result.replaceAll(placeholder, replacement),
-        argument,
-      ),
-    );
-    const [command, ...args] = substituted;
-    const stdout = await runAdapter(
-      command,
-      args,
-      input.projectRoot,
-      input.timeoutPerObservationMs,
-    );
     let parsed: unknown;
     try {
-      parsed = JSON.parse(stdout);
-    } catch {
-      throw new Error(`Browser adapter returned invalid JSON for ${entry.viewport.width}px ${entry.state}.`);
+      parsed = await executeAdapterJson({
+        commandTemplate: input.commandTemplate,
+        replacements,
+        cwd: input.projectRoot,
+        timeoutMs: input.timeoutPerObservationMs,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "Browser adapter returned invalid JSON.") {
+        throw new Error(`Browser adapter returned invalid JSON for ${entry.viewport.width}px ${entry.state}.`);
+      }
+      throw error;
     }
     const screenshot = await stat(entry.screenshotPath).catch(() => undefined);
     if (!screenshot?.isFile()) {
