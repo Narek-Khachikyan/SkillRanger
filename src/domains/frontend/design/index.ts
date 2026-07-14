@@ -7,6 +7,7 @@ import type { DesignBrief, DesignDirection, DesignRecipe } from "./types.ts";
 export * from "./types.ts";
 export * from "./policy-types.ts";
 export * from "./policy.ts";
+export * from "./repair.ts";
 export * from "./validation.ts";
 export * from "./browser.ts";
 export * from "./source-validation.ts";
