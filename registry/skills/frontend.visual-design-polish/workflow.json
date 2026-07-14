@@ -7,5 +7,5 @@
     "standard": ["Limit exploration to 2–3 recipe-compatible variants.", "Allow one bounded composition variation.", "Keep hard gates unchanged."],
     "advanced": ["Allow new primitives only with product evidence and destructive critique.", "Keep hard gates unchanged."]
   },
-  "steps": ["collect-evidence", "validate-brief", "resolve-execution-policy", "select-recipe", "select-compatible-rules", "compare-recipe-examples", "define-structured-direction", "validate-direction", "validate-implementation-prerequisites", "implement", "capture-initial-evidence", "independent-critique", "bounded-repair", "capture-recheck-evidence-390", "capture-recheck-evidence-768", "capture-recheck-evidence-1440", "final-verify", "final-report"]
+  "steps": ["collect-evidence", "validate-brief", "resolve-execution-policy", "select-recipe", "select-compatible-rules", "compare-recipe-examples", "define-structured-direction", "validate-direction", "validate-implementation-prerequisites", "implement", "capture-initial-evidence", "independent-visual-critique", "bounded-repair", "capture-recheck-evidence-390", "capture-recheck-evidence-768", "capture-recheck-evidence-1440", "final-verify", "final-report"]
 }

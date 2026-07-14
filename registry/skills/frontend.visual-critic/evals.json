@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0",
+  "suite": "frontend-visual-critic-v1",
+  "slice": "visual-critic",
+  "baselines": ["without-skill", "current-skill"],
+  "minimumRepetitions": 3,
+  "cases": [
+    {
+      "id": "rendered-variant-comparison",
+      "expected": "should-trigger",
+      "prompt": "Compare these two rendered variants using their mobile, tablet, and desktop screenshots; select the stronger candidate or reject both."
+    },
+    {
+      "id": "implementation-request",
+      "expected": "should-not-trigger",
+      "prompt": "Implement a responsive pricing page in React and Tailwind."
+    }
+  ],
+  "taskAssertions": ["Return a code-free report with complete scorecards, evidence-backed AI-slop findings, and a valid selection outcome."]
+}

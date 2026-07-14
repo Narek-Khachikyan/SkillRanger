@@ -17,6 +17,91 @@ test("visual skills declare a verification outcome when browser evidence is unav
   }
 });
 
+test("visual critic is read-only and code-free", async () => {
+  const root = path.resolve("registry/skills/frontend.visual-critic");
+  const manifest = JSON.parse(await readFile(path.join(root, "skill.manifest.json"), "utf8"));
+  const skill = await readFile(path.join(root, "SKILL.md"), "utf8");
+  const output = JSON.parse(await readFile(path.join(root, "output.schema.json"), "utf8"));
+
+  assert.equal(manifest.id, "frontend.visual-critic");
+  assert.equal(manifest.name, "visual-critic");
+  assert.deepEqual(manifest.routing, { lane: "qa", category: "visual-critic" });
+  assert.deepEqual(manifest.permissions, {
+    filesystem: ["read-project"],
+    writes: [],
+    network: false,
+    shell: false,
+  });
+  assert.deepEqual(manifest.scripts, []);
+  assert.deepEqual(manifest.execution, {
+    contractVersion: "1.0",
+    inputSchema: "input.schema.json",
+    outputSchema: "output.schema.json",
+    workflow: "workflow.json",
+    gates: "gates.json",
+    evals: "evals.json",
+    modelProfiles: ["constrained", "standard", "advanced"],
+  });
+  assert.match(manifest.description, /after .*rendered variants? or screenshots? (exist|are available)/i);
+  assert.match(skill, /must not write or propose JSX, CSS, HTML, diffs, shell commands, or source edits/i);
+  assert.match(skill, /refuse implementation requests/i);
+  assert.match(skill, /owning implementation skill/i);
+  assert.equal(output.properties.containsImplementationCode.const, false);
+});
+
+test("visual critic contracts enforce the complete evidence-first review", async () => {
+  const root = path.resolve("registry/skills/frontend.visual-critic");
+  const skill = await readFile(path.join(root, "SKILL.md"), "utf8");
+  const gates = JSON.parse(await readFile(path.join(root, "gates.json"), "utf8"));
+  const evals = JSON.parse(await readFile(path.join(root, "evals.json"), "utf8"));
+  const requiredSequence = [
+    /validate input artifact ids/i,
+    /inspect every declared viewport and state screenshot/i,
+    /score all ten criteria/i,
+    /flag AI slop with evidence/i,
+    /compare variants/i,
+    /select one or reject all/i,
+    /emit bounded findings/i,
+  ];
+  let cursor = -1;
+  for (const pattern of requiredSequence) {
+    const match = skill.slice(cursor + 1).search(pattern);
+    assert.notEqual(match, -1, `missing or misordered instruction: ${pattern}`);
+    cursor += match + 1;
+  }
+
+  assert.deepEqual(gates.hard, [
+    "same-actor",
+    "missing-candidate-evidence",
+    "incomplete-scorecard",
+    "critic-code-output",
+    "invalid-selection",
+  ]);
+  assert.equal(evals.cases.filter((entry: { expected: string }) => entry.expected === "should-trigger").length, 1);
+  assert.match(evals.cases.find((entry: { expected: string }) => entry.expected === "should-trigger").prompt, /two rendered variants/i);
+  assert.equal(evals.cases.filter((entry: { expected: string }) => entry.expected === "should-not-trigger").length, 1);
+  assert.match(evals.cases.find((entry: { expected: string }) => entry.expected === "should-not-trigger").prompt, /implement .*page/i);
+  assert.ok(evals.taskAssertions.some((assertion: string) => /code-free report/i.test(assertion)));
+});
+
+test("material design workflows call critic after initial evidence", async () => {
+  for (const file of [
+    "domains/frontend/workflows/design-generation.workflow.json",
+    "registry/skills/frontend.visual-design-polish/workflow.json",
+    "registry/skills/frontend.design-to-code/workflow.json",
+  ]) {
+    const workflow = JSON.parse(await readFile(file, "utf8"));
+    const ids = workflow.steps.map((step: string | { id: string }) =>
+      typeof step === "string" ? step : step.id
+    );
+    assert.notEqual(ids.indexOf("capture-initial-evidence"), -1, `${file}: missing initial evidence`);
+    assert.notEqual(ids.indexOf("independent-visual-critique"), -1, `${file}: missing independent critic`);
+    assert.notEqual(ids.indexOf("bounded-repair"), -1, `${file}: missing bounded repair`);
+    assert.ok(ids.indexOf("capture-initial-evidence") < ids.indexOf("independent-visual-critique"));
+    assert.ok(ids.indexOf("independent-visual-critique") < ids.indexOf("bounded-repair"));
+  }
+});
+
 test("design skills carry the anti-slop decision contracts", async () => {
   assert.match(await readSkill("visual-design-polish"), /## Scope Triage/);
   assert.match(await readSkill("visual-design-polish"), /## Evidence Ledger/);
@@ -106,6 +191,7 @@ test("skill workflows enforce policy, bounded repair, and fresh viewport recheck
     const workflow = JSON.parse(await readFile(file, "utf8"));
     const ids: string[] = workflow.steps;
     const implementationStep = file.includes("tailwind-ui-polish") ? "implement-bounded-fix" : "implement";
+    const critiqueStep = file.includes("tailwind-ui-polish") ? "independent-critique" : "independent-visual-critique";
     const before = (left: string, right: string) => {
       assert.notEqual(ids.indexOf(left), -1, `${file}: missing ${left}`);
       assert.notEqual(ids.indexOf(right), -1, `${file}: missing ${right}`);
@@ -114,7 +200,7 @@ test("skill workflows enforce policy, bounded repair, and fresh viewport recheck
 
     before("resolve-execution-policy", "define-structured-direction");
     before("define-structured-direction", implementationStep);
-    before("independent-critique", "bounded-repair");
+    before(critiqueStep, "bounded-repair");
     before("bounded-repair", "capture-recheck-evidence-390");
     before("capture-recheck-evidence-390", "capture-recheck-evidence-768");
     before("capture-recheck-evidence-768", "capture-recheck-evidence-1440");

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VisualCriticReport",
+  "type": "object",
+  "required": ["schemaVersion", "id", "generatorActorId", "criticActorId", "candidateVariantIds", "evidenceIds", "comparisons", "outcome", "repairFindings", "confidence", "residualUncertainty", "containsImplementationCode"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "id": { "type": "string", "minLength": 1 },
+    "generatorActorId": { "type": "string", "minLength": 1 },
+    "criticActorId": { "type": "string", "minLength": 1 },
+    "candidateVariantIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+    "evidenceIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+    "comparisons": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["variantId", "scores", "strengths", "weaknesses", "aiSlopFindings"],
+        "properties": {
+          "variantId": { "type": "string", "minLength": 1 },
+          "scores": {
+            "type": "object",
+            "required": ["product-specificity", "hierarchy", "composition", "typography", "color-roles", "state-quality", "responsive-transformation", "accessibility", "implementation-coherence", "ai-slop-risk"],
+            "properties": {
+              "product-specificity": { "type": "number", "minimum": 0, "maximum": 1 },
+              "hierarchy": { "type": "number", "minimum": 0, "maximum": 1 },
+              "composition": { "type": "number", "minimum": 0, "maximum": 1 },
+              "typography": { "type": "number", "minimum": 0, "maximum": 1 },
+              "color-roles": { "type": "number", "minimum": 0, "maximum": 1 },
+              "state-quality": { "type": "number", "minimum": 0, "maximum": 1 },
+              "responsive-transformation": { "type": "number", "minimum": 0, "maximum": 1 },
+              "accessibility": { "type": "number", "minimum": 0, "maximum": 1 },
+              "implementation-coherence": { "type": "number", "minimum": 0, "maximum": 1 },
+              "ai-slop-risk": { "type": "number", "minimum": 0, "maximum": 1 }
+            },
+            "additionalProperties": false
+          },
+          "strengths": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "weaknesses": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "aiSlopFindings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["code", "severity", "evidence", "explanation"],
+              "properties": {
+                "code": { "enum": ["generic-hero-copy", "interchangeable-saas-layout", "excessive-generic-cards", "meaningless-effects", "invented-proof", "repeated-icon-grid", "arbitrary-radii-shadows", "weak-hierarchy", "meaningless-decoration"] },
+                "severity": { "enum": ["critical", "high", "medium", "low"] },
+                "evidence": { "type": "string", "minLength": 1 },
+                "explanation": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "outcome": { "enum": ["selected", "no-acceptable-variant"] },
+    "selectedVariantId": { "type": "string", "minLength": 1 },
+    "repairFindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "code", "source", "severity", "gate", "message", "evidence", "remediation", "autofixable"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "code": { "type": "string", "minLength": 1 },
+          "source": { "type": "string", "minLength": 1 },
+          "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
+          "gate": { "enum": ["hard", "soft"] },
+          "message": { "type": "string", "minLength": 1 },
+          "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+          "affectedSurface": { "type": "string", "minLength": 1 },
+          "remediation": { "type": "string", "minLength": 1 },
+          "autofixable": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "residualUncertainty": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "containsImplementationCode": { "const": false }
+  },
+  "additionalProperties": false
+}

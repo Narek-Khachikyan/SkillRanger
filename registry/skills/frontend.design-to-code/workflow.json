@@ -7,5 +7,5 @@
     "standard": ["Allow one local component variant when required by the reference.", "Keep fidelity and hard gates unchanged."],
     "advanced": ["Allow a new primitive only when the reference and product evidence require it.", "Do not copy protected brand expression."]
   },
-  "steps": ["validate-reference", "extract-brief", "map-local-components", "implement", "compare-reference", "browser-verify", "repair", "final-report"]
+  "steps": ["validate-reference", "extract-brief", "map-local-components", "implement", "capture-initial-evidence", "compare-reference", "independent-visual-critique", "bounded-repair", "capture-recheck-evidence", "browser-verify", "final-report"]
 }

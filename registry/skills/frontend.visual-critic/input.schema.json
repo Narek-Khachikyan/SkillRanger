@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VisualCriticInput",
+  "type": "object",
+  "required": ["schemaVersion", "generatorActorId", "criticActorId", "policyId", "candidates"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "generatorActorId": { "type": "string", "minLength": 1 },
+    "criticActorId": { "type": "string", "minLength": 1 },
+    "policyId": { "type": "string", "minLength": 1 },
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["variantId", "directionPath", "evidenceId", "screenshotPaths"],
+        "properties": {
+          "variantId": { "type": "string", "minLength": 1 },
+          "directionPath": { "type": "string", "minLength": 1 },
+          "evidenceId": { "type": "string", "minLength": 1 },
+          "screenshotPaths": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

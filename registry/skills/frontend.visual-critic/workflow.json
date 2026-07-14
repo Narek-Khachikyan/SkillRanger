@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0",
+  "id": "frontend.visual-critic",
+  "profileInstructions": {
+    "constrained": ["Inspect supplied rendered evidence only.", "Complete all ten scores for every candidate.", "Return code-free bounded findings."],
+    "standard": ["Compare all supplied candidates without adding variants.", "Keep hard gates unchanged."],
+    "advanced": ["Explain subtle product-specific and responsive tradeoffs with evidence.", "Keep hard gates unchanged."]
+  },
+  "steps": ["validate-input-artifact-ids", "inspect-declared-screenshots", "score-ten-criteria", "flag-ai-slop-with-evidence", "compare-variants", "select-one-or-reject-all", "emit-bounded-findings"]
+}

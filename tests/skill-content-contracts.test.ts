@@ -251,6 +251,22 @@ test("validateSkillContent reports link issues", async () => {
   assert.ok(issues.some((i) => i.message.includes("does not resolve")));
 });
 
+test("visual critic content keeps its trigger and ownership boundaries", async () => {
+  const skillRoot = path.resolve("registry/skills/frontend.visual-critic");
+  const skillText = await readFile(path.join(skillRoot, "SKILL.md"), "utf8");
+  const manifest = JSON.parse(
+    await readFile(path.join(skillRoot, "skill.manifest.json"), "utf8"),
+  ) as { id: string; routing: { lane: string } };
+  const issues = validateSkillContent(skillText, skillRoot, {
+    lane: manifest.routing.lane,
+    skillId: manifest.id,
+  });
+
+  assert.deepEqual(issues, []);
+  assert.match(skillText, /Use this skill after .*rendered variants? or screenshots? (exist|are available)/i);
+  assert.match(skillText, /Do not use this skill to implement/i);
+});
+
 test("all curated skills pass reference link validation", async () => {
   const skillsRoot = path.resolve("registry/skills");
   const entries = await readdir(skillsRoot, { withFileTypes: true });

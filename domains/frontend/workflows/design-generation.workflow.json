@@ -14,10 +14,10 @@
     { "id": "validate-implementation-prerequisites", "type": "validate", "requires": [".design/direction.json", ".design/execution-policy.json"], "produces": ["implementation-prerequisites"], "gate": "implementation-prerequisites-valid" },
     { "id": "implement", "type": "implement", "requires": [".design/direction.json", ".design/execution-policy.json", "implementation-prerequisites"], "produces": ["implementation-diff"] },
     { "id": "capture-initial-evidence", "type": "verify", "requires": ["implementation-diff"], "produces": [".design/initial-evidence.json"], "gate": "responsive-verification" },
-    { "id": "critique", "type": "validate", "requires": [".design/direction.json", ".design/initial-evidence.json"], "produces": [".design/verification.json"], "gate": "destructive-critique-complete" },
-    { "id": "bounded-repair", "type": "repair", "requires": [".design/verification.json", ".design/execution-policy.json"], "produces": [".design/bounded-repair.json", "repair-diff"] },
+    { "id": "independent-visual-critique", "type": "validate", "requires": [".design/direction.json", ".design/initial-evidence.json"], "produces": [".design/visual-critic-report.json"], "gate": "independent-visual-critique-complete" },
+    { "id": "bounded-repair", "type": "repair", "requires": [".design/visual-critic-report.json", ".design/execution-policy.json"], "produces": [".design/bounded-repair.json", "repair-diff"] },
     { "id": "capture-recheck-evidence", "type": "verify", "requires": ["repair-diff", ".design/bounded-repair.json"], "produces": [".design/recheck-evidence.json"], "gate": "fresh-recheck-evidence" },
-    { "id": "final-verify", "type": "verify", "requires": [".design/verification.json", ".design/recheck-evidence.json"], "produces": [".design/final-verification.json"], "gate": "hard-gates-passed" },
+    { "id": "final-verify", "type": "verify", "requires": [".design/visual-critic-report.json", ".design/recheck-evidence.json"], "produces": [".design/final-verification.json"], "gate": "hard-gates-passed" },
     { "id": "report", "type": "report", "requires": [".design/final-verification.json"], "produces": [".design/DESIGN.md"] }
   ]
 }

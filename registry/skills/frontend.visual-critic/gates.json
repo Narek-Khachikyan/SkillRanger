@@ -1,0 +1,5 @@
+{
+  "schemaVersion": "1.0",
+  "hard": ["same-actor", "missing-candidate-evidence", "incomplete-scorecard", "critic-code-output", "invalid-selection"],
+  "advisory": []
+}

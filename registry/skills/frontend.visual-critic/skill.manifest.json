@@ -1,0 +1,83 @@
+{
+  "id": "frontend.visual-critic",
+  "name": "visual-critic",
+  "displayName": "Visual Critic",
+  "description": "Critique and compare frontend visual candidates only after two rendered variants or screenshots exist, producing an independent code-free selection report.",
+  "stackTags": ["frontend", "web-app", "react", "typescript", "tailwind"],
+  "taskTags": ["visual-critique", "variant-comparison", "responsive-qa", "ai-slop-review"],
+  "supportedAgents": ["codex", "generic-agent-skills"],
+  "source": {
+    "type": "curated",
+    "registry": "local",
+    "path": "./registry/skills/frontend.visual-critic"
+  },
+  "version": "0.1.0",
+  "riskLevel": "low",
+  "permissions": {
+    "filesystem": ["read-project"],
+    "writes": [],
+    "network": false,
+    "shell": false
+  },
+  "scripts": [],
+  "dependencies": [],
+  "qualityScore": 0.9,
+  "securityScore": 0.99,
+  "quality": {
+    "rubricVersion": "1.0",
+    "scores": {
+      "usefulness": 0.9,
+      "triggerSpecificity": 0.9,
+      "progressiveDisclosure": 0.9,
+      "safety": 0.99,
+      "verifiability": 0.9,
+      "maintainability": 0.9,
+      "portability": 0.9
+    }
+  },
+  "verification": {
+    "requiredCapabilities": ["browser", "screenshots"],
+    "fallback": "blocked"
+  },
+  "execution": {
+    "contractVersion": "1.0",
+    "inputSchema": "input.schema.json",
+    "outputSchema": "output.schema.json",
+    "workflow": "workflow.json",
+    "gates": "gates.json",
+    "evals": "evals.json",
+    "modelProfiles": ["constrained", "standard", "advanced"]
+  },
+  "freshness": {
+    "lastReviewedAt": "2026-07-14"
+  },
+  "installTargets": ["repo", "user"],
+  "compatibility": {
+    "codex": {
+      "level": "native",
+      "scopes": ["repo"],
+      "adapter": "codex"
+    },
+    "generic-agent-skills": {
+      "level": "native",
+      "scopes": ["repo"],
+      "adapter": "generic-agent-skills"
+    }
+  },
+  "conflictsWith": [],
+  "supersedes": [],
+  "maintainer": {
+    "name": "local-curated",
+    "trustTier": "curated"
+  },
+  "license": "MIT",
+  "routing": {
+    "lane": "qa",
+    "category": "visual-critic"
+  },
+  "evaluation": {
+    "status": "none",
+    "benchmarkVersion": "frontend-visual-critic-v1",
+    "evidenceUri": "registry/skills/frontend.visual-critic/evals.json"
+  }
+}

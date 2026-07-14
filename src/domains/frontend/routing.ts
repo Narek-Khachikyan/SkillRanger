@@ -126,6 +126,13 @@ const specializedIntentHints: Record<string, string[]> = {
     "screenshot looks off", "style guide", "subject-specific", "tell me what to change", "visual",
     "visual direction", "visual identity", "visual language", "visual regression", "visual thesis",
   ],
+  "frontend.visual-critic": [
+    "compare rendered variants", "compare screenshots", "compare these two rendered variants",
+    "rendered variants", "two rendered variants", "variant screenshots",
+    "сравни два отрисованных варианта", "сравни скриншоты вариантов",
+    "сравните два отрисованных варианта", "сравните скриншоты вариантов",
+    "отрисованных варианта", "скриншоты вариантов",
+  ],
 };
 
 const designIntentPhrases = ["make this app better", "make this page better", "make the page better"];
@@ -140,7 +147,9 @@ const designIntentTokens = new Set([
   "дизайн", "редизайн", "ребрендинг", "современный",
 ]);
 
-const intentGatedSkillIds = new Set(["frontend.motion-audit", "frontend.motion-design"]);
+const intentGatedSkillIds = new Set([
+  "frontend.motion-audit", "frontend.motion-design", "frontend.visual-critic",
+]);
 const requiredStackTags = new Set(["nextjs", "vite", "react", "tailwind", "playwright"]);
 
 const canonicalIntentBySkillId: Partial<Record<string, CanonicalFrontendIntent>> = {
