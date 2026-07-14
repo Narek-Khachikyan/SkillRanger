@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/domains/frontend/ui-evidence-bundle.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "id", "variantId", "iteration", "sourceIdentity", "route", "capturedAt", "requiredViewports", "requiredStates", "captures", "adapterCapabilities"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "id": { "$ref": "#/$defs/safeId" },
+    "variantId": { "$ref": "#/$defs/safeId" },
+    "iteration": { "type": "integer", "minimum": 0 },
+    "sourceIdentity": { "type": "string", "minLength": 1 },
+    "route": { "type": "string", "minLength": 1 },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "requiredViewports": { "type": "array", "prefixItems": [{ "const": 390 }, { "const": 768 }, { "const": 1440 }], "items": false, "minItems": 3, "maxItems": 3 },
+    "requiredStates": { "type": "array", "minItems": 4, "items": { "type": "string", "minLength": 1 } },
+    "captures": { "type": "array", "items": { "$ref": "#/$defs/capture" } },
+    "adapterCapabilities": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  },
+  "$defs": {
+    "safeId": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+    "viewport": {
+      "type": "object", "required": ["width", "height"],
+      "properties": { "width": { "enum": [390, 768, 1440] }, "height": { "type": "integer", "minimum": 1 } },
+      "additionalProperties": false
+    },
+    "stringList": { "type": "array", "items": { "type": "string" } },
+    "observation": {
+      "type": "object",
+      "required": ["schemaVersion", "viewport", "route", "state", "horizontalOverflow", "clippedControls", "unreachableActions", "stickyOverlaps", "consoleErrors", "keyboardTraps", "invisibleFocus", "criticalAxeViolations", "reducedMotionVerified"],
+      "properties": {
+        "schemaVersion": { "const": "1.0" }, "viewport": { "$ref": "#/$defs/viewport" },
+        "route": { "type": "string" }, "state": { "type": "string" }, "horizontalOverflow": { "type": "boolean" },
+        "clippedControls": { "$ref": "#/$defs/stringList" }, "unreachableActions": { "$ref": "#/$defs/stringList" },
+        "stickyOverlaps": { "$ref": "#/$defs/stringList" }, "consoleErrors": { "$ref": "#/$defs/stringList" },
+        "keyboardTraps": { "$ref": "#/$defs/stringList" }, "invisibleFocus": { "$ref": "#/$defs/stringList" },
+        "criticalAxeViolations": { "$ref": "#/$defs/stringList" }, "reducedMotionVerified": { "type": "boolean" },
+        "screenshotPath": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "check": {
+      "type": "object",
+      "required": ["code", "severity", "gate", "viewport", "state", "locator", "expected", "evidence", "remediation"],
+      "properties": {
+        "code": { "enum": ["horizontal-overflow", "clipped-content", "element-overlap", "sticky-overlap", "console-error", "unreachable-action", "keyboard-trap", "focus-order", "invisible-focus", "contrast", "critical-axe", "reduced-motion", "state-not-rendered", "inconsistent-spacing", "random-color", "excessive-radii", "excessive-shadows", "generic-card-repetition", "weak-typography-hierarchy", "text-measure", "touch-target"] },
+        "severity": { "enum": ["critical", "high", "medium", "low"] }, "gate": { "enum": ["hard", "soft"] },
+        "viewport": { "type": "integer" }, "state": { "type": "string" }, "locator": { "type": "string" },
+        "measured": { "type": "string" }, "expected": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/stringList" }, "remediation": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "capture": {
+      "type": "object", "required": ["viewport", "state", "screenshotPath", "observation", "checks"],
+      "properties": {
+        "viewport": { "$ref": "#/$defs/viewport" }, "state": { "type": "string" }, "screenshotPath": { "type": "string" },
+        "observation": { "$ref": "#/$defs/observation" }, "checks": { "type": "array", "items": { "$ref": "#/$defs/check" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
