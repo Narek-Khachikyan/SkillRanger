@@ -28,6 +28,7 @@ export * from "./mechanical.ts";
 export * from "./browser-checks.ts";
 export * from "./adapter.ts";
 export * from "./evidence.ts";
+export * from "./visual-verification.ts";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
