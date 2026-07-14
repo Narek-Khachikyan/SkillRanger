@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "id": "e-commerce",
+  "name": "E-commerce",
+  "appropriateWhen": ["Users compare products, availability, price, fulfillment, carts, checkout steps, orders, or inventory."],
+  "inappropriateWhen": ["The product does not contain a real catalogue, purchase path, or fulfillment decision."],
+  "domainSignals": ["commerce", "store", "product", "catalog", "cart", "checkout", "order", "inventory"],
+  "layoutModels": ["grid", "structured-list", "split-pane"],
+  "densityRange": ["balanced", "spacious"],
+  "hierarchyStrategies": ["action-first", "narrative-first", "data-first"],
+  "mobileStrategy": ["Keep product evidence, price, availability, fulfillment, and the purchase action together while turning comparison into a readable sequence."],
+  "requiredStates": ["loading", "empty", "error", "unavailable", "cart-empty", "payment-error"],
+  "signatureMovePatterns": ["Make product evidence, price, availability, and fulfillment state the visual grammar."],
+  "forbiddenDefaults": ["fake reviews", "invented discounts", "hidden fulfillment cost", "identical product cards without comparison cues"],
+  "validationRules": ["Price and availability remain paired", "Fulfillment information is visible before commitment", "Comparison cues survive mobile"]
+}

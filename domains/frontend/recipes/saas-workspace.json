@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "id": "saas-workspace",
+  "name": "SaaS Workspace",
+  "appropriateWhen": ["Teams repeatedly coordinate projects, tasks, settings, inbox items, permissions, or shared work objects."],
+  "inappropriateWhen": ["The main experience is a public narrative page, product storefront, or passive media feed."],
+  "domainSignals": ["workspace", "collaboration", "project", "task", "team", "settings", "inbox"],
+  "layoutModels": ["split-pane", "structured-list", "table"],
+  "densityRange": ["balanced", "compact"],
+  "hierarchyStrategies": ["action-first", "exception-first", "data-first"],
+  "mobileStrategy": ["Turn shared list-detail work into explicit drill-in navigation while keeping object state, permissions, and the next action visible."],
+  "requiredStates": ["loading", "empty", "error", "first-run", "no-permission", "sync-error"],
+  "signatureMovePatterns": ["Use the real work object and its lifecycle as navigation and hierarchy."],
+  "forbiddenDefaults": ["dashboard metric cards without decisions", "nested generic cards", "decorative activity feed"],
+  "validationRules": ["Work-object state drives hierarchy", "Permission limits are explicit", "Mobile drill-in preserves task context"]
+}

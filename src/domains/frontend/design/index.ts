@@ -4,7 +4,9 @@ import { defaultDomainsRoot } from "../../../paths.ts";
 import type { VerificationReport } from "../../../runtime/types.ts";
 import type { ProjectFingerprint } from "../../../types.ts";
 import type { DesignBrief, DesignDirection, DesignRecipe } from "./types.ts";
+import { frontendRecipeFiles } from "./catalog.ts";
 export * from "./types.ts";
+export * from "./catalog.ts";
 export * from "./policy-types.ts";
 export * from "./policy.ts";
 export * from "./repair.ts";
@@ -28,16 +30,10 @@ export const asDesignBrief = (value: unknown): DesignBrief | undefined => {
 };
 
 const recipesRoot = path.join(defaultDomainsRoot, "frontend", "recipes");
-const recipeFiles = [
-  "operational-command-center.json",
-  "consumer-discovery.json",
-  "developer-tool.json",
-  "editorial-content.json",
-];
 
 export const loadFrontendRecipes = async (): Promise<DesignRecipe[]> =>
   Promise.all(
-    recipeFiles.map(async (file) =>
+    frontendRecipeFiles.map(async (file) =>
       JSON.parse(await readFile(path.join(recipesRoot, file), "utf8")) as DesignRecipe,
     ),
   );

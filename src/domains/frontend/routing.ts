@@ -2,6 +2,7 @@ import { defaultDomainsRoot } from "../../paths.ts";
 import type { ProjectFingerprint, Recommendation, RegistrySkill, SkillLane } from "../../types.ts";
 import { registerDomainPack } from "../registry.ts";
 import type { DomainPackManifest, DomainRoutingPolicy } from "../types.ts";
+import { frontendRecipeFiles } from "./design/catalog.ts";
 import { analyzeFrontendIntent, type CanonicalFrontendIntent } from "./intents/index.ts";
 import { evaluateFrontendRunPolicy } from "./run-policy.ts";
 
@@ -352,10 +353,7 @@ export const frontendDomainManifest: DomainPackManifest = {
       "schemas/design-execution-policy.schema.json", "schemas/bounded-repair-request.schema.json",
       "schemas/verification-report.schema.json",
     ],
-    recipes: [
-      "recipes/operational-command-center.json", "recipes/consumer-discovery.json",
-      "recipes/developer-tool.json", "recipes/editorial-content.json",
-    ],
+    recipes: frontendRecipeFiles.map((file) => `recipes/${file}`),
     workflows: ["workflows/design-generation.workflow.json", "workflows/design-to-code.workflow.json"],
     validators: ["validators/frontend-validation.rules.json"],
     evalSuite: "evals/frontend/suite.json",

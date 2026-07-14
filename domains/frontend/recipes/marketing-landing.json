@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "id": "marketing-landing",
+  "name": "Marketing Landing",
+  "appropriateWhen": ["The product must explain a supplied capability, campaign, launch, pricing model, proof point, or conversion path."],
+  "inappropriateWhen": ["The primary task is repeated operational work, dense administration, or long-form reading."],
+  "domainSignals": ["marketing", "landing", "campaign", "conversion", "launch", "pricing", "proof"],
+  "layoutModels": ["editorial-grid", "structured-list", "grid"],
+  "densityRange": ["spacious", "balanced"],
+  "hierarchyStrategies": ["narrative-first", "action-first"],
+  "mobileStrategy": ["Preserve the capability-to-proof-to-action sequence, keep supplied proof adjacent to its claim, and retain one clear conversion action."],
+  "requiredStates": ["loading", "empty", "error", "pricing-unavailable", "form-error"],
+  "signatureMovePatterns": ["Turn supplied proof, product mechanism, or conversion path into the page rhythm."],
+  "forbiddenDefaults": ["fake testimonials", "invented logos", "generic three-card feature grid", "unrelated gradient orb"],
+  "validationRules": ["Claims are traceable to supplied evidence", "The conversion path remains explicit", "Mobile preserves proof context"]
+}

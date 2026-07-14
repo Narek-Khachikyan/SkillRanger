@@ -7,15 +7,11 @@ import type {
   DesignDirection,
   DesignValidationResult,
 } from "./types.ts";
+import { frontendRecipeIds } from "./catalog.ts";
 
 const requiredStates = new Set(["loading", "empty", "error"]);
 const usageFrequencies = new Set(["rare", "occasional", "frequent", "continuous", "unknown"]);
-const supportedRecipeIds = new Set([
-  "operational-command-center",
-  "consumer-discovery",
-  "developer-tool",
-  "editorial-content",
-]);
+const supportedRecipeIds = new Set(frontendRecipeIds);
 const axisValues = {
   density: new Set(["compact", "balanced", "spacious", "editorial"]),
   hierarchy: new Set(["action-first", "data-first", "narrative-first", "exception-first"]),

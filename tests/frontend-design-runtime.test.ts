@@ -92,7 +92,7 @@ const observation = (width: number, state: string): BrowserObservation => ({
 
 test("frontend recipes recommend a developer-tool grammar from product evidence", async () => {
   const recipes = await loadFrontendRecipes();
-  assert.equal(recipes.length, 4);
+  assert.equal(recipes.length, 8);
   const recommendations = recommendFrontendRecipe(brief(), recipes);
   assert.equal(recommendations[0]?.recipe.id, "developer-tool");
 });

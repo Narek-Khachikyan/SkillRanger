@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0",
+  "id": "mobile-consumer-app",
+  "name": "Mobile Consumer App",
+  "appropriateWhen": ["A person repeats a one-thumb action in a mobile habit, feed, camera, chat, fitness, music, social, or notification flow."],
+  "inappropriateWhen": ["The primary workflow requires simultaneous dense panes, wide comparison tables, or desktop-first administration."],
+  "domainSignals": ["mobile", "habit", "feed", "camera", "chat", "fitness", "music", "social", "notification"],
+  "layoutModels": ["structured-list", "timeline", "grid"],
+  "densityRange": ["balanced", "spacious"],
+  "hierarchyStrategies": ["action-first", "narrative-first"],
+  "mobileStrategy": ["Place the repeated primary action in a reachable thumb zone and return immediate visible feedback for completion, offline, and permission states."],
+  "requiredStates": ["loading", "empty", "error", "first-run", "offline", "permission-denied"],
+  "signatureMovePatterns": ["Organize the composition around a one-thumb repeated action and immediate state feedback."],
+  "forbiddenDefaults": ["desktop navigation shrunk to mobile", "floating action without task meaning", "excessive carousels", "gesture-only actions"],
+  "validationRules": ["The repeated action is thumb-reachable", "State feedback is immediate and visible", "Essential actions do not rely on gestures alone"]
+}

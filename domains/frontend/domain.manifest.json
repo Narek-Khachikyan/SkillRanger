@@ -26,7 +26,11 @@
       "recipes/operational-command-center.json",
       "recipes/consumer-discovery.json",
       "recipes/developer-tool.json",
-      "recipes/editorial-content.json"
+      "recipes/editorial-content.json",
+      "recipes/marketing-landing.json",
+      "recipes/saas-workspace.json",
+      "recipes/e-commerce.json",
+      "recipes/mobile-consumer-app.json"
     ],
     "workflows": [
       "workflows/design-generation.workflow.json",
