@@ -6,13 +6,13 @@
   "maxRepairIterations": 3,
   "branches": [{
     "id": "critic-decision",
-    "afterStepId": "require-selected-variant-or-block-no-acceptable-variant",
+    "afterStepId": "independent-visual-critique",
     "convergeAt": "capture-recheck-evidence",
     "cases": [
       { "id": "rejected", "when": { "criticOutcome": "no-acceptable-variant" }, "stepIds": ["block-no-acceptable-variant"], "terminal": true },
-      { "id": "constrained-repair", "when": { "criticOutcome": "selected", "profiles": ["constrained"] }, "stepIds": ["repair-requested", "bounded-repair"] },
-      { "id": "findings-repair", "when": { "criticOutcome": "selected", "profiles": ["standard", "advanced"], "repairFindings": "positive" }, "stepIds": ["repair-requested", "bounded-repair"] },
-      { "id": "clean-selection", "when": { "criticOutcome": "selected", "profiles": ["standard", "advanced"], "repairFindings": "zero" }, "stepIds": ["no-repair-needed"] }
+      { "id": "constrained-repair", "when": { "criticOutcome": "selected", "profiles": ["constrained"] }, "stepIds": ["require-selected-variant-or-block-no-acceptable-variant", "repair-requested", "bounded-repair"] },
+      { "id": "findings-repair", "when": { "criticOutcome": "selected", "profiles": ["standard", "advanced"], "repairFindings": "positive" }, "stepIds": ["require-selected-variant-or-block-no-acceptable-variant", "repair-requested", "bounded-repair"] },
+      { "id": "clean-selection", "when": { "criticOutcome": "selected", "profiles": ["standard", "advanced"], "repairFindings": "zero" }, "stepIds": ["require-selected-variant-or-block-no-acceptable-variant", "no-repair-needed"] }
     ]
   }],
   "steps": [

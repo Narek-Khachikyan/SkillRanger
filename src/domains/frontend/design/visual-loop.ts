@@ -59,7 +59,11 @@ const validateStringIds = (value: unknown, label: string, unique = false) => {
   if (unique && new Set(value).size !== value.length) throw new Error(`${label} must contain unique variant ids`);
 };
 
-const validateStoredRun = (run: VisualRun) => {
+const snapshotInvariant: (condition: unknown, message: string) => asserts condition = (condition, message) => {
+  if (!condition) throw new Error(`Visual run snapshot invariant failed: ${message}`);
+};
+
+const validateStoredRun = (run: VisualRun, policy: DesignExecutionPolicy) => {
   if (run?.schemaVersion !== "1.0") throw new Error("visual run schemaVersion must be 1.0");
   hasOnlyKeys(run, [
     "schemaVersion", "id", "policyPath", "state", "variantIds", "selectedVariantId",
@@ -114,6 +118,106 @@ const validateStoredRun = (run: VisualRun) => {
     rfc3339(entry.at, "visual run history timestamp");
     if (entry.eventId !== undefined) nonEmpty(entry.eventId, "visual run history event id");
   }
+
+  snapshotInvariant(run.history.length > 0, "history must be non-empty");
+  snapshotInvariant(run.history[0].state === "policy-resolved", "history must start at policy-resolved");
+  snapshotInvariant(run.history.at(-1)?.state === run.state, "history tail must equal the current state");
+  for (let index = 1; index < run.history.length; index += 1) {
+    const previous = run.history[index - 1].state;
+    const current = run.history[index].state;
+    const legalTargets = transitionByState[previous].map((type) => targetStateByEvent[type]);
+    snapshotInvariant(legalTargets.includes(current), `illegal history transition ${previous} -> ${current}`);
+    snapshotInvariant(run.history[index].eventId !== undefined, "transition history entries require event ids");
+  }
+
+  const states = new Set(run.history.map(({ state }) => state));
+  const reached = (...expected: VisualRunState[]) => expected.some((state) => states.has(state));
+  const directionsReached = reached(
+    "directions-valid", "implemented", "initial-evidence-captured", "critiqued",
+    "repair-requested", "no-repair-needed", "repaired", "recheck-evidence-captured",
+    "final-audited", "verified",
+  );
+  snapshotInvariant(
+    directionsReached ? run.variantIds.length === policy.variantLimit : run.variantIds.length === 0,
+    "variant ids must match the resolved policy after directions validation",
+  );
+
+  const implementedReached = reached(
+    "implemented", "initial-evidence-captured", "critiqued", "repair-requested",
+    "no-repair-needed", "repaired", "recheck-evidence-captured", "final-audited", "verified",
+  );
+  const implementationIds = run.artifacts.implementations?.map(({ variantId }) => variantId) ?? [];
+  snapshotInvariant(
+    implementedReached
+      ? implementationIds.length === run.variantIds.length
+        && implementationIds.every((id) => run.variantIds.includes(id))
+      : run.artifacts.implementations === undefined,
+    "implementations must exactly cover variants from implemented onward",
+  );
+
+  const initialEvidenceReached = reached(
+    "initial-evidence-captured", "critiqued", "repair-requested", "no-repair-needed",
+    "repaired", "recheck-evidence-captured", "final-audited", "verified",
+  );
+  snapshotInvariant(
+    initialEvidenceReached ? run.artifacts.initialEvidenceId !== undefined : run.artifacts.initialEvidenceId === undefined,
+    "initial evidence presence must match history",
+  );
+
+  const critiqueReached = reached(
+    "critiqued", "repair-requested", "no-repair-needed", "repaired",
+    "recheck-evidence-captured", "final-audited", "verified",
+  );
+  snapshotInvariant(
+    critiqueReached
+      ? run.artifacts.critiqueId !== undefined && run.critiqueRepairFindingCount !== undefined
+      : run.artifacts.critiqueId === undefined
+        && run.critiqueRepairFindingCount === undefined
+        && run.selectedVariantId === undefined,
+    "critique artifacts and finding count must match history",
+  );
+
+  const decisionReached = reached(
+    "repair-requested", "no-repair-needed", "repaired", "recheck-evidence-captured",
+    "final-audited", "verified",
+  );
+  snapshotInvariant(
+    !decisionReached || (run.selectedVariantId !== undefined && run.variantIds.includes(run.selectedVariantId)),
+    "selected decision states require a current selected variant",
+  );
+
+  const repairRequested = reached("repair-requested", "repaired");
+  snapshotInvariant(
+    repairRequested ? run.artifacts.repairId !== undefined : run.artifacts.repairId === undefined,
+    "repair request artifact must match the repair path",
+  );
+  const repaired = states.has("repaired");
+  snapshotInvariant(
+    repaired ? run.artifacts.repairImplementationArtifact !== undefined : run.artifacts.repairImplementationArtifact === undefined,
+    "repair implementation artifact must match the repaired path",
+  );
+  if (states.has("no-repair-needed")) {
+    snapshotInvariant(policy.profile !== "constrained", "constrained policy cannot use no-repair-needed");
+    snapshotInvariant(run.critiqueRepairFindingCount === 0, "no-repair-needed requires zero critic repair findings");
+  }
+
+  const recheckReached = reached("recheck-evidence-captured", "final-audited", "verified");
+  snapshotInvariant(
+    recheckReached
+      ? run.artifacts.recheckEvidenceId !== undefined
+        && run.artifacts.recheckEvidenceId !== run.artifacts.initialEvidenceId
+      : run.artifacts.recheckEvidenceId === undefined,
+    "recheck evidence must be present and fresh only after recheck",
+  );
+  const finalAuditReached = reached("final-audited", "verified");
+  snapshotInvariant(
+    finalAuditReached ? run.artifacts.finalAuditReportPath !== undefined : run.artifacts.finalAuditReportPath === undefined,
+    "final audit report path must match history",
+  );
+  snapshotInvariant(
+    states.has("verified") ? run.artifacts.verificationReportPath !== undefined : run.artifacts.verificationReportPath === undefined,
+    "verification report path must match verified history",
+  );
 };
 
 const validateEventPayload = (event: VisualRunEvent) => {
@@ -195,7 +299,7 @@ const validateEvent = (
   event: VisualRunEvent,
   policy: DesignExecutionPolicy,
 ) => {
-  validateStoredRun(run);
+  validateStoredRun(run, policy);
   validateEventPayload(event);
   if (!transitionByState[run.state].includes(event.type)) {
     throw new Error(`${event.type} is not allowed from ${run.state}`);

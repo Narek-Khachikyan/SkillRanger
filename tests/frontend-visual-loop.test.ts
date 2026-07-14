@@ -464,3 +464,68 @@ test("deep-clones history snapshots across transitions", () => {
   second.history[0].at = "2027-01-01T00:00:00Z";
   assert.equal(first.history[0].at, "1970-01-01T00:00:00.000Z");
 });
+
+test("rejects forged persisted snapshots before any transition", () => {
+  let implemented = createVisualRun({ id: "coherence", policyPath: "policy.json" });
+  implemented = applyVisualRunEvent(implemented, { type: "directions-validated", ...event(1), variantIds: ["v1"] }, constrained);
+  implemented = applyVisualRunEvent(implemented, {
+    type: "implementation-recorded", ...event(2), implementations: [{ variantId: "v1", artifactId: "diff:v1" }],
+  }, constrained);
+  const evidenced = applyVisualRunEvent(implemented, {
+    type: "initial-evidence-recorded", ...event(3), evidenceId: "e1",
+  }, constrained);
+  const critiqued = applyVisualRunEvent(evidenced, {
+    type: "critique-recorded", ...event(4), critiqueId: "c1", selectedVariantId: "v1", repairFindingCount: 1,
+  }, constrained);
+  const requested = applyVisualRunEvent(critiqued, {
+    type: "repair-requested", ...event(5), repairId: "r1",
+  }, constrained);
+  const repaired = applyVisualRunEvent(requested, {
+    type: "repair-recorded", ...event(6), repairId: "r1", implementationArtifact: "repair:v1",
+  }, constrained);
+  const rechecked = applyVisualRunEvent(repaired, {
+    type: "recheck-evidence-recorded", ...event(7), evidenceId: "e2",
+  }, constrained);
+  const audited = applyVisualRunEvent(rechecked, {
+    type: "final-audit-recorded", ...event(8), reportPath: "audit.json",
+  }, constrained);
+
+  const forgeries: Array<[string, VisualRun, VisualRunEvent]> = [
+    ["empty history", { ...implemented, history: [] }, { type: "initial-evidence-recorded", ...event(3), evidenceId: "e1" }],
+    ["wrong first history", { ...implemented, history: [{ ...implemented.history[0], state: "directions-valid" }] }, { type: "initial-evidence-recorded", ...event(3), evidenceId: "e1" }],
+    ["wrong last history", { ...implemented, history: implemented.history.slice(0, -1) }, { type: "initial-evidence-recorded", ...event(3), evidenceId: "e1" }],
+    ["illegal history jump", { ...audited, history: [audited.history[0], audited.history.at(-1)!] }, { type: "verification-recorded", ...event(9), outcome: "verified", reportPath: "verify.json" }],
+    ["bad variant count", { ...implemented, variantIds: ["v1", "v2"] }, { type: "initial-evidence-recorded", ...event(3), evidenceId: "e1" }],
+    ["missing implementation", { ...implemented, artifacts: {} }, { type: "initial-evidence-recorded", ...event(3), evidenceId: "e1" }],
+    ["missing initial evidence", { ...evidenced, artifacts: { ...evidenced.artifacts, initialEvidenceId: undefined } }, { type: "critique-recorded", ...event(4), critiqueId: "c1", selectedVariantId: "v1", repairFindingCount: 1 }],
+    ["missing critique", { ...critiqued, artifacts: { ...critiqued.artifacts, critiqueId: undefined } }, { type: "repair-requested", ...event(5), repairId: "r1" }],
+    ["missing repair request", { ...requested, artifacts: { ...requested.artifacts, repairId: undefined } }, { type: "repair-recorded", ...event(6), repairId: "r1", implementationArtifact: "repair:v1" }],
+    ["missing repair artifact", { ...repaired, artifacts: { ...repaired.artifacts, repairImplementationArtifact: undefined } }, { type: "recheck-evidence-recorded", ...event(7), evidenceId: "e2" }],
+    ["stale recheck", { ...rechecked, artifacts: { ...rechecked.artifacts, recheckEvidenceId: "e1" } }, { type: "final-audit-recorded", ...event(8), reportPath: "audit.json" }],
+    ["forged final audited", { ...audited, artifacts: { ...audited.artifacts, finalAuditReportPath: undefined } }, { type: "verification-recorded", ...event(9), outcome: "verified", reportPath: "verify.json" }],
+  ];
+  for (const [label, forged, next] of forgeries) {
+    const before = structuredClone(forged);
+    assert.throws(() => applyVisualRunEvent(forged, next, constrained), /snapshot invariant/i, label);
+    assert.deepEqual(forged, before, label);
+  }
+});
+
+test("rejects forged no-repair semantics and verified snapshots", () => {
+  let noRepair = runThroughCritique(standard, 0, "v1");
+  noRepair = applyVisualRunEvent(noRepair, { type: "no-repair-needed", ...event(5) }, standard);
+  const constrainedForgery = structuredClone(noRepair);
+  assert.throws(() => applyVisualRunEvent(constrainedForgery, {
+    type: "recheck-evidence-recorded", ...event(6), evidenceId: "e2",
+  }, constrained), /snapshot invariant/i);
+
+  let verified = applyVisualRunEvent(noRepair, {
+    type: "recheck-evidence-recorded", ...event(6), evidenceId: "e2",
+  }, standard);
+  verified = applyVisualRunEvent(verified, { type: "final-audit-recorded", ...event(7), reportPath: "audit.json" }, standard);
+  verified = applyVisualRunEvent(verified, {
+    type: "verification-recorded", ...event(8), outcome: "verified", reportPath: "verify.json",
+  }, standard);
+  const forged = { ...verified, artifacts: { ...verified.artifacts, verificationReportPath: undefined } };
+  assert.throws(() => applyVisualRunEvent(forged, { type: "failed", ...event(9) }, standard), /snapshot invariant/i);
+});

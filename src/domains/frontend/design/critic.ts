@@ -5,6 +5,7 @@ import type {
   VisualCriterion,
   VisualCriticInput,
   VisualCriticReport,
+  VisualRun,
   VisualRunEvent,
 } from "./visual-loop-types.ts";
 
@@ -22,7 +23,9 @@ const criteria: VisualCriterion[] = [
 ];
 
 const codeShape = /```(?:jsx|tsx|css|html|javascript|typescript)|(?:^|\n)(?:diff --git|@@ |\+\+\+ |--- )|<\/?[a-z][^>]*>|\bclassName\s*=|\b(?:git|npm|pnpm|yarn)\s+(?:add|commit|run)\b/i;
-const shellCommandShape = /(?:^|\n)\s*(?:(?:rm\s+-[a-z]*r[a-z]*f|curl(?:\s|$)|wget(?:\s|$)|(?:python\d*|node|bash|zsh|sh)\s+\S|git\s+push\b)|[^\n]*(?:\s\|\s|\s(?:>|>>|<)\s)\S)/i;
+const shellFenceShape = /```(?:sh|bash|zsh|shell)\b/i;
+const shellCommandPrefix = /^(?:rm\s+-[a-z]*r[a-z]*f\b|curl\b|wget\b|python\d*\b|node\b|bash\b|zsh\b|sh\b|git\s+push\b)/i;
+const operatorCommandPrefix = /^(?:npm|pnpm|yarn|git|rm|curl|wget|python\d*|node|bash|zsh|sh|cat|sed|awk|tee|cp|mv|find|docker|npx|bun|deno)\b/i;
 
 const aiSlopCodes = new Set<AiSlopCode>([
   "generic-hero-copy",
@@ -83,6 +86,44 @@ const reportStrings = (value: unknown, seen = new Set<object>()): string[] => {
   return Object.values(value).flatMap((entry) => reportStrings(entry, seen));
 };
 
+const unwrapCommandPrefix = (line: string) => {
+  const tokens = line.trim().split(/\s+/);
+  const assignment = /^[A-Za-z_][A-Za-z0-9_]*=\S+$/;
+  let changed = true;
+  while (changed && tokens.length > 0) {
+    changed = false;
+    while (tokens[0] && assignment.test(tokens[0])) {
+      tokens.shift();
+      changed = true;
+    }
+    if (tokens[0] === "env") {
+      tokens.shift();
+      while (tokens[0]?.startsWith("-")) {
+        const option = tokens.shift();
+        if (option === "-u" && tokens.length > 0) tokens.shift();
+      }
+      changed = true;
+    }
+    if (tokens[0] === "sudo") {
+      tokens.shift();
+      while (tokens[0]?.startsWith("-")) {
+        const option = tokens.shift();
+        if (["-u", "-g", "-h", "-p", "-C", "-T", "-R", "-D"].includes(option ?? "")
+          && tokens.length > 0) tokens.shift();
+      }
+      changed = true;
+    }
+  }
+  return tokens.join(" ");
+};
+
+const containsShellCommand = (value: string) => shellFenceShape.test(value)
+  || value.split(/\r?\n/).some((line) => {
+    const command = unwrapCommandPrefix(line);
+    if (shellCommandPrefix.test(command)) return true;
+    return operatorCommandPrefix.test(command) && /(?:\s\|\s|\s(?:>|>>|<)\s)\S/.test(command);
+  });
+
 const hasOnlyKeys = (value: Record<string, unknown>, allowed: readonly string[]) =>
   Object.keys(value).every((key) => allowed.includes(key));
 
@@ -117,7 +158,7 @@ const validReportContract = (value: unknown): value is VisualCriticReport => {
     || value.evidenceIds.length === 0 || !Array.isArray(value.comparisons)
     || new Set(value.evidenceIds).size !== value.evidenceIds.length
     || value.comparisons.length === 0 || !Array.isArray(value.repairFindings)
-    || !value.repairFindings.every(validFinding) || !stringArray(value.residualUncertainty)
+    || !value.repairFindings.every(validFinding) || !stringArray(value.residualUncertainty, true)
     || typeof value.confidence !== "number" || !Number.isFinite(value.confidence)
     || value.confidence < 0 || value.confidence > 1
     || typeof value.containsImplementationCode !== "boolean") return false;
@@ -160,6 +201,9 @@ export const createVisualCriticInput = (
       || candidate.screenshotPaths.length === 0) {
       throw new Error("Visual critic input candidates require non-empty artifact references and screenshots.");
     }
+    if (!hasOnlyKeys(candidate, ["variantId", "directionPath", "evidenceId", "screenshotPaths"])) {
+      throw new Error("Visual critic input candidate contains a schema-forbidden field.");
+    }
     if (variantIds.has(candidate.variantId) || evidenceIds.has(candidate.evidenceId)) {
       throw new Error("Visual critic input candidate variantId and evidenceId values must be unique.");
     }
@@ -172,7 +216,9 @@ export const createVisualCriticInput = (
     generatorActorId: input.generatorActorId,
     criticActorId: input.criticActorId,
     candidates: input.candidates.map((candidate) => ({
-      ...candidate,
+      variantId: candidate.variantId,
+      directionPath: candidate.directionPath,
+      evidenceId: candidate.evidenceId,
       screenshotPaths: [...candidate.screenshotPaths],
     })),
   };
@@ -447,7 +493,7 @@ export const validateVisualCriticReport = (
       "Return code-free visual analysis and leave implementation to the generator.",
     ));
   }
-  if (reportStrings(report).some((value) => shellCommandShape.test(value))) {
+  if (reportStrings(report).some(containsShellCommand)) {
     findings.push(hardFinding(
       "critic-shell-output",
       "The critic report contains a shell command or command pipeline.",
@@ -459,10 +505,21 @@ export const validateVisualCriticReport = (
 };
 
 export const createCritiqueRecordedEvent = (
+  run: Pick<VisualRun, "variantIds">,
   input: VisualCriticInput,
   report: unknown,
   event: { id: string; at: string },
 ): Extract<VisualRunEvent, { type: "critique-recorded" }> => {
+  if (!Array.isArray(run.variantIds) || !stringArray(run.variantIds, true)
+    || new Set(run.variantIds).size !== run.variantIds.length) {
+    throw new Error("Current visual run candidate set must contain unique non-empty variant ids.");
+  }
+  const runCandidateIds = [...run.variantIds].sort();
+  const inputCandidateIds = input.candidates.map(({ variantId }) => variantId).sort();
+  if (runCandidateIds.length !== inputCandidateIds.length
+    || runCandidateIds.some((id, index) => id !== inputCandidateIds[index])) {
+    throw new Error("Visual critic input candidate set must exactly match the current visual run variants.");
+  }
   const findings = validateVisualCriticReport(input, report);
   if (findings.length > 0 || !validReportContract(report)) {
     throw new Error("Cannot create a critique event from an invalid visual critic report.");

@@ -6,6 +6,7 @@ import {
   createVisualCriticInput,
   validateVisualCriticReport,
   type VisualCriticReport,
+  type VisualRun,
 } from "../src/domains/frontend/design/index.ts";
 
 const input = createVisualCriticInput({
@@ -323,6 +324,9 @@ test("rejects shell-command output without flagging natural prose", () => {
     "rm -rf dist", "curl -L https://example.test", "wget https://example.test/a",
     "python scripts/fix.py", "node scripts/fix.mjs", "git push origin main",
     "npm test | tee result.txt", "pnpm test > result.txt", "sh ./repair.sh",
+    "sudo rm -rf /", "env X=1 curl https://example.test", "TOKEN=x wget https://example.test/a",
+    "sudo -u root rm -rf /tmp/build", "env -i X=1 curl https://example.test",
+    "```sh\nrm -rf dist\n```", "```bash\ncurl https://example.test\n```",
   ]) {
     const report = makeCriticReport({ selectedVariantId: "v1" });
     report.comparisons[0].weaknesses = [sample];
@@ -333,6 +337,7 @@ test("rejects shell-command output without flagging natural prose", () => {
     "The shell-like frame distracts from the content.",
     "A pipe metaphor would not improve this composition.",
     "The team can push the hierarchy further during repair.",
+    "Variant A > Variant B in hierarchy.",
   ];
   assert.ok(!findingCodes(prose).includes("critic-shell-output"));
 });
@@ -344,6 +349,7 @@ test("rejects empty or duplicate critic input artifacts", () => {
     { ...input, candidates: [{ variantId: "v", directionPath: "a", evidenceId: "e", screenshotPaths: [] }] },
     { ...input, candidates: [input.candidates[0], { ...input.candidates[1], variantId: "v1" }] },
     { ...input, candidates: [input.candidates[0], { ...input.candidates[1], evidenceId: "e1" }] },
+    { ...input, candidates: [{ ...input.candidates[0], injected: true }] },
   ];
   for (const value of cases) assert.throws(() => createVisualCriticInput(value), /critic input/i);
 });
@@ -354,8 +360,32 @@ test("maps a validated critic report into a drift-free critique event", () => {
     id: "repair-1", code: "spacing", source: "critic", severity: "medium", gate: "soft",
     message: "Tighten spacing.", evidence: ["e2"], remediation: "Adjust the selected composition.", autofixable: false,
   }];
-  assert.deepEqual(createCritiqueRecordedEvent(input, report, { id: "event-4", at: "2026-07-14T00:00:04Z" }), {
+  const run = { variantIds: ["v2", "v1"] } as VisualRun;
+  assert.deepEqual(createCritiqueRecordedEvent(run, input, report, { id: "event-4", at: "2026-07-14T00:00:04Z" }), {
     type: "critique-recorded", id: "event-4", at: "2026-07-14T00:00:04Z",
     critiqueId: "critique-1", selectedVariantId: "v2", repairFindingCount: 1,
   });
+});
+
+test("binds critique events to the current run candidate snapshot", () => {
+  const oneCandidateInput = createVisualCriticInput({
+    policyId: "policy-1", generatorActorId: "generator-a", criticActorId: "critic-b",
+    candidates: [input.candidates[0]],
+  });
+  const oneCandidateReport = makeCriticReport({ selectedVariantId: "v1" });
+  oneCandidateReport.candidateVariantIds = ["v1"];
+  oneCandidateReport.evidenceIds = ["e1"];
+  oneCandidateReport.comparisons = [oneCandidateReport.comparisons[0]];
+  const run = { variantIds: ["v1", "v2"] } as VisualRun;
+  const before = structuredClone(run);
+  assert.throws(() => createCritiqueRecordedEvent(
+    run, oneCandidateInput, oneCandidateReport, { id: "event-4", at: "2026-07-14T00:00:04Z" },
+  ), /candidate set/i);
+  assert.deepEqual(run, before);
+});
+
+test("rejects empty residual uncertainty entries", () => {
+  const report = makeCriticReport({ selectedVariantId: "v1" });
+  report.residualUncertainty = ["   "];
+  assert.ok(findingCodes(report).includes("critic-report-invalid"));
 });

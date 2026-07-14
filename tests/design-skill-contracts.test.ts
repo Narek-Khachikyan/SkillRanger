@@ -173,6 +173,14 @@ test("workflow branch resolver executes one critic decision path and converges",
     assert.equal(standardRepair.includes("bounded-repair"), true, file);
     assert.equal(noRepair.includes("no-repair-needed"), true, file);
     assert.equal(rejected.includes("block-no-acceptable-variant"), true, file);
+    assert.equal(rejected.includes("require-selected-variant-or-block-no-acceptable-variant"), false, file);
+    assert.equal(constrainedRepair.includes("require-selected-variant-or-block-no-acceptable-variant"), true, file);
+    assert.equal(noRepair.includes("require-selected-variant-or-block-no-acceptable-variant"), true, file);
+    assert.deepEqual(
+      rejected.slice(rejected.indexOf("independent-visual-critique") + 1),
+      ["block-no-acceptable-variant"],
+      file,
+    );
     for (const path of [constrainedRepair, standardRepair, noRepair]) {
       assert.equal(path.filter((id) => ["bounded-repair", "no-repair-needed", "block-no-acceptable-variant"].includes(id)).length, 1, file);
       assert.ok(path.includes("capture-recheck-evidence"), file);
