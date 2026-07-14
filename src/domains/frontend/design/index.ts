@@ -21,6 +21,7 @@ export * from "./browser.ts";
 export * from "./source-validation.ts";
 export * from "./visual-loop-types.ts";
 export * from "./visual-loop.ts";
+export * from "./critic.ts";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
