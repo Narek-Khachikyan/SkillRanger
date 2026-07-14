@@ -56,6 +56,14 @@ const brief = (): DesignBrief => ({
 const direction = (): DesignDirection => ({
   schemaVersion: "1.0",
   recipeId: "developer-tool",
+  selectedRuleIds: [
+    "typography.role-contrast",
+    "layout.list-detail",
+    "responsive.list-detail-drill-in",
+    "color.operational-status",
+    "state.recovery-first",
+    "signature.repeated-action-feedback",
+  ],
   thesis: "A compact evidence-first workspace for comparing skills and install risk.",
   productReason: "Developers repeatedly compare project evidence, risk, and commands.",
   axes: {

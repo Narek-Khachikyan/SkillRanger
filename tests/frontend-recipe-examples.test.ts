@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { stat } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
+  generateExampleAssets,
   loadRecipeExamplePacks,
   renderExamplePlate,
   type ExampleScene,
@@ -28,6 +31,34 @@ test("ships complete good/bad desktop/mobile/state packs", async () => {
     }
   }
   assert.equal(assetCount, 80);
+});
+
+test("rejects incomplete example packs at runtime", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "skillranger-examples-"));
+  try {
+    await cp("domains/frontend/examples", root, { recursive: true });
+    const file = path.join(root, "consumer-discovery", "example.json");
+    const source = JSON.parse(await readFile(file, "utf8"));
+    source.scenes.pop();
+    await writeFile(file, JSON.stringify(source), "utf8");
+    await assert.rejects(loadRecipeExamplePacks(root), /Invalid recipe example pack/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("generator rejects assets that do not match the scene id", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "skillranger-example-output-"));
+  try {
+    await cp("domains/frontend/examples", root, { recursive: true });
+    const file = path.join(root, "operational-command-center", "example.json");
+    const source = JSON.parse(await readFile(file, "utf8"));
+    source.scenes[0].asset = "example.json";
+    await writeFile(file, JSON.stringify(source), "utf8");
+    await assert.rejects(generateExampleAssets(root), /asset must match assets\/good-desktop-success\.svg/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("renders deterministic escaped semantic SVG plates", () => {

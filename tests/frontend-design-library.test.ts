@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   frontendRecipeIds,
   loadDesignRuleLibrary,
@@ -57,6 +60,14 @@ test("selects one compatible rule from every family", async () => {
 const makeDirection = (recipeId: string): DesignDirection => ({
   schemaVersion: "1.0",
   recipeId,
+  selectedRuleIds: [
+    "typography.role-contrast",
+    "layout.action-evidence",
+    "responsive.recompose-not-stack",
+    "color.semantic-roles",
+    "state.complete-primary-flow",
+    "signature.product-data-grammar",
+  ],
   thesis: "A product-specific direction.",
   productReason: "The product evidence supports this direction.",
   axes: {
@@ -72,6 +83,29 @@ const makeDirection = (recipeId: string): DesignDirection => ({
   signatureMove: "Use the primary work object as the visual grammar.",
   rejectedDefaults: ["generic cards"],
   destructiveCritique: "The direction must preserve product evidence.",
+});
+
+test("rejects malformed design rule records at runtime", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "skillranger-rules-"));
+  try {
+    await cp("domains/frontend/rules", root, { recursive: true });
+    const file = path.join(root, "typography.json");
+    const source = JSON.parse(await readFile(file, "utf8"));
+    source.rules[0].verification = [];
+    await writeFile(file, JSON.stringify(source), "utf8");
+    await assert.rejects(loadDesignRuleLibrary(root), /Invalid design rule contract/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("validates six selected rule families on a design direction", () => {
+  const invalid = makeDirection("e-commerce");
+  invalid.selectedRuleIds[5] = "state.recovery-first";
+  assert.ok(validateDesignDirection(
+    makeBrief({ domain: "commerce", surfaceType: "storefront" }),
+    invalid,
+  ).some(({ code }) => code === "direction-rule-selection-contract"));
 });
 
 test("loads exactly eight stable frontend recipes", async () => {

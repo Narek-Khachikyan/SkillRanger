@@ -2,10 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://skillranger.local/domains/frontend/design-direction.schema.json",
   "type": "object",
-  "required": ["schemaVersion", "recipeId", "thesis", "productReason", "axes", "typographyRoles", "colorRoles", "signatureMove", "rejectedDefaults", "destructiveCritique"],
+  "required": ["schemaVersion", "recipeId", "selectedRuleIds", "thesis", "productReason", "axes", "typographyRoles", "colorRoles", "signatureMove", "rejectedDefaults", "destructiveCritique"],
   "properties": {
     "schemaVersion": { "const": "1.0" },
     "recipeId": { "type": "string", "minLength": 1 },
+    "selectedRuleIds": { "type": "array", "minItems": 6, "maxItems": 6, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
     "thesis": { "type": "string", "minLength": 1 },
     "productReason": { "type": "string", "minLength": 1 },
     "axes": {

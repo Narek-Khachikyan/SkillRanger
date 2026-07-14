@@ -1,10 +1,8 @@
-export type DesignRuleFamily =
-  | "typography"
-  | "layout"
-  | "responsive"
-  | "color"
-  | "state"
-  | "signature-move";
+export const designRuleFamilies = [
+  "typography", "layout", "responsive", "color", "state", "signature-move",
+] as const;
+
+export type DesignRuleFamily = (typeof designRuleFamilies)[number];
 
 export type DesignRule = {
   schemaVersion: "1.0";

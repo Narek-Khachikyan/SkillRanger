@@ -11,7 +11,9 @@ export const generateExampleAssets = async (root = defaultExamplesRoot) => {
   for (const pack of packs) {
     const packRoot = path.dirname(pack.sourcePath);
     for (const scene of pack.scenes) {
-      const outputPath = path.resolve(scene.assetPath);
+      const expectedAsset = `assets/${scene.id}.svg`;
+      if (scene.asset !== expectedAsset) throw new Error(`Example scene asset must match ${expectedAsset}`);
+      const outputPath = path.resolve(packRoot, expectedAsset);
       if (!outputPath.startsWith(`${packRoot}${path.sep}`)) {
         throw new Error(`Generated example asset escapes pack: ${scene.asset}`);
       }

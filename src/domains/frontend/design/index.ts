@@ -104,6 +104,8 @@ export const compileDesignMarkdown = (
     `Destructive critique: ${direction.destructiveCritique}`,
   ]),
   "",
+  section("Selected Rules", direction.selectedRuleIds),
+  "",
   section("Axes", Object.entries(direction.axes).map(([key, value]) => `${key}: ${value}`)),
   "",
   section("Required States", brief.surface.requiredStates),

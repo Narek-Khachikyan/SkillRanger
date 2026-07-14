@@ -8,6 +8,8 @@ import type {
   DesignValidationResult,
 } from "./types.ts";
 import { frontendRecipeIds } from "./catalog.ts";
+import { loadDesignRuleLibrarySync } from "./library.ts";
+import { designRuleFamilies } from "./library-types.ts";
 
 const requiredStates = new Set(["loading", "empty", "error"]);
 const usageFrequencies = new Set(["rare", "occasional", "frequent", "continuous", "unknown"]);
@@ -226,6 +228,29 @@ export const validateDesignDirection = (
     ));
   }
 
+  const selectedRuleIds = isStringArray(direction.selectedRuleIds) ? direction.selectedRuleIds : [];
+  const selectedRules = loadDesignRuleLibrarySync().rules.filter((rule) => selectedRuleIds.includes(rule.id));
+  const selectedFamilies = new Set(selectedRules.map(({ family }) => family));
+  const rulesCompatible = nonEmpty(direction.recipeId) && selectedRules.every((rule) =>
+    rule.recipeIds.includes("*") || rule.recipeIds.includes(direction.recipeId as string));
+  if (
+    selectedRuleIds.length !== designRuleFamilies.length ||
+    new Set(selectedRuleIds).size !== designRuleFamilies.length ||
+    selectedRules.length !== designRuleFamilies.length ||
+    selectedFamilies.size !== designRuleFamilies.length ||
+    designRuleFamilies.some((family) => !selectedFamilies.has(family)) ||
+    !rulesCompatible
+  ) {
+    findings.push(finding(
+      "direction-rule-selection-contract",
+      "critical",
+      "hard",
+      "Design direction must select exactly one existing compatible rule from each design rule family.",
+      "Select six unique compatible rules: typography, layout, responsive, color, state, and signature-move.",
+      selectedRuleIds,
+    ));
+  }
+
   const axes = isRecord(direction.axes) ? direction.axes : undefined;
   const axesValid = Boolean(
     axes &&
@@ -269,6 +294,7 @@ export const validateDesignDirection = (
   if (!hasOnlyKeys(direction, [
     "schemaVersion",
     "recipeId",
+    "selectedRuleIds",
     "thesis",
     "productReason",
     "axes",
