@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/domains/frontend/visual-critic-report.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "id", "generatorActorId", "criticActorId", "candidateVariantIds", "evidenceIds", "comparisons", "outcome", "repairFindings", "confidence", "residualUncertainty", "containsImplementationCode"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "id": { "type": "string", "minLength": 1 },
+    "generatorActorId": { "type": "string", "minLength": 1 },
+    "criticActorId": { "type": "string", "minLength": 1 },
+    "candidateVariantIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "evidenceIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "comparisons": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/comparison" }
+    },
+    "outcome": { "enum": ["selected", "no-acceptable-variant"] },
+    "selectedVariantId": { "type": "string", "minLength": 1 },
+    "repairFindings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/verificationFinding" }
+    },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "residualUncertainty": { "type": "array", "items": { "type": "string" } },
+    "containsImplementationCode": { "const": false }
+  },
+  "$defs": {
+    "score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "scores": {
+      "type": "object",
+      "required": ["product-specificity", "hierarchy", "composition", "typography", "color-roles", "state-quality", "responsive-transformation", "accessibility", "implementation-coherence", "ai-slop-risk"],
+      "properties": {
+        "product-specificity": { "$ref": "#/$defs/score" },
+        "hierarchy": { "$ref": "#/$defs/score" },
+        "composition": { "$ref": "#/$defs/score" },
+        "typography": { "$ref": "#/$defs/score" },
+        "color-roles": { "$ref": "#/$defs/score" },
+        "state-quality": { "$ref": "#/$defs/score" },
+        "responsive-transformation": { "$ref": "#/$defs/score" },
+        "accessibility": { "$ref": "#/$defs/score" },
+        "implementation-coherence": { "$ref": "#/$defs/score" },
+        "ai-slop-risk": { "$ref": "#/$defs/score" }
+      },
+      "additionalProperties": false
+    },
+    "aiSlopFinding": {
+      "type": "object",
+      "required": ["code", "severity", "evidence", "explanation"],
+      "properties": {
+        "code": { "enum": ["generic-hero-copy", "interchangeable-saas-layout", "excessive-generic-cards", "meaningless-effects", "invented-proof", "repeated-icon-grid", "arbitrary-radii-shadows", "weak-hierarchy", "meaningless-decoration"] },
+        "severity": { "enum": ["critical", "high", "medium", "low"] },
+        "evidence": { "type": "string" },
+        "explanation": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "comparison": {
+      "type": "object",
+      "required": ["variantId", "scores", "strengths", "weaknesses", "aiSlopFindings"],
+      "properties": {
+        "variantId": { "type": "string", "minLength": 1 },
+        "scores": { "$ref": "#/$defs/scores" },
+        "strengths": { "type": "array", "items": { "type": "string" } },
+        "weaknesses": { "type": "array", "items": { "type": "string" } },
+        "aiSlopFindings": { "type": "array", "items": { "$ref": "#/$defs/aiSlopFinding" } }
+      },
+      "additionalProperties": false
+    },
+    "verificationFinding": {
+      "type": "object",
+      "required": ["id", "code", "source", "severity", "gate", "message", "evidence", "remediation", "autofixable"],
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "source": { "type": "string" },
+        "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
+        "gate": { "enum": ["hard", "soft"] },
+        "message": { "type": "string" },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "affectedSurface": { "type": "string" },
+        "remediation": { "type": "string" },
+        "autofixable": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

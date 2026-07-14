@@ -22,7 +22,10 @@
       "schemas/bounded-repair-request.schema.json",
       "schemas/verification-report.schema.json",
       "schemas/design-rule.schema.json",
-      "schemas/recipe-example.schema.json"
+      "schemas/recipe-example.schema.json",
+      "schemas/design-variant.schema.json",
+      "schemas/visual-critic-report.schema.json",
+      "schemas/visual-run.schema.json"
     ],
     "rules": ["rules/index.json"],
     "examples": [

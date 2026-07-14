@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/domains/frontend/visual-run.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "id", "policyPath", "state", "variantIds", "artifacts", "history"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "id": { "type": "string", "minLength": 1 },
+    "policyPath": { "type": "string", "minLength": 1 },
+    "state": { "$ref": "#/$defs/state" },
+    "variantIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "selectedVariantId": { "type": "string", "minLength": 1 },
+    "artifacts": {
+      "type": "object",
+      "properties": {
+        "initialEvidenceId": { "type": "string", "minLength": 1 },
+        "critiqueId": { "type": "string", "minLength": 1 },
+        "repairId": { "type": "string", "minLength": 1 },
+        "recheckEvidenceId": { "type": "string", "minLength": 1 },
+        "verificationReportPath": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["state", "at"],
+        "properties": {
+          "state": { "$ref": "#/$defs/state" },
+          "at": { "type": "string", "format": "date-time" },
+          "eventId": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "state": {
+      "enum": ["policy-resolved", "directions-valid", "implemented", "initial-evidence-captured", "critiqued", "repair-requested", "no-repair-needed", "repaired", "recheck-evidence-captured", "final-audited", "verified", "failed", "blocked"]
+    }
+  },
+  "additionalProperties": false
+}
