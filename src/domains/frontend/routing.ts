@@ -128,10 +128,10 @@ const specializedIntentHints: Record<string, string[]> = {
   ],
   "frontend.visual-critic": [
     "compare rendered variants", "compare screenshots", "compare these two rendered variants",
-    "rendered variants", "two rendered variants", "variant screenshots",
+    "rendered variants", "these two screenshots", "two rendered variants", "two screenshots", "variant screenshots",
     "сравни два отрисованных варианта", "сравни скриншоты вариантов",
     "сравните два отрисованных варианта", "сравните скриншоты вариантов",
-    "отрисованных варианта", "скриншоты вариантов",
+    "два скриншота", "отрисованных варианта", "скриншоты вариантов", "эти два скриншота",
   ],
 };
 
@@ -156,8 +156,10 @@ const visualCriticActionTokens = new Set([
 ]);
 const visualCriticEvidencePhrases = [
   "rendered variant", "rendered variants", "variant screenshot", "variant screenshots",
-  "mobile and desktop screenshots", "отрисованного варианта", "отрисованных варианта",
-  "скриншот варианта", "скриншоты вариантов", "мобильным и десктопным скриншотам",
+  "these two screenshots", "two screenshots", "mobile and desktop screenshots",
+  "два скриншота", "отрисованного варианта", "отрисованных варианта",
+  "скриншот варианта", "скриншоты вариантов", "эти два скриншота",
+  "мобильным и десктопным скриншотам",
 ];
 const requiredStackTags = new Set(["nextjs", "vite", "react", "tailwind", "playwright"]);
 

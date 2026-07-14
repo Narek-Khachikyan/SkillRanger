@@ -63,11 +63,29 @@ test("visual critic routing requires rendered evidence and comparison intent", a
   });
   assert.equal(russianCompare[0]?.skillId, "frontend.visual-critic");
 
+  const screenshotOnlyCompare = await nextFixtureRecommendations({
+    userIntent: "Compare these two screenshots and select the stronger design.",
+  });
+  assert.equal(screenshotOnlyCompare[0]?.skillId, "frontend.visual-critic");
+
+  const russianScreenshotOnlyCompare = await nextFixtureRecommendations({
+    userIntent: "Сравни эти два скриншота и выбери лучший дизайн.",
+  });
+  assert.equal(russianScreenshotOnlyCompare[0]?.skillId, "frontend.visual-critic");
+
   const russianImplementationCollision = await nextFixtureRecommendations({
     userIntent: "Реализуй два отрисованных варианта страницы тарифов на React и Tailwind",
   });
   assert.equal(
     russianImplementationCollision.some(({ skillId }) => skillId === "frontend.visual-critic"),
+    false,
+  );
+
+  const screenshotImplementationCollision = await nextFixtureRecommendations({
+    userIntent: "Implement two screenshots for this pricing page in React and Tailwind.",
+  });
+  assert.equal(
+    screenshotImplementationCollision.some(({ skillId }) => skillId === "frontend.visual-critic"),
     false,
   );
 });
