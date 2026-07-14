@@ -4,6 +4,12 @@ Use this reference when the product context matches one of these patterns. Each 
 shows product truth -> design tension -> competing directions -> thesis -> signature ->
 application -> destructive critique. Adapt the structure, not the details.
 
+## Canonical Worked Packs
+
+Before implementation, load `domains/frontend/examples/<recipe-id>/example.json` for the selected recipe. Compare the proposed direction with its good and bad desktop/mobile/state scenes and record which selected rule ids explain the difference. The SVG assets are explanatory evidence only: do not copy them as JSX, CSS, components, layouts, or production templates.
+
+The narrative examples below remain reasoning exercises. The canonical packs govern recipe-specific comparison and use neutral structural content.
+
 ## 1. Operations SaaS: Fleet Maintenance Dashboard
 
 **Product truth:** Dispatchers scan 50+ work orders/hour. Each order has priority,

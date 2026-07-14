@@ -1,6 +1,8 @@
 # Frontend Domain Pack
 
-The frontend pack is SkillRanger's reference domain implementation. It owns frontend routing policy, structured design artifacts, product recipes, deterministic validation rules, workflows, and frontend eval slices. Core imports only the generic domain interfaces.
+The frontend pack is SkillRanger's reference domain implementation. It owns frontend routing policy, structured design artifacts, eight product recipes, 18 versioned design rules, eight worked example packs, deterministic validation rules, workflows, and frontend eval slices. Core imports only the generic domain interfaces.
+
+The canonical rule index is `rules/index.json`; worked packs are stored at `examples/<recipe-id>/example.json`. Select one compatible rule from each of the six families before material implementation, then compare the direction with the selected recipe's good and bad examples. Generated SVG plates are explanatory evidence, not production templates.
 
 The host remains responsible for model execution and project edits. SkillRanger validates artifacts and browser observations, computes outcomes, and emits bounded repair requests. It never silently edits a project through this runtime.
 
@@ -9,7 +11,7 @@ The host remains responsible for model execution and project edits. SkillRanger 
 1. Create `.design/brief.json` from observed project evidence.
 2. Run `skillranger design:validate --brief .design/brief.json`.
 3. Run `skillranger design:recommend-recipe --brief .design/brief.json`.
-4. Create `.design/direction.json` using the selected recipe.
+4. Select six compatible rule ids and create `.design/direction.json` using the selected recipe; record the selected rule ids in structured direction metadata.
 5. Implement the direction through the selected skill.
 6. Record browser observations for required viewports and states. Use `design:observe` with a project-specific browser adapter or provide the same JSON contract through the host.
 7. Run `skillranger design:verify` and repair hard findings.

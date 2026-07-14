@@ -2,6 +2,16 @@
 
 Read this only for material visual direction, an unfamiliar domain, or when the core workflow needs concrete craft guidance.
 
+## Canonical Rule Library
+
+Load `domains/frontend/rules/index.json` before material implementation. Select exactly one compatible rule from each family—typography, layout, responsive, color, state, and signature move—and record the six selected rule ids in structured direction metadata. Treat each rule's preconditions, constraints, accessibility notes, anti-patterns, and verification criteria as one decision contract.
+
+- Constrained: use the first policy-compatible six-rule set without adding primitives.
+- Standard: compare recipe-compatible alternatives by rule id before selecting six.
+- Advanced: a deviation requires destructive critique naming the affected rule id, product benefit, accessibility effect, and replacement verification.
+
+Do not mix constraints from several same-family rules while claiming one selection.
+
 ## Domain And Direction
 
 Anchor a visual thesis in observed domain nouns, verbs, artifacts, data shapes, user

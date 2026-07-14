@@ -3,9 +3,9 @@
   "id": "frontend.visual-design-polish",
   "maxRepairIterations": 3,
   "profileInstructions": {
-    "constrained": ["Resolve one top recipe and one structured direction.", "Implement only from existing primitives and verified patterns.", "Run one mandatory corrective pass followed by fresh evidence."],
+    "constrained": ["Resolve one top recipe and one structured direction with exactly six selected rule ids: one compatible id from each rule family.", "Compare the direction with the selected recipe good/bad example pack before implementation.", "Implement only from existing primitives and verified patterns.", "Run one mandatory corrective pass followed by fresh evidence."],
     "standard": ["Limit exploration to 2–3 recipe-compatible variants.", "Allow one bounded composition variation.", "Keep hard gates unchanged."],
     "advanced": ["Allow new primitives only with product evidence and destructive critique.", "Keep hard gates unchanged."]
   },
-  "steps": ["collect-evidence", "validate-brief", "resolve-execution-policy", "select-recipe", "define-structured-direction", "validate-direction", "validate-implementation-prerequisites", "implement", "capture-initial-evidence", "independent-critique", "bounded-repair", "capture-recheck-evidence-390", "capture-recheck-evidence-768", "capture-recheck-evidence-1440", "final-verify", "final-report"]
+  "steps": ["collect-evidence", "validate-brief", "resolve-execution-policy", "select-recipe", "select-compatible-rules", "compare-recipe-examples", "define-structured-direction", "validate-direction", "validate-implementation-prerequisites", "implement", "capture-initial-evidence", "independent-critique", "bounded-repair", "capture-recheck-evidence-390", "capture-recheck-evidence-768", "capture-recheck-evidence-1440", "final-verify", "final-report"]
 }

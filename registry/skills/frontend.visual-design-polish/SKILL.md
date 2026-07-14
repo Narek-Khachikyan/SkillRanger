@@ -23,7 +23,7 @@ open-ended direction work in tailwind-ui-polish.
 
 ## Structured Execution Contract
 
-For material work, read `input.schema.json`, `workflow.json`, and `gates.json` before implementation. Create the required `.design` artifacts in workflow order and validate them with SkillRanger when available. Use the constrained profile when model capability is unknown: select one recommended recipe, keep one signature move, use existing primitives, and do not skip browser evidence or the repair pass. Return the shape in `output.schema.json`; `evals.json` identifies the benchmark slice.
+For material work, read `input.schema.json`, `workflow.json`, and `gates.json` before implementation. Create the required `.design` artifacts in workflow order and validate them with SkillRanger when available. Load the canonical rule index, select exactly one compatible rule from each of the six families, and record the six selected rule ids in structured direction metadata. Compare the direction against the selected recipe's good/bad example pack before implementation. Use the constrained profile when model capability is unknown: select one recommended recipe, keep one signature move, use existing primitives, and do not skip browser evidence or the repair pass. Return the shape in `output.schema.json`; `evals.json` identifies the benchmark slice.
 
 ## Design Change Modes
 
@@ -56,7 +56,7 @@ Name the concrete problem the current UI creates for a real user task: weak hier
 Each direction must differ on at least two of: density model, hierarchy strategy, typographic voice, color temperature, composition pattern, or material treatment. Each must include a one-sentence product reason and one rejected default it intentionally avoids. Do not propose directions that could describe the same "clean modern SaaS" with different accent colors.
 
 ### 4. Choose And Thesis
-Select one direction with its product justification. State a compact visual thesis: product/audience, hierarchy and density target, type/color roles, one useful signature move, and one generic default deliberately rejected. Set design variance, motion, and density to suit the product. Choose one primary direction and at most one supporting accent; do not mix unrelated trends.
+Select one direction with its product justification. Select and record one compatible rule id for typography, layout, responsive, color, state, and signature move. State a compact visual thesis: product/audience, hierarchy and density target, type/color roles, one useful signature move, and one generic default deliberately rejected. Compare it with the recipe's good/bad pack, then set design variance, motion, and density to suit the product. Choose one primary direction and at most one supporting accent; do not mix unrelated trends.
 
 ### 5. Define The Signature Move
 Name one non-generic visual decision the thesis earns: a treatment of a real data shape, a domain-appropriate surface material, a typographic conflict and resolution, a composition structure tied to a user workflow, a color-as-meaning rule, or a motion behavior that clarifies cause and effect. If the signature could describe any SaaS product, it is not specific enough.

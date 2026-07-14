@@ -128,3 +128,12 @@ test("repair-loop documentation requires equal-or-higher-severity regression che
   assert.match(repairLoop, /equal-or-higher-severity regression/i);
   assert.doesNotMatch(repairLoop, /new critical or high regression/i);
 });
+
+test("visual design skill references the canonical rule and example libraries", async () => {
+  const skill = await readFile("registry/skills/frontend.visual-design-polish/SKILL.md", "utf8");
+  const rules = await readFile("registry/skills/frontend.visual-design-polish/references/visual-rules.md", "utf8");
+  const examples = await readFile("registry/skills/frontend.visual-design-polish/references/evidence-examples.md", "utf8");
+  assert.match(skill, /selected rule ids/i);
+  assert.match(rules, /domains\/frontend\/rules\/index\.json/);
+  assert.match(examples, /domains\/frontend\/examples\/<recipe-id>\/example\.json/);
+});
