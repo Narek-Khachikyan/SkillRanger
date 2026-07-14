@@ -355,6 +355,8 @@ test("classifies the exact ambiguous command regression corpus", () => {
     "./repair.sh", "echo repair now", "command rm -rf /", "/bin/rm -rf /",
     "git reset --hard", "npm install react", "sudo rm -rf /",
     "/usr/bin/env X=1 curl https://example.test", "$ node repair.js",
+    "whoami", "date", "uname -a", "id", "hostname",
+    "source .env", "install input output", "host example.com",
   ];
   for (const sample of prohibited) {
     const report = makeCriticReport({ selectedVariantId: "v1" });
@@ -370,6 +372,12 @@ test("classifies the exact ambiguous command regression corpus", () => {
     "git history supports this direction.",
     "npm ecosystem choices affect portability.",
     "Variant A > Variant B in hierarchy.",
+    "Source evidence supports this selection.",
+    "Install flow hierarchy is unclear.",
+    "Host application framing is coherent.",
+    "Date labels need stronger contrast.",
+    "Hostname copy belongs in the technical details panel.",
+    "Id values should not dominate the hierarchy.",
   ];
   for (const sample of allowed) {
     const report = makeCriticReport({ selectedVariantId: "v1" });

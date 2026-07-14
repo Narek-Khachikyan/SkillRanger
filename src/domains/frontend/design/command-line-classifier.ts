@@ -9,15 +9,19 @@ const wrapperOptionsWithValues = new Set([
   "--host", "--prompt", "--chdir", "--unset", "-f", "-o",
 ]);
 const unambiguousExecutables = new Set([
-  "echo", "printf", "eval", "exec", "source", "export", "unset", "alias", "cd", "pwd", "ls",
-  "rm", "cp", "mv", "install", "mkdir", "rmdir", "touch", "ln", "chmod", "chown",
-  "curl", "wget", "ssh", "scp", "sftp", "rsync", "nc", "netcat", "ping", "dig", "host", "nslookup",
+  "echo", "printf", "eval", "exec", "unset", "cd", "ls",
+  "rm", "cp", "mv", "mkdir", "rmdir", "touch", "ln", "chmod", "chown",
+  "curl", "wget", "ssh", "scp", "sftp", "rsync", "nc", "netcat", "ping", "dig", "nslookup",
   "perl", "php", "javac", "cargo", "rustc", "deno", "npx",
   "sh", "bash", "zsh", "fish", "dash", "ksh", "pwsh", "powershell",
   "ps", "kill", "pkill", "killall", "top", "lsof",
   "cat", "tee", "sed", "awk", "xargs", "grep", "rg", "tar", "zip", "unzip",
   "docker", "podman", "kubectl", "helm", "terraform", "ansible",
   "cmake", "gradle", "mvn", "tsc", "vite", "webpack", "rollup", "esbuild",
+]);
+const standaloneExecutables = new Set([
+  "whoami", "date", "uname", "uptime", "hostname", "id", "groups", "tty", "pwd",
+  "printenv", "true", "false", "env",
 ]);
 const vcsExecutables = new Set(["git", "hg", "svn"]);
 const vcsSubcommands = new Set([
@@ -40,9 +44,18 @@ const scriptExtension = /\.(?:sh|bash|zsh|fish|py|pyw|js|mjs|cjs|ts|tsx|rb|pl|ph
 const explicitPath = /^(?:[A-Za-z]:[\\/]|\.{1,2}[\\/]|[\\/])/;
 const pathArgument = /^(?:[A-Za-z]:[\\/]|\.{0,2}[\\/]|~[\\/])/;
 const commandToken = /^[A-Za-z0-9_.+/-]+$/;
+const hostnameQuery = /^(?:(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}|localhost|(?:\d{1,3}\.){3}\d{1,3})$/i;
 
 const executableName = (token: string) => path.posix.basename(token.replace(/\\/g, "/")).toLowerCase();
 const tokenize = (line: string) => line.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
+
+const isKnownCommandWord = (token: string) => {
+  const executable = executableName(token);
+  return unambiguousExecutables.has(executable) || standaloneExecutables.has(executable)
+    || vcsExecutables.has(executable) || packageExecutables.has(executable)
+    || runtimeExecutables.has(executable) || executable === "make" || executable === "find"
+    || ["source", ".", "install", "host", "export", "alias"].includes(executable);
+};
 
 const unwrapCommandPosition = (line: string) => {
   let normalized = line.trim();
@@ -63,6 +76,11 @@ const unwrapCommandPosition = (line: string) => {
     }
     const wrapper = tokens[0] ? executableName(tokens[0]) : "";
     if (!wrappers.has(wrapper)) continue;
+    if (wrapper === "env" && tokens.length > 1
+      && !tokens[1]!.startsWith("-") && !assignment.test(tokens[1]!)
+      && !explicitPath.test(tokens[1]!) && !scriptExtension.test(tokens[1]!)
+      && !isKnownCommandWord(tokens[1]!)) continue;
+    if (wrapper === "env" && tokens.length === 1) continue;
     tokens.shift();
     wrapped = true;
     while (tokens[0]?.startsWith("-")) {
@@ -77,6 +95,33 @@ const unwrapCommandPosition = (line: string) => {
 const hasFlag = (tokens: string[]) => tokens.some((token) => /^--?(?:[A-Za-z0-9]|$)/.test(token));
 const hasPath = (tokens: string[]) => tokens.some((token) => pathArgument.test(token));
 const hasScript = (tokens: string[]) => tokens.some((token) => scriptExtension.test(token));
+
+const isStandaloneCommand = (executable: string, args: string[]): boolean => {
+  if (!standaloneExecutables.has(executable)) return false;
+  if (args.length === 0 || hasFlag(args)) return true;
+  if (executable === "date") return args.some((token) => token.startsWith("+"));
+  if (executable === "hostname") return args.length === 1 && hostnameQuery.test(args[0]!);
+  if (executable === "id" || executable === "groups") return args.length === 1 && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(args[0]!);
+  if (executable === "printenv") return args.every((token) => /^[A-Z_][A-Z0-9_]*$/.test(token));
+  if (executable === "env") return args.some((token) => assignment.test(token));
+  return false;
+};
+
+const isHomonymCommand = (executable: string, args: string[]): boolean => {
+  if (executable === "source" || executable === ".") {
+    return hasFlag(args) || hasPath(args) || hasScript(args)
+      || (args.length === 1 && commandToken.test(args[0]!));
+  }
+  if (executable === "install") {
+    return hasFlag(args) || hasPath(args) || hasScript(args)
+      || (args.length === 2 && args.every((token) => commandToken.test(token)));
+  }
+  if (executable === "host") return hasFlag(args) || (args.length === 1 && hostnameQuery.test(args[0]!));
+  if (executable === "export" || executable === "alias") {
+    return hasFlag(args) || args.some((token) => assignment.test(token));
+  }
+  return false;
+};
 
 const isAmbiguousCommand = (executable: string, args: string[]): boolean => {
   const first = args[0]?.toLowerCase() ?? "";
@@ -115,6 +160,7 @@ export const containsProhibitedCommandLine = (value: string): boolean => {
 
     if (prompted || wrapped || explicitPath.test(executableToken) || scriptExtension.test(executableToken)) return true;
     if (unambiguousExecutables.has(executable)) return true;
+    if (isStandaloneCommand(executable, args) || isHomonymCommand(executable, args)) return true;
     if (isAmbiguousCommand(executable, args)) return true;
 
     // Operator characters are intentionally not evidence: only an independently command-shaped line reaches true.
