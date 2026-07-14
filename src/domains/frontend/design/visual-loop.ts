@@ -115,6 +115,7 @@ const validateStoredRun = (run: VisualRun, policy: DesignExecutionPolicy) => {
     if (ids.some((id) => !run.variantIds.includes(id))) throw new Error("visual run implementation variant reference is stale");
   }
   if (!Array.isArray(run.history)) throw new Error("visual run history must be an array");
+  const eventIds: string[] = [];
   for (const entry of run.history) {
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
       throw new Error("visual run history entry must be an object");
@@ -122,8 +123,12 @@ const validateStoredRun = (run: VisualRun, policy: DesignExecutionPolicy) => {
     hasOnlyKeys(entry, ["state", "at", "eventId"], "visual run history entry");
     if (!Object.hasOwn(transitionByState, entry?.state)) throw new Error("visual run history state is invalid");
     rfc3339(entry.at, "visual run history timestamp");
-    if (entry.eventId !== undefined) nonEmpty(entry.eventId, "visual run history event id");
+    if (entry.eventId !== undefined) {
+      nonEmpty(entry.eventId, "visual run history event id");
+      eventIds.push(entry.eventId);
+    }
   }
+  if (new Set(eventIds).size !== eventIds.length) throw new Error("visual run history event ids must be unique");
 
   snapshotInvariant(run.history.length > 0, "history must be non-empty");
   snapshotInvariant(run.history[0].state === "policy-resolved", "history must start at policy-resolved");
@@ -225,6 +230,11 @@ const validateStoredRun = (run: VisualRun, policy: DesignExecutionPolicy) => {
     "verification report path must match verified history",
   );
 };
+
+export const assertValidVisualRunSnapshot = (
+  run: VisualRun,
+  policy: DesignExecutionPolicy,
+): void => validateStoredRun(run, policy);
 
 const validateEventPayload = (event: VisualRunEvent) => {
   if (!event || typeof event !== "object" || !Object.hasOwn(targetStateByEvent, event.type)) {

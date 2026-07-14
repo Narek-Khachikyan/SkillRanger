@@ -5,7 +5,7 @@ import type { BoundedRepairRequest, DesignExecutionPolicy } from "./policy-types
 import type { UiCheckResult, UiEvidenceBundle } from "./evidence-types.ts";
 import type { DesignBrief, DesignDirection, DesignValidationResult } from "./types.ts";
 import type { DesignVariantMetadata, VisualCriticReport, VisualRun, VisualRunState } from "./visual-loop-types.ts";
-import { digestDesignExecutionPolicy } from "./visual-loop.ts";
+import { assertValidVisualRunSnapshot, digestDesignExecutionPolicy } from "./visual-loop.ts";
 import { validateDesignBrief, validateDesignDirection } from "./validation.ts";
 
 const artifactIsNonEmptyFile = (filePath: string) => {
@@ -59,6 +59,12 @@ const validateFinalLifecycle = (input: {
   boundedRepairRequest?: BoundedRepairRequest;
 }) => {
   const issues: string[] = [];
+  try {
+    assertValidVisualRunSnapshot(input.visualRun, input.policy);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "invalid visual run snapshot";
+    if (!message.includes("recheck evidence must be present and fresh")) issues.push(message);
+  }
   const states = input.visualRun.history.map(({ state }) => state);
   const repairRequired = input.policy.profile === "constrained" || input.criticReport.repairFindings.length > 0;
   const repairRecorded = states.includes("repair-requested") || states.includes("repaired");

@@ -63,3 +63,23 @@ test("requires complete initial evidence before critique", () => {
   assert.ok(result.findings.some(({ code }) => code === "visual-evidence-matrix-incomplete"));
   assert.equal(result.report.outcome, "failed");
 });
+
+
+test("rejects malformed timestamps and duplicate lifecycle event ids", () => {
+  const malformedTimestamp = makeVerificationInput({
+    initialEvidence: makeBundle({ id: "e1", variantId: "v1", sourceIdentity: "git:abc" }),
+    recheckEvidence: makeBundle({ id: "e2", variantId: "v1", sourceIdentity: "git:def" }),
+  });
+  malformedTimestamp.visualRun.history[1].at = "not-a-timestamp";
+  assert.ok(verifyVisualResult(malformedTimestamp).findings
+    .some(({ code }) => code === "visual-run-lifecycle-invalid"));
+
+  const duplicateEvents = makeVerificationInput({
+    initialEvidence: makeBundle({ id: "e1", variantId: "v1", sourceIdentity: "git:abc" }),
+    recheckEvidence: makeBundle({ id: "e2", variantId: "v1", sourceIdentity: "git:def" }),
+  });
+  duplicateEvents.visualRun.history[2].eventId = duplicateEvents.visualRun.history[1].eventId;
+  const result = verifyVisualResult(duplicateEvents);
+  assert.ok(result.findings.some(({ code }) => code === "visual-run-lifecycle-invalid"));
+  assert.equal(result.report.outcome, "failed");
+});
