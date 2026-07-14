@@ -33,6 +33,7 @@ export type DomainPackManifest = {
     workflows: string[];
     validators: string[];
     evalSuite?: string;
+    capabilityRecords?: string[];
   };
   ownership: DomainOwnershipRule[];
 };

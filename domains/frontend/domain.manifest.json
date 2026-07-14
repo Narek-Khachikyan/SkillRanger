@@ -14,7 +14,10 @@
     "evaluation"
   ],
   "artifacts": {
-    "intents": ["intents/ownership.json"],
+    "intents": [
+      "intents/ownership.json",
+      "intents/phases.json"
+    ],
     "schemas": [
       "schemas/design-brief.schema.json",
       "schemas/design-direction.schema.json",
@@ -26,9 +29,12 @@
       "schemas/design-variant.schema.json",
       "schemas/visual-critic-report.schema.json",
       "schemas/visual-run.schema.json",
-      "schemas/ui-evidence-bundle.schema.json"
+      "schemas/ui-evidence-bundle.schema.json",
+      "schemas/model-capability-record.schema.json"
     ],
-    "rules": ["rules/index.json"],
+    "rules": [
+      "rules/index.json"
+    ],
     "examples": [
       "examples/operational-command-center/example.json",
       "examples/consumer-discovery/example.json",
@@ -53,50 +59,74 @@
       "workflows/design-generation.workflow.json",
       "workflows/design-to-code.workflow.json"
     ],
-    "validators": ["validators/frontend-validation.rules.json"],
-    "evalSuite": "evals/frontend/suite.json"
+    "validators": [
+      "validators/frontend-validation.rules.json"
+    ],
+    "evalSuite": "evals/frontend/suite.json",
+    "capabilityRecords": [
+      "capabilities/default-constrained.json"
+    ]
   },
   "ownership": [
     {
       "intent": "visual-direction",
       "primarySkill": "frontend.visual-design-polish",
-      "supportingSkills": ["frontend.ux-critique", "frontend.design-system"]
+      "supportingSkills": [
+        "frontend.ux-critique",
+        "frontend.design-system"
+      ]
     },
     {
       "intent": "tailwind-execution",
       "primarySkill": "frontend.tailwind-ui-polish",
-      "supportingSkills": ["frontend.accessibility-review"]
+      "supportingSkills": [
+        "frontend.accessibility-review"
+      ]
     },
     {
       "intent": "design-system",
       "primarySkill": "frontend.design-system",
-      "supportingSkills": ["frontend.tailwind-ui-polish"]
+      "supportingSkills": [
+        "frontend.tailwind-ui-polish"
+      ]
     },
     {
       "intent": "design-to-code",
       "primarySkill": "frontend.design-to-code",
-      "supportingSkills": ["frontend.tailwind-ui-polish"],
-      "requiresEvidence": ["visual-reference"]
+      "supportingSkills": [
+        "frontend.tailwind-ui-polish"
+      ],
+      "requiresEvidence": [
+        "visual-reference"
+      ]
     },
     {
       "intent": "ux-review",
       "primarySkill": "frontend.ux-critique",
-      "supportingSkills": ["frontend.accessibility-review"]
+      "supportingSkills": [
+        "frontend.accessibility-review"
+      ]
     },
     {
       "intent": "interaction-polish",
       "primarySkill": "frontend.interaction-polish",
-      "supportingSkills": ["frontend.accessibility-review"]
+      "supportingSkills": [
+        "frontend.accessibility-review"
+      ]
     },
     {
       "intent": "motion-design",
       "primarySkill": "frontend.motion-design",
-      "supportingSkills": ["frontend.interaction-polish"]
+      "supportingSkills": [
+        "frontend.interaction-polish"
+      ]
     },
     {
       "intent": "motion-review",
       "primarySkill": "frontend.motion-audit",
-      "supportingSkills": ["frontend.performance-review"]
+      "supportingSkills": [
+        "frontend.performance-review"
+      ]
     },
     {
       "intent": "release-review",

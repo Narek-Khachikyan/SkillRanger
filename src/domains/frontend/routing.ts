@@ -1,3 +1,4 @@
+import { phaseRankForSkill } from "./phases.ts";
 import { defaultDomainsRoot } from "../../paths.ts";
 import type { ProjectFingerprint, Recommendation, RegistrySkill, SkillLane } from "../../types.ts";
 import { registerDomainPack } from "../registry.ts";
@@ -359,6 +360,7 @@ const routing: DomainRoutingPolicy = {
         const recommendation = recommendations.find((candidate) => candidate.skillId === skillId);
         return recommendation ? [{ ...recommendation, role: "companion" as const }] : [];
       })
+      .sort((left, right) => phaseRankForSkill(left.skillId) - phaseRankForSkill(right.skillId))
       .slice(0, 2);
     return [{ ...primary, role: "primary" as const }, ...companions];
   },
@@ -375,14 +377,14 @@ export const frontendDomainManifest: DomainPackManifest = {
     "project-signals", "intent-routing", "structured-artifacts", "verification", "repair", "evaluation",
   ],
   artifacts: {
-    intents: ["intents/ownership.json"],
+    intents: ["intents/ownership.json", "intents/phases.json"],
     schemas: [
       "schemas/design-brief.schema.json", "schemas/design-direction.schema.json",
       "schemas/design-execution-policy.schema.json", "schemas/bounded-repair-request.schema.json",
       "schemas/verification-report.schema.json", "schemas/design-rule.schema.json",
       "schemas/recipe-example.schema.json", "schemas/design-variant.schema.json",
       "schemas/visual-critic-report.schema.json", "schemas/visual-run.schema.json",
-      "schemas/ui-evidence-bundle.schema.json",
+      "schemas/ui-evidence-bundle.schema.json", "schemas/model-capability-record.schema.json",
     ],
     recipes: frontendRecipeFiles.map((file) => `recipes/${file}`),
     rules: ["rules/index.json"],
@@ -390,6 +392,7 @@ export const frontendDomainManifest: DomainPackManifest = {
     workflows: ["workflows/design-generation.workflow.json", "workflows/design-to-code.workflow.json"],
     validators: ["validators/frontend-validation.rules.json"],
     evalSuite: "evals/frontend/suite.json",
+    capabilityRecords: ["capabilities/default-constrained.json"],
   },
   ownership: [
     { intent: "visual-direction", primarySkill: "frontend.visual-design-polish", supportingSkills: ["frontend.ux-critique", "frontend.design-system"] },

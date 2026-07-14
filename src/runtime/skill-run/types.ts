@@ -11,6 +11,7 @@ export type SkillRunPolicyDecision = {
   mandatorySkillIds: string[];
   clarification: { required: boolean; questions: Array<{ id: string; fields: string[]; text: string; allowDecline: boolean }> };
   verificationRequired: boolean;
+  artifacts?: Record<string, unknown>;
 };
 
 export type SkillRunSkill = { skillId: string; role: "primary" | "companion"; version: string; checksum: string; mandatory: boolean };

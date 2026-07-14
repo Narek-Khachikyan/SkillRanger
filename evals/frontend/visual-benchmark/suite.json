@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0",
+  "version": "visual-benchmark-v1",
+  "skillRangerVersion": "0.1.0",
+  "skillRangerChecksum": "sha256:frozen-visual-benchmark-v1",
+  "toolCapabilities": [
+    "browser",
+    "screenshots",
+    "filesystem"
+  ],
+  "briefs": [
+    "briefs/operational-command-center.json",
+    "briefs/consumer-discovery.json",
+    "briefs/developer-tool.json",
+    "briefs/editorial-content.json",
+    "briefs/marketing-landing.json",
+    "briefs/saas-workspace.json",
+    "briefs/e-commerce.json",
+    "briefs/mobile-consumer-app.json"
+  ]
+}

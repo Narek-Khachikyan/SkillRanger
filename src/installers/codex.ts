@@ -1,7 +1,9 @@
-import { cp, lstat, mkdir, readdir, readlink, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { cp, lstat, mkdir, readdir, readlink, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { auditSkill } from "../audit/index.ts";
+import { assertSkillIntegrity } from "../registry/index.ts";
 import { upsertInstalledSkill } from "../lockfile/index.ts";
 import type { InstallPlan, RegistrySkill } from "../types.ts";
 import { getAgentConfig, isUniversalAgent } from "./agents.ts";
@@ -40,6 +42,32 @@ const isPathSafe = (basePath: string, targetPath: string) => {
 
 const pathsOverlap = (left: string, right: string) => isPathSafe(left, right) || isPathSafe(right, left);
 
+const assertRepoPathSafe = async (input: InstallInput, targetPath: string, label: string, includeTarget = true) => {
+  if (input.scope !== "repo") return;
+  const projectRoot = path.resolve(input.projectRoot);
+  const rootInfo = await lstat(projectRoot).catch(() => undefined);
+  if (!rootInfo?.isDirectory() || rootInfo.isSymbolicLink()) throw new Error("Repository root must be a real directory.");
+  const canonicalRoot = await realpath(projectRoot);
+  const resolvedTarget = path.resolve(targetPath);
+  if (!isPathSafe(projectRoot, resolvedTarget)) throw new Error(`${label} escaped repository root.`);
+  const relative = path.relative(projectRoot, includeTarget ? resolvedTarget : path.dirname(resolvedTarget));
+  let current = projectRoot;
+  for (const component of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, component);
+    const info = await lstat(current).catch(() => undefined);
+    if (!info) break;
+    if (info.isSymbolicLink()) throw new Error(`${label} contains a symlink component: ${path.relative(projectRoot, current)}`);
+  }
+  let existing = includeTarget ? resolvedTarget : path.dirname(resolvedTarget);
+  while (!(await lstat(existing).catch(() => undefined))) {
+    const parent = path.dirname(existing);
+    if (parent === existing) break;
+    existing = parent;
+  }
+  const canonicalExisting = await realpath(existing);
+  if (!isPathSafe(canonicalRoot, canonicalExisting)) throw new Error(`${label} escaped canonical repository root.`);
+};
+
 export const getCanonicalSkillsDir = (input: Pick<InstallInput, "projectRoot" | "scope">) => {
   const base = input.scope === "user" ? os.homedir() : input.projectRoot;
   return path.resolve(base, canonicalSkillBase);
@@ -74,9 +102,13 @@ const skillInstallDirs = (skill: RegistrySkill, input: InstallInput) => {
 const installMode = (input: InstallInput): InstallMode => input.mode ?? "symlink";
 
 const planWrites = async (skill: RegistrySkill, input: InstallInput) => {
+  await assertSkillIntegrity(skill);
   const { canonicalDir, agentDir } = skillInstallDirs(skill, input);
+  await assertRepoPathSafe(input, canonicalDir, "Canonical skill install path");
+  await assertRepoPathSafe(input, agentDir, `${input.targetAgent} skill install path`);
   const files = await walkSkillFiles(skill.path);
   const copiedFiles = files.filter((filePath) => filePath !== skillManifestFile);
+  copiedFiles.push(...(skill.sharedContracts ?? []).map(({ installPath }) => installPath));
   const mode = installMode(input);
   const universal = isUniversalAgent(input.targetAgent) || canonicalDir === agentDir;
   const targetDir = mode === "copy" ? agentDir : canonicalDir;
@@ -86,22 +118,56 @@ const planWrites = async (skill: RegistrySkill, input: InstallInput) => {
   return writes;
 };
 
-const cleanDirectory = async (dir: string) => {
-  await rm(dir, { recursive: true, force: true });
-  await mkdir(dir, { recursive: true });
-};
-
-const copySkillFiles = async (skill: RegistrySkill, target: string) => {
-  await cleanDirectory(target);
+const populateSkillDirectory = async (skill: RegistrySkill, staging: string) => {
+  await mkdir(staging, { recursive: false });
   const files = await walkSkillFiles(skill.path);
   for (const filePath of files) {
     if (filePath === skillManifestFile) continue;
     const sourcePath = path.join(skill.path, filePath);
-    const targetPath = path.join(target, filePath);
+    const targetPath = path.join(staging, filePath);
     await mkdir(path.dirname(targetPath), { recursive: true });
-    await cp(sourcePath, targetPath, { dereference: true, recursive: true });
+    await cp(sourcePath, targetPath, { dereference: false, recursive: true });
   }
-  await writeFile(path.join(target, skillManifestFile), `${JSON.stringify(skill.manifest, null, 2)}\n`);
+  for (const contract of skill.sharedContracts ?? []) {
+    const targetPath = path.join(staging, contract.installPath);
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await cp(contract.path, targetPath, { dereference: false });
+  }
+  await writeFile(path.join(staging, skillManifestFile), `${JSON.stringify(skill.manifest, null, 2)}\n`);
+};
+
+const copySkillFiles = async (skill: RegistrySkill, target: string, safetyCheck?: () => Promise<void>) => {
+  await assertSkillIntegrity(skill);
+  await safetyCheck?.();
+  const parent = path.dirname(target);
+  await mkdir(parent, { recursive: true });
+  await safetyCheck?.();
+  const staging = path.join(parent, `.${path.basename(target)}.staging-${randomUUID()}`);
+  const backup = path.join(parent, `.${path.basename(target)}.backup-${randomUUID()}`);
+  let movedExisting = false;
+  try {
+    await populateSkillDirectory(skill, staging);
+    // Detect source/contract mutation and parent-path substitution before touching a working install.
+    await assertSkillIntegrity(skill);
+    await safetyCheck?.();
+    if (await lstat(target).catch(() => undefined)) {
+      await rename(target, backup);
+      movedExisting = true;
+    }
+    try {
+      await rename(staging, target);
+    } catch (error) {
+      if (movedExisting) await rename(backup, target);
+      throw error;
+    }
+    if (movedExisting) await rm(backup, { recursive: true, force: true });
+  } catch (error) {
+    await rm(staging, { recursive: true, force: true });
+    if (movedExisting && !(await lstat(target).catch(() => undefined))) {
+      await rename(backup, target).catch(() => undefined);
+    }
+    throw error;
+  }
 };
 
 const resolveSymlinkTarget = (linkPath: string, linkTarget: string) => path.resolve(path.dirname(linkPath), linkTarget);
@@ -184,19 +250,24 @@ const makeAdapter = (id: string): AgentAdapter => ({
       throw new Error(`Refusing to install ${skill.manifest.id} onto its source directory.`);
     }
 
-    await copySkillFiles(skill, targetDir);
+    const targetSafety = () => assertRepoPathSafe(input, targetDir, "Skill install path");
+    await targetSafety();
+    await copySkillFiles(skill, targetDir, targetSafety);
     let installedPath = targetDir;
     if (mode === "symlink" && !universal) {
+      await assertRepoPathSafe(input, agentDir, `${input.targetAgent} link path`, false);
       const linked = await createDirectorySymlink(targetDir, agentDir);
       if (linked) {
         installedPath = agentDir;
       } else {
-        await copySkillFiles(skill, agentDir);
+        const agentSafety = () => assertRepoPathSafe(input, agentDir, `${input.targetAgent} skill install path`);
+        await copySkillFiles(skill, agentDir, agentSafety);
         installedPath = agentDir;
         plan.warnings.push(`Symlink failed for ${input.targetAgent}; copied skill files instead.`);
       }
     }
 
+    await assertRepoPathSafe(input, path.join(input.projectRoot, "skillranger.lock.json"), "Lockfile path");
     await upsertInstalledSkill(input.projectRoot, skill, {
       targetAgent: input.targetAgent,
       scope: input.scope,

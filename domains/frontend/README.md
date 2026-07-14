@@ -32,3 +32,7 @@ When material product facts remain unknown, clarification is limited to the requ
 ## Russian routing release profile
 
 `npm run eval:frontend:ru` runs the frozen Cyrillic routing slice against `fixtures/next-react-ts`; mixed Cyrillic/Latin prompts are part of the Russian slice. `npm run release:check` runs build, syntax checks, all tests, registry validation/lint/audit, the full 157-prompt routing suite, and this Russian gate. For repeated OpenCode task comparisons, use the exact Russian task filter documented in `docs/FRONTEND_SKILL_QUALITY.md`; use the complete real `visual-direction`, `tailwind-execution`, and `design-to-code` slices for promotion variance. Keep the same fixture, `opencode` target, installed versions/checksums, three baselines, and at least three repetitions for each separately pinned and labeled GLM and DeepSeek model. External-model results are analytical evidence and do not block deterministic local build/test gates.
+
+## Execution phases
+
+Material frontend work follows one-owner phases in this order: visual direction, UX, design system, implementation, motion, accessibility, and final audit. Inapplicable phases carry an explicit skip reason. Repair begins at the phase owning the finding and rejoins at evidence capture; supporting skills never expand the owner scope. See `intents/phases.json`.

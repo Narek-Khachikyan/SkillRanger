@@ -113,3 +113,11 @@ For material implementation, read `input.schema.json`, `workflow.json`, and `gat
   when translating a reference into a DESIGN.md-style brief.
 - Use the project's existing components, tokens, Tailwind config, global CSS, and
   adjacent screens as primary implementation references.
+
+## Shared Contracts
+
+Ownership: design-to-code owns faithful reference translation into implementation.
+
+- [`frontend/browser-evidence`](references/shared/frontend--browser-evidence.md)
+- [`frontend/bounded-repair`](references/shared/frontend--bounded-repair.md)
+- [`frontend/visual-verification`](references/shared/frontend--visual-verification.md)

@@ -2,72 +2,229 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://skillranger.local/schemas/registry.schema.json",
   "type": "object",
-  "required": ["id", "name", "displayName", "description", "stackTags", "taskTags", "supportedAgents", "source", "version", "riskLevel", "permissions", "scripts", "dependencies", "qualityScore", "securityScore", "installTargets", "conflictsWith", "supersedes", "maintainer", "license"],
+  "required": [
+    "id",
+    "name",
+    "displayName",
+    "description",
+    "stackTags",
+    "taskTags",
+    "supportedAgents",
+    "source",
+    "version",
+    "riskLevel",
+    "permissions",
+    "scripts",
+    "dependencies",
+    "qualityScore",
+    "securityScore",
+    "installTargets",
+    "conflictsWith",
+    "supersedes",
+    "maintainer",
+    "license"
+  ],
   "properties": {
-    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]+$" },
-    "name": { "type": "string" },
-    "displayName": { "type": "string" },
-    "description": { "type": "string" },
-    "stackTags": { "type": "array", "items": { "type": "string" } },
-    "taskTags": { "type": "array", "items": { "type": "string" } },
-    "supportedAgents": { "type": "array", "items": { "type": "string" } },
-    "routing": {
-      "type": "object",
-      "required": ["lane", "category"],
-      "properties": {
-        "lane": { "enum": ["framework", "design", "implementation", "qa", "agent-context"] },
-        "category": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" }
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "displayName": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "stackTags": {
+      "type": "array",
+      "items": {
+        "type": "string"
       }
     },
-    "version": { "type": "string" },
-    "riskLevel": { "enum": ["low", "medium", "high", "block"] },
-    "qualityScore": { "type": "number", "minimum": 0, "maximum": 1 },
-    "securityScore": { "type": "number", "minimum": 0, "maximum": 1 },
+    "taskTags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "supportedAgents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "routing": {
+      "type": "object",
+      "required": [
+        "lane",
+        "category"
+      ],
+      "properties": {
+        "lane": {
+          "enum": [
+            "framework",
+            "design",
+            "implementation",
+            "qa",
+            "agent-context"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]*$"
+        }
+      }
+    },
+    "version": {
+      "type": "string"
+    },
+    "riskLevel": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "block"
+      ]
+    },
+    "qualityScore": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "securityScore": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
     "evaluation": {
       "type": "object",
-      "required": ["status"],
+      "required": [
+        "status"
+      ],
       "properties": {
-        "status": { "enum": ["none", "trigger-eval", "task-eval", "real-project-smoke", "curated"] },
-        "lastRunAt": { "type": "string" },
-        "benchmarkVersion": { "type": "string", "minLength": 1 },
-        "evidenceUri": { "type": "string", "minLength": 1 },
-        "score": { "type": "number", "minimum": 0, "maximum": 1 }
+        "status": {
+          "enum": [
+            "none",
+            "trigger-eval",
+            "task-eval",
+            "real-project-smoke",
+            "curated"
+          ]
+        },
+        "lastRunAt": {
+          "type": "string"
+        },
+        "benchmarkVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceUri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
       }
     },
     "execution": {
-      "type": "object",
-      "required": ["contractVersion", "inputSchema", "outputSchema", "workflow", "gates", "evals", "modelProfiles"],
-      "properties": {
-        "contractVersion": { "const": "1.0" },
-        "inputSchema": { "type": "string", "minLength": 1 },
-        "outputSchema": { "type": "string", "minLength": 1 },
-        "workflow": { "type": "string", "minLength": 1 },
-        "gates": { "type": "string", "minLength": 1 },
-        "evals": { "type": "string", "minLength": 1 },
-        "modelProfiles": {
-          "type": "array",
-          "minItems": 1,
-          "items": { "enum": ["constrained", "standard", "advanced"] }
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["contractVersion", "inputSchema", "outputSchema", "workflow", "gates", "evals", "modelProfiles"],
+          "properties": {
+            "contractVersion": { "const": "1.0" },
+            "inputSchema": { "type": "string", "minLength": 1 },
+            "outputSchema": { "type": "string", "minLength": 1 },
+            "workflow": { "type": "string", "minLength": 1 },
+            "gates": { "type": "string", "minLength": 1 },
+            "evals": { "type": "string", "minLength": 1 },
+            "modelProfiles": {
+              "type": "array", "minItems": 1,
+              "items": { "enum": ["constrained", "standard", "advanced"] }
+            },
+            "sharedContracts": {
+              "type": "array", "minItems": 1, "uniqueItems": true,
+              "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$" }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["sharedContracts"],
+          "properties": {
+            "sharedContracts": {
+              "type": "array", "minItems": 1, "uniqueItems": true,
+              "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$" }
+            }
+          },
+          "additionalProperties": false
         }
-      },
-      "additionalProperties": false
+      ]
     },
     "quality": {
       "type": "object",
-      "required": ["rubricVersion", "scores"],
+      "required": [
+        "rubricVersion",
+        "scores"
+      ],
       "properties": {
-        "rubricVersion": { "const": "1.0" },
+        "rubricVersion": {
+          "const": "1.0"
+        },
         "scores": {
           "type": "object",
-          "required": ["usefulness", "triggerSpecificity", "progressiveDisclosure", "safety", "verifiability", "maintainability", "portability"],
+          "required": [
+            "usefulness",
+            "triggerSpecificity",
+            "progressiveDisclosure",
+            "safety",
+            "verifiability",
+            "maintainability",
+            "portability"
+          ],
           "properties": {
-            "usefulness": { "type": "number", "minimum": 0, "maximum": 1 },
-            "triggerSpecificity": { "type": "number", "minimum": 0, "maximum": 1 },
-            "progressiveDisclosure": { "type": "number", "minimum": 0, "maximum": 1 },
-            "safety": { "type": "number", "minimum": 0, "maximum": 1 },
-            "verifiability": { "type": "number", "minimum": 0, "maximum": 1 },
-            "maintainability": { "type": "number", "minimum": 0, "maximum": 1 },
-            "portability": { "type": "number", "minimum": 0, "maximum": 1 }
+            "usefulness": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "triggerSpecificity": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "progressiveDisclosure": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "safety": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "verifiability": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "maintainability": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "portability": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
           }
         }
       }
@@ -76,18 +233,38 @@
       "type": "object",
       "additionalProperties": {
         "type": "object",
-        "required": ["level"],
+        "required": [
+          "level"
+        ],
         "properties": {
-          "level": { "enum": ["native", "convertible", "packageable", "unsupported"] },
+          "level": {
+            "enum": [
+              "native",
+              "convertible",
+              "packageable",
+              "unsupported"
+            ]
+          },
           "scopes": {
             "type": "array",
-            "items": { "enum": ["repo", "user"] }
+            "items": {
+              "enum": [
+                "repo",
+                "user"
+              ]
+            }
           },
-          "adapter": { "type": "string" },
-          "requiresAdapter": { "type": "boolean" },
+          "adapter": {
+            "type": "string"
+          },
+          "requiresAdapter": {
+            "type": "boolean"
+          },
           "requires": {
             "type": "array",
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           }
         }
       }

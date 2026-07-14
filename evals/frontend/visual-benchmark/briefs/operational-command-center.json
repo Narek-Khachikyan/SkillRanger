@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0",
+  "id": "ops-incident-queue",
+  "recipeId": "operational-command-center",
+  "prompt": "Triage an incident queue with supplied stale and assigned status. Produce a structured design direction, implement it in the supplied fixture, render every declared state at every fixed viewport, capture screenshots, request an independent critique, perform bounded repair when required, and capture a fresh recheck. Use only supplied product facts; do not invent proof, entities, or activity.",
+  "fixture": "fixtures/next-react-ts",
+  "route": "/",
+  "productFacts": [
+    "Incident title, severity, assignee, and age are supplied."
+  ],
+  "contentShapes": [
+    "queue rows",
+    "incident detail",
+    "status controls"
+  ],
+  "requiredViewports": [
+    390,
+    768,
+    1440
+  ],
+  "requiredStates": [
+    "loading",
+    "empty",
+    "error",
+    "success",
+    "stale"
+  ],
+  "scoringCriteria": [
+    "product-specificity",
+    "hierarchy",
+    "composition",
+    "typography",
+    "color-roles",
+    "state-quality",
+    "responsive-transformation",
+    "accessibility",
+    "implementation-coherence",
+    "ai-slop-risk"
+  ],
+  "forbiddenInvention": [
+    "metrics",
+    "testimonials",
+    "people",
+    "brands",
+    "transactions"
+  ]
+}

@@ -51,7 +51,10 @@
     }
   },
   "verification": {
-    "requiredCapabilities": ["browser", "screenshots"],
+    "requiredCapabilities": [
+      "browser",
+      "screenshots"
+    ],
     "fallback": "unverified"
   },
   "execution": {
@@ -61,7 +64,16 @@
     "workflow": "workflow.json",
     "gates": "gates.json",
     "evals": "evals.json",
-    "modelProfiles": ["constrained", "standard", "advanced"]
+    "modelProfiles": [
+      "constrained",
+      "standard",
+      "advanced"
+    ],
+    "sharedContracts": [
+      "frontend/browser-evidence",
+      "frontend/bounded-repair",
+      "frontend/visual-verification"
+    ]
   },
   "freshness": {
     "lastReviewedAt": "2026-07-10",

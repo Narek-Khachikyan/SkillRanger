@@ -1,0 +1,17 @@
+[
+  {
+    "id": "weak",
+    "modelId": "fixture/model-weak@pinned",
+    "commandProfile": "weak.json"
+  },
+  {
+    "id": "medium",
+    "modelId": "fixture/model-medium@pinned",
+    "commandProfile": "medium.json"
+  },
+  {
+    "id": "strong",
+    "modelId": "fixture/model-strong@pinned",
+    "commandProfile": "strong.json"
+  }
+]

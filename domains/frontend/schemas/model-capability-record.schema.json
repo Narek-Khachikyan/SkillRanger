@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "benchmarkVersion", "candidateId", "modelIds", "sampleCount", "evaluatedAt", "metrics", "profile", "constraints", "evidencePaths"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]+$" },
+    "benchmarkVersion": { "const": "visual-benchmark-v1" },
+    "candidateId": { "enum": ["weak", "medium", "strong", "unknown"] },
+    "modelIds": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "sampleCount": { "type": "integer", "minimum": 0 },
+    "evaluatedAt": { "type": "string", "format": "date-time" },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meanQuality", "catastrophicFailureRate", "verificationSuccessRate", "withinConditionVariance", "meanRepairIterations"],
+      "properties": {
+        "meanQuality": { "type": "number", "minimum": 0, "maximum": 1 },
+        "catastrophicFailureRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "verificationSuccessRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "withinConditionVariance": { "type": "number", "minimum": 0, "maximum": 1 },
+        "meanRepairIterations": { "type": "number", "minimum": 0 }
+      }
+    },
+    "profile": { "enum": ["constrained", "standard", "advanced"] },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "profile", "maxVariants", "allowedRecipeIds", "maxCompositionFreedom", "maxPrimitiveFreedom", "implementationStrategy"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "profile": { "enum": ["constrained", "standard", "advanced"] },
+        "maxVariants": { "enum": [1, 2, 3] },
+        "allowedRecipeIds": {
+          "type": "array", "uniqueItems": true,
+          "items": { "enum": ["operational-command-center", "consumer-discovery", "developer-tool", "editorial-content", "marketing-landing", "saas-workspace", "e-commerce", "mobile-consumer-app"] }
+        },
+        "maxCompositionFreedom": { "enum": ["preserve", "recipe-layouts", "free"] },
+        "maxPrimitiveFreedom": { "enum": ["existing-only", "local-variants", "new-primitives"] },
+        "implementationStrategy": { "enum": ["verified-patterns-only", "patterns-preferred", "free"] }
+      }
+    },
+    "evidencePaths": {
+      "type": "array", "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$" }
+    }
+  }
+}

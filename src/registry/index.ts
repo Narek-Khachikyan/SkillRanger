@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import type { RegistrySkill } from "../types.ts";
+import type { RegistrySkill, ResolvedSharedContract } from "../types.ts";
 import {
   assertValidSkillManifest,
   RegistryValidationError,
@@ -33,7 +33,7 @@ const walkFiles = async (root: string): Promise<string[]> => {
   return files;
 };
 
-const allowedRegistryRootEntries = new Set(["skills"]);
+const allowedRegistryRootEntries = new Set(["skills", "contracts"]);
 const allowedSkillTopLevelEntries = new Set([
   "SKILL.md",
   "skill.manifest.json",
@@ -190,7 +190,7 @@ const assertNoRegistryIssues = (
   }
 };
 
-export const computeSkillChecksum = async (skillRoot: string) => {
+export const computeSkillChecksum = async (skillRoot: string, sharedContracts: ResolvedSharedContract[] = []) => {
   const hash = createHash("sha256");
   const files = (await walkFiles(skillRoot)).sort();
   for (const file of files) {
@@ -200,7 +200,59 @@ export const computeSkillChecksum = async (skillRoot: string) => {
     hash.update(Uint8Array.from(await readFile(file)));
     hash.update("\0");
   }
+  for (const contract of [...sharedContracts].sort((a, b) => a.id.localeCompare(b.id))) {
+    hash.update(contract.installPath.replace(/\\/g, "/"));
+    hash.update("\0");
+    hash.update(Uint8Array.from(await readFile(contract.path)));
+    hash.update("\0");
+  }
   return `sha256:${hash.digest("hex")}`;
+};
+
+const isContainedPath = (root: string, candidate: string) =>
+  candidate === root || candidate.startsWith(`${root}${path.sep}`);
+
+const assertNoSymlinkComponents = async (root: string, candidate: string, id: string) => {
+  const relative = path.relative(root, candidate);
+  let current = root;
+  for (const component of ["", ...relative.split(path.sep)]) {
+    if (component) current = path.join(current, component);
+    const info = await lstat(current).catch(() => undefined);
+    if (!info) throw new Error(`Shared contract not found: ${id}`);
+    if (info.isSymbolicLink()) throw new Error(`Shared contract path contains a symlink: ${id}`);
+  }
+};
+
+const resolveSharedContracts = async (registryRoot: string, ids: string[] = []): Promise<ResolvedSharedContract[]> => {
+  const contractsRoot = path.resolve(registryRoot, "contracts");
+  const rootInfo = await lstat(contractsRoot).catch(() => undefined);
+  if (ids.length > 0 && (!rootInfo?.isDirectory() || rootInfo.isSymbolicLink())) {
+    throw new Error("Shared contracts root must be a real directory");
+  }
+  const canonicalRoot = ids.length > 0 ? await realpath(contractsRoot) : contractsRoot;
+  const resolved: ResolvedSharedContract[] = [];
+  for (const id of [...ids].sort()) {
+    if (!/^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/.test(id)) throw new Error(`Invalid shared contract id: ${id}`);
+    const contractPath = path.resolve(contractsRoot, `${id}.md`);
+    if (!isContainedPath(contractsRoot, contractPath)) throw new Error(`Shared contract escaped contracts root: ${id}`);
+    await assertNoSymlinkComponents(contractsRoot, contractPath, id);
+    const canonicalPath = await realpath(contractPath);
+    if (!isContainedPath(canonicalRoot, canonicalPath)) throw new Error(`Shared contract escaped contracts root: ${id}`);
+    const info = await lstat(contractPath);
+    if (!info.isFile()) throw new Error(`Shared contract not found: ${id}`);
+    const bytes = await readFile(contractPath);
+    resolved.push({ id, path: contractPath, checksum: `sha256:${createHash("sha256").update(bytes).digest("hex")}`, installPath: `references/shared/${id.replaceAll("/", "--")}.md` });
+  }
+  return resolved;
+};
+
+export const assertSkillIntegrity = async (skill: RegistrySkill) => {
+  // Registry-loaded skills always carry a canonical SHA-256. Explicit in-memory fixtures may not.
+  if (!/^sha256:[a-f0-9]{64}$/.test(skill.checksum)) return;
+  const actual = await computeSkillChecksum(skill.path, skill.sharedContracts ?? []);
+  if (actual !== skill.checksum || (skill.manifest.checksum !== undefined && actual !== skill.manifest.checksum)) {
+    throw new Error(`stale skill integrity for ${skill.manifest.id}`);
+  }
 };
 
 export const loadLocalRegistry = async (
@@ -234,11 +286,13 @@ export const loadLocalRegistry = async (
       skillRoot,
       skillText,
     });
+    const sharedContracts = await resolveSharedContracts(resolvedRegistryRoot, manifest.execution?.sharedContracts);
     const contentIssues = validateSkillContent(skillText, skillRoot, {
       lane: manifest.routing?.lane,
       skillId: manifest.id,
       requiredCapabilities: manifest.verification?.requiredCapabilities,
       enforceContracts: manifest.source.type === "curated",
+      materializedSharedContractPaths: new Set(sharedContracts.map(({ installPath }) => installPath)),
     });
     const warningIssues = contentIssues.filter(
       (issue) => issue.path === "SKILL.md" && issue.message.includes("threshold"),
@@ -258,12 +312,13 @@ export const loadLocalRegistry = async (
         contentErrors,
       );
     }
-    const checksum = await computeSkillChecksum(skillRoot);
+    const checksum = await computeSkillChecksum(skillRoot, sharedContracts);
     skills.push({
       manifest: { ...manifest, checksum },
       path: skillRoot,
       skillPath,
       checksum,
+      sharedContracts,
     });
   }
 

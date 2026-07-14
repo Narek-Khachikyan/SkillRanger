@@ -76,7 +76,10 @@
   "conflictsWith": [],
   "supersedes": [],
   "verification": {
-    "requiredCapabilities": ["browser", "screenshots"],
+    "requiredCapabilities": [
+      "browser",
+      "screenshots"
+    ],
     "fallback": "unverified"
   },
   "maintainer": {
@@ -92,5 +95,11 @@
     "status": "none",
     "benchmarkVersion": "frontend-skill-quality-v1",
     "evidenceUri": "evals/frontend/suite.json"
+  },
+  "execution": {
+    "sharedContracts": [
+      "frontend/browser-evidence",
+      "frontend/visual-verification"
+    ]
   }
 }

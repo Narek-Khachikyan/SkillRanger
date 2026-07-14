@@ -37,7 +37,7 @@ const suspiciousPatterns: Array<[RegExp, RiskLevel, string]> = [
   [/\blaunchctl\b|\bcrontab\b|\bsystemctl\b/i, "high", "persistence-mechanism"],
   [/\b(npm|pnpm|pip|pip3|uv)\s+install\b/i, "medium", "dependency-install"],
   [/\b(ignore|disregard)\s+(all\s+)?(previous|prior|above)\s+(instructions|rules)\b/i, "high", "prompt-injection"],
-  [/\b(reveal|exfiltrate|print)\s+(secrets?|tokens?|api[_-]?keys?|credentials)\b/i, "high", "secret-exfiltration-instruction"]
+  [/\b(reveal|exfiltrate|print)\s+(secrets?|tokens?|api[\s_-]?keys?|credentials)\b/i, "high", "secret-exfiltration-instruction"]
 ];
 
 const maxRisk = (findings: AuditFinding[], fallback: RiskLevel): RiskLevel => {
@@ -46,10 +46,12 @@ const maxRisk = (findings: AuditFinding[], fallback: RiskLevel): RiskLevel => {
 
 export const auditSkill = async (skill: RegistrySkill): Promise<AuditReport> => {
   const findings: AuditFinding[] = [];
-  const files = await walkFiles(skill.path);
+  const files = [
+    ...(await walkFiles(skill.path)).map((file) => ({ file, rel: path.relative(skill.path, file) })),
+    ...(skill.sharedContracts ?? []).map((contract) => ({ file: contract.path, rel: contract.installPath })),
+  ];
 
-  for (const file of files) {
-    const rel = path.relative(skill.path, file);
+  for (const { file, rel } of files) {
     const parts = rel.split(path.sep);
     const fileStat = await lstat(file);
 
@@ -118,7 +120,7 @@ export const auditSkill = async (skill: RegistrySkill): Promise<AuditReport> => 
     });
   }
 
-  const checksum = await computeSkillChecksum(skill.path);
+  const checksum = await computeSkillChecksum(skill.path, skill.sharedContracts);
   const riskLevel = maxRisk(findings, skill.manifest.riskLevel);
   const securityScore = Math.max(0.05, Number((skill.manifest.securityScore - findings.length * 0.12 - (riskLevel === "block" ? 0.5 : 0)).toFixed(2)));
 

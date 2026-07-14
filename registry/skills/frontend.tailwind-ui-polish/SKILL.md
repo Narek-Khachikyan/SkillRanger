@@ -172,3 +172,11 @@ guidance, read [the mechanical rules reference](references/mechanical-rules.md).
 - Changes made or recommended, scoped to Tailwind classes, local variants, or small component extraction.
 - Viewports and states verified, including the mobile/desktop screenshot matrix or the exact blocker.
 - Remaining visual/accessibility risk and any screenshots or manual checks still needed.
+
+## Shared Contracts
+
+Ownership: tailwind-ui-polish owns Tailwind implementation and bounded repair.
+
+- [`frontend/browser-evidence`](references/shared/frontend--browser-evidence.md)
+- [`frontend/bounded-repair`](references/shared/frontend--bounded-repair.md)
+- [`frontend/visual-verification`](references/shared/frontend--visual-verification.md)

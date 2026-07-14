@@ -146,3 +146,10 @@ explicitly:
   primary system references.
 - Refer to the shadcn/ui theming docs and Tailwind CSS documentation for token and
   theme architecture guidance.
+
+## Shared Contracts
+
+Ownership: design-system owns reusable tokens/primitives.
+
+- [`frontend/bounded-repair`](references/shared/frontend--bounded-repair.md)
+- [`frontend/visual-verification`](references/shared/frontend--visual-verification.md)

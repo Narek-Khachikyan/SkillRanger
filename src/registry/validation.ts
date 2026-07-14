@@ -448,10 +448,25 @@ export const validateSkillManifest = (
     if (!isRecord(input.execution)) {
       issues.push({ path: "execution", message: "Must be an object when present." });
     } else {
-      if (input.execution.contractVersion !== "1.0") {
+      const execution = input.execution;
+      const structuredFields = ["contractVersion", "inputSchema", "outputSchema", "workflow", "gates", "evals", "modelProfiles"] as const;
+      const allowedExecutionFields = new Set([...structuredFields, "sharedContracts"]);
+      const unknownExecutionField = Object.keys(input.execution).find((key) => !allowedExecutionFields.has(key as typeof structuredFields[number] | "sharedContracts"));
+      if (unknownExecutionField) issues.push({ path: `execution.${unknownExecutionField}`, message: "Unknown execution property." });
+      const structuredExecution = structuredFields.some((key) => execution[key] !== undefined);
+      if (!structuredExecution && input.execution.sharedContracts === undefined) {
+        issues.push({ path: "execution", message: "Must be a complete structured execution contract or declare sharedContracts." });
+      }
+      if (structuredExecution) {
+        for (const key of structuredFields) {
+          if (input.execution[key] === undefined) issues.push({ path: `execution.${key}`, message: "Required for structured execution." });
+        }
+      }
+      if (structuredExecution && input.execution.contractVersion !== "1.0") {
         issues.push({ path: "execution.contractVersion", message: "Must be 1.0." });
       }
       for (const key of ["inputSchema", "outputSchema", "workflow", "gates", "evals"] as const) {
+        if (!structuredExecution) continue;
         const value = input.execution[key];
         if (
           typeof value !== "string" ||
@@ -464,12 +479,28 @@ export const validateSkillManifest = (
           issues.push({ path: `execution.${key}`, message: `Referenced file does not exist: ${value}.` });
         }
       }
+      if (input.execution.sharedContracts !== undefined) {
+        const contracts = input.execution.sharedContracts;
+        const contractPattern = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/;
+        if (!isStringArray(contracts) || contracts.length === 0) {
+          issues.push({ path: "execution.sharedContracts", message: "Must be a non-empty array of shared contract ids." });
+        } else {
+          contracts.forEach((contract, index) => {
+            if (!contractPattern.test(contract) || hasPathTraversal(contract)) {
+              issues.push({ path: `execution.sharedContracts.${index}`, message: "Must be a safe domain/contract id." });
+            }
+          });
+          if (new Set(contracts).size !== contracts.length) {
+            issues.push({ path: "execution.sharedContracts", message: "Shared contract ids must be unique." });
+          }
+        }
+      }
       const profiles = input.execution.modelProfiles;
       const allowedProfiles = new Set(["constrained", "standard", "advanced"]);
       if (
-        !isStringArray(profiles) ||
+        structuredExecution && (!isStringArray(profiles) ||
         profiles.length === 0 ||
-        !profiles.every((profile) => allowedProfiles.has(profile))
+        !profiles.every((profile) => allowedProfiles.has(profile)))
       ) {
         issues.push({
           path: "execution.modelProfiles",
@@ -701,6 +732,7 @@ const markdownDestination = (rawValue: string) => {
 export const validateSkillReferences = (
   skillText: string,
   skillRoot: string,
+  materializedSharedContractPaths: ReadonlySet<string> = new Set(),
 ): RegistryValidationIssue[] => {
   const issues: RegistryValidationIssue[] = [];
   const links = extractMarkdownLinks(skillText);
@@ -723,7 +755,8 @@ export const validateSkillReferences = (
       });
       continue;
     }
-    if (!existsSync(resolved)) {
+    const materializedSharedContract = /^references\/shared\/[a-z0-9][a-z0-9._-]*--[a-z0-9][a-z0-9._-]*\.md$/.test(filePath);
+    if (!existsSync(resolved) && !(materializedSharedContract && materializedSharedContractPaths.has(filePath))) {
       issues.push({
         path: `SKILL.md:${lineNumber}`,
         message: `Reference path does not resolve: ${linkPath}.`,
@@ -839,10 +872,11 @@ export const validateSkillContent = (
     skillId?: string;
     requiredCapabilities?: string[];
     enforceContracts?: boolean;
+    materializedSharedContractPaths?: ReadonlySet<string>;
   } = {},
 ): RegistryValidationIssue[] => {
   const issues: RegistryValidationIssue[] = [];
-  issues.push(...validateSkillReferences(skillText, skillRoot));
+  issues.push(...validateSkillReferences(skillText, skillRoot, context.materializedSharedContractPaths));
   if (context.enforceContracts === false) return issues;
   issues.push(...validateContentContracts(skillText));
   issues.push(

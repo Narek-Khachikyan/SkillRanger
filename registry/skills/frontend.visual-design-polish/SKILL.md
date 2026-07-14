@@ -144,3 +144,11 @@ or open-ended requests. Read [the visual rules reference](references/visual-rule
 for domain extraction, composition, typography, color, data, interaction, and pattern
 detail. Read [the evidence examples](references/evidence-examples.md) for worked
 examples of the thesis workflow across product types.
+
+## Shared Contracts
+
+Ownership: visual-design-polish owns art direction.
+
+- [`frontend/browser-evidence`](references/shared/frontend--browser-evidence.md)
+- [`frontend/bounded-repair`](references/shared/frontend--bounded-repair.md)
+- [`frontend/visual-verification`](references/shared/frontend--visual-verification.md)

@@ -100,5 +100,11 @@
     "status": "none",
     "benchmarkVersion": "frontend-skill-quality-v1",
     "evidenceUri": "evals/frontend/suite.json"
+  },
+  "execution": {
+    "sharedContracts": [
+      "frontend/browser-evidence",
+      "frontend/visual-verification"
+    ]
   }
 }

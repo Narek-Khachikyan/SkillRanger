@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cp, lstat, mkdir, mkdtemp, stat, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, mkdtemp, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { findSkill } from "../src/registry/index.ts";
@@ -292,4 +292,25 @@ test("codex installer blocks risky skill before writing files", async () => {
 
   assert.equal(await exists(path.join(projectRoot, ".agents/skills/malicious-skill/SKILL.md")), false);
   assert.equal(await exists(path.join(projectRoot, "skillranger.lock.json")), false);
+});
+
+test("repo installer rejects symlink components in canonical and agent-specific parents", async () => {
+  const skill = await findSkill("frontend.visual-design-polish", "registry"); assert.ok(skill);
+  const adapter = getAdapter("codex");
+  for (const component of [".agents", ".agents/skills"]) {
+    const root = await mkdtemp(path.join(os.tmpdir(), "skillranger-symlink-parent-"));
+    const projectRoot = path.join(root, "project"); const outside = path.join(root, "outside");
+    await mkdir(projectRoot); await mkdir(outside); await mkdir(path.dirname(path.join(projectRoot, component)), { recursive: true });
+    await symlink(outside, path.join(projectRoot, component), "dir");
+    const input = { projectRoot, targetAgent: "codex", scope: "repo" as const, dryRun: false, mode: "copy" as const };
+    await assert.rejects(adapter.planInstall(skill, input), /symlink component/);
+    await assert.rejects(adapter.applyInstall(skill, input), /symlink component/);
+    assert.equal(await exists(path.join(outside, "visual-design-polish", "references/shared/frontend--browser-evidence.md")), false);
+  }
+
+  const root = await mkdtemp(path.join(os.tmpdir(), "skillranger-agent-symlink-")); const projectRoot = path.join(root, "project"); const outside = path.join(root, "outside");
+  await mkdir(projectRoot); await mkdir(outside); await symlink(outside, path.join(projectRoot, ".claude"), "dir");
+  const claude = getAdapter("claude-code");
+  await assert.rejects(claude.planInstall(skill, { projectRoot, targetAgent: "claude-code", scope: "repo", dryRun: true }), /symlink component/);
+  assert.equal(await exists(path.join(outside, "skills", "visual-design-polish")), false);
 });

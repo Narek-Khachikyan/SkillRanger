@@ -94,3 +94,10 @@ Use this skill when the task touches user-facing UI, forms, navigation, modals, 
 - Include file references and the affected UI state when available.
 - Provide concise fix direction, not a long accessibility lecture.
 - Note automated checks run, manual checks run, assistive-technology or browser evidence inspected, and residual WCAG/APG risks that remain unverified.
+
+## Shared Contracts
+
+Ownership: accessibility-review owns semantic, keyboard, focus, target, contrast, and reduced-motion findings.
+
+- [`frontend/browser-evidence`](references/shared/frontend--browser-evidence.md)
+- [`frontend/visual-verification`](references/shared/frontend--visual-verification.md)

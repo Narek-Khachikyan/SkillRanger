@@ -24,3 +24,7 @@ The resolver applies the following downgrade matrix before choosing variants:
 `repair` and `refine` always select one variant. `standard` can select two ranked variants for exploration, while `advanced` can select up to three and supports evidence-backed open composition.
 
 Empirical capability evidence can only reduce freedom: its variant cap, recipe allowlist, composition limit, primitive limit, and implementation strategy bound the configured profile. An explicit recipe allowlist must intersect ranked recipes; otherwise policy resolution fails rather than expanding selection beyond the evidence.
+
+## Empirical visual calibration
+
+Profiles are derived from frozen visual benchmark candidate metrics, not provider or model names. Insufficient or unknown evidence resolves to `constrained`. Constrained permits one variant, preserved composition, existing primitives, and verified patterns; standard permits two variants, recipe layouts, local variants, and preferred patterns; advanced permits three variants, free composition, new primitives, and free implementation after structured direction. Capability records retain benchmark version, sample count, metrics, model ids as provenance only, successful recipes, and evidence paths.

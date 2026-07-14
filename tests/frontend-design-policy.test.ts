@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import type {
   BoundedRepairRequest,
@@ -15,10 +16,11 @@ import {
 // @ts-expect-error Canonical policy caps variants at three.
 const unsupportedVariantLimit: DesignExecutionPolicy["variantLimit"] = 4;
 const execFileAsync = promisify(execFile);
+const typescriptBin = createRequire(import.meta.url).resolve("typescript/bin/tsc");
 
 test("checks canonical policy constraints at compile time", async () => {
   await execFileAsync(process.execPath, [
-    "node_modules/typescript/bin/tsc",
+    typescriptBin,
     "--ignoreConfig",
     "--noEmit",
     "--strict",

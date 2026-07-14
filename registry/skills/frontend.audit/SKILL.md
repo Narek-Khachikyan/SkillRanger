@@ -88,3 +88,10 @@ Use this skill when a frontend feature, page, redesign, or app slice needs a fin
 - Specialist handoffs needed, if any.
 - Commands, screenshots, browser viewports, test artifacts, and manual checks run or missing.
 - Prioritized remediation plan and residual risk.
+
+## Shared Contracts
+
+Ownership: audit owns final cross-lane release decision.
+
+- [`frontend/browser-evidence`](references/shared/frontend--browser-evidence.md)
+- [`frontend/visual-verification`](references/shared/frontend--visual-verification.md)

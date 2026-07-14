@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0",
+  "id": "discovery-reading-catalogue",
+  "recipeId": "consumer-discovery",
+  "prompt": "Browse, filter, and save supplied titles. Produce a structured design direction, implement it in the supplied fixture, render every declared state at every fixed viewport, capture screenshots, request an independent critique, perform bounded repair when required, and capture a fresh recheck. Use only supplied product facts; do not invent proof, entities, or activity.",
+  "fixture": "fixtures/next-react-ts",
+  "route": "/",
+  "productFacts": [
+    "Titles, authors, genres, and saved state are supplied."
+  ],
+  "contentShapes": [
+    "title cards",
+    "filters",
+    "saved list"
+  ],
+  "requiredViewports": [
+    390,
+    768,
+    1440
+  ],
+  "requiredStates": [
+    "loading",
+    "empty",
+    "error",
+    "success",
+    "filtered"
+  ],
+  "scoringCriteria": [
+    "product-specificity",
+    "hierarchy",
+    "composition",
+    "typography",
+    "color-roles",
+    "state-quality",
+    "responsive-transformation",
+    "accessibility",
+    "implementation-coherence",
+    "ai-slop-risk"
+  ],
+  "forbiddenInvention": [
+    "metrics",
+    "testimonials",
+    "people",
+    "brands",
+    "transactions"
+  ]
+}

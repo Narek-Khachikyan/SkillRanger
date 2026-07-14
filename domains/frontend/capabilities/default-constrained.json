@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "1.0",
+  "id": "unknown-constrained-default",
+  "benchmarkVersion": "visual-benchmark-v1",
+  "candidateId": "unknown",
+  "modelIds": [],
+  "sampleCount": 0,
+  "evaluatedAt": "1970-01-01T00:00:00.000Z",
+  "metrics": {
+    "meanQuality": 0,
+    "catastrophicFailureRate": 0.1,
+    "verificationSuccessRate": 0.75,
+    "withinConditionVariance": 0.12,
+    "meanRepairIterations": 5
+  },
+  "profile": "constrained",
+  "constraints": {
+    "id": "unknown-constrained-default",
+    "profile": "constrained",
+    "maxVariants": 1,
+    "allowedRecipeIds": [
+      "operational-command-center",
+      "consumer-discovery",
+      "developer-tool",
+      "editorial-content",
+      "marketing-landing",
+      "saas-workspace",
+      "e-commerce",
+      "mobile-consumer-app"
+    ],
+    "maxCompositionFreedom": "preserve",
+    "maxPrimitiveFreedom": "existing-only",
+    "implementationStrategy": "verified-patterns-only"
+  },
+  "evidencePaths": []
+}

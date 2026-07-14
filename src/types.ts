@@ -104,13 +104,14 @@ export type SkillManifest = {
     fallback: Exclude<VerificationStatus, "ready">;
   };
   execution?: {
-    contractVersion: "1.0";
-    inputSchema: string;
-    outputSchema: string;
-    workflow: string;
-    gates: string;
-    evals: string;
-    modelProfiles: ModelCapabilityProfile[];
+    contractVersion?: "1.0";
+    inputSchema?: string;
+    outputSchema?: string;
+    workflow?: string;
+    gates?: string;
+    evals?: string;
+    modelProfiles?: ModelCapabilityProfile[];
+    sharedContracts?: string[];
   };
   freshness?: {
     lastReviewedAt?: string;
@@ -136,11 +137,19 @@ export type SkillManifest = {
   license: string;
 };
 
+export type ResolvedSharedContract = {
+  id: string;
+  path: string;
+  checksum: string;
+  installPath: string;
+};
+
 export type RegistrySkill = {
   manifest: SkillManifest;
   path: string;
   skillPath: string;
   checksum: string;
+  sharedContracts?: ResolvedSharedContract[];
 };
 
 export type AuditFinding = {

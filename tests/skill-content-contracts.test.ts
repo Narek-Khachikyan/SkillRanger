@@ -91,6 +91,16 @@ test("validateSkillReferences rejects unresolved paths", async () => {
   assert.match(issues[0].message, /does not resolve/);
 });
 
+test("validateSkillReferences binds materialized shared links to declared contracts", async () => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), "skill-content-"));
+  const text = "[shared](references/shared/frontend--browser-evidence.md)";
+  assert.match(validateSkillReferences(text, tmp)[0].message, /does not resolve/);
+  assert.deepEqual(
+    validateSkillReferences(text, tmp, new Set(["references/shared/frontend--browser-evidence.md"])),
+    [],
+  );
+});
+
 test("validateSkillReferences accepts resolved reference paths", async () => {
   const tmp = await mkdtemp(path.join(os.tmpdir(), "skill-content-"));
   await mkdir(path.join(tmp, "references"), { recursive: true });
@@ -284,8 +294,12 @@ test("all curated skills pass reference link validation", async () => {
     );
     const manifest = JSON.parse(manifestText) as {
       id: string;
+      execution?: { sharedContracts?: string[] };
     };
-    const issues = validateSkillReferences(skillText, skillRoot);
+    const materialized = new Set((manifest.execution?.sharedContracts ?? []).map(
+      (id) => `references/shared/${id.replaceAll("/", "--")}.md`,
+    ));
+    const issues = validateSkillReferences(skillText, skillRoot, materialized);
     for (const issue of issues) {
       errors.push(`${manifest.id}: ${issue.path}: ${issue.message}`);
     }

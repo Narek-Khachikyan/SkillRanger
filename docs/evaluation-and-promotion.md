@@ -42,3 +42,7 @@ node src/cli/index.ts eval:frontend \
 Evaluate mean pass rate, worst-run pass rate, sample standard deviation across repetitions, hard-gate failures, false completion claims, responsive/accessibility failures, and blind human preference. Promotion requires improvement over no skill, no regression against the prose skill, and stable repeated results. The repository does not set benchmark scores automatically from unassessed runner output.
 
 Each assessed run may include `verification.outcome`, `verification.hardGatesPassed`, and `verification.criticalFindings`. Claiming `verified` while any hard gate fails, a critical finding remains, or an assertion is not passed is counted as a false completion claim.
+
+## Visual calibration evidence
+
+The frozen 96-slot visual benchmark and resulting capability records are analytical evidence. External model execution is not an ordinary local release blocker, and visual calibration does not replace existing routing, task-evaluation, safety, registry, or promotion gates.

@@ -50,7 +50,7 @@ export const resolveDesignExecutionPolicy = (input: {
     throw new Error("policy resolution requires at least one ranked recipe");
   }
 
-  const profile = input.profile ?? "constrained";
+  const profile = input.profile ?? input.capability?.profile ?? "constrained";
   const downgradeReasons: string[] = [];
   let effectiveMode = input.mode;
   if (profile === "constrained" && (input.mode === "explore" || input.mode === "reimagine")) {

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0",
+  "id": "saas-team-workspace",
+  "recipeId": "saas-workspace",
+  "prompt": "Update task status with permissions and sync recovery. Produce a structured design direction, implement it in the supplied fixture, render every declared state at every fixed viewport, capture screenshots, request an independent critique, perform bounded repair when required, and capture a fresh recheck. Use only supplied product facts; do not invent proof, entities, or activity.",
+  "fixture": "fixtures/next-react-ts",
+  "route": "/",
+  "productFacts": [
+    "Tasks, members, permissions, and sync state are supplied."
+  ],
+  "contentShapes": [
+    "task board",
+    "member context",
+    "sync recovery"
+  ],
+  "requiredViewports": [
+    390,
+    768,
+    1440
+  ],
+  "requiredStates": [
+    "loading",
+    "empty",
+    "error",
+    "success",
+    "no-permission"
+  ],
+  "scoringCriteria": [
+    "product-specificity",
+    "hierarchy",
+    "composition",
+    "typography",
+    "color-roles",
+    "state-quality",
+    "responsive-transformation",
+    "accessibility",
+    "implementation-coherence",
+    "ai-slop-risk"
+  ],
+  "forbiddenInvention": [
+    "metrics",
+    "testimonials",
+    "people",
+    "brands",
+    "transactions"
+  ]
+}

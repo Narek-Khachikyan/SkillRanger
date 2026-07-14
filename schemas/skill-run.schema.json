@@ -53,7 +53,8 @@
             }
           }
         },
-        "verificationRequired": { "type": "boolean" }
+        "verificationRequired": { "type": "boolean" },
+        "artifacts": { "type": "object" }
       }
     },
     "recommendations": { "type": "array", "items": { "$ref": "#/$defs/skill" } },

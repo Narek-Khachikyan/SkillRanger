@@ -125,3 +125,11 @@ Return the Motion Brief, scope classification, choreography and implementation c
 ## References
 
 Read [motion-quality.md](references/motion-quality.md) for the decision-oriented source set. Use project conventions first; references inform decisions and do not prescribe an animation library.
+
+## Shared Contracts
+
+Ownership: motion-design owns cause-and-effect motion direction.
+
+- [`frontend/browser-evidence`](references/shared/frontend--browser-evidence.md)
+- [`frontend/bounded-repair`](references/shared/frontend--bounded-repair.md)
+- [`frontend/visual-verification`](references/shared/frontend--visual-verification.md)

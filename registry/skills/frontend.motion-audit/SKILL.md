@@ -65,3 +65,10 @@ Return scope classification, evidence inspected and missing, the 0–4 Motion Sc
 ## References
 
 Read [motion-quality.md](references/motion-quality.md) for standards and tools. Apply the project’s product language; the references are decision aids, not a library mandate.
+
+## Shared Contracts
+
+Ownership: motion-audit owns motion verification only.
+
+- [`frontend/browser-evidence`](references/shared/frontend--browser-evidence.md)
+- [`frontend/visual-verification`](references/shared/frontend--visual-verification.md)

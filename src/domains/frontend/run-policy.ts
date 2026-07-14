@@ -2,6 +2,7 @@ import type { SkillRunPolicyDecision } from "../../runtime/skill-run/types.ts";
 import type { DomainRunPolicyInput } from "../types.ts";
 import { asDesignBrief } from "./design/index.ts";
 import { analyzeFrontendIntent } from "./intents/index.ts";
+import { planFrontendPhases } from "./phases.ts";
 
 const materialSkillIds = new Set([
   "frontend.visual-design-polish",
@@ -99,5 +100,15 @@ export const evaluateFrontendRunPolicy = (
     },
     verificationRequired: material
       || input.recommendations.some(({ skillId }) => verificationSkillIds.has(skillId)),
+    artifacts: {
+      phasePlan: planFrontendPhases({
+        intent: input.intent,
+        recommendedSkillIds: input.recommendations.map(({ skillId }) => skillId),
+        repairFindingCodes: Array.isArray(input.artifacts?.repairFindingCodes)
+          ? input.artifacts.repairFindingCodes.filter((code): code is string => typeof code === "string")
+          : undefined,
+        material,
+      }),
+    },
   };
 };

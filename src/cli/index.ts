@@ -53,6 +53,7 @@ import {
 } from "../evals/runner.ts";
 import { skillLanes, type InstallPlan, type ProjectFingerprint, type Recommendation, type RegistrySkill, type SkillLane } from "../types.ts";
 import { handleRunCliCommand } from "./runs.ts";
+import { handleVisualEvalCommand } from "./visual-eval.ts";
 
 const supportedSetupTargets = ["claude-code", "codex", "opencode", "cursor", "gemini-cli"] as const;
 type SupportedSetupTarget = (typeof supportedSetupTargets)[number];
@@ -162,6 +163,7 @@ const printHelp = () => {
 	  skillranger audit:registry [--json]
   skillranger lint:skills [--json]
   skillranger publish:check [--json]
+	  skillranger eval:visual --plan|--run|--prepare-review|--aggregate|--calibrate [options] [--json]
 	  skillranger eval:frontend [--suite <path>] [--locale en|ru|all] [--json]
   skillranger eval:frontend --run-tasks --skill-slice <id> --repetitions <n> [--baselines without-skill,old-skill,current-skill] [--json]
   skillranger eval:frontend --verify-task-evidence <path> --summarize-variance [--json]
@@ -525,6 +527,8 @@ const run = async () => {
     printHelp();
     return;
   }
+
+  if (await handleVisualEvalCommand({ command, flags: args.flags })) return;
 
   if (await handleRunCliCommand({
     command,

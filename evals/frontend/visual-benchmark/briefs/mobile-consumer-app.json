@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0",
+  "id": "mobile-daily-check-in",
+  "recipeId": "mobile-consumer-app",
+  "prompt": "Complete an offline-capable one-thumb daily check-in. Produce a structured design direction, implement it in the supplied fixture, render every declared state at every fixed viewport, capture screenshots, request an independent critique, perform bounded repair when required, and capture a fresh recheck. Use only supplied product facts; do not invent proof, entities, or activity.",
+  "fixture": "fixtures/next-react-ts",
+  "route": "/",
+  "productFacts": [
+    "Check-in choices, local status, and sync behavior are supplied."
+  ],
+  "contentShapes": [
+    "check-in control",
+    "history",
+    "offline status"
+  ],
+  "requiredViewports": [
+    390,
+    768,
+    1440
+  ],
+  "requiredStates": [
+    "loading",
+    "empty",
+    "error",
+    "success",
+    "offline"
+  ],
+  "scoringCriteria": [
+    "product-specificity",
+    "hierarchy",
+    "composition",
+    "typography",
+    "color-roles",
+    "state-quality",
+    "responsive-transformation",
+    "accessibility",
+    "implementation-coherence",
+    "ai-slop-risk"
+  ],
+  "forbiddenInvention": [
+    "metrics",
+    "testimonials",
+    "people",
+    "brands",
+    "transactions"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0",
+  "order": [
+    "visual-direction",
+    "ux",
+    "design-system",
+    "implementation",
+    "motion",
+    "accessibility",
+    "final-audit"
+  ],
+  "owners": {
+    "visual-direction": "frontend.visual-design-polish",
+    "ux": "frontend.ux-critique",
+    "design-system": "frontend.design-system",
+    "implementation": "frontend.react-component-design",
+    "motion": "frontend.motion-design",
+    "accessibility": "frontend.accessibility-review",
+    "final-audit": "frontend.audit"
+  }
+}

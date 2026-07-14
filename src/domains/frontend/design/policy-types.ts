@@ -6,6 +6,7 @@ export type DesignCapabilityProfile = "constrained" | "standard" | "advanced";
 
 export type DesignCapabilityConstraints = {
   id: string;
+  profile?: DesignCapabilityProfile;
   maxVariants: 1 | 2 | 3;
   allowedRecipeIds?: string[];
   maxCompositionFreedom: "preserve" | "recipe-layouts" | "free";

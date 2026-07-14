@@ -124,3 +124,10 @@ If the screen cannot be mapped to this flow, treat that as a UX finding rather t
 - Evidence inspected or missing.
 - Recommended copy/layout/interaction changes.
 - Residual risks and validation steps.
+
+## Shared Contracts
+
+Ownership: ux-critique owns task-flow critique and cannot select visual styling.
+
+- [`frontend/browser-evidence`](references/shared/frontend--browser-evidence.md)
+- [`frontend/visual-verification`](references/shared/frontend--visual-verification.md)

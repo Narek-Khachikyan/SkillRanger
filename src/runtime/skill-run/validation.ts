@@ -179,7 +179,8 @@ export const assertValidSkillRun: (input: unknown) => asserts input is SkillRun 
     if (intentSha256 !== expectedIntentDigest) fail("Raw intent does not match its SHA-256 digest.");
   }
 
-  const policy = keys(value.policy, ["lifecycleRequired", "mandatorySkillIds", "clarification", "verificationRequired"], [], "skill run.policy");
+  const policy = keys(value.policy, ["lifecycleRequired", "mandatorySkillIds", "clarification", "verificationRequired"], ["artifacts"], "skill run.policy");
+  if (Object.hasOwn(policy, "artifacts")) object(policy.artifacts, "skill run.policy.artifacts");
   boolean(policy.lifecycleRequired, "skill run.policy.lifecycleRequired");
   const mandatoryIds = stringArray(policy.mandatorySkillIds, "skill run.policy.mandatorySkillIds", true);
   boolean(policy.verificationRequired, "skill run.policy.verificationRequired");
