@@ -54,7 +54,7 @@ export type DesignRecipe = {
 export type DesignDirection = {
   schemaVersion: "1.0";
   recipeId: string;
-  selectedRuleIds: string[];
+  selectedRuleIds?: string[];
   thesis: string;
   productReason: string;
   axes: {

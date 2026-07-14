@@ -108,6 +108,17 @@ test("validates six selected rule families on a design direction", () => {
   ).some(({ code }) => code === "direction-rule-selection-contract"));
 });
 
+test("preserves schema 1.0 directions created before rule selection metadata", () => {
+  const legacy = makeDirection("developer-tool") as DesignDirection & { selectedRuleIds?: string[] };
+  delete legacy.selectedRuleIds;
+  const codes = validateDesignDirection(
+    makeBrief({ domain: "developer tool", surfaceType: "workspace" }),
+    legacy,
+  ).map(({ code }) => code);
+  assert.equal(codes.includes("direction-rule-selection-contract"), false);
+  assert.equal(codes.includes("direction-structure-contract"), false);
+});
+
 test("loads exactly eight stable frontend recipes", async () => {
   assert.deepEqual(frontendRecipeIds, [
     "operational-command-center", "consumer-discovery", "developer-tool", "editorial-content",

@@ -228,27 +228,29 @@ export const validateDesignDirection = (
     ));
   }
 
-  const selectedRuleIds = isStringArray(direction.selectedRuleIds) ? direction.selectedRuleIds : [];
-  const selectedRules = loadDesignRuleLibrarySync().rules.filter((rule) => selectedRuleIds.includes(rule.id));
-  const selectedFamilies = new Set(selectedRules.map(({ family }) => family));
-  const rulesCompatible = nonEmpty(direction.recipeId) && selectedRules.every((rule) =>
-    rule.recipeIds.includes("*") || rule.recipeIds.includes(direction.recipeId as string));
-  if (
-    selectedRuleIds.length !== designRuleFamilies.length ||
-    new Set(selectedRuleIds).size !== designRuleFamilies.length ||
-    selectedRules.length !== designRuleFamilies.length ||
-    selectedFamilies.size !== designRuleFamilies.length ||
-    designRuleFamilies.some((family) => !selectedFamilies.has(family)) ||
-    !rulesCompatible
-  ) {
-    findings.push(finding(
-      "direction-rule-selection-contract",
-      "critical",
-      "hard",
-      "Design direction must select exactly one existing compatible rule from each design rule family.",
-      "Select six unique compatible rules: typography, layout, responsive, color, state, and signature-move.",
-      selectedRuleIds,
-    ));
+  if (direction.selectedRuleIds !== undefined) {
+    const selectedRuleIds = isStringArray(direction.selectedRuleIds) ? direction.selectedRuleIds : [];
+    const selectedRules = loadDesignRuleLibrarySync().rules.filter((rule) => selectedRuleIds.includes(rule.id));
+    const selectedFamilies = new Set(selectedRules.map(({ family }) => family));
+    const rulesCompatible = nonEmpty(direction.recipeId) && selectedRules.every((rule) =>
+      rule.recipeIds.includes("*") || rule.recipeIds.includes(direction.recipeId as string));
+    if (
+      selectedRuleIds.length !== designRuleFamilies.length ||
+      new Set(selectedRuleIds).size !== designRuleFamilies.length ||
+      selectedRules.length !== designRuleFamilies.length ||
+      selectedFamilies.size !== designRuleFamilies.length ||
+      designRuleFamilies.some((family) => !selectedFamilies.has(family)) ||
+      !rulesCompatible
+    ) {
+      findings.push(finding(
+        "direction-rule-selection-contract",
+        "critical",
+        "hard",
+        "Design direction rule metadata must select exactly one existing compatible rule from each design rule family.",
+        "Select six unique compatible rules: typography, layout, responsive, color, state, and signature-move.",
+        selectedRuleIds,
+      ));
+    }
   }
 
   const axes = isRecord(direction.axes) ? direction.axes : undefined;

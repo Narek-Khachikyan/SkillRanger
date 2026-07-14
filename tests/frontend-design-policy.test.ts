@@ -179,3 +179,14 @@ test("blocks arbitrary JSX before a direction and verified pattern selection", (
     "implementation-strategy-violation",
   ]);
 });
+
+test("constrained implementation requires all six selected rule families", () => {
+  const policy = resolveDesignExecutionPolicy({ mode: "refine", profile: "constrained", rankedRecipeIds: ranked });
+  const findings = validateImplementationPrerequisites({
+    policy,
+    directions: [],
+    selectedRuleIds: ["typography.role-contrast"],
+    implementationKind: "local-primitives",
+  });
+  assert.ok(findings.some(({ code }) => code === "verified-pattern-selection-missing"));
+});

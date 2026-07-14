@@ -6,6 +6,7 @@ import type {
   DesignExecutionPolicy,
 } from "./policy-types.ts";
 import type { DesignDirection } from "./types.ts";
+import { loadDesignRuleLibrarySync } from "./library.ts";
 
 const compositionRank = { preserve: 0, "recipe-layouts": 1, free: 2 } as const;
 const primitiveRank = { "existing-only": 0, "local-variants": 1, "new-primitives": 2 } as const;
@@ -153,12 +154,18 @@ export const validateImplementationPrerequisites = (input: {
     }));
   }
 
-  if (input.policy.implementationStrategy === "verified-patterns-only" && input.selectedRuleIds.length === 0) {
+  const selectedRules = loadDesignRuleLibrarySync().rules.filter((rule) => input.selectedRuleIds.includes(rule.id));
+  const selectedFamilies = new Set(selectedRules.map(({ family }) => family));
+  const selectedRulesComplete = input.selectedRuleIds.length === input.policy.requiredRuleFamilies.length &&
+    new Set(input.selectedRuleIds).size === input.policy.requiredRuleFamilies.length &&
+    selectedRules.length === input.policy.requiredRuleFamilies.length &&
+    input.policy.requiredRuleFamilies.every((family) => selectedFamilies.has(family));
+  if (input.policy.implementationStrategy === "verified-patterns-only" && !selectedRulesComplete) {
     findings.push(finding({
       code: "verified-pattern-selection-missing",
-      message: "Verified-patterns-only implementation requires at least one selected rule.",
-      evidence: [],
-      remediation: "Select the verified rules that govern the implementation.",
+      message: "Verified-patterns-only implementation requires one selected rule from every required family.",
+      evidence: input.selectedRuleIds,
+      remediation: "Select six unique verified rules covering typography, layout, responsive, color, state, and signature-move.",
     }));
   }
   if (input.policy.implementationStrategy === "verified-patterns-only" && input.implementationKind === "arbitrary-jsx-css") {
