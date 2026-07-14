@@ -97,3 +97,34 @@ test("constrained skill profiles forbid arbitrary JSX before structured directio
     assert.ok(workflow.profileInstructions.constrained.some((line: string) => line.includes("mandatory corrective pass")));
   }
 });
+
+test("skill workflows enforce policy, bounded repair, and fresh viewport rechecks", async () => {
+  for (const file of [
+    "registry/skills/frontend.visual-design-polish/workflow.json",
+    "registry/skills/frontend.tailwind-ui-polish/workflow.json",
+  ]) {
+    const workflow = JSON.parse(await readFile(file, "utf8"));
+    const ids: string[] = workflow.steps;
+    const implementationStep = file.includes("tailwind-ui-polish") ? "implement-bounded-fix" : "implement";
+    const before = (left: string, right: string) => {
+      assert.notEqual(ids.indexOf(left), -1, `${file}: missing ${left}`);
+      assert.notEqual(ids.indexOf(right), -1, `${file}: missing ${right}`);
+      assert.ok(ids.indexOf(left) < ids.indexOf(right), `${file}: ${left} must precede ${right}`);
+    };
+
+    before("resolve-execution-policy", "define-structured-direction");
+    before("define-structured-direction", implementationStep);
+    before("independent-critique", "bounded-repair");
+    before("bounded-repair", "capture-recheck-evidence-390");
+    before("capture-recheck-evidence-390", "capture-recheck-evidence-768");
+    before("capture-recheck-evidence-768", "capture-recheck-evidence-1440");
+    before("capture-recheck-evidence-1440", "final-verify");
+    before("final-verify", "final-report");
+  }
+});
+
+test("repair-loop documentation requires equal-or-higher-severity regression checks", async () => {
+  const repairLoop = await readFile("docs/repair-loop.md", "utf8");
+  assert.match(repairLoop, /equal-or-higher-severity regression/i);
+  assert.doesNotMatch(repairLoop, /new critical or high regression/i);
+});

@@ -7,5 +7,5 @@
     "standard": ["Limit exploration to 2–3 recipe-compatible variants.", "Allow local variants when repetition is demonstrated.", "Preserve ownership boundaries and hard gates."],
     "advanced": ["Allow new primitives only with product evidence and destructive critique.", "Do not change broad art direction without a separate finding."]
   },
-  "steps": ["classify-project", "validate-input", "inspect-tailwind-system", "capture-before", "implement-bounded-fix", "browser-verify", "repair", "final-report"]
+  "steps": ["classify-project", "validate-input", "inspect-tailwind-system", "capture-before", "resolve-execution-policy", "define-structured-direction", "validate-implementation-prerequisites", "implement-bounded-fix", "capture-initial-evidence", "independent-critique", "bounded-repair", "capture-recheck-evidence-390", "capture-recheck-evidence-768", "capture-recheck-evidence-1440", "final-verify", "final-report"]
 }

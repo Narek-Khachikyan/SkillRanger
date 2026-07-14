@@ -26,7 +26,8 @@ Complete a bounded repair only when all of the following are true:
   `allowedChanges`.
 - No `protectedInvariants` are violated.
 - No targeted critical or high finding remains in the recheck report.
-- The repair introduces no new critical or high regression.
+- The repair introduces no equal-or-higher-severity regression relative to the
+  findings it was approved to correct.
 
 If any rule fails, record the resulting verification finding, keep the result out of
 the final report, and either perform the next policy-permitted bounded pass or stop
