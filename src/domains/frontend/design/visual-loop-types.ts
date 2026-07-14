@@ -56,7 +56,7 @@ export type VisualRunEvent =
   | (VisualRunEventBase<"repair-recorded"> & { repairId: string; implementationArtifact: string })
   | (VisualRunEventBase<"recheck-evidence-recorded"> & { evidenceId: string })
   | (VisualRunEventBase<"final-audit-recorded"> & { reportPath: string })
-  | (VisualRunEventBase<"verification-recorded"> & { outcome: VerificationOutcome })
+  | (VisualRunEventBase<"verification-recorded"> & { outcome: VerificationOutcome; reportPath: string })
   | VisualRunEventBase<"blocked">
   | VisualRunEventBase<"failed">;
 

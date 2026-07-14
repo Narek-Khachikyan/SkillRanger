@@ -5,6 +5,7 @@ import type {
   DesignVariantMetadata,
   VisualCriticReport,
   VisualRun,
+  VisualRunEvent,
 } from "../src/domains/frontend/design/index.ts";
 
 test("exports immutable visual orchestration artifacts", () => {
@@ -55,4 +56,15 @@ test("visual contracts are strict and bound critic scores", async () => {
   assert.equal(criticSchema.properties.confidence.maximum, 1);
   assert.equal(runSchema.additionalProperties, false);
   assert.equal(runSchema.properties.variantIds.uniqueItems, true);
+});
+
+test("verification events retain their report artifact path", () => {
+  const event: VisualRunEvent = {
+    id: "event-verification-1",
+    at: "2026-07-14T00:01:00.000Z",
+    type: "verification-recorded",
+    outcome: "verified",
+    reportPath: ".design/verification-report.json",
+  };
+  assert.equal(event.reportPath, ".design/verification-report.json");
 });
