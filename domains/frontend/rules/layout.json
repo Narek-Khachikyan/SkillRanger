@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "1.0",
+  "family": "layout",
+  "rules": [
+    {
+      "schemaVersion": "1.0", "id": "layout.action-evidence", "version": "1.0.0", "family": "layout", "name": "Action and Evidence",
+      "recipeIds": ["*"], "preconditions": ["A primary action and the evidence needed to take it are known."],
+      "intent": "Place the primary action beside the evidence and state that justify it.",
+      "constraints": ["Keep decision evidence in the same visual region as its action.", "Reserve the strongest hierarchy for the primary flow."],
+      "rolesConsumed": ["primary-action", "evidence", "status"], "responsiveBehavior": ["Move action and evidence together when the composition recomposes."],
+      "accessibility": ["DOM order must preserve evidence before the dependent action."], "antiPatterns": ["Detached call-to-action bars with missing context."],
+      "verification": ["Trace the primary decision at desktop and mobile without crossing unrelated regions."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    },
+    {
+      "schemaVersion": "1.0", "id": "layout.list-detail", "version": "1.0.0", "family": "layout", "name": "List Detail",
+      "recipeIds": ["operational-command-center", "developer-tool", "saas-workspace", "mobile-consumer-app"], "preconditions": ["Users select a repeated object and inspect or update its details."],
+      "intent": "Use the real work object as the stable bridge between overview and detail.",
+      "constraints": ["Keep selection state visible.", "Do not duplicate the full detail inside each list row."],
+      "rolesConsumed": ["list", "selection", "detail", "action"], "responsiveBehavior": ["Convert simultaneous panes into an explicit drill-in sequence."],
+      "accessibility": ["Announce selection and preserve focus when detail content changes."], "antiPatterns": ["Nested cards that obscure list-detail ownership."],
+      "verification": ["Verify selection, focus, back navigation, and detail identity across viewports."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    },
+    {
+      "schemaVersion": "1.0", "id": "layout.commerce-comparison", "version": "1.0.0", "family": "layout", "name": "Commerce Comparison",
+      "recipeIds": ["e-commerce", "consumer-discovery"], "preconditions": ["Comparable products or catalogue objects have real differentiating evidence."],
+      "intent": "Structure repeated products around evidence that supports comparison and commitment.",
+      "constraints": ["Align comparable facts across items.", "Keep availability and fulfillment adjacent to the action."],
+      "rolesConsumed": ["product", "price", "availability", "fulfillment", "action"], "responsiveBehavior": ["Turn wide comparison into a consistent fact sequence without hiding attributes."],
+      "accessibility": ["Give repeated products unique accessible names and explicit availability text."], "antiPatterns": ["Identical product cards without comparison cues."],
+      "verification": ["Compare two products at desktop and mobile using the same evidence fields."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    }
+  ]
+}

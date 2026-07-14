@@ -53,6 +53,12 @@ export const validateDomainPackManifest = (input: unknown): string[] => {
       if (!isStringArray(input.artifacts[key])) issues.push(`artifacts.${key} must be a string array`);
       else if (!input.artifacts[key].every(safeRelativePath)) issues.push(`artifacts.${key} contains an unsafe path`);
     }
+    for (const key of ["rules", "examples"] as const) {
+      if (input.artifacts[key] !== undefined) {
+        if (!isStringArray(input.artifacts[key])) issues.push(`artifacts.${key} must be a string array`);
+        else if (!input.artifacts[key].every(safeRelativePath)) issues.push(`artifacts.${key} contains an unsafe path`);
+      }
+    }
     if (
       input.artifacts.evalSuite !== undefined &&
       (typeof input.artifacts.evalSuite !== "string" || !safeRelativePath(input.artifacts.evalSuite))

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0",
+  "files": {
+    "typography": "typography.json",
+    "layout": "layout.json",
+    "responsive": "responsive.json",
+    "color": "color.json",
+    "state": "state.json",
+    "signature-move": "signature-move.json"
+  }
+}

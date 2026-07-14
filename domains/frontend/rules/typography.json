@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1.0",
+  "family": "typography",
+  "rules": [
+    {
+      "schemaVersion": "1.0", "id": "typography.role-contrast", "version": "1.0.0", "family": "typography", "name": "Role Contrast",
+      "recipeIds": ["*"], "preconditions": ["Display, body, and meta content roles are identified before styling."],
+      "intent": "Create semantic hierarchy through distinct display, body, and meta roles rather than size alone.",
+      "constraints": ["Use display, body, and meta roles.", "Keep at least a 1.25 scale between adjacent display roles.", "Preserve a 45–75ch reading measure."],
+      "rolesConsumed": ["display", "body", "meta"], "responsiveBehavior": ["Reduce display scale without collapsing semantic role contrast."],
+      "accessibility": ["Heading semantics must follow document structure independently of visual size."],
+      "antiPatterns": ["Size-only hierarchy with indistinguishable weight, spacing, and semantics."],
+      "verification": ["Inspect heading semantics and computed role contrast, including the 1.25 display-role scale and 45–75ch measure."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    },
+    {
+      "schemaVersion": "1.0", "id": "typography.editorial-product", "version": "1.0.0", "family": "typography", "name": "Editorial Product Voice",
+      "recipeIds": ["editorial-content", "marketing-landing", "e-commerce"], "preconditions": ["A narrative or product evidence sequence is present."],
+      "intent": "Let sourced content and product evidence determine the reading rhythm.",
+      "constraints": ["Keep evidence labels quieter than claims.", "Pair product facts with the heading they qualify."],
+      "rolesConsumed": ["display", "body", "evidence", "meta"], "responsiveBehavior": ["Shorten line length before reducing body size."],
+      "accessibility": ["Do not encode evidence status through italics or color alone."], "antiPatterns": ["Decorative pull quotes without content value."],
+      "verification": ["Confirm narrative order, readable measure, and explicit evidence labels at mobile and desktop widths."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    },
+    {
+      "schemaVersion": "1.0", "id": "typography.dense-workspace", "version": "1.0.0", "family": "typography", "name": "Dense Workspace Roles",
+      "recipeIds": ["operational-command-center", "developer-tool", "saas-workspace"], "preconditions": ["Repeated rows, technical output, or work-object metadata are primary."],
+      "intent": "Keep dense operational content scannable through stable functional text roles.",
+      "constraints": ["Use tabular numerals where comparisons require them.", "Keep action labels distinct from metadata."],
+      "rolesConsumed": ["body", "label", "meta", "code"], "responsiveBehavior": ["Preserve labels when columns become list-detail groups."],
+      "accessibility": ["Maintain readable text size and visible focus labels in compact layouts."], "antiPatterns": ["Shrinking all text to fit a wide table."],
+      "verification": ["Scan repeated rows for stable alignment, role distinction, and readable zoom behavior."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    }
+  ]
+}

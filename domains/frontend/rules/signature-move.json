@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "1.0",
+  "family": "signature-move",
+  "rules": [
+    {
+      "schemaVersion": "1.0", "id": "signature.product-data-grammar", "version": "1.0.0", "family": "signature-move", "name": "Product Data Grammar",
+      "recipeIds": ["*"], "preconditions": ["A real product object, lifecycle, evidence type, or content structure is known."],
+      "intent": "Derive one memorable visual behavior from real product data instead of generic decoration.",
+      "constraints": ["Tie the move to a recurring product meaning.", "Use the move consistently and sparingly."],
+      "rolesConsumed": ["primary-object", "product-state", "evidence"], "responsiveBehavior": ["Preserve meaning while simplifying expression on constrained viewports."],
+      "accessibility": ["The signature must remain understandable without motion, color, or fine visual detail alone."], "antiPatterns": ["Unrelated gradient or animation used as a brand substitute."],
+      "verification": ["Name the product datum behind the move and verify the mapping in success and recovery states."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    },
+    {
+      "schemaVersion": "1.0", "id": "signature.conversion-proof", "version": "1.0.0", "family": "signature-move", "name": "Conversion Proof Rhythm",
+      "recipeIds": ["marketing-landing", "e-commerce", "consumer-discovery", "editorial-content"], "preconditions": ["Supplied proof or concrete product evidence supports a claim or choice."],
+      "intent": "Turn the claim-to-evidence-to-action sequence into the composition rhythm.",
+      "constraints": ["Use only supplied proof.", "Keep evidence adjacent to the claim or choice it supports."],
+      "rolesConsumed": ["claim", "proof", "mechanism", "action"], "responsiveBehavior": ["Keep each claim-proof pair intact when sections reorder."],
+      "accessibility": ["Label proof sources and avoid relying on logo recognition."], "antiPatterns": ["Fake testimonials, invented logos, or unsupported metrics."],
+      "verification": ["Trace every proof item to evidence and verify adjacency to its supported claim."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    },
+    {
+      "schemaVersion": "1.0", "id": "signature.repeated-action-feedback", "version": "1.0.0", "family": "signature-move", "name": "Repeated Action Feedback",
+      "recipeIds": ["mobile-consumer-app", "saas-workspace", "operational-command-center", "developer-tool"], "preconditions": ["Users repeat a meaningful action on a primary object."],
+      "intent": "Make immediate state feedback for the repeated action the recognizable product behavior.",
+      "constraints": ["Feedback must reveal the resulting object state.", "Keep duration and motion proportional to action frequency."],
+      "rolesConsumed": ["primary-action", "result-state", "pending", "recovery"], "responsiveBehavior": ["Keep feedback adjacent to the action and object on every viewport."],
+      "accessibility": ["Expose the result as text and respect reduced-motion preferences."], "antiPatterns": ["Celebratory motion disconnected from actual completion."],
+      "verification": ["Repeat the action with success, pending, offline, and error outcomes and inspect feedback consistency."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    }
+  ]
+}

@@ -7,6 +7,8 @@ import type { DesignBrief, DesignDirection, DesignRecipe } from "./types.ts";
 import { frontendRecipeFiles } from "./catalog.ts";
 export * from "./types.ts";
 export * from "./catalog.ts";
+export * from "./library-types.ts";
+export * from "./library.ts";
 export * from "./policy-types.ts";
 export * from "./policy.ts";
 export * from "./repair.ts";

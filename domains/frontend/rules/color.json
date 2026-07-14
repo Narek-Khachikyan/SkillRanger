@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "1.0",
+  "family": "color",
+  "rules": [
+    {
+      "schemaVersion": "1.0", "id": "color.semantic-roles", "version": "1.0.0", "family": "color", "name": "Semantic Color Roles",
+      "recipeIds": ["*"], "preconditions": ["Surface, text, action, border, and status roles are identified."],
+      "intent": "Assign color to stable semantic roles so hierarchy and state survive theme and viewport changes.",
+      "constraints": ["Name colors by role rather than pigment.", "Use accent color only for meaningful emphasis or action."],
+      "rolesConsumed": ["surface", "text", "border", "accent", "status"], "responsiveBehavior": ["Keep role meaning unchanged across responsive compositions."],
+      "accessibility": ["Meet contrast requirements and never communicate state through color alone."], "antiPatterns": ["Raw decorative colors without a product or state role."],
+      "verification": ["Inspect computed role usage, contrast, and non-color status cues in every required state."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    },
+    {
+      "schemaVersion": "1.0", "id": "color.commerce-trust", "version": "1.0.0", "family": "color", "name": "Commerce Trust",
+      "recipeIds": ["e-commerce", "marketing-landing", "consumer-discovery"], "preconditions": ["Price, availability, fulfillment, or supplied proof affects commitment."],
+      "intent": "Use restrained semantic color to clarify product evidence and commitment state.",
+      "constraints": ["Keep price and fulfillment readable without promotional color noise.", "Reserve warning color for actual unavailability or recovery."],
+      "rolesConsumed": ["price", "availability", "fulfillment", "proof"], "responsiveBehavior": ["Preserve evidence roles when product facts wrap or reorder."],
+      "accessibility": ["Write availability and fulfillment status explicitly alongside color."], "antiPatterns": ["Invented discount colors or fake urgency."],
+      "verification": ["Confirm price, availability, fulfillment, and proof remain distinguishable without color perception."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    },
+    {
+      "schemaVersion": "1.0", "id": "color.operational-status", "version": "1.0.0", "family": "color", "name": "Operational Status",
+      "recipeIds": ["operational-command-center", "developer-tool", "saas-workspace", "mobile-consumer-app"], "preconditions": ["Real lifecycle, exception, permission, or connectivity states exist."],
+      "intent": "Map operational color to real state severity and recovery priority.",
+      "constraints": ["Use a finite documented status palette.", "Do not apply severe color to neutral selection or decoration."],
+      "rolesConsumed": ["neutral", "active", "warning", "error", "success"], "responsiveBehavior": ["Retain text labels when status indicators become compact."],
+      "accessibility": ["Pair every status color with text, iconography, or pattern."], "antiPatterns": ["Rainbow status systems with overlapping meaning."],
+      "verification": ["Review every status mapping for unique meaning, contrast, and a non-color cue."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    }
+  ]
+}

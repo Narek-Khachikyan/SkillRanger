@@ -28,6 +28,8 @@ export type DomainPackManifest = {
     intents: string[];
     schemas: string[];
     recipes: string[];
+    rules?: string[];
+    examples?: string[];
     workflows: string[];
     validators: string[];
     evalSuite?: string;

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "1.0",
+  "family": "state",
+  "rules": [
+    {
+      "schemaVersion": "1.0", "id": "state.complete-primary-flow", "version": "1.0.0", "family": "state", "name": "Complete Primary Flow",
+      "recipeIds": ["*"], "preconditions": ["The primary object, action, and required loading, empty, error, and success states are known."],
+      "intent": "Design every required state as a coherent continuation of the same primary flow.",
+      "constraints": ["Keep the primary object or its placeholder identifiable.", "Give empty and error states a relevant next action."],
+      "rolesConsumed": ["loading", "empty", "error", "success", "primary-action"], "responsiveBehavior": ["Keep state identity and recovery visible at every supported viewport."],
+      "accessibility": ["Announce asynchronous state changes without moving focus unexpectedly."], "antiPatterns": ["Generic centered messages detached from the task."],
+      "verification": ["Exercise loading, empty, error, and success through the same primary-flow entry point."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    },
+    {
+      "schemaVersion": "1.0", "id": "state.recovery-first", "version": "1.0.0", "family": "state", "name": "Recovery First",
+      "recipeIds": ["operational-command-center", "developer-tool", "saas-workspace", "e-commerce"], "preconditions": ["Failure, permission, availability, or payment states can interrupt committed work."],
+      "intent": "Lead failure states with a safe recovery action and preserved task context.",
+      "constraints": ["State what remains preserved.", "Offer the safest relevant recovery before secondary navigation."],
+      "rolesConsumed": ["error", "context", "recovery", "support"], "responsiveBehavior": ["Keep recovery action visible without covering error context."],
+      "accessibility": ["Move focus only when required and connect the error to the affected control or object."], "antiPatterns": ["Error banners with no recovery path."],
+      "verification": ["Trigger each error and confirm context preservation, focus behavior, and a working recovery action."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    },
+    {
+      "schemaVersion": "1.0", "id": "state.optimistic-offline", "version": "1.0.0", "family": "state", "name": "Optimistic Offline",
+      "recipeIds": ["mobile-consumer-app", "saas-workspace"], "preconditions": ["A repeated action may occur with intermittent connectivity."],
+      "intent": "Acknowledge the action immediately while making pending and offline recovery explicit.",
+      "constraints": ["Distinguish saved, pending, and failed states.", "Provide a retry path without duplicating the action."],
+      "rolesConsumed": ["pending", "offline", "saved", "retry"], "responsiveBehavior": ["Keep connectivity feedback adjacent to the repeated action."],
+      "accessibility": ["Announce pending and failure transitions through a polite live region."], "antiPatterns": ["Silent optimistic updates that can disappear after refresh."],
+      "verification": ["Simulate offline, retry, reconnect, and duplicate-action conditions."],
+      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+    }
+  ]
+}

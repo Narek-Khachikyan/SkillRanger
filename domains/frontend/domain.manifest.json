@@ -20,8 +20,10 @@
       "schemas/design-direction.schema.json",
       "schemas/design-execution-policy.schema.json",
       "schemas/bounded-repair-request.schema.json",
-      "schemas/verification-report.schema.json"
+      "schemas/verification-report.schema.json",
+      "schemas/design-rule.schema.json"
     ],
+    "rules": ["rules/index.json"],
     "recipes": [
       "recipes/operational-command-center.json",
       "recipes/consumer-discovery.json",

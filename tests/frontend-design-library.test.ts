@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   frontendRecipeIds,
+  loadDesignRuleLibrary,
   loadFrontendRecipes,
   recommendFrontendRecipe,
+  selectDesignRules,
   validateDesignDirection,
   type DesignBrief,
   type DesignDirection,
@@ -30,6 +32,26 @@ const makeBrief = (input: { domain: string; surfaceType: string }): DesignBrief 
     observed: [{ statement: `Domain: ${input.domain}`, source: "test fixture" }],
     inferred: [], assumed: [], unknown: [],
   },
+});
+
+test("loads all six rule families with unique versioned ids", async () => {
+  const library = await loadDesignRuleLibrary();
+  assert.deepEqual([...new Set(library.rules.map(({ family }) => family))].sort(),
+    ["color", "layout", "responsive", "signature-move", "state", "typography"]);
+  assert.equal(library.rules.length, 18);
+  assert.equal(new Set(library.rules.map(({ id }) => id)).size, library.rules.length);
+  assert.ok(library.rules.every((rule) => rule.version === "1.0.0"));
+  assert.ok(library.rules.every((rule) => rule.provenance.length > 0 && rule.verification.length > 0));
+});
+
+test("selects one compatible rule from every family", async () => {
+  const families = ["typography", "layout", "responsive", "color", "state", "signature-move"] as const;
+  const library = await loadDesignRuleLibrary();
+  for (const recipeId of frontendRecipeIds) {
+    const selected = selectDesignRules(library, { recipeId, families: [...families] });
+    assert.equal(selected.length, 6);
+    assert.ok(selected.every((rule) => rule.recipeIds.includes(recipeId) || rule.recipeIds.includes("*")));
+  }
 });
 
 const makeDirection = (recipeId: string): DesignDirection => ({
