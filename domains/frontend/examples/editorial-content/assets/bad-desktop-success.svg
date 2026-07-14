@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" role="img" aria-labelledby="title description">
+<title id="title">section</title>
+<desc id="description">bad desktop success example</desc>
+<rect width="1440" height="900" fill="#f5f3ee"/>
+<text x="72" y="90" fill="#7d2d2d" font-family="ui-monospace, monospace" font-size="14" font-weight="700">SUCCESS</text>
+<text x="72" y="130" fill="#18201d" font-family="system-ui, sans-serif" font-size="38" font-weight="750">section</text>
+<text x="1368" y="90" text-anchor="end" fill="#176b55" font-family="system-ui, sans-serif" font-size="14" font-weight="700">Continue reading</text>
+<rect x="72" y="188" width="1296" height="118" rx="10" fill="#ffffff" stroke="#c9d0cc"/>
+<text x="94" y="230" fill="#18201d" font-family="system-ui, sans-serif" font-size="34" font-weight="700">Continue reading</text>
+<text x="94" y="286" fill="#66716c" font-family="system-ui, sans-serif" font-size="13">action</text>
+<rect x="72" y="324" width="1296" height="118" rx="10" fill="#ffffff" stroke="#c9d0cc"/>
+<text x="110" y="366" fill="#18201d" font-family="system-ui, sans-serif" font-size="16" font-weight="500">section</text>
+<text x="110" y="422" fill="#66716c" font-family="system-ui, sans-serif" font-size="13">copy</text>
+<text x="72" y="872" fill="#7d2d2d" font-family="ui-monospace, monospace" font-size="12">typography.role-contrast · layout.action-evidence · signature.product-data-grammar</text>
+</svg>

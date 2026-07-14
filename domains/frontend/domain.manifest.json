@@ -21,9 +21,20 @@
       "schemas/design-execution-policy.schema.json",
       "schemas/bounded-repair-request.schema.json",
       "schemas/verification-report.schema.json",
-      "schemas/design-rule.schema.json"
+      "schemas/design-rule.schema.json",
+      "schemas/recipe-example.schema.json"
     ],
     "rules": ["rules/index.json"],
+    "examples": [
+      "examples/operational-command-center/example.json",
+      "examples/consumer-discovery/example.json",
+      "examples/developer-tool/example.json",
+      "examples/editorial-content/example.json",
+      "examples/marketing-landing/example.json",
+      "examples/saas-workspace/example.json",
+      "examples/e-commerce/example.json",
+      "examples/mobile-consumer-app/example.json"
+    ],
     "recipes": [
       "recipes/operational-command-center.json",
       "recipes/consumer-discovery.json",
