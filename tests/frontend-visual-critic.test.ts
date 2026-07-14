@@ -350,6 +350,34 @@ test("rejects shell-command output without flagging natural prose", () => {
   assert.ok(!findingCodes(prose).includes("critic-shell-output"));
 });
 
+test("classifies the exact ambiguous command regression corpus", () => {
+  const prohibited = [
+    "./repair.sh", "echo repair now", "command rm -rf /", "/bin/rm -rf /",
+    "git reset --hard", "npm install react", "sudo rm -rf /",
+    "/usr/bin/env X=1 curl https://example.test", "$ node repair.js",
+  ];
+  for (const sample of prohibited) {
+    const report = makeCriticReport({ selectedVariantId: "v1" });
+    report.comparisons[0].weaknesses = [sample];
+    assert.ok(findingCodes(report).includes("critic-shell-output"), sample);
+  }
+
+  const allowed = [
+    "make the hierarchy clearer.",
+    "find a stronger balance between density and clarity.",
+    "go with the more product-specific composition.",
+    "node relationships are visually ambiguous.",
+    "git history supports this direction.",
+    "npm ecosystem choices affect portability.",
+    "Variant A > Variant B in hierarchy.",
+  ];
+  for (const sample of allowed) {
+    const report = makeCriticReport({ selectedVariantId: "v1" });
+    report.comparisons[0].weaknesses = [sample];
+    assert.ok(!findingCodes(report).includes("critic-shell-output"), sample);
+  }
+});
+
 test("rejects empty or duplicate critic input artifacts", () => {
   const cases = [
     { ...input, candidates: [] },
