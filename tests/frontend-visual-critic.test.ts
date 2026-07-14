@@ -55,6 +55,9 @@ const makeCriticReport = ({ selectedVariantId }: { selectedVariantId?: string })
 const findingCodes = (report: VisualCriticReport) =>
   validateVisualCriticReport(input, report).map(({ code }) => code);
 
+const asHostReport = (report: VisualCriticReport) =>
+  report as unknown as Record<string, unknown>;
+
 test("requires an actor independent from the generator", () => {
   assert.throws(() => createVisualCriticInput({ ...input, criticActorId: "generator-a" }), /independent critic/);
 
@@ -71,6 +74,42 @@ test("rejects candidate and evidence mismatches deterministically", () => {
   const findings = validateVisualCriticReport(input, report);
   assert.deepEqual(findings.filter(({ code }) => code === "critic-candidate-mismatch")[0]?.evidence, ["v2", "v3"]);
   assert.deepEqual(findings.filter(({ code }) => code === "critic-evidence-mismatch")[0]?.evidence, ["e2", "e3"]);
+});
+
+test("rejects duplicate candidate and evidence entries when unique membership is unchanged", () => {
+  const report = makeCriticReport({ selectedVariantId: "v1" });
+  report.candidateVariantIds = ["v2", "v1", "v2"];
+  report.evidenceIds = ["e2", "e1", "e2"];
+
+  const first = validateVisualCriticReport(input, report);
+  const second = validateVisualCriticReport(input, report);
+  assert.deepEqual(first, second);
+  assert.deepEqual(first.find(({ code }) => code === "critic-candidate-mismatch")?.evidence, ["v2"]);
+  assert.deepEqual(first.find(({ code }) => code === "critic-evidence-mismatch")?.evidence, ["e2"]);
+});
+
+test("rejects malformed report metadata without throwing", () => {
+  const cases: Array<[string, unknown, string]> = [
+    ["schemaVersion", "2.0", "critic-schema-version"],
+    ["outcome", "winner", "critic-outcome-invalid"],
+    ["outcome", 7, "critic-outcome-invalid"],
+    ["confidence", Number.NaN, "critic-confidence-invalid"],
+    ["confidence", Number.POSITIVE_INFINITY, "critic-confidence-invalid"],
+    ["confidence", -0.01, "critic-confidence-invalid"],
+    ["confidence", 1.01, "critic-confidence-invalid"],
+    ["confidence", "0.8", "critic-confidence-invalid"],
+  ];
+
+  for (const [field, value, expectedCode] of cases) {
+    const report = makeCriticReport({ selectedVariantId: "v1" });
+    asHostReport(report)[field] = value;
+    const before = structuredClone(report);
+    let result: ReturnType<typeof compareDesignVariants> | undefined;
+    assert.doesNotThrow(() => { result = compareDesignVariants(input, report); }, `${field}: ${String(value)}`);
+    assert.equal(result?.ok, false);
+    assert.ok(result?.findings.some(({ code }) => code === expectedCode), `${field}: ${String(value)}`);
+    assert.deepEqual(report, before);
+  }
 });
 
 test("rejects missing criteria, out-of-range scores, and missing comparisons", () => {
@@ -96,6 +135,10 @@ test("rejects code-shaped critic output for every detector alternative", () => {
     "<section>content</section>",
     "className=\"p-4\"",
     "npm run build",
+    "git add src/file.ts",
+    "git commit -m fix",
+    "pnpm run test",
+    "yarn run build",
   ];
 
   for (const sample of samples) {
@@ -103,6 +146,34 @@ test("rejects code-shaped critic output for every detector alternative", () => {
     report.comparisons[0].weaknesses = [sample];
     assert.ok(findingCodes(report).includes("critic-code-output"), sample);
   }
+});
+
+test("detects code-shaped content through distinct nested string locations", () => {
+  const mutations: Array<(report: VisualCriticReport) => void> = [
+    (report) => { report.comparisons[0].strengths = ["<main>preview</main>"]; },
+    (report) => { report.comparisons[0].aiSlopFindings = [{
+      code: "weak-hierarchy", severity: "high", evidence: "e1", explanation: "git commit -m repair",
+    }]; },
+    (report) => { report.repairFindings = [{
+      id: "repair-1", code: "spacing", source: "critic", severity: "medium", gate: "soft",
+      message: "Spacing needs work.", evidence: ["e1"], remediation: "pnpm run format", autofixable: false,
+    }]; },
+    (report) => { report.residualUncertainty = ["```html\n<section />\n```"]; },
+  ];
+
+  for (const mutate of mutations) {
+    const report = makeCriticReport({ selectedVariantId: "v1" });
+    mutate(report);
+    assert.ok(findingCodes(report).includes("critic-code-output"));
+  }
+});
+
+test("does not flag natural-language critic prose as code", () => {
+  const report = makeCriticReport({ selectedVariantId: "v1" });
+  report.comparisons[0].strengths = ["The Git history supports this visual direction."];
+  report.comparisons[0].weaknesses = ["The team should run another visual review after repair."];
+  report.residualUncertainty = ["Package managers may add operational complexity."];
+  assert.ok(!findingCodes(report).includes("critic-code-output"));
 });
 
 test("rejects the implementation-code flag even without code-shaped strings", () => {
@@ -125,6 +196,42 @@ test("requires AI-slop evidence to reference supplied evidence", () => {
   assert.ok(!findingCodes(report).includes("critic-ai-slop-evidence-invalid"));
   report.comparisons[0].aiSlopFindings[0].evidence = "e1";
   assert.ok(!findingCodes(report).includes("critic-ai-slop-evidence-invalid"));
+});
+
+test("binds AI-slop evidence to the enclosing comparison variant", () => {
+  const report = makeCriticReport({ selectedVariantId: "v1" });
+  report.comparisons[0].aiSlopFindings = [{
+    code: "weak-hierarchy",
+    severity: "high",
+    evidence: "v2-390.png",
+    explanation: "The primary action is visually subordinate.",
+  }];
+  assert.ok(findingCodes(report).includes("critic-ai-slop-evidence-invalid"));
+
+  report.comparisons[0].aiSlopFindings[0].evidence = "e2";
+  assert.ok(findingCodes(report).includes("critic-ai-slop-evidence-invalid"));
+});
+
+test("rejects malformed AI-slop entries without throwing or mutation", () => {
+  const malformedEntries: unknown[] = [
+    null,
+    "weak hierarchy",
+    {},
+    { code: "unknown-code", severity: "high", evidence: "e1", explanation: "Specific explanation." },
+    { code: "weak-hierarchy", severity: "urgent", evidence: "e1", explanation: "Specific explanation." },
+    { code: "weak-hierarchy", severity: "high", evidence: "", explanation: "Specific explanation." },
+    { code: "weak-hierarchy", severity: "high", evidence: "e1", explanation: "   " },
+  ];
+
+  for (const malformedEntry of malformedEntries) {
+    const report = makeCriticReport({ selectedVariantId: "v1" });
+    (report.comparisons[0] as unknown as Record<string, unknown>).aiSlopFindings = [malformedEntry];
+    const before = structuredClone(report);
+    let findings: ReturnType<typeof validateVisualCriticReport> = [];
+    assert.doesNotThrow(() => { findings = validateVisualCriticReport(input, report); });
+    assert.ok(findings.some(({ code }) => code === "critic-ai-slop-finding-invalid"));
+    assert.deepEqual(report, before);
+  }
 });
 
 test("rejects invalid and inconsistent winner selections", () => {

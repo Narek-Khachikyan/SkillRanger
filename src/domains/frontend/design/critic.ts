@@ -1,5 +1,6 @@
 import type { VerificationFinding } from "../../../runtime/types.ts";
 import type {
+  AiSlopCode,
   VariantComparisonResult,
   VisualCriterion,
   VisualCriticInput,
@@ -21,11 +22,32 @@ const criteria: VisualCriterion[] = [
 
 const codeShape = /```(?:jsx|tsx|css|html|javascript|typescript)|(?:^|\n)(?:diff --git|@@ |\+\+\+ |--- )|<\/?[a-z][^>]*>|\bclassName\s*=|\b(?:git|npm|pnpm|yarn)\s+(?:add|commit|run)\b/i;
 
+const aiSlopCodes = new Set<AiSlopCode>([
+  "generic-hero-copy",
+  "interchangeable-saas-layout",
+  "excessive-generic-cards",
+  "meaningless-effects",
+  "invented-proof",
+  "repeated-icon-grid",
+  "arbitrary-radii-shadows",
+  "weak-hierarchy",
+  "meaningless-decoration",
+]);
+
+const aiSlopSeverities = new Set(["critical", "high", "medium", "low"]);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const nonEmpty = (value: unknown): value is string =>
+  typeof value === "string" && value.trim().length > 0;
+
 const hardFinding = (
   code: string,
   message: string,
   remediation: string,
   evidence: string[] = [],
+  affectedSurface?: string,
 ): VerificationFinding => ({
   id: `${code}:${evidence.join(",") || "report"}`,
   code,
@@ -34,6 +56,7 @@ const hardFinding = (
   gate: "hard",
   message,
   evidence,
+  ...(affectedSurface === undefined ? {} : { affectedSurface }),
   remediation,
   autofixable: false,
 });
@@ -85,6 +108,33 @@ export const validateVisualCriticReport = (
   const evidenceIds = input.candidates.map(({ evidenceId }) => evidenceId);
   const reportCandidateIds = Array.isArray(report.candidateVariantIds) ? report.candidateVariantIds : [];
   const reportEvidenceIds = Array.isArray(report.evidenceIds) ? report.evidenceIds : [];
+
+  if (report.schemaVersion !== "1.0") {
+    findings.push(hardFinding(
+      "critic-schema-version",
+      "The visual critic report schemaVersion must be 1.0.",
+      "Regenerate the report with schemaVersion 1.0.",
+    ));
+  }
+  if (report.outcome !== "selected" && report.outcome !== "no-acceptable-variant") {
+    findings.push(hardFinding(
+      "critic-outcome-invalid",
+      "The visual critic report outcome is invalid.",
+      "Use selected or no-acceptable-variant as the report outcome.",
+    ));
+  }
+  if (
+    typeof report.confidence !== "number" ||
+    !Number.isFinite(report.confidence) ||
+    report.confidence < 0 ||
+    report.confidence > 1
+  ) {
+    findings.push(hardFinding(
+      "critic-confidence-invalid",
+      "The visual critic confidence must be a finite number between 0 and 1.",
+      "Provide a finite confidence score from 0 through 1.",
+    ));
+  }
 
   if (report.generatorActorId === report.criticActorId) {
     findings.push(hardFinding(
@@ -183,22 +233,47 @@ export const validateVisualCriticReport = (
     ));
   }
 
-  const suppliedEvidence = new Set([
-    ...evidenceIds,
-    ...input.candidates.flatMap(({ screenshotPaths }) => screenshotPaths),
-  ]);
-  const invalidAiSlopEvidence = sortedUnique(comparisons.flatMap((comparison) =>
-    (Array.isArray(comparison?.aiSlopFindings) ? comparison.aiSlopFindings : [])
-      .map(({ evidence }) => evidence)
-      .filter((evidence) => typeof evidence !== "string" || !suppliedEvidence.has(evidence)),
-  ).map(String));
-  if (invalidAiSlopEvidence.length > 0) {
-    findings.push(hardFinding(
-      "critic-ai-slop-evidence-invalid",
-      "AI-slop findings must point to supplied screenshots or evidence ids.",
-      "Reference an evidence id or screenshot path from the critic input.",
-      invalidAiSlopEvidence,
-    ));
+  const candidateById = new Map(input.candidates.map((candidate) => [candidate.variantId, candidate]));
+  for (const comparison of comparisons) {
+    const variantId = typeof comparison?.variantId === "string" ? comparison.variantId : "unknown";
+    const candidate = candidateById.get(variantId);
+    const variantEvidence = new Set(candidate
+      ? [candidate.evidenceId, ...candidate.screenshotPaths]
+      : []);
+    const aiSlopFindings = Array.isArray(comparison?.aiSlopFindings)
+      ? comparison.aiSlopFindings as unknown[]
+      : [];
+    const invalidEvidence: string[] = [];
+    for (const [index, entry] of aiSlopFindings.entries()) {
+      if (
+        !isRecord(entry) ||
+        !nonEmpty(entry.code) ||
+        !aiSlopCodes.has(entry.code as AiSlopCode) ||
+        typeof entry.severity !== "string" ||
+        !aiSlopSeverities.has(entry.severity) ||
+        !nonEmpty(entry.evidence) ||
+        !nonEmpty(entry.explanation)
+      ) {
+        findings.push(hardFinding(
+          "critic-ai-slop-finding-invalid",
+          `Comparison ${variantId} has a malformed AI-slop finding.`,
+          "Provide a legal AI-slop code and severity with non-empty evidence and explanation.",
+          [variantId, String(index)],
+          variantId,
+        ));
+        continue;
+      }
+      if (!variantEvidence.has(entry.evidence)) invalidEvidence.push(entry.evidence);
+    }
+    if (invalidEvidence.length > 0) {
+      findings.push(hardFinding(
+        "critic-ai-slop-evidence-invalid",
+        `AI-slop findings for ${variantId} must point to that variant's supplied evidence.`,
+        "Reference the enclosing variant's evidence id or one of its screenshot paths.",
+        sortedUnique(invalidEvidence),
+        variantId,
+      ));
+    }
   }
 
   if (report.containsImplementationCode !== false || reportStrings(report).some((value) => codeShape.test(value))) {
