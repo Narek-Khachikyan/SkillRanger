@@ -31,6 +31,14 @@ const completionFinding = (input: {
 const criticalOrHigh = (finding: VerificationFinding) =>
   finding.severity === "critical" || finding.severity === "high";
 
+const severityRank: Record<VerificationFinding["severity"], number> = {
+  info: 0,
+  low: 1,
+  medium: 2,
+  high: 3,
+  critical: 4,
+};
+
 export const createBoundedRepairRequest = (input: {
   id: string;
   policy: DesignExecutionPolicy;
@@ -77,6 +85,9 @@ export const validateBoundedRepairCompletion = (input: {
 }): VerificationFinding[] => {
   const findings: VerificationFinding[] = [];
   const sourceFindingIds = new Set(input.request.findings.map((finding) => finding.id));
+  const leastSevereSourceFindingRank = Math.min(
+    ...input.request.findings.map((finding) => severityRank[finding.severity]),
+  );
 
   if (input.recheckEvidenceId === input.request.sourceEvidenceId) {
     findings.push(completionFinding({
@@ -133,14 +144,16 @@ export const validateBoundedRepairCompletion = (input: {
   }
 
   const regressions = input.recheckReport.findings.filter(
-    (finding) => !sourceFindingIds.has(finding.id) && criticalOrHigh(finding),
+    (finding) =>
+      !sourceFindingIds.has(finding.id) &&
+      severityRank[finding.severity] >= leastSevereSourceFindingRank,
   );
   if (regressions.length > 0) {
     findings.push(completionFinding({
       code: "repair-regression",
-      message: "Repair introduced a new critical or high regression.",
+      message: "Repair introduced a new regression at or above the repair severity baseline.",
       evidence: regressions.map((finding) => finding.id),
-      remediation: "Resolve introduced critical or high regressions before completing the repair.",
+      remediation: "Resolve introduced equal-or-higher-severity regressions before completing the repair.",
     }));
   }
 

@@ -27,7 +27,9 @@ Complete a bounded repair only when all of the following are true:
 - No `protectedInvariants` are violated.
 - No targeted critical or high finding remains in the recheck report.
 - The repair introduces no equal-or-higher-severity regression relative to the
-  findings it was approved to correct.
+  least-severe finding it was approved to correct. Severity is ordered `info < low <
+  medium < high < critical`; a new finding is blocking when it is equal to or higher
+  than that request-specific baseline.
 
 If any rule fails, record the resulting verification finding, keep the result out of
 the final report, and either perform the next policy-permitted bounded pass or stop

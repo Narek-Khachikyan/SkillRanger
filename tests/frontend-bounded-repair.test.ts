@@ -71,3 +71,33 @@ test("rejects a remaining critical or high targeted finding", () => {
     changedFiles: ["src/Runs.tsx"], appliedChanges: ["responsive-layout"], violatedInvariants: [],
   }).map(({ code }) => code), ["repair-targeted-finding-unresolved"]);
 });
+
+test("rejects a new medium regression for a medium-severity repair request", () => {
+  const mediumSource = createVerificationReport({
+    domain: "frontend", workflowId: "frontend.design-generation", capabilityStatus: "ready",
+    executionStatus: "implemented", verificationStatus: "failed",
+    findings: [{
+      id: "color-1", code: "design-system-raw-color", source: "frontend.source", severity: "medium", gate: "soft",
+      message: "A raw color bypasses a semantic token.", evidence: ["src/Runs.tsx"],
+      remediation: "Use a semantic token.", autofixable: false,
+    }],
+  });
+  const mediumRequest = createBoundedRepairRequest({
+    id: "repair-medium", policy, report: mediumSource, targetVariantId: "v1", sourceEvidenceId: "e-medium",
+    allowedFiles: ["src/Runs.tsx"], allowedChanges: ["color-role"], protectedInvariants: [],
+  });
+  const recheck = createVerificationReport({
+    domain: "frontend", workflowId: "frontend.design-generation", iteration: 1,
+    capabilityStatus: "ready", executionStatus: "implemented", verificationStatus: "failed",
+    findings: [{
+      id: "genericity-1", code: "generic-gradient-blob", source: "frontend.source", severity: "medium", gate: "soft",
+      message: "A generic decorative treatment was introduced.", evidence: ["src/Runs.tsx"],
+      remediation: "Remove the generic treatment.", autofixable: false,
+    }],
+  });
+
+  assert.deepEqual(validateBoundedRepairCompletion({
+    request: mediumRequest, recheckReport: recheck, recheckEvidenceId: "e-medium-recheck",
+    changedFiles: ["src/Runs.tsx"], appliedChanges: ["color-role"], violatedInvariants: [],
+  }).map(({ code }) => code), ["repair-regression"]);
+});
