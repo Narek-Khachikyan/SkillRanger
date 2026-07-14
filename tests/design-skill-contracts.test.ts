@@ -85,3 +85,15 @@ test("ux-critique carries positive flow-first gate, not only anti-slop checks", 
   assert.match(text, /## Flow First Gate/);
   assert.match(text, /## UX Copy Rules/);
 });
+
+test("constrained skill profiles forbid arbitrary JSX before structured direction", async () => {
+  for (const file of [
+    "registry/skills/frontend.visual-design-polish/workflow.json",
+    "registry/skills/frontend.tailwind-ui-polish/workflow.json",
+  ]) {
+    const workflow = JSON.parse(await readFile(file, "utf8"));
+    assert.ok(workflow.profileInstructions.constrained.some((line: string) => line.includes("structured direction")));
+    assert.ok(workflow.profileInstructions.constrained.some((line: string) => line.includes("verified patterns")));
+    assert.ok(workflow.profileInstructions.constrained.some((line: string) => line.includes("mandatory corrective pass")));
+  }
+});

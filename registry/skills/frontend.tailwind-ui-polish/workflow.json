@@ -3,9 +3,9 @@
   "id": "frontend.tailwind-ui-polish",
   "maxRepairIterations": 3,
   "profileInstructions": {
-    "constrained": ["Preserve the supplied direction.", "Make one bounded class-level pass.", "Use static complete classes and existing tokens.", "Verify all declared viewports and states."],
-    "standard": ["Allow local variants when repetition is demonstrated.", "Preserve ownership boundaries and hard gates."],
-    "advanced": ["Allow bounded primitive extraction with evidence.", "Do not change broad art direction without a separate finding."]
+    "constrained": ["Resolve one top recipe and one structured direction.", "Implement only from existing primitives and verified patterns.", "Run one mandatory corrective pass followed by fresh evidence."],
+    "standard": ["Limit exploration to 2–3 recipe-compatible variants.", "Allow local variants when repetition is demonstrated.", "Preserve ownership boundaries and hard gates."],
+    "advanced": ["Allow new primitives only with product evidence and destructive critique.", "Do not change broad art direction without a separate finding."]
   },
   "steps": ["classify-project", "validate-input", "inspect-tailwind-system", "capture-before", "implement-bounded-fix", "browser-verify", "repair", "final-report"]
 }

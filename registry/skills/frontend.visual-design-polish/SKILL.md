@@ -25,6 +25,13 @@ open-ended direction work in tailwind-ui-polish.
 
 For material work, read `input.schema.json`, `workflow.json`, and `gates.json` before implementation. Create the required `.design` artifacts in workflow order and validate them with SkillRanger when available. Use the constrained profile when model capability is unknown: select one recommended recipe, keep one signature move, use existing primitives, and do not skip browser evidence or the repair pass. Return the shape in `output.schema.json`; `evals.json` identifies the benchmark slice.
 
+## Design Change Modes
+
+- **repair:** Correct verification findings within the approved `BoundedRepairRequest`; repair cannot broaden art direction.
+- **refine:** Improve an approved direction while preserving its recipe, thesis, and protected invariants.
+- **explore:** Compare policy-permitted recipe-compatible directions before selecting one structured direction.
+- **reimagine:** Establish a new direction only when product evidence, destructive critique, and the execution policy permit it.
+
 ## Evidence Ledger
 
 Before choosing a thesis, separate **observed** project evidence, **inferred** context, and **assumptions** requiring confirmation. Never invent domain artifacts, personas, or terminology at low confidence.

@@ -5,11 +5,19 @@
   "requiredCapabilities": ["filesystem-read", "filesystem-write", "screenshots"],
   "maxRepairIterations": 3,
   "steps": [
-    { "id": "collect-reference", "type": "collect", "requires": ["visual-reference"], "produces": [".design/brief.json"], "gate": "reference-evidence-present" },
-    { "id": "extract-direction", "type": "model", "requires": ["visual-reference", ".design/brief.json"], "produces": [".design/direction.json"], "gate": "design-direction-valid" },
-    { "id": "implement", "type": "implement", "requires": [".design/direction.json"], "produces": ["implementation-diff"] },
-    { "id": "compare", "type": "verify", "requires": ["visual-reference", "implementation-diff"], "produces": [".design/verification.json"], "gate": "responsive-verification" },
-    { "id": "repair", "type": "repair", "requires": [".design/verification.json"], "produces": ["repair-diff"] },
-    { "id": "report", "type": "report", "requires": [".design/verification.json"], "produces": [".design/DESIGN.md"] }
+    { "id": "collect-evidence", "type": "collect", "requires": ["visual-reference"], "produces": [".design/brief.json"], "gate": "reference-evidence-present" },
+    { "id": "validate-brief", "type": "validate", "requires": [".design/brief.json"], "produces": ["brief-findings"] },
+    { "id": "resolve-execution-policy", "type": "model", "requires": [".design/brief.json"], "produces": [".design/execution-policy.json"], "gate": "execution-policy-resolved" },
+    { "id": "select-recipe", "type": "model", "requires": ["visual-reference", ".design/brief.json", ".design/execution-policy.json"], "produces": [".design/recipe.json"] },
+    { "id": "define-direction", "type": "model", "requires": ["visual-reference", ".design/brief.json", ".design/execution-policy.json", ".design/recipe.json"], "produces": [".design/direction.json"], "gate": "design-direction-valid" },
+    { "id": "validate-direction", "type": "validate", "requires": [".design/direction.json", ".design/execution-policy.json"], "produces": ["direction-findings"], "gate": "design-direction-valid" },
+    { "id": "validate-implementation-prerequisites", "type": "validate", "requires": [".design/direction.json", ".design/execution-policy.json"], "produces": ["implementation-prerequisites"], "gate": "implementation-prerequisites-valid" },
+    { "id": "implement", "type": "implement", "requires": [".design/direction.json", ".design/execution-policy.json", "implementation-prerequisites"], "produces": ["implementation-diff"] },
+    { "id": "capture-initial-evidence", "type": "verify", "requires": ["visual-reference", "implementation-diff"], "produces": [".design/initial-evidence.json"], "gate": "responsive-verification" },
+    { "id": "critique", "type": "validate", "requires": [".design/direction.json", ".design/initial-evidence.json"], "produces": [".design/verification.json"], "gate": "destructive-critique-complete" },
+    { "id": "bounded-repair", "type": "repair", "requires": [".design/verification.json", ".design/execution-policy.json"], "produces": [".design/bounded-repair.json", "repair-diff"] },
+    { "id": "capture-recheck-evidence", "type": "verify", "requires": ["repair-diff", ".design/bounded-repair.json"], "produces": [".design/recheck-evidence.json"], "gate": "fresh-recheck-evidence" },
+    { "id": "final-verify", "type": "verify", "requires": [".design/verification.json", ".design/recheck-evidence.json"], "produces": [".design/final-verification.json"], "gate": "hard-gates-passed" },
+    { "id": "report", "type": "report", "requires": [".design/final-verification.json"], "produces": [".design/DESIGN.md"] }
   ]
 }

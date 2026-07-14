@@ -24,6 +24,13 @@ Classify the project before prescribing tokens: **shadcn-backed**, **Tailwind wi
 
 For material responsive or state work, read `input.schema.json`, `workflow.json`, and `gates.json` before editing. Follow the selected profile without relaxing hard gates. With unknown model capability, use the constrained profile: preserve the existing direction, make the smallest bounded class change, verify declared states and viewports, and run one repair pass. Return `output.schema.json`; use `evals.json` for isolated evaluation.
 
+## Design Change Modes
+
+- **repair:** Correct verification findings within the approved `BoundedRepairRequest`; repair cannot broaden art direction.
+- **refine:** Improve an approved direction while preserving its recipe, thesis, and protected invariants.
+- **explore:** Compare policy-permitted recipe-compatible directions before selecting one structured direction.
+- **reimagine:** Establish a new direction only when product evidence, destructive critique, and the execution policy permit it.
+
 ## Verification Outcome
 
 - Report `verified` only after the changed view is rendered at the relevant desktop and mobile widths.

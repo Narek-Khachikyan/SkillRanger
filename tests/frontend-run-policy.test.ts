@@ -6,6 +6,7 @@ import { evaluateFrontendRunPolicy } from "../src/domains/frontend/run-policy.ts
 import { getDomainPack } from "../src/domains/registry.ts";
 import "../src/domains/bundled.ts";
 import { createSkillRun, reduceSkillRun } from "../src/runtime/skill-run/reducer.ts";
+import { readFile } from "node:fs/promises";
 
 const recommendation = (skillId: string, role: "primary" | "companion") =>
   ({ skillId, role }) as Recommendation;
@@ -42,6 +43,19 @@ const completeBrief: DesignBrief = {
   },
   evidence: { observed: [], inferred: [], assumed: [], unknown: [] },
 };
+
+test("material workflows resolve policy and bounded repair explicitly", async () => {
+  for (const file of [
+    "domains/frontend/workflows/design-generation.workflow.json",
+    "domains/frontend/workflows/design-to-code.workflow.json",
+  ]) {
+    const workflow = JSON.parse(await readFile(file, "utf8"));
+    const ids = workflow.steps.map((step: { id: string }) => step.id);
+    assert.ok(ids.indexOf("resolve-execution-policy") < ids.indexOf("define-direction"));
+    assert.ok(ids.indexOf("validate-implementation-prerequisites") < ids.indexOf("implement"));
+    assert.ok(ids.indexOf("bounded-repair") < ids.indexOf("report"));
+  }
+});
 
 test("sparse Russian material redesign requires field-linked clarification", () => {
   const decision = evaluateFrontendRunPolicy({
