@@ -21,6 +21,7 @@ repair iterations.
 
 Complete a bounded repair only when all of the following are true:
 
+- The request contains at least one source finding.
 - Recheck uses evidence different from `sourceEvidenceId`.
 - Every changed file is in `allowedFiles` and every applied change category is in
   `allowedChanges`.

@@ -101,3 +101,19 @@ test("rejects a new medium regression for a medium-severity repair request", () 
     changedFiles: ["src/Runs.tsx"], appliedChanges: ["color-role"], violatedInvariants: [],
   }).map(({ code }) => code), ["repair-regression"]);
 });
+
+test("rejects a bounded repair request with no source findings", () => {
+  const recheck = createVerificationReport({
+    domain: "frontend", workflowId: "frontend.design-generation", iteration: 1,
+    capabilityStatus: "ready", executionStatus: "implemented", verificationStatus: "failed",
+    findings: [{
+      id: "focus-1", code: "invisible-focus", source: "frontend.browser", severity: "critical", gate: "hard",
+      message: "Focus disappeared.", evidence: ["button"], remediation: "Restore focus.", autofixable: false,
+    }],
+  });
+
+  assert.ok(validateBoundedRepairCompletion({
+    request: { ...request(), findings: [], passCriteria: [] }, recheckReport: recheck, recheckEvidenceId: "e2",
+    changedFiles: ["src/Runs.tsx"], appliedChanges: ["responsive-layout"], violatedInvariants: [],
+  }).some(({ code }) => code === "repair-source-findings-missing"));
+});

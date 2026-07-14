@@ -89,6 +89,15 @@ export const validateBoundedRepairCompletion = (input: {
     ...input.request.findings.map((finding) => severityRank[finding.severity]),
   );
 
+  if (input.request.findings.length === 0) {
+    findings.push(completionFinding({
+      code: "repair-source-findings-missing",
+      message: "Bounded repair completion requires at least one source finding.",
+      evidence: [input.request.id],
+      remediation: "Create the repair request from one or more source verification findings.",
+    }));
+  }
+
   if (input.recheckEvidenceId === input.request.sourceEvidenceId) {
     findings.push(completionFinding({
       code: "repair-evidence-stale",
