@@ -44,6 +44,34 @@ test("recommender ranks Next.js review first for Next.js fixture", async () => {
   );
 });
 
+test("visual critic routing requires rendered evidence and comparison intent", async () => {
+  const compare = await nextFixtureRecommendations({
+    userIntent: "Compare these two rendered variants using their mobile and desktop screenshots",
+  });
+  assert.equal(compare[0]?.skillId, "frontend.visual-critic");
+
+  const implementationCollision = await nextFixtureRecommendations({
+    userIntent: "Implement two rendered variants of this pricing page in React and Tailwind",
+  });
+  assert.equal(
+    implementationCollision.some(({ skillId }) => skillId === "frontend.visual-critic"),
+    false,
+  );
+
+  const russianCompare = await nextFixtureRecommendations({
+    userIntent: "Сравни два отрисованных варианта по мобильным и десктопным скриншотам",
+  });
+  assert.equal(russianCompare[0]?.skillId, "frontend.visual-critic");
+
+  const russianImplementationCollision = await nextFixtureRecommendations({
+    userIntent: "Реализуй два отрисованных варианта страницы тарифов на React и Tailwind",
+  });
+  assert.equal(
+    russianImplementationCollision.some(({ skillId }) => skillId === "frontend.visual-critic"),
+    false,
+  );
+});
+
 test("recommender omits the final audit without an explicit audit intent", async () => {
   const recommendations = await nextFixtureRecommendations();
 

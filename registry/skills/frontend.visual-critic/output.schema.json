@@ -81,5 +81,15 @@
     "residualUncertainty": { "type": "array", "items": { "type": "string", "minLength": 1 } },
     "containsImplementationCode": { "const": false }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "outcome": { "const": "selected" } }, "required": ["outcome"] },
+      "then": { "required": ["selectedVariantId"] }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "no-acceptable-variant" } }, "required": ["outcome"] },
+      "then": { "not": { "required": ["selectedVariantId"] } }
+    }
+  ],
   "additionalProperties": false
 }

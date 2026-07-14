@@ -15,9 +15,13 @@
     { "id": "implement", "type": "implement", "requires": [".design/direction.json", ".design/execution-policy.json", "implementation-prerequisites"], "produces": ["implementation-diff"] },
     { "id": "capture-initial-evidence", "type": "verify", "requires": ["implementation-diff"], "produces": [".design/initial-evidence.json"], "gate": "responsive-verification" },
     { "id": "independent-visual-critique", "type": "validate", "requires": [".design/direction.json", ".design/initial-evidence.json"], "produces": [".design/visual-critic-report.json"], "gate": "independent-visual-critique-complete" },
-    { "id": "bounded-repair", "type": "repair", "requires": [".design/visual-critic-report.json", ".design/execution-policy.json"], "produces": [".design/bounded-repair.json", "repair-diff"] },
-    { "id": "capture-recheck-evidence", "type": "verify", "requires": ["repair-diff", ".design/bounded-repair.json"], "produces": [".design/recheck-evidence.json"], "gate": "fresh-recheck-evidence" },
-    { "id": "final-verify", "type": "verify", "requires": [".design/visual-critic-report.json", ".design/recheck-evidence.json"], "produces": [".design/final-verification.json"], "gate": "hard-gates-passed" },
+    { "id": "require-selected-variant-or-block-no-acceptable-variant", "type": "validate", "requires": [".design/visual-critic-report.json"], "produces": [".design/selected-variant.json"], "gate": "critic-outcome-selected" },
+    { "id": "repair-requested", "type": "validate", "requires": [".design/selected-variant.json", ".design/visual-critic-report.json", ".design/execution-policy.json"], "produces": [".design/repair-request.json"], "gate": "constrained-or-repair-findings" },
+    { "id": "bounded-repair", "type": "repair", "requires": [".design/repair-request.json"], "produces": [".design/bounded-repair.json", ".design/accepted-selection.json", "repair-diff"] },
+    { "id": "no-repair-needed", "type": "validate", "requires": [".design/selected-variant.json", ".design/visual-critic-report.json", ".design/execution-policy.json"], "produces": [".design/accepted-selection.json"], "gate": "standard-or-advanced-zero-repair-findings" },
+    { "id": "capture-recheck-evidence", "type": "verify", "requires": [".design/accepted-selection.json"], "produces": [".design/recheck-evidence.json"], "gate": "fresh-recheck-evidence" },
+    { "id": "final-audit", "type": "verify", "requires": [".design/visual-critic-report.json", ".design/recheck-evidence.json"], "produces": [".design/final-audit.json"], "gate": "hard-gates-passed" },
+    { "id": "final-verify", "type": "verify", "requires": [".design/final-audit.json"], "produces": [".design/final-verification.json"], "gate": "hard-gates-passed" },
     { "id": "report", "type": "report", "requires": [".design/final-verification.json"], "produces": [".design/DESIGN.md"] }
   ]
 }

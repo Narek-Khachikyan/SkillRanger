@@ -3,9 +3,9 @@
   "id": "frontend.design-to-code",
   "maxRepairIterations": 3,
   "profileInstructions": {
-    "constrained": ["Stop when reference evidence is absent.", "Extract one bounded direction.", "Reuse local components and tokens.", "State every approximation.", "Compare reference and implementation in browser evidence."],
-    "standard": ["Allow one local component variant when required by the reference.", "Keep fidelity and hard gates unchanged."],
-    "advanced": ["Allow a new primitive only when the reference and product evidence require it.", "Do not copy protected brand expression."]
+    "constrained": ["Stop when reference evidence is absent.", "Extract one bounded direction.", "Reuse local components and tokens.", "State every approximation.", "Compare reference and implementation in browser evidence.", "A no-acceptable-variant outcome must block without repair; a selected outcome always enters repair-requested."],
+    "standard": ["Allow one local component variant when required by the reference.", "Keep fidelity and hard gates unchanged.", "A no-acceptable-variant outcome must block; a selected outcome with repair findings enters repair-requested, while zero repair findings enters no-repair-needed."],
+    "advanced": ["Allow a new primitive only when the reference and product evidence require it.", "Do not copy protected brand expression.", "A no-acceptable-variant outcome must block; a selected outcome with repair findings enters repair-requested, while zero repair findings enters no-repair-needed."]
   },
-  "steps": ["validate-reference", "extract-brief", "map-local-components", "implement", "capture-initial-evidence", "compare-reference", "independent-visual-critique", "bounded-repair", "capture-recheck-evidence", "browser-verify", "final-report"]
+  "steps": ["validate-reference", "extract-brief", "map-local-components", "implement", "capture-initial-evidence", "compare-reference", "independent-visual-critique", "require-selected-variant-or-block-no-acceptable-variant", "repair-requested", "bounded-repair", "no-repair-needed", "capture-recheck-evidence", "browser-verify", "final-audit", "final-report"]
 }

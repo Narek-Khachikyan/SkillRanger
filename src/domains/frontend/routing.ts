@@ -150,6 +150,15 @@ const designIntentTokens = new Set([
 const intentGatedSkillIds = new Set([
   "frontend.motion-audit", "frontend.motion-design", "frontend.visual-critic",
 ]);
+const visualCriticActionTokens = new Set([
+  "compare", "critique", "evaluate", "rank", "review", "select", "reject",
+  "сравни", "сравните", "оцени", "оцените", "выбери", "выберите", "проверь", "проверьте",
+]);
+const visualCriticEvidencePhrases = [
+  "rendered variant", "rendered variants", "variant screenshot", "variant screenshots",
+  "mobile and desktop screenshots", "отрисованного варианта", "отрисованных варианта",
+  "скриншот варианта", "скриншоты вариантов", "мобильным и десктопным скриншотам",
+];
 const requiredStackTags = new Set(["nextjs", "vite", "react", "tailwind", "playwright"]);
 
 const canonicalIntentBySkillId: Partial<Record<string, CanonicalFrontendIntent>> = {
@@ -187,6 +196,13 @@ const isMotionAuditIntent = (intent?: string) => {
   if (!intent) return false;
   const tokens = tokenize(intent);
   return hasAnyToken(tokens, motionAuditVerbTokens) && hasAnyToken(tokens, motionSubjectTokens);
+};
+
+const isVisualCriticIntent = (intent?: string) => {
+  if (!intent) return false;
+  const normalized = intent.toLowerCase();
+  return hasAnyToken(tokenize(intent), visualCriticActionTokens) &&
+    visualCriticEvidencePhrases.some((phrase) => normalized.includes(phrase));
 };
 
 const legacySpecializedIntentScore = (skillId: string, intent: string) => {
@@ -323,6 +339,7 @@ const routing: DomainRoutingPolicy = {
       return false;
     }
     if (skill.manifest.id === "frontend.audit" && !isAuditIntent(intent)) return false;
+    if (skill.manifest.id === "frontend.visual-critic" && !isVisualCriticIntent(intent)) return false;
     if (
       intentGatedSkillIds.has(skill.manifest.id) &&
       specializedIntentScore(skill, intent) === 0 &&

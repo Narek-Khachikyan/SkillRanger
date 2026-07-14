@@ -102,6 +102,91 @@ test("material design workflows call critic after initial evidence", async () =>
   }
 });
 
+test("material design workflows encode all post-critique policy branches", async () => {
+  const domainFile = "domains/frontend/workflows/design-generation.workflow.json";
+  const domainWorkflow = JSON.parse(await readFile(domainFile, "utf8"));
+  const byId = new Map(
+    domainWorkflow.steps.map((step: { id: string }) => [step.id, step]),
+  );
+  const selectedGate = byId.get("require-selected-variant-or-block-no-acceptable-variant");
+  const repairRequested = byId.get("repair-requested");
+  const boundedRepair = byId.get("bounded-repair");
+  const noRepair = byId.get("no-repair-needed");
+  const recheck = byId.get("capture-recheck-evidence");
+  const finalAudit = byId.get("final-audit");
+
+  assert.equal(selectedGate?.gate, "critic-outcome-selected");
+  assert.equal(repairRequested?.gate, "constrained-or-repair-findings");
+  assert.ok(boundedRepair?.requires.includes(".design/repair-request.json"));
+  assert.equal(noRepair?.gate, "standard-or-advanced-zero-repair-findings");
+  assert.ok(boundedRepair?.produces.includes(".design/accepted-selection.json"));
+  assert.ok(noRepair?.produces.includes(".design/accepted-selection.json"));
+  assert.ok(recheck?.requires.includes(".design/accepted-selection.json"));
+  assert.ok(finalAudit?.requires.includes(".design/recheck-evidence.json"));
+
+  for (const file of [
+    "registry/skills/frontend.visual-design-polish/workflow.json",
+    "registry/skills/frontend.design-to-code/workflow.json",
+  ]) {
+    const workflow = JSON.parse(await readFile(file, "utf8"));
+    const steps: string[] = workflow.steps;
+    for (const id of [
+      "require-selected-variant-or-block-no-acceptable-variant",
+      "repair-requested",
+      "bounded-repair",
+      "no-repair-needed",
+      "capture-recheck-evidence",
+      "final-audit",
+    ]) {
+      assert.ok(steps.includes(id), `${file}: missing ${id}`);
+    }
+    assert.ok(workflow.profileInstructions.constrained.some((line: string) =>
+      /no-acceptable-variant.*block/i.test(line) && /repair-requested/i.test(line)
+    ));
+    for (const profile of ["standard", "advanced"]) {
+      assert.ok(workflow.profileInstructions[profile].some((line: string) =>
+        /repair findings.*repair-requested/i.test(line) && /zero repair findings.*no-repair-needed/i.test(line)
+      ));
+    }
+  }
+});
+
+test("visual critic output schema binds selection id to outcome", async () => {
+  const schema = JSON.parse(
+    await readFile("registry/skills/frontend.visual-critic/output.schema.json", "utf8"),
+  );
+  assert.deepEqual(schema.allOf, [
+    {
+      if: { properties: { outcome: { const: "selected" } }, required: ["outcome"] },
+      then: { required: ["selectedVariantId"] },
+    },
+    {
+      if: { properties: { outcome: { const: "no-acceptable-variant" } }, required: ["outcome"] },
+      then: { not: { required: ["selectedVariantId"] } },
+    },
+  ]);
+
+  const acceptsSelectionCondition = (instance: Record<string, unknown>) =>
+    schema.allOf.every((branch: {
+      if: { properties: { outcome: { const: string } } };
+      then: { required?: string[]; not?: { required: string[] } };
+    }) => {
+      if (instance.outcome !== branch.if.properties.outcome.const) return true;
+      if (branch.then.required) {
+        return branch.then.required.every((key) => Object.hasOwn(instance, key));
+      }
+      return branch.then.not?.required.every((key) => !Object.hasOwn(instance, key)) ?? true;
+    });
+
+  assert.equal(acceptsSelectionCondition({ outcome: "selected", selectedVariantId: "v1" }), true);
+  assert.equal(acceptsSelectionCondition({ outcome: "selected" }), false);
+  assert.equal(acceptsSelectionCondition({ outcome: "no-acceptable-variant" }), true);
+  assert.equal(
+    acceptsSelectionCondition({ outcome: "no-acceptable-variant", selectedVariantId: "v1" }),
+    false,
+  );
+});
+
 test("design skills carry the anti-slop decision contracts", async () => {
   assert.match(await readSkill("visual-design-polish"), /## Scope Triage/);
   assert.match(await readSkill("visual-design-polish"), /## Evidence Ledger/);
