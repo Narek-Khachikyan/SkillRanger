@@ -96,9 +96,10 @@ const hasFlag = (tokens: string[]) => tokens.some((token) => /^--?(?:[A-Za-z0-9]
 const hasPath = (tokens: string[]) => tokens.some((token) => pathArgument.test(token));
 const hasScript = (tokens: string[]) => tokens.some((token) => scriptExtension.test(token));
 
-const isStandaloneCommand = (executable: string, args: string[]): boolean => {
+const isStandaloneCommand = (executable: string, args: string[], rawExecutable: string): boolean => {
   if (!standaloneExecutables.has(executable)) return false;
-  if (args.length === 0 || hasFlag(args)) return true;
+  if (args.length === 0) return rawExecutable === rawExecutable.toLowerCase();
+  if (hasFlag(args)) return true;
   if (executable === "date") return args.some((token) => token.startsWith("+"));
   if (executable === "hostname") return args.length === 1 && hostnameQuery.test(args[0]!);
   if (executable === "id" || executable === "groups") return args.length === 1 && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(args[0]!);
@@ -155,12 +156,13 @@ export const containsProhibitedCommandLine = (value: string): boolean => {
     const { tokens, prompted, wrapped } = unwrapCommandPosition(trimmed);
     const executableToken = tokens[0];
     if (!executableToken) return prompted || wrapped;
+    const rawExecutable = path.posix.basename(executableToken.replace(/\\/g, "/"));
     const executable = executableName(executableToken);
     const args = tokens.slice(1);
 
     if (prompted || wrapped || explicitPath.test(executableToken) || scriptExtension.test(executableToken)) return true;
-    if (unambiguousExecutables.has(executable)) return true;
-    if (isStandaloneCommand(executable, args) || isHomonymCommand(executable, args)) return true;
+    if (unambiguousExecutables.has(executable) && rawExecutable === rawExecutable.toLowerCase()) return true;
+    if (isStandaloneCommand(executable, args, rawExecutable) || isHomonymCommand(executable, args)) return true;
     if (isAmbiguousCommand(executable, args)) return true;
 
     // Operator characters are intentionally not evidence: only an independently command-shaped line reaches true.

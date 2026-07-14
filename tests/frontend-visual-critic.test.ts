@@ -357,6 +357,7 @@ test("classifies the exact ambiguous command regression corpus", () => {
     "/usr/bin/env X=1 curl https://example.test", "$ node repair.js",
     "whoami", "date", "uname -a", "id", "hostname",
     "source .env", "install input output", "host example.com",
+    "touch file", "top", "ping host", "$ Touch file",
   ];
   for (const sample of prohibited) {
     const report = makeCriticReport({ selectedVariantId: "v1" });
@@ -378,6 +379,10 @@ test("classifies the exact ambiguous command regression corpus", () => {
     "Date labels need stronger contrast.",
     "Hostname copy belongs in the technical details panel.",
     "Id values should not dominate the hierarchy.",
+    "Touch targets are too small.",
+    "Top navigation lacks hierarchy.",
+    "Ping feedback is visually weak.",
+    "Echo the brand shape more subtly.",
   ];
   for (const sample of allowed) {
     const report = makeCriticReport({ selectedVariantId: "v1" });
