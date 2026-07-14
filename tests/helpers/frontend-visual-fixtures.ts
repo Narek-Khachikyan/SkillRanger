@@ -1,4 +1,5 @@
 import {
+  digestDesignExecutionPolicy,
   resolveDesignExecutionPolicy,
   type DesignBrief,
   type DesignDirection,
@@ -94,12 +95,25 @@ export const makeVerificationInput = (overrides: {
     policy,
     visualRun: {
       schemaVersion: "1.0", id: "run-1", policyPath: ".design/execution-policy.json",
+      policyDigest: digestDesignExecutionPolicy(policy),
       state: "final-audited", variantIds: ["v1"], selectedVariantId: "v1",
+      critiqueRepairFindingCount: 0,
       artifacts: {
+        implementations: [{ variantId: "v1", artifactId: "git-diff:abc" }],
         initialEvidenceId: overrides.initialEvidence.id, critiqueId: "c1",
         recheckEvidenceId: overrides.recheckEvidence.id,
+        finalAuditReportPath: ".design/final-audit.json",
       },
-      history: [{ state: "final-audited", at: "2026-07-14T00:02:00Z" }],
+      history: [
+        { state: "policy-resolved", at: "2026-07-14T00:00:00Z" },
+        { state: "directions-valid", at: "2026-07-14T00:00:01Z", eventId: "1" },
+        { state: "implemented", at: "2026-07-14T00:00:02Z", eventId: "2" },
+        { state: "initial-evidence-captured", at: "2026-07-14T00:00:03Z", eventId: "3" },
+        { state: "critiqued", at: "2026-07-14T00:00:04Z", eventId: "4" },
+        { state: "no-repair-needed", at: "2026-07-14T00:00:05Z", eventId: "5" },
+        { state: "recheck-evidence-captured", at: "2026-07-14T00:01:00Z", eventId: "6" },
+        { state: "final-audited", at: "2026-07-14T00:02:00Z", eventId: "7" },
+      ],
     } as VisualRun,
     variant: {
       schemaVersion: "1.0", id: "v1", recipeId: "developer-tool",

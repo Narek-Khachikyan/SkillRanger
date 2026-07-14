@@ -4,7 +4,8 @@ import type { VerificationFinding } from "../../../runtime/types.ts";
 import type { BoundedRepairRequest, DesignExecutionPolicy } from "./policy-types.ts";
 import type { UiCheckResult, UiEvidenceBundle } from "./evidence-types.ts";
 import type { DesignBrief, DesignDirection, DesignValidationResult } from "./types.ts";
-import type { DesignVariantMetadata, VisualCriticReport, VisualRun } from "./visual-loop-types.ts";
+import type { DesignVariantMetadata, VisualCriticReport, VisualRun, VisualRunState } from "./visual-loop-types.ts";
+import { digestDesignExecutionPolicy } from "./visual-loop.ts";
 import { validateDesignBrief, validateDesignDirection } from "./validation.ts";
 
 const artifactIsNonEmptyFile = (filePath: string) => {
@@ -48,6 +49,81 @@ const checkFinding = (check: UiCheckResult): VerificationFinding => ({
   autofixable: false,
 });
 
+const validateFinalLifecycle = (input: {
+  policy: DesignExecutionPolicy;
+  visualRun: VisualRun;
+  variant: DesignVariantMetadata;
+  initialEvidence: UiEvidenceBundle;
+  recheckEvidence: UiEvidenceBundle;
+  criticReport: VisualCriticReport;
+  boundedRepairRequest?: BoundedRepairRequest;
+}) => {
+  const issues: string[] = [];
+  const states = input.visualRun.history.map(({ state }) => state);
+  const repairRequired = input.policy.profile === "constrained" || input.criticReport.repairFindings.length > 0;
+  const repairRecorded = states.includes("repair-requested") || states.includes("repaired");
+  const usesRepair = repairRequired || repairRecorded;
+  const expectedStates: VisualRunState[] = [
+    "policy-resolved", "directions-valid", "implemented", "initial-evidence-captured", "critiqued",
+    ...(usesRepair ? ["repair-requested", "repaired"] as VisualRunState[] : ["no-repair-needed"] as VisualRunState[]),
+    "recheck-evidence-captured", "final-audited",
+  ];
+  if (input.visualRun.policyDigest !== digestDesignExecutionPolicy(input.policy)) issues.push("policy digest mismatch");
+  if (states.length !== expectedStates.length || states.some((state, index) => state !== expectedStates[index])) {
+    issues.push(`history must be ${expectedStates.join(" -> ")}`);
+  }
+  if (input.visualRun.history.slice(1).some(({ eventId }) => !eventId)) issues.push("transition history event id missing");
+  if (input.visualRun.history.some((entry, index) => index > 0
+    && Date.parse(entry.at) < Date.parse(input.visualRun.history[index - 1].at))) {
+    issues.push("history timestamps are not monotonic");
+  }
+  if (input.visualRun.variantIds.length !== input.policy.variantLimit
+    || !input.visualRun.variantIds.includes(input.variant.id)) issues.push("variant set does not match policy");
+  const implementationIds = input.visualRun.artifacts.implementations?.map(({ variantId }) => variantId) ?? [];
+  if (implementationIds.length !== input.visualRun.variantIds.length
+    || !implementationIds.every((id) => input.visualRun.variantIds.includes(id))) {
+    issues.push("implementation artifacts do not cover variants");
+  }
+  if (input.visualRun.artifacts.initialEvidenceId !== input.initialEvidence.id
+    || input.visualRun.artifacts.critiqueId !== input.criticReport.id
+    || input.visualRun.artifacts.recheckEvidenceId !== input.recheckEvidence.id
+    || !input.visualRun.artifacts.finalAuditReportPath) issues.push("lifecycle artifact identity mismatch");
+  if (input.visualRun.critiqueRepairFindingCount !== input.criticReport.repairFindings.length) {
+    issues.push("critic repair finding count mismatch");
+  }
+  if (usesRepair) {
+    if (!input.boundedRepairRequest
+      || input.visualRun.artifacts.repairId !== input.boundedRepairRequest.id
+      || !input.visualRun.artifacts.repairImplementationArtifact) issues.push("completed bounded repair path missing");
+  } else if (input.boundedRepairRequest || input.visualRun.artifacts.repairId
+    || input.visualRun.artifacts.repairImplementationArtifact) issues.push("unexpected repair artifacts");
+  return issues;
+};
+
+const evidenceMatrixIssues = (
+  label: "initial" | "recheck",
+  bundle: UiEvidenceBundle,
+  policy: DesignExecutionPolicy,
+) => {
+  const validCaptures = bundle.captures.filter(({ viewport, state, screenshotPath, observation }) =>
+    observation.viewport.width === viewport.width
+    && observation.viewport.height === viewport.height
+    && observation.state === state
+    && observation.route === bundle.route
+    && observation.screenshotPath === screenshotPath);
+  const matrix = new Set(validCaptures.map(({ viewport, state }) => `${viewport.width}::${state}`));
+  const issues = policy.requiredViewports.flatMap((viewport) =>
+    policy.requiredStates
+      .filter((state) => !matrix.has(`${viewport}::${state}`))
+      .map((state) => `${label}:${viewport}px:${state}`));
+  const metadataMatches = bundle.requiredViewports.length === policy.requiredViewports.length
+    && bundle.requiredViewports.every((viewport, index) => viewport === policy.requiredViewports[index])
+    && policy.requiredStates.every((state) => bundle.requiredStates.includes(state));
+  if (!metadataMatches) issues.push(`${label}:required matrix metadata mismatch`);
+  if (validCaptures.length !== bundle.captures.length) issues.push(`${label}:capture observation identity mismatch`);
+  return issues;
+};
+
 export const verifyVisualResult = (input: {
   workflowId: string;
   policy: DesignExecutionPolicy;
@@ -74,6 +150,16 @@ export const verifyVisualResult = (input: {
       "The visual run has not completed final audit.",
       [input.visualRun.state],
       "Complete critique, any bounded repair, fresh recheck evidence, and final audit before verification.",
+    ));
+  }
+  const lifecycleIssues = validateFinalLifecycle(input);
+  if (lifecycleIssues.length > 0) {
+    findings.push(hardFinding(
+      "visual-run-lifecycle-invalid",
+      "The visual run history does not prove the complete ordered critique and correction lifecycle.",
+      lifecycleIssues,
+      "Rebuild the run through validated state-machine transitions and persist every required artifact.",
+      selectedVariantId,
     ));
   }
   if (input.visualRun.selectedVariantId !== selectedVariantId) {
@@ -136,34 +222,31 @@ export const verifyVisualResult = (input: {
     ));
   }
 
-  const matrix = new Set(input.recheckEvidence.captures.map(({ viewport, state }) => `${viewport.width}::${state}`));
-  const missingMatrix = input.policy.requiredViewports.flatMap((viewport) =>
-    input.policy.requiredStates
-      .filter((state) => !matrix.has(`${viewport}::${state}`))
-      .map((state) => `${viewport}px:${state}`));
-  const requiredMetadataMatches = input.recheckEvidence.requiredViewports.length === input.policy.requiredViewports.length
-    && input.recheckEvidence.requiredViewports.every((viewport, index) => viewport === input.policy.requiredViewports[index])
-    && input.policy.requiredStates.every((state) => input.recheckEvidence.requiredStates.includes(state));
-  if (missingMatrix.length > 0 || !requiredMetadataMatches) {
+  const missingMatrix = [
+    ...evidenceMatrixIssues("initial", input.initialEvidence, input.policy),
+    ...evidenceMatrixIssues("recheck", input.recheckEvidence, input.policy),
+  ];
+  if (missingMatrix.length > 0) {
     findings.push(hardFinding(
       "visual-evidence-matrix-incomplete",
-      "Fresh evidence does not cover the complete required viewport and state matrix.",
-      missingMatrix.length > 0 ? missingMatrix : ["required matrix metadata mismatch"],
-      "Recapture every required state at 390px, 768px, and 1440px.",
+      "Initial or fresh evidence does not cover the complete required viewport and state matrix.",
+      missingMatrix,
+      "Capture every required state at 390px, 768px, and 1440px before critique and after correction.",
       input.recheckEvidence.route,
     ));
   }
 
   const artifactExists = input.artifactExists ?? artifactIsNonEmptyFile;
-  const missingScreenshots = input.recheckEvidence.captures
-    .filter(({ screenshotPath }) => !artifactExists(screenshotPath))
-    .map(({ screenshotPath }) => screenshotPath);
+  const missingScreenshots = [input.initialEvidence, input.recheckEvidence]
+    .flatMap((bundle) => bundle.captures
+      .filter(({ screenshotPath }) => !artifactExists(screenshotPath))
+      .map(({ screenshotPath }) => screenshotPath));
   if (missingScreenshots.length > 0) {
     findings.push(hardFinding(
       "visual-screenshot-missing",
-      "A recheck screenshot is missing or empty.",
-      missingScreenshots,
-      "Create every non-empty screenshot from the fresh recheck capture.",
+      "An initial or recheck screenshot is missing or empty.",
+      [...new Set(missingScreenshots)],
+      "Create every non-empty screenshot for both evidence captures.",
       input.recheckEvidence.route,
     ));
   }

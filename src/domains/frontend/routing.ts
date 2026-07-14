@@ -382,6 +382,7 @@ export const frontendDomainManifest: DomainPackManifest = {
       "schemas/verification-report.schema.json", "schemas/design-rule.schema.json",
       "schemas/recipe-example.schema.json", "schemas/design-variant.schema.json",
       "schemas/visual-critic-report.schema.json", "schemas/visual-run.schema.json",
+      "schemas/ui-evidence-bundle.schema.json",
     ],
     recipes: frontendRecipeFiles.map((file) => `recipes/${file}`),
     rules: ["rules/index.json"],

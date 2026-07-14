@@ -25,7 +25,8 @@
       "schemas/recipe-example.schema.json",
       "schemas/design-variant.schema.json",
       "schemas/visual-critic-report.schema.json",
-      "schemas/visual-run.schema.json"
+      "schemas/visual-run.schema.json",
+      "schemas/ui-evidence-bundle.schema.json"
     ],
     "rules": ["rules/index.json"],
     "examples": [

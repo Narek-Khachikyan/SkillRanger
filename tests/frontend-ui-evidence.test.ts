@@ -81,3 +81,9 @@ test("captures observations and extended mechanical evidence", async () => {
   assert.deepEqual(JSON.parse(await readFile(path.join(root, "e1", "bundle.json"), "utf8")), bundle);
   await assert.rejects(() => executeUiEvidenceCapture({ plan, commandTemplate: `node ${adapter}`, projectRoot: root }), /already exists/);
 });
+
+
+test("publishes the UI evidence bundle schema", async () => {
+  const manifest = JSON.parse(await readFile("domains/frontend/domain.manifest.json", "utf8"));
+  assert.ok(manifest.artifacts.schemas.includes("schemas/ui-evidence-bundle.schema.json"));
+});
