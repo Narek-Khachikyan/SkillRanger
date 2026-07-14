@@ -28,10 +28,13 @@ export type VisualRun = {
   selectedVariantId?: string;
   critiqueRepairFindingCount?: number;
   artifacts: {
+    implementations?: Array<{ variantId: string; artifactId: string }>;
     initialEvidenceId?: string;
     critiqueId?: string;
     repairId?: string;
+    repairImplementationArtifact?: string;
     recheckEvidenceId?: string;
+    finalAuditReportPath?: string;
     verificationReportPath?: string;
   };
   history: Array<{ state: VisualRunState; at: string; eventId?: string }>;
@@ -45,7 +48,9 @@ type VisualRunEventBase<Type extends string> = {
 
 export type VisualRunEvent =
   | (VisualRunEventBase<"directions-validated"> & { variantIds: string[] })
-  | (VisualRunEventBase<"implementation-recorded"> & { variantId: string; implementationArtifact: string })
+  | (VisualRunEventBase<"implementation-recorded"> & {
+    implementations: Array<{ variantId: string; artifactId: string }>;
+  })
   | (VisualRunEventBase<"initial-evidence-recorded"> & { evidenceId: string })
   | (VisualRunEventBase<"critique-recorded"> & {
     critiqueId: string;

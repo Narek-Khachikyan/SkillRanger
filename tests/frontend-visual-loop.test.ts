@@ -24,6 +24,11 @@ const standard = resolveDesignExecutionPolicy({
   profile: "standard",
   rankedRecipeIds: ["saas-workspace", "developer-tool"],
 });
+const advanced = resolveDesignExecutionPolicy({
+  mode: "reimagine",
+  profile: "advanced",
+  rankedRecipeIds: ["saas-workspace", "developer-tool", "operational-command-center"],
+});
 
 const event = (sequence: number) => ({
   id: String(sequence),
@@ -33,22 +38,25 @@ const event = (sequence: number) => ({
 const runThroughCritique = (
   policy = constrained,
   repairFindingCount = 1,
+  selectedVariantId?: string,
 ) => {
-  const variantIds = policy.variantLimit === 1 ? ["v1"] : ["v1", "v2"];
+  const variantIds = ["v1", "v2", "v3"].slice(0, policy.variantLimit);
   let run = createVisualRun({ id: "run-path", policyPath: ".design/execution-policy.json" });
   run = applyVisualRunEvent(run, { type: "directions-validated", ...event(1), variantIds }, policy);
   run = applyVisualRunEvent(run, {
     type: "implementation-recorded",
     ...event(2),
-    variantId: "v1",
-    implementationArtifact: "git-diff:initial",
+    implementations: variantIds.map((variantId) => ({
+      variantId,
+      artifactId: `git-diff:initial:${variantId}`,
+    })),
   }, policy);
   run = applyVisualRunEvent(run, { type: "initial-evidence-recorded", ...event(3), evidenceId: "e1" }, policy);
   return applyVisualRunEvent(run, {
     type: "critique-recorded",
     ...event(4),
     critiqueId: "c1",
-    selectedVariantId: "v1",
+    selectedVariantId,
     repairFindingCount,
   }, policy);
 };
@@ -103,6 +111,11 @@ test("visual contracts are strict and bound critic scores", async () => {
   assert.equal(runSchema.properties.variantIds.uniqueItems, true);
   assert.equal(runSchema.properties.critiqueRepairFindingCount.type, "integer");
   assert.equal(runSchema.properties.critiqueRepairFindingCount.minimum, 0);
+  const artifacts = runSchema.properties.artifacts.properties;
+  assert.deepEqual(artifacts.implementations.items.required, ["variantId", "artifactId"]);
+  assert.equal(artifacts.implementations.items.additionalProperties, false);
+  assert.equal(artifacts.repairImplementationArtifact.minLength, 1);
+  assert.equal(artifacts.finalAuditReportPath.minLength, 1);
 });
 
 test("verification events retain their report artifact path", () => {
@@ -117,7 +130,7 @@ test("verification events retain their report artifact path", () => {
 });
 
 test("requires the complete constrained visual correction path and retains artifacts", () => {
-  let run = runThroughCritique(constrained, 0);
+  let run = runThroughCritique(constrained, 0, "v1");
   const beforeInvalid = structuredClone(run);
   assert.throws(
     () => applyVisualRunEvent(run, { type: "no-repair-needed", ...event(5) }, constrained),
@@ -142,7 +155,8 @@ test("requires the complete constrained visual correction path and retains artif
     ...event(10),
     reportPath: ".design/final-audit.json",
   }, constrained);
-  assert.equal(run.artifacts.verificationReportPath, ".design/final-audit.json");
+  assert.equal(run.artifacts.finalAuditReportPath, ".design/final-audit.json");
+  assert.equal(run.artifacts.verificationReportPath, undefined);
   run = applyVisualRunEvent(run, {
     type: "verification-recorded",
     ...event(11),
@@ -154,22 +168,25 @@ test("requires the complete constrained visual correction path and retains artif
   assert.equal(run.selectedVariantId, "v1");
   assert.equal(run.critiqueRepairFindingCount, 0);
   assert.deepEqual(run.artifacts, {
+    implementations: [{ variantId: "v1", artifactId: "git-diff:initial:v1" }],
     initialEvidenceId: "e1",
     critiqueId: "c1",
     repairId: "r1",
+    repairImplementationArtifact: "git-diff:repair",
     recheckEvidenceId: "e2",
+    finalAuditReportPath: ".design/final-audit.json",
     verificationReportPath: ".design/verification-report.json",
   });
   assert.equal(run.history.length, 10);
 });
 
 test("allows the standard no-repair branch only for a critique with zero findings", () => {
-  let run = runThroughCritique(standard, 0);
+  let run = runThroughCritique(standard, 0, "v1");
   run = applyVisualRunEvent(run, { type: "no-repair-needed", ...event(5) }, standard);
   run = applyVisualRunEvent(run, { type: "recheck-evidence-recorded", ...event(6), evidenceId: "e2" }, standard);
   assert.equal(run.state, "recheck-evidence-captured");
 
-  const findingsRun = runThroughCritique(standard, 2);
+  const findingsRun = runThroughCritique(standard, 2, "v1");
   assert.throws(
     () => applyVisualRunEvent(findingsRun, { type: "no-repair-needed", ...event(5) }, standard),
     /zero repair findings/,
@@ -198,15 +215,19 @@ test("rejects implementations and critique selections outside the validated vari
   assert.throws(() => applyVisualRunEvent(run, {
     type: "implementation-recorded",
     ...event(2),
-    variantId: "v3",
-    implementationArtifact: "git-diff:initial",
+    implementations: [
+      { variantId: "v1", artifactId: "git-diff:v1" },
+      { variantId: "v3", artifactId: "git-diff:v3" },
+    ],
   }, standard), /validated variant/);
 
   run = applyVisualRunEvent(run, {
     type: "implementation-recorded",
     ...event(2),
-    variantId: "v1",
-    implementationArtifact: "git-diff:initial",
+    implementations: [
+      { variantId: "v1", artifactId: "git-diff:v1" },
+      { variantId: "v2", artifactId: "git-diff:v2" },
+    ],
   }, standard);
   run = applyVisualRunEvent(run, { type: "initial-evidence-recorded", ...event(3), evidenceId: "e1" }, standard);
   assert.throws(() => applyVisualRunEvent(run, {
@@ -219,7 +240,7 @@ test("rejects implementations and critique selections outside the validated vari
 });
 
 test("persists and validates the critique finding count for replay", () => {
-  const run = runThroughCritique(standard, 0);
+  const run = runThroughCritique(standard, 0, "v1");
   const replayed = JSON.parse(JSON.stringify(run)) as VisualRun;
   const next = applyVisualRunEvent(replayed, { type: "no-repair-needed", ...event(5) }, standard);
   assert.equal(next.state, "no-repair-needed");
@@ -229,7 +250,12 @@ test("persists and validates the critique finding count for replay", () => {
     type: "directions-validated", ...event(1), variantIds: ["v1", "v2"],
   }, standard);
   beforeCritique = applyVisualRunEvent(beforeCritique, {
-    type: "implementation-recorded", ...event(2), variantId: "v1", implementationArtifact: "diff",
+    type: "implementation-recorded",
+    ...event(2),
+    implementations: [
+      { variantId: "v1", artifactId: "diff:v1" },
+      { variantId: "v2", artifactId: "diff:v2" },
+    ],
   }, standard);
   beforeCritique = applyVisualRunEvent(beforeCritique, {
     type: "initial-evidence-recorded", ...event(3), evidenceId: "e1",
@@ -256,7 +282,7 @@ test("rejects skipped stages and leaves the original run unchanged", () => {
 });
 
 test("requires a verified outcome and makes terminal states terminal", () => {
-  let run = runThroughCritique(standard, 0);
+  let run = runThroughCritique(standard, 0, "v1");
   run = applyVisualRunEvent(run, { type: "no-repair-needed", ...event(5) }, standard);
   run = applyVisualRunEvent(run, { type: "recheck-evidence-recorded", ...event(6), evidenceId: "e2" }, standard);
   run = applyVisualRunEvent(run, { type: "final-audit-recorded", ...event(7), reportPath: "audit.json" }, standard);
@@ -283,4 +309,122 @@ test("publishes the exact allowed event table without exposing mutable internals
   const events = allowedVisualRunEvents("policy-resolved");
   events.pop();
   assert.deepEqual(allowedVisualRunEvents("policy-resolved"), ["directions-validated", "blocked", "failed"]);
+});
+
+test("requires atomic exact implementation coverage for standard and advanced policies", () => {
+  let standardRun = createVisualRun({ id: "run-standard-coverage", policyPath: "policy.json" });
+  standardRun = applyVisualRunEvent(standardRun, {
+    type: "directions-validated", ...event(1), variantIds: ["v1", "v2"],
+  }, standard);
+
+  const invalidImplementations = [
+    {
+      implementations: [{ variantId: "v1", artifactId: "a1" }],
+      message: /exactly cover all validated variants/,
+    },
+    {
+      implementations: [
+        { variantId: "v1", artifactId: "a1" },
+        { variantId: "v1", artifactId: "a2" },
+      ],
+      message: /unique variant ids/,
+    },
+    {
+      implementations: [
+        { variantId: "v1", artifactId: "a1" },
+        { variantId: "v2", artifactId: "a2" },
+        { variantId: "v3", artifactId: "a3" },
+      ],
+      message: /exactly cover all validated variants/,
+    },
+  ];
+  for (const invalid of invalidImplementations) {
+    const before = structuredClone(standardRun);
+    assert.throws(() => applyVisualRunEvent(standardRun, {
+      type: "implementation-recorded", ...event(2), implementations: invalid.implementations,
+    }, standard), invalid.message);
+    assert.deepEqual(standardRun, before);
+  }
+
+  standardRun = applyVisualRunEvent(standardRun, {
+    type: "implementation-recorded",
+    ...event(2),
+    implementations: [
+      { variantId: "v2", artifactId: "a2" },
+      { variantId: "v1", artifactId: "a1" },
+    ],
+  }, standard);
+  assert.deepEqual(standardRun.artifacts.implementations, [
+    { variantId: "v2", artifactId: "a2" },
+    { variantId: "v1", artifactId: "a1" },
+  ]);
+
+  let advancedRun = createVisualRun({ id: "run-advanced-coverage", policyPath: "policy.json" });
+  advancedRun = applyVisualRunEvent(advancedRun, {
+    type: "directions-validated", ...event(1), variantIds: ["v1", "v2", "v3"],
+  }, advanced);
+  advancedRun = applyVisualRunEvent(advancedRun, {
+    type: "implementation-recorded",
+    ...event(2),
+    implementations: [
+      { variantId: "v3", artifactId: "a3" },
+      { variantId: "v1", artifactId: "a1" },
+      { variantId: "v2", artifactId: "a2" },
+    ],
+  }, advanced);
+  assert.equal(advancedRun.artifacts.implementations?.length, 3);
+});
+
+test("requires a selected candidate before repair or no-repair decisions", () => {
+  const constrainedRun = runThroughCritique(constrained, 1, undefined);
+  const standardRun = runThroughCritique(standard, 0, undefined);
+  for (const [run, nextEvent, policy] of [
+    [constrainedRun, { type: "repair-requested", ...event(5), repairId: "r1" }, constrained],
+    [standardRun, { type: "no-repair-needed", ...event(5) }, standard],
+  ] as const) {
+    const before = structuredClone(run);
+    assert.throws(
+      () => applyVisualRunEvent(run, nextEvent, policy),
+      /selected variant is required/,
+    );
+    assert.deepEqual(run, before);
+  }
+});
+
+test("rejects a stale repair id without mutation or artifact overwrite", () => {
+  let run = runThroughCritique(constrained, 1, "v1");
+  run = applyVisualRunEvent(run, { type: "repair-requested", ...event(5), repairId: "repair-current" }, constrained);
+  const before = structuredClone(run);
+  assert.throws(() => applyVisualRunEvent(run, {
+    type: "repair-recorded",
+    ...event(6),
+    repairId: "repair-stale",
+    implementationArtifact: "git-diff:stale",
+  }, constrained), /match the requested repair id/);
+  assert.deepEqual(run, before);
+  assert.equal(run.artifacts.repairId, "repair-current");
+  assert.equal(run.artifacts.repairImplementationArtifact, undefined);
+});
+
+test("clones persisted implementation references across later transitions", () => {
+  const implemented = (() => {
+    let run = createVisualRun({ id: "run-immutable-artifacts", policyPath: "policy.json" });
+    run = applyVisualRunEvent(run, {
+      type: "directions-validated", ...event(1), variantIds: ["v1", "v2"],
+    }, standard);
+    return applyVisualRunEvent(run, {
+      type: "implementation-recorded",
+      ...event(2),
+      implementations: [
+        { variantId: "v1", artifactId: "a1" },
+        { variantId: "v2", artifactId: "a2" },
+      ],
+    }, standard);
+  })();
+  const next = applyVisualRunEvent(implemented, {
+    type: "initial-evidence-recorded", ...event(3), evidenceId: "e1",
+  }, standard);
+  assert.notEqual(next.artifacts.implementations, implemented.artifacts.implementations);
+  assert.notEqual(next.artifacts.implementations?.[0], implemented.artifacts.implementations?.[0]);
+  assert.deepEqual(next.artifacts.implementations, implemented.artifacts.implementations);
 });

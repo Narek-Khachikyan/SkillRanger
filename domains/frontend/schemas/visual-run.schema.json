@@ -14,10 +14,24 @@
     "artifacts": {
       "type": "object",
       "properties": {
+        "implementations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["variantId", "artifactId"],
+            "properties": {
+              "variantId": { "type": "string", "minLength": 1 },
+              "artifactId": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
         "initialEvidenceId": { "type": "string", "minLength": 1 },
         "critiqueId": { "type": "string", "minLength": 1 },
         "repairId": { "type": "string", "minLength": 1 },
+        "repairImplementationArtifact": { "type": "string", "minLength": 1 },
         "recheckEvidenceId": { "type": "string", "minLength": 1 },
+        "finalAuditReportPath": { "type": "string", "minLength": 1 },
         "verificationReportPath": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false

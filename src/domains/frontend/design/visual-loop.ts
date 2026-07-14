@@ -66,8 +66,15 @@ const validateEvent = (
     }
   }
 
-  if (event.type === "implementation-recorded" && !run.variantIds.includes(event.variantId)) {
-    throw new Error("implementation must reference a validated variant");
+  if (event.type === "implementation-recorded") {
+    const implementationVariantIds = event.implementations.map(({ variantId }) => variantId);
+    if (new Set(implementationVariantIds).size !== implementationVariantIds.length) {
+      throw new Error("implementations must contain unique variant ids");
+    }
+    if (implementationVariantIds.length !== run.variantIds.length
+      || !implementationVariantIds.every((variantId) => run.variantIds.includes(variantId))) {
+      throw new Error("implementations must exactly cover all validated variants");
+    }
   }
 
   if (event.type === "critique-recorded"
@@ -87,6 +94,15 @@ const validateEvent = (
     if (run.critiqueRepairFindingCount !== 0) {
       throw new Error("no-repair-needed requires a critique with zero repair findings");
     }
+  }
+
+  if ((event.type === "repair-requested" || event.type === "no-repair-needed")
+    && (run.selectedVariantId === undefined || !run.variantIds.includes(run.selectedVariantId))) {
+    throw new Error("a selected variant is required before a repair decision");
+  }
+
+  if (event.type === "repair-recorded" && event.repairId !== run.artifacts.repairId) {
+    throw new Error("repair-recorded must match the requested repair id");
   }
 
   if (event.type === "recheck-evidence-recorded"
@@ -111,13 +127,19 @@ export const applyVisualRunEvent = (
     ...run,
     state: targetState,
     variantIds: [...run.variantIds],
-    artifacts: { ...run.artifacts },
+    artifacts: {
+      ...run.artifacts,
+      implementations: run.artifacts.implementations?.map((implementation) => ({ ...implementation })),
+    },
     history: [...run.history, { state: targetState, at: event.at, eventId: event.id }],
   };
 
   switch (event.type) {
     case "directions-validated":
       next.variantIds = [...event.variantIds];
+      break;
+    case "implementation-recorded":
+      next.artifacts.implementations = event.implementations.map((implementation) => ({ ...implementation }));
       break;
     case "initial-evidence-recorded":
       next.artifacts.initialEvidenceId = event.evidenceId;
@@ -128,13 +150,17 @@ export const applyVisualRunEvent = (
       next.critiqueRepairFindingCount = event.repairFindingCount;
       break;
     case "repair-requested":
-    case "repair-recorded":
       next.artifacts.repairId = event.repairId;
+      break;
+    case "repair-recorded":
+      next.artifacts.repairImplementationArtifact = event.implementationArtifact;
       break;
     case "recheck-evidence-recorded":
       next.artifacts.recheckEvidenceId = event.evidenceId;
       break;
     case "final-audit-recorded":
+      next.artifacts.finalAuditReportPath = event.reportPath;
+      break;
     case "verification-recorded":
       next.artifacts.verificationReportPath = event.reportPath;
       break;
