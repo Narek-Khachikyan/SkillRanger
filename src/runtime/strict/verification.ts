@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 import { assertValidCriticReportV2 } from "./critic.ts";
+import { deriveBrowserGateResults, deriveTailwindSourceResults } from "./frontend-evidence.ts";
 import type { EvidenceArtifact, SkillLedger, SkillRunV2 } from "./types.ts";
 
 type Result = { passed: boolean; message?: string };
@@ -84,8 +85,13 @@ export const deriveStrictValidatorResults = async (
 
   const output = parse(artifacts.findLast(({ validatedAs }) => validatedAs === "output"), artifactBytes);
   const verificationInput = parse(artifacts.findLast(({ kind }) => kind === "verification-input"), artifactBytes);
-  const sourceReview = parse(artifacts.findLast(({ kind }) => kind === "implementation-diff"), artifactBytes);
+  const implementationDiff = artifacts.findLast(({ kind }) => kind === "implementation-diff");
+  const sourceReview = parse(implementationDiff, artifactBytes);
   const criticReport = parse(artifacts.findLast(({ validatedAs }) => validatedAs === "critic-report"), artifactBytes);
+  const browser = deriveBrowserGateResults(verificationInput, artifacts);
+  const source = deriveTailwindSourceResults(
+    implementationDiff ? artifactBytes.get(implementationDiff.artifactId)?.toString("utf8") ?? "" : "",
+  );
 
   for (const gate of ledger.contract.gates) {
     if (gate.evaluator.type !== "validator") continue;
@@ -120,10 +126,9 @@ export const deriveStrictValidatorResults = async (
       const passed = report !== undefined && checks[gateSlug(gate.id)] === true;
       result = { passed, ...(passed ? {} : { message: `Performance report failed ${gateSlug(gate.id)}.` }) };
     } else if (gate.evaluator.validatorId === "frontend/browser-hard-gates" || gate.evaluator.validatorId === "frontend/tailwind-source") {
-      const evidence = gate.evaluator.validatorId === "frontend/browser-hard-gates" ? verificationInput : sourceReview;
-      const checks = record(evidence) && record(evidence.checks) ? evidence.checks : undefined;
-      const passed = checks?.[gateSlug(gate.id)] === true;
-      result = { passed, ...(passed ? {} : { message: `Evidence check ${gateSlug(gate.id)} is not true.` }) };
+      result = gate.evaluator.validatorId === "frontend/browser-hard-gates"
+        ? browser[gateSlug(gate.id)]
+        : source[gateSlug(gate.id)];
     }
     results[gate.id] = result;
   }

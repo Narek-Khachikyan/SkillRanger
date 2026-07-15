@@ -12,8 +12,10 @@ import {
   createContentChunks,
   createStrictSkillRun,
   readNextStrictChunk,
+  type EvidenceArtifact,
   type ExecutionContractV2,
 } from "../src/runtime/strict/index.ts";
+import { deriveBrowserGateResults, deriveTailwindSourceResults } from "../src/runtime/strict/frontend-evidence.ts";
 
 const sha = (value: string | Buffer) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
 const contract: ExecutionContractV2 = {
@@ -85,6 +87,53 @@ const redirectArtifactParentOutsideRoot = async (root: string, run: Awaited<Retu
   await rename(artifactParent, outsideArtifacts);
   await symlink(outsideArtifacts, artifactParent, "dir");
 };
+
+const browserObservation = (width: number) => ({
+  viewport: { width, height: width === 390 ? 844 : width === 768 ? 1024 : 900 },
+  state: "default",
+  screenshotPath: `evidence/${width}.png`,
+  horizontalOverflow: false,
+  clippedControls: [],
+  unreachableActions: [],
+  stickyOverlaps: [],
+  consoleErrors: [],
+  keyboardTraps: [],
+  invisibleFocus: [],
+  criticalAxeViolations: [],
+  reducedMotionVerified: true,
+});
+const browserArtifacts = [390, 768, 1440].map((width) => ({
+  kind: `browser-screenshot-${width}`,
+  sourcePath: `evidence/${width}.png`,
+})) as EvidenceArtifact[];
+
+test("derives browser gates only from closed observations bound to screenshot evidence", () => {
+  const observations = [390, 768, 1440].map(browserObservation);
+  const valid = deriveBrowserGateResults({ observations }, browserArtifacts);
+  assert.equal(Object.keys(valid).length, 7);
+  assert.ok(Object.values(valid).every(({ passed }) => passed));
+
+  const forged = deriveBrowserGateResults({ checks: { "required-states-covered": true } }, browserArtifacts);
+  assert.ok(Object.values(forged).every(({ passed, message }) => !passed && /valid browser observations/i.test(message ?? "")));
+
+  const unbound = deriveBrowserGateResults({ observations: observations.map((item, index) => index === 0 ? { ...item, screenshotPath: "evidence/unbound.png" } : item) }, browserArtifacts);
+  assert.ok(Object.values(unbound).every(({ passed, message }) => !passed && /not bound/i.test(message ?? "")));
+
+  const openShape = deriveBrowserGateResults({ observations: [{ ...observations[0], callerApproved: true }, ...observations.slice(1)] }, browserArtifacts);
+  assert.ok(Object.values(openShape).every(({ passed }) => !passed));
+});
+
+test("derives Tailwind source gates from staged source text instead of checks claims", () => {
+  const dynamic = deriveTailwindSourceResults('{"checks":{"no-dynamic-tailwind-classes":true},"diff":"+ <div className={`p-4 bg-${color}-600`}>"}');
+  assert.equal(dynamic["no-dynamic-tailwind-classes"].passed, false);
+
+  const staticSource = deriveTailwindSourceResults('+ <div className="bg-brand-600 text-on-brand">Save</div>');
+  assert.equal(staticSource["no-dynamic-tailwind-classes"].passed, true);
+  assert.equal(staticSource["repeated-class-bundles-reviewed"].passed, true);
+
+  const conflicting = deriveTailwindSourceResults('+ <div className="block flex">Save</div>');
+  assert.equal(conflicting["repeated-class-bundles-reviewed"].passed, false);
+});
 
 test("strict store writes atomically and rejects a tampered persisted content snapshot", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-store-"));

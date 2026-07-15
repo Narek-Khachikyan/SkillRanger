@@ -18,12 +18,14 @@ const readAll = async (store: StrictSkillRunStore, run: SkillRunV2, skillId: str
   while (run.state === "reading") run = await store.update(run.runId, (current) => readNextStrictChunk(current, skillId).run);
   return run;
 };
-const step = async (root: string, store: StrictSkillRunStore, run: SkillRunV2, skillId: string, evidence: Array<{ kind: string; value: unknown; validatedAs?: "output" | "critic-report" }> = []) => {
+const step = async (root: string, store: StrictSkillRunStore, run: SkillRunV2, skillId: string, evidence: Array<{ kind: string; value: unknown; sourcePath?: string; validatedAs?: "output" | "critic-report" }> = []) => {
   const ledger = run.skillLedgers.find((entry) => entry.skillId === skillId)!;
   const next = ledger.steps.find(({ status }) => status === "pending")!;
   run = await store.update(run.runId, (current) => beginStrictStep(current, skillId, next.id));
   for (const [index, item] of evidence.entries()) {
-    const source = path.join(root, "evidence", `${run.revision}-${index}-${item.kind}.json`);
+    const source = item.sourcePath
+      ? path.join(root, item.sourcePath)
+      : path.join(root, "evidence", `${run.revision}-${index}-${item.kind}.json`);
     await mkdir(path.dirname(source), { recursive: true });
     await writeFile(source, typeof item.value === "string" ? item.value : `${JSON.stringify(item.value, null, 2)}\n`);
     run = await store.ingestEvidence(run.runId, {
@@ -74,7 +76,7 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
   const store = new StrictSkillRunStore(root); run = await readAll(store, run, skillId);
   run = await step(root, store, run, skillId, [{ kind: "project-archetype", value: "tailwind\n" }]);
   run = await step(root, store, run, skillId, [{ kind: "browser-screenshot-before", value: "before\n" }]);
-  run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: { checks: { "no-dynamic-tailwind-classes": false, "raw-colors-reviewed": true, "repeated-class-bundles-reviewed": true } } }]);
+  run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: { checks: { "no-dynamic-tailwind-classes": true }, diff: "+ <div className={`p-4 bg-${color}-600`}>Save</div>" } }]);
   run = await step(root, store, run, skillId, [{ kind: "browser-screenshot-initial", value: "initial\n" }]);
   run = await step(root, store, run, skillId, [{ kind: "critic-report", validatedAs: "critic-report", value: { schemaVersion: "2.0", skillId, criticInvocationId: "critic-2", executorInvocationId: "executor-1", outcome: "clean", findings: [] } }]);
   run = await step(root, store, run, skillId, ["browser-screenshot-390", "browser-screenshot-768", "browser-screenshot-1440"].map((kind) => ({ kind, value: `${kind}\n` })));
@@ -83,10 +85,32 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
   run = await step(root, store, run, skillId, [{ kind: "skill-output", validatedAs: "output", value: { outcome: "verified", classification: "hierarchy", changes: ["polished"], verification: {}, residualRisks: [] } }]);
   run = await store.verifySkill(run.runId, skillId);
   assert.equal(run.state, "repair-required");
-  run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: { checks: { "no-dynamic-tailwind-classes": true, "raw-colors-reviewed": true, "repeated-class-bundles-reviewed": true } } }]);
+  const firstReport = run.skillLedgers[0].verificationReports.at(-1)!;
+  const browserGateIds = new Set(run.skillLedgers[0].contract.gates
+    .filter(({ evaluator }) => evaluator.type === "validator" && evaluator.validatorId === "frontend/browser-hard-gates")
+    .map(({ id }) => id));
+  const browserResults = firstReport.gateResults.filter(({ gateId }) => browserGateIds.has(gateId));
+  assert.equal(browserResults.length, 7);
+  assert.ok(browserResults.every(({ passed, message }) => !passed && /valid browser observations/i.test(message ?? "")));
+  assert.equal(firstReport.gateResults.find(({ gateId }) => gateId.endsWith("/no-dynamic-tailwind-classes"))?.passed, false);
+  run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: '+ <div className="bg-brand-600 text-on-brand">Save</div>\n' }]);
   const repairKinds = ["browser-screenshot-390", "browser-screenshot-768", "browser-screenshot-1440"];
-  run = await step(root, store, run, skillId, repairKinds.map((kind) => ({ kind, value: `${kind}-fresh\n` })));
-  run = await step(root, store, run, skillId, [{ kind: "verification-input", value: { checks: browserChecks } }]);
+  run = await step(root, store, run, skillId, repairKinds.map((kind, index) => ({ kind, value: `${kind}-fresh\n`, sourcePath: `evidence/${[390, 768, 1440][index]}.png` })));
+  const observations = [390, 768, 1440].map((width) => ({
+    viewport: { width, height: width === 390 ? 844 : width === 768 ? 1024 : 900 },
+    state: "default",
+    screenshotPath: `evidence/${width}.png`,
+    horizontalOverflow: false,
+    clippedControls: [],
+    unreachableActions: [],
+    stickyOverlaps: [],
+    consoleErrors: [],
+    keyboardTraps: [],
+    invisibleFocus: [],
+    criticalAxeViolations: [],
+    reducedMotionVerified: true,
+  }));
+  run = await step(root, store, run, skillId, [{ kind: "verification-input", value: { observations } }]);
   run = await step(root, store, run, skillId, [{ kind: "skill-output", validatedAs: "output", value: { outcome: "verified", classification: "hierarchy", changes: ["repaired"], verification: {}, residualRisks: [] } }]);
   run = await store.verifySkill(run.runId, skillId);
   assert.equal(run.skillLedgers[0].outcome, "used");
