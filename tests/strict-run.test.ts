@@ -13,6 +13,7 @@ import {
   verifyStrictSkill,
   StrictSkillRunError,
   assertValidCriticReportV2,
+  assertValidStrictSkillRun,
   type ExecutionContractV2,
   type StrictSkillSelection,
 } from "../src/runtime/strict/index.ts";
@@ -105,6 +106,32 @@ const attach = (run: ReturnType<typeof created>, kind: string, stepId: string, v
   });
 };
 
+const fullyExecutedFixture = () => {
+  let run = fullyRead();
+  run = beginStrictStep(run, "frontend.test-skill", contract().steps[0].id);
+  run = attach(run, "inspection", contract().steps[0].id);
+  run = completeStrictStep(run, "frontend.test-skill", contract().steps[0].id);
+  run = beginStrictStep(run, "frontend.test-skill", contract().steps[2].id);
+  run = attach(run, "skill-output", contract().steps[2].id, "output");
+  run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
+  return verifyStrictSkill(run, "frontend.test-skill", {
+    validatorResults: { "core/artifact-integrity": { passed: true } },
+  });
+};
+
+const repairRequiredFixture = () => {
+  let run = fullyRead();
+  run = beginStrictStep(run, "frontend.test-skill", contract().steps[0].id);
+  run = attach(run, "inspection", contract().steps[0].id);
+  run = completeStrictStep(run, "frontend.test-skill", contract().steps[0].id);
+  run = beginStrictStep(run, "frontend.test-skill", contract().steps[2].id);
+  run = attach(run, "skill-output", contract().steps[2].id, "output");
+  run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
+  return verifyStrictSkill(run, "frontend.test-skill", {
+    validatorResults: { "core/artifact-integrity": { passed: false } },
+  });
+};
+
 const renamedContract = (skillId: string): ExecutionContractV2 => JSON.parse(
   JSON.stringify(contract()).replaceAll("frontend.test-skill", skillId),
 ) as ExecutionContractV2;
@@ -134,6 +161,82 @@ test("enforces step order, current-step evidence, and required evidence kinds", 
   run = completeStrictStep(run, "frontend.test-skill", contract().steps[0].id);
   assert.equal(run.skillLedgers[0].steps[0].status, "satisfied");
   assert.equal(run.skillLedgers[0].steps[1].status, "skipped");
+});
+
+test("rejects persisted step snapshots that diverge from the execution contract", () => {
+  const forged = structuredClone(created());
+  forged.skillLedgers[0].steps[0].id = "frontend.test-skill/step/forged";
+  assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
+});
+
+test("rejects a persisted used ledger without a passing verification report", () => {
+  const forged = fullyExecutedFixture();
+  forged.skillLedgers[0].verificationReports = [];
+  assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
+});
+
+test("rejects persisted attempts that reference missing artifacts", () => {
+  const forged = fullyExecutedFixture();
+  forged.skillLedgers[0].steps[0].attempts[0].evidenceIds[0] = "artifact-missing";
+  assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
+});
+
+test("rejects persisted verification reports inconsistent with their contract", () => {
+  for (const mutate of [
+    (run: ReturnType<typeof fullyExecutedFixture>) => { run.skillLedgers[0].verificationReports[0].skillId = "frontend.forged"; },
+    (run: ReturnType<typeof fullyExecutedFixture>) => { run.skillLedgers[0].verificationReports[0].gateResults[0].level = "advisory"; },
+    (run: ReturnType<typeof fullyExecutedFixture>) => { run.skillLedgers[0].verificationReports[0].hardPassed = false; },
+  ]) {
+    const forged = fullyExecutedFixture();
+    mutate(forged);
+    assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
+  }
+});
+
+test("rejects persisted repair bookkeeping outside contract bounds", () => {
+  const forgedCounter = repairRequiredFixture();
+  forgedCounter.skillLedgers[0].repairIterations = 2;
+  assert.throws(() => assertValidStrictSkillRun(forgedCounter), StrictSkillRunError);
+
+  const forgedRequest = repairRequiredFixture();
+  forgedRequest.skillLedgers[0].repairRequests[0].sourceReportIndex = 1;
+  assert.throws(() => assertValidStrictSkillRun(forgedRequest), StrictSkillRunError);
+});
+
+test("rejects persisted artifact attributions outside the declared execution graph", () => {
+  for (const mutate of [
+    (run: ReturnType<typeof fullyExecutedFixture>) => { run.artifacts[0].attributions[0].stepId = "frontend.test-skill/step/forged"; },
+    (run: ReturnType<typeof fullyExecutedFixture>) => { run.artifacts[0].attributions[0].attempt = 2; },
+    (run: ReturnType<typeof fullyExecutedFixture>) => { run.artifacts[0].attributions[0].ruleIds = ["frontend.test-skill/rule/forged"]; },
+  ]) {
+    const forged = fullyExecutedFixture();
+    mutate(forged);
+    assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
+  }
+});
+
+test("rejects persisted terminal and aggregate states inconsistent with their lifecycle", () => {
+  const forgedNoOp = created();
+  forgedNoOp.state = "planned";
+  forgedNoOp.skillLedgers[0].state = "no-op";
+  forgedNoOp.skillLedgers[0].outcome = "no-op";
+  assert.throws(() => assertValidStrictSkillRun(forgedNoOp), StrictSkillRunError);
+
+  const forgedAggregate = created();
+  forgedAggregate.state = "verified";
+  assert.throws(() => assertValidStrictSkillRun(forgedAggregate), StrictSkillRunError);
+
+  for (const state of ["ready", "verifying"] as const) {
+    const forgedInProgress = created();
+    forgedInProgress.state = state;
+    assert.throws(() => assertValidStrictSkillRun(forgedInProgress), StrictSkillRunError);
+  }
+});
+
+test("accepts reducer-produced persisted lifecycle graphs", () => {
+  assert.doesNotThrow(() => assertValidStrictSkillRun(created()));
+  assert.doesNotThrow(() => assertValidStrictSkillRun(repairRequiredFixture()));
+  assert.doesNotThrow(() => assertValidStrictSkillRun(fullyExecutedFixture()));
 });
 
 test("computes verification, opens one bounded repair, and refuses caller-controlled completion", () => {

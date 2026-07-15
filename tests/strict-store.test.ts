@@ -55,6 +55,24 @@ test("strict store writes atomically and rejects a tampered persisted content sn
   await assert.rejects(store.read(run.runId), (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity");
 });
 
+test("rejects a persisted used outcome without completed steps and verification", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-forged-used-"));
+  const store = new StrictSkillRunStore(root);
+  const run = fixtureRun();
+  await store.create(run);
+
+  const runPath = path.join(root, ".skillranger", "runs", `${run.runId}.json`);
+  const forged = JSON.parse(await readFile(runPath, "utf8"));
+  forged.skillLedgers[0].state = "used";
+  forged.skillLedgers[0].outcome = "used";
+  await writeFile(runPath, `${JSON.stringify(forged)}\n`);
+
+  await assert.rejects(
+    store.read(run.runId),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+  );
+});
+
 test("ingests immutable evidence and binds it to the active step", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-evidence-"));
   const source = path.join(root, "reports", "report.json");
