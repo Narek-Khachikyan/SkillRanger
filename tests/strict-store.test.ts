@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rename, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -28,17 +28,63 @@ const contract: ExecutionContractV2 = {
   ],
 };
 
-const fixtureRun = () => createStrictSkillRun({
+const domainValidatorContract: ExecutionContractV2 = {
+  ...contract,
+  gates: [...contract.gates, {
+    id: "frontend.store-test/gate/domain-validator",
+    level: "hard",
+    evaluator: { type: "validator", validatorId: "frontend/performance-claims" },
+    ruleIds: ["frontend.store-test/rule/evidence"],
+  }],
+};
+
+const fixtureRun = (executionContract = contract) => createStrictSkillRun({
   runId: "run_strict_store", domain: "frontend", targetAgent: "codex", locale: "en",
   intent: { sha256: sha("store"), normalizedGoal: "store evidence" }, now: "2026-07-15T10:00:00.000Z",
   selectedSkills: [{
-    skillId: contract.skillId, role: "primary", mandatory: true, version: "1.0.0",
-    packageChecksum: sha("package"), contractChecksum: sha(JSON.stringify(contract)), contract,
+    skillId: executionContract.skillId, role: "primary", mandatory: true, version: "1.0.0",
+    packageChecksum: sha("package"), contractChecksum: sha(JSON.stringify(executionContract)), contract: executionContract,
     schemaSnapshots: { input: { type: "object" }, output: { type: "object" } },
     schemaChecksums: { input: sha(JSON.stringify({ type: "object" })), output: sha(JSON.stringify({ type: "object" })) },
     contentChunks: createContentChunks("SKILL.md", "# Store Test\n"), applicable: true, unmetPrerequisites: [],
   }],
 });
+
+const stageCompletedEvidence = async (
+  root: string,
+  store: StrictSkillRunStore,
+  executionContract = contract,
+) => {
+  const source = path.join(root, "report.json");
+  await writeFile(source, "{}\n");
+  let run = beginStrictStep(
+    readNextStrictChunk(fixtureRun(executionContract), executionContract.skillId).run,
+    executionContract.skillId,
+    executionContract.steps[0].id,
+  );
+  await store.create(run);
+  run = await store.ingestEvidence(run.runId, {
+    sourcePath: source,
+    kind: "report",
+    validatedAs: "output",
+    attributions: [{
+      skillId: executionContract.skillId,
+      stepId: executionContract.steps[0].id,
+      attempt: 1,
+      relation: "produced",
+      ruleIds: executionContract.rules.map(({ id }) => id),
+    }],
+  });
+  return store.update(run.runId, (current) => completeStrictStep(current, executionContract.skillId, executionContract.steps[0].id));
+};
+
+const redirectArtifactParentOutsideRoot = async (root: string, run: Awaited<ReturnType<typeof stageCompletedEvidence>>) => {
+  const artifactParent = path.dirname(path.join(root, run.artifacts[0].path));
+  const outsideRoot = await mkdtemp(path.join(os.tmpdir(), "strict-evidence-outside-"));
+  const outsideArtifacts = path.join(outsideRoot, "artifacts");
+  await rename(artifactParent, outsideArtifacts);
+  await symlink(outsideArtifacts, artifactParent, "dir");
+};
 
 test("strict store writes atomically and rejects a tampered persisted content snapshot", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-store-"));
@@ -146,6 +192,36 @@ test("rejects changed evidence even when the contract omits an integrity gate", 
     store.verifySkill(run.runId, contract.skillId),
     (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
   );
+});
+
+test("invokes a registered domain validator only after artifact integrity passes", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-domain-validator-"));
+  let calls = 0;
+  const store = new StrictSkillRunStore(root, {
+    "frontend/performance-claims": () => { calls += 1; return { passed: true }; },
+  });
+  const run = await stageCompletedEvidence(root, store, domainValidatorContract);
+
+  const verified = await store.verifySkill(run.runId, domainValidatorContract.skillId);
+
+  assert.equal(verified.skillLedgers[0].outcome, "used");
+  assert.equal(calls, 1);
+});
+
+test("rejects an artifact reached through an escaping parent symlink before domain validation", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-parent-link-"));
+  let calls = 0;
+  const store = new StrictSkillRunStore(root, {
+    "frontend/performance-claims": () => { calls += 1; throw new Error("domain validator invoked"); },
+  });
+  const run = await stageCompletedEvidence(root, store, domainValidatorContract);
+  await redirectArtifactParentOutsideRoot(root, run);
+
+  await assert.rejects(
+    store.verifySkill(run.runId, domainValidatorContract.skillId),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
+  );
+  assert.equal(calls, 0);
 });
 
 test("rejects symlink evidence before creating an artifact", async () => {

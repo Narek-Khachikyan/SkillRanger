@@ -402,10 +402,15 @@ test("computes verification, opens one bounded repair, and refuses caller-contro
 });
 
 test("rejects failed artifact integrity before reducing contract gates", () => {
+  const untouchedSource = new Proxy({} as ReturnType<typeof verificationReadyFixture>, {
+    get: () => { throw new Error("strict run source was touched"); },
+  });
   assert.throws(
-    () => verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", {
+    () => verifyStrictSkill(untouchedSource, "frontend.test-skill", {
       artifactIntegrity: { passed: false, message: "Digest mismatch." },
-      validatorResults: { "core/artifact-integrity": { passed: true } },
+      validatorResults: new Proxy({}, {
+        get: () => { throw new Error("validator results were touched"); },
+      }),
     }),
     (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
   );

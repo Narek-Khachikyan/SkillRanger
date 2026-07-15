@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { lstat, readFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 import { assertValidCriticReportV2 } from "./critic.ts";
 import type { EvidenceArtifact, SkillLedger, SkillRunV2 } from "./types.ts";
@@ -9,47 +10,97 @@ export type StrictValidatorDerivation = {
   artifactIntegrity: Result;
   validatorResults: Record<string, Result>;
 };
+export type StrictValidatorCallback = (context: {
+  gateId: string;
+  validatorId: string;
+  skillId: string;
+  artifacts: readonly EvidenceArtifact[];
+  evidence: {
+    output?: unknown;
+    verificationInput?: unknown;
+    sourceReview?: unknown;
+    criticReport?: unknown;
+  };
+}) => Result | Promise<Result>;
+export type StrictValidatorCallbacks = Partial<Record<string, StrictValidatorCallback>>;
 const digest = (bytes: Uint8Array) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
-const parse = async (root: string, artifact: EvidenceArtifact | undefined) => {
+const parse = (artifact: EvidenceArtifact | undefined, artifactBytes: Map<string, Buffer>) => {
   if (!artifact) return undefined;
-  try { return JSON.parse(await readFile(path.join(root, artifact.path), "utf8")) as unknown; }
+  try { return JSON.parse(artifactBytes.get(artifact.artifactId)?.toString("utf8") ?? "") as unknown; }
   catch { return undefined; }
 };
 const gateSlug = (gateId: string) => gateId.slice(gateId.lastIndexOf("/") + 1);
+const containedBy = (root: string, target: string) => {
+  const relative = path.relative(root, target);
+  return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+};
+
+const readVerifiedArtifact = async (projectRoot: string, canonicalRoot: string, artifact: EvidenceArtifact) => {
+  const target = path.resolve(projectRoot, artifact.path);
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    const leaf = await lstat(target);
+    if (!leaf.isFile() || leaf.isSymbolicLink()) return undefined;
+    const canonicalBeforeOpen = await realpath(target);
+    if (!containedBy(canonicalRoot, canonicalBeforeOpen)) return undefined;
+    handle = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const info = await handle.stat();
+    const bytes = await handle.readFile();
+    const canonicalAfterRead = await realpath(target);
+    if (canonicalAfterRead !== canonicalBeforeOpen || !containedBy(canonicalRoot, canonicalAfterRead)) return undefined;
+    if (!info.isFile() || bytes.byteLength !== artifact.size || digest(bytes) !== artifact.sha256) return undefined;
+    return bytes;
+  } catch {
+    return undefined;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+};
 
 export const deriveStrictValidatorResults = async (
   projectRoot: string,
   run: SkillRunV2,
   ledger: SkillLedger,
+  validatorCallbacks: StrictValidatorCallbacks = {},
 ): Promise<StrictValidatorDerivation> => {
   const results: Record<string, Result> = {};
   const ids = new Set(ledger.steps.flatMap((step) => step.attempts.at(-1)?.evidenceIds ?? []));
   const artifacts = run.artifacts.filter(({ artifactId }) => ids.has(artifactId));
-  let integrity = true;
-  for (const artifact of artifacts) {
-    const target = path.resolve(projectRoot, artifact.path);
-    const root = path.resolve(projectRoot);
-    if (!target.startsWith(`${root}${path.sep}`)) { integrity = false; break; }
-    const [bytes, info] = await Promise.all([readFile(target).catch(() => undefined), lstat(target).catch(() => undefined)]);
-    if (!bytes || !info?.isFile() || bytes.byteLength !== artifact.size || digest(bytes) !== artifact.sha256) { integrity = false; break; }
+  const artifactBytes = new Map<string, Buffer>();
+  const canonicalRoot = await realpath(projectRoot).catch(() => undefined);
+  let integrity = canonicalRoot !== undefined;
+  if (canonicalRoot) {
+    for (const artifact of artifacts) {
+      const bytes = await readVerifiedArtifact(projectRoot, canonicalRoot, artifact);
+      if (!bytes) { integrity = false; break; }
+      artifactBytes.set(artifact.artifactId, bytes);
+    }
   }
   const artifactIntegrity: Result = integrity
     ? { passed: true }
     : { passed: false, message: "Staged artifact digest, size, path, or file type changed." };
   if (!artifactIntegrity.passed) return { artifactIntegrity, validatorResults: results };
 
-  const output = await parse(projectRoot, artifacts.findLast(({ validatedAs }) => validatedAs === "output"));
-  const verificationInput = await parse(projectRoot, artifacts.findLast(({ kind }) => kind === "verification-input"));
-  const sourceReview = await parse(projectRoot, artifacts.findLast(({ kind }) => kind === "implementation-diff"));
+  const output = parse(artifacts.findLast(({ validatedAs }) => validatedAs === "output"), artifactBytes);
+  const verificationInput = parse(artifacts.findLast(({ kind }) => kind === "verification-input"), artifactBytes);
+  const sourceReview = parse(artifacts.findLast(({ kind }) => kind === "implementation-diff"), artifactBytes);
+  const criticReport = parse(artifacts.findLast(({ validatedAs }) => validatedAs === "critic-report"), artifactBytes);
 
   for (const gate of ledger.contract.gates) {
     if (gate.evaluator.type !== "validator") continue;
     let result: Result = { passed: false, message: `Runtime validator ${gate.evaluator.validatorId} found no valid evidence.` };
-    if (gate.evaluator.validatorId === "core/artifact-integrity") result = { passed: integrity, ...(integrity ? {} : { message: "Staged artifact digest or size changed." }) };
+    const callback = validatorCallbacks[gate.evaluator.validatorId];
+    if (callback) result = await callback({
+      gateId: gate.id,
+      validatorId: gate.evaluator.validatorId,
+      skillId: ledger.skillId,
+      artifacts,
+      evidence: { output, verificationInput, sourceReview, criticReport },
+    });
+    else if (gate.evaluator.validatorId === "core/artifact-integrity") result = { passed: true };
     else if (gate.evaluator.validatorId === "core/critic-independence") {
-      const critic = await parse(projectRoot, artifacts.findLast(({ validatedAs }) => validatedAs === "critic-report"));
-      try { assertValidCriticReportV2(critic, ledger.contract); result = { passed: true }; }
+      try { assertValidCriticReportV2(criticReport, ledger.contract); result = { passed: true }; }
       catch (error) { result = { passed: false, message: (error as Error).message }; }
     } else if (gate.evaluator.validatorId === "frontend/performance-claims") {
       const report = record(output) ? output : undefined;

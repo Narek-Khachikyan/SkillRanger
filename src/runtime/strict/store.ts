@@ -6,7 +6,7 @@ import { assertValidCriticReportV2 } from "./critic.ts";
 import { validateJsonSchema } from "./json-schema.ts";
 import { assertValidStrictSkillRun } from "./validation.ts";
 import { StrictSkillRunError, type EvidenceArtifact, type SkillRunV2 } from "./types.ts";
-import { deriveStrictValidatorResults } from "./verification.ts";
+import { deriveStrictValidatorResults, type StrictValidatorCallbacks } from "./verification.ts";
 import { captureSourceControl } from "./git.ts";
 
 const lockTimeoutMs = 5_000;
@@ -17,8 +17,12 @@ const digestBytes = (bytes: Uint8Array) => `sha256:${createHash("sha256").update
 
 export class StrictSkillRunStore {
   private readonly projectRoot: string;
+  private readonly validatorCallbacks: StrictValidatorCallbacks;
 
-  constructor(projectRoot: string) { this.projectRoot = projectRoot; }
+  constructor(projectRoot: string, validatorCallbacks: StrictValidatorCallbacks = {}) {
+    this.projectRoot = projectRoot;
+    this.validatorCallbacks = validatorCallbacks;
+  }
 
   private runPath(runId: string) {
     if (!/^run_[a-z0-9_-]{7,127}$/.test(runId)) throw new StrictSkillRunError("run-integrity", `Invalid run id ${runId}.`);
@@ -163,7 +167,7 @@ export class StrictSkillRunStore {
     return this.update(runId, async (run) => {
       const ledger = run.skillLedgers.find((candidate) => candidate.skillId === skillId);
       if (!ledger) throw new StrictSkillRunError("run-integrity", `Unknown selected skill ${skillId}.`);
-      const derivation = await deriveStrictValidatorResults(this.projectRoot, run, ledger);
+      const derivation = await deriveStrictValidatorResults(this.projectRoot, run, ledger, this.validatorCallbacks);
       return verifyStrictSkill(run, skillId, derivation);
     });
   }
