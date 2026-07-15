@@ -300,6 +300,30 @@ test("keeps a class expression range open across regex closing braces", () => {
   assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
 });
 
+test("keeps class range open for regex after an if statement head", () => {
+  const results = deriveTailwindSourceResults('<div className={(() => { if (x) /\\}/.test(y); return "bg-brand-500"; })() ? `${computedClass}` : "bg-brand-500"} />');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("keeps class range open for regex after a while statement head", () => {
+  const results = deriveTailwindSourceResults('<div className={(() => { while (x) /\\}/.test(y); return "bg-brand-500"; })() ? `${computedClass}` : "bg-brand-500"} />');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("keeps class range open for regex after else", () => {
+  const results = deriveTailwindSourceResults('<div className={(() => { if (x) y(); else /\\}/.test(y); return "bg-brand-500"; })() ? `${computedClass}` : "bg-brand-500"} />');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("keeps ordinary division expressions out of regex-literal handling", () => {
+  const results = deriveTailwindSourceResults('<div className={(() => { const ratio = total / count / scale; return ratio ? "bg-brand-500" : "bg-brand-600"; })()} />');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
 test("rejects conditional interpolation of Tailwind token fragments", () => {
   const results = deriveTailwindSourceResults('<div className={`bg-${active ? "red" : "blue"}-500`}>Save</div>');
 
@@ -324,6 +348,18 @@ test("fails closed for an unparseable multiline class template", () => {
     '  `bg-${(() => { return /\\{/.test(color) ? "red" : "blue"; })()}-500`',
     '}></div>',
   ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("ignores dynamic-looking templates outside class expressions", () => {
+  const results = deriveTailwindSourceResults('const cacheKey = `bg-${color}-600`; const message = `text-${status}-500`;');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
+test("rejects the same dynamic templates inside class composition", () => {
+  const results = deriveTailwindSourceResults('const classes = cn(`bg-${color}-600`, `text-${status}-500`);');
 
   assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
 });

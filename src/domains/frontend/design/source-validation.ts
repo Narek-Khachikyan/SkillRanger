@@ -91,57 +91,107 @@ const regexLiteralEnd = (content: string, start: number) => {
   return undefined;
 };
 
-const canStartRegexLiteral = (content: string, index: number, expressionStart: number) => {
-  let previous = index - 1;
-  while (previous >= expressionStart && /\s/.test(content[previous])) previous -= 1;
-  if (previous < expressionStart || /[([{,:;!?=+\-*%&|^~<>]/.test(content[previous])) return true;
-  const preceding = content.slice(expressionStart, previous + 1);
-  return /(?:^|\W)(?:return|throw|case|delete|void|typeof|instanceof|in|of|yield|await)\s*$/.test(preceding);
-};
+const controlHeadKeywords = new Set(["if", "while", "for", "with", "switch", "catch"]);
+const statementPrefixKeywords = new Set(["else", "do"]);
+const expressionPrefixKeywords = new Set(["return", "throw", "case", "delete", "void", "typeof", "instanceof", "in", "of", "yield", "await"]);
+const regexPrefixPunctuation = new Set(["{", "[", ";", ",", "?", ":", "=", "+", "-", "*", "%", "&", "|", "^", "!", "~", "<", ">", "/"]);
+const valueSuffixPunctuation = new Set(["}", "]", "."]);
 
 const scanFailure = (content: string, start: number, reason: string): ScanFailure => {
   const newline = content.indexOf("\n", start);
   return { start, end: newline === -1 ? content.length : newline, reason };
 };
 
-type LexicalItem = { end: number; template?: ParsedTemplate; failure?: undefined } | { failure: ScanFailure } | undefined;
-function lexicalItemAt(content: string, index: number, expressionStart: number): LexicalItem {
+type LexicalItem = { end: number; kind: "comment" | "value"; template?: ParsedTemplate; failure?: undefined } | { failure: ScanFailure } | undefined;
+function lexicalItemAt(content: string, index: number, regexAllowed: boolean): LexicalItem {
   const character = content[index];
   if (character === "\"" || character === "'") {
     const end = quotedEnd(content, index, character);
-    return end === undefined ? { failure: scanFailure(content, index, "unterminated string") } : { end };
+    return end === undefined ? { failure: scanFailure(content, index, "unterminated string") } : { end, kind: "value" };
   }
   if (character === "`") {
     const template = parseTemplateAt(content, index);
-    return template ? { end: template.end, template } : { failure: scanFailure(content, index, "unparseable template") };
+    return template ? { end: template.end, kind: "value", template } : { failure: scanFailure(content, index, "unparseable template") };
   }
   if (character !== "/") return undefined;
   if (content[index + 1] === "/" || content[index + 1] === "*") {
     const end = commentEnd(content, index);
-    return end === undefined ? { failure: scanFailure(content, index, "unterminated comment") } : { end };
+    return end === undefined ? { failure: scanFailure(content, index, "unterminated comment") } : { end, kind: "comment" };
   }
-  if (!canStartRegexLiteral(content, index, expressionStart)) return undefined;
+  if (!regexAllowed) return undefined;
   const end = regexLiteralEnd(content, index);
-  return end === undefined ? { failure: scanFailure(content, index, "unterminated regular expression") } : { end };
+  return end === undefined ? { failure: scanFailure(content, index, "unterminated regular expression") } : { end, kind: "value" };
 }
 
 function scanBalancedDelimiter(content: string, start: number, open: string, close: string): BalancedScan {
   const nested: ParsedTemplate[] = [];
+  const parenthesisControls = open === "(" ? [false] : [];
   let depth = 1;
   let index = start + 1;
+  let regexAllowed = true;
+  let pendingControlHead = false;
   while (index < content.length) {
-    const lexical = lexicalItemAt(content, index, start + 1);
+    const lexical = lexicalItemAt(content, index, regexAllowed);
     if (lexical?.failure) return { failure: lexical.failure };
     if (lexical) {
       if (lexical.template) nested.push(lexical.template);
+      if (lexical.kind === "value") {
+        regexAllowed = false;
+        pendingControlHead = false;
+      }
       index = lexical.end;
       continue;
     }
-    if (content[index] === open) depth += 1;
-    else if (content[index] === close) {
+    const character = content[index];
+    if (/\s/.test(character)) {
+      index += 1;
+      continue;
+    }
+    if (/[A-Za-z_$]/.test(character)) {
+      let end = index + 1;
+      while (/[A-Za-z0-9_$]/.test(content[end] ?? "")) end += 1;
+      const keyword = content.slice(index, end);
+      pendingControlHead = controlHeadKeywords.has(keyword);
+      regexAllowed = pendingControlHead || statementPrefixKeywords.has(keyword) || expressionPrefixKeywords.has(keyword);
+      index = end;
+      continue;
+    }
+    if (/[0-9]/.test(character)) {
+      let end = index + 1;
+      while (/[A-Za-z0-9_.]/.test(content[end] ?? "")) end += 1;
+      pendingControlHead = false;
+      regexAllowed = false;
+      index = end;
+      continue;
+    }
+    if (character === "(") {
+      parenthesisControls.push(pendingControlHead);
+      pendingControlHead = false;
+      regexAllowed = true;
+      if (open === "(") depth += 1;
+      index += 1;
+      continue;
+    }
+    if (character === ")") {
+      const closedControlHead = parenthesisControls.pop() ?? false;
+      if (close === ")") {
+        depth -= 1;
+        if (depth === 0) return { end: index, nested };
+      }
+      pendingControlHead = false;
+      regexAllowed = closedControlHead;
+      index += 1;
+      continue;
+    }
+    if (character === open) depth += 1;
+    else if (character === close) {
       depth -= 1;
       if (depth === 0) return { end: index, nested };
     }
+    if (character === "\\") return { failure: scanFailure(content, index, "unexpected escape outside lexical value") };
+    pendingControlHead = false;
+    if (regexPrefixPunctuation.has(character)) regexAllowed = true;
+    else if (valueSuffixPunctuation.has(character)) regexAllowed = false;
     index += 1;
   }
   return { failure: scanFailure(content, start, `unterminated ${open}${close} expression`) };
@@ -302,10 +352,11 @@ const dynamicTailwindFindings = (source: SourceInput) => {
   }
   for (const template of parsedTemplates(source.content)) {
     const classRelevant = classAnalysis.ranges.some(({ start, end }) => template.start >= start && template.end <= end);
+    if (!classRelevant) continue;
     const unsafe = template.expressions.some((expression, index) => {
       const left = template.segments[index].match(/\S*$/)?.[0] ?? "";
       const right = template.segments[index + 1].match(/^\S*/)?.[0] ?? "";
-      if (left === "" && right === "" && classRelevant) return !staticConditionalClasses(expression);
+      if (left === "" && right === "") return !staticConditionalClasses(expression);
       return dynamicUtilityToken.test(`${left}__DYNAMIC__${right}`);
     });
     if (unsafe) {
