@@ -182,6 +182,10 @@ test("accepts a reducer-produced ready ledger for a repair-only contract", () =>
   assert.equal(run.skillLedgers[0].state, "ready");
   assert.deepEqual(run.skillLedgers[0].steps.map(({ status }) => status), ["skipped"]);
   assert.doesNotThrow(() => assertValidStrictSkillRun(run));
+
+  const forged = structuredClone(run);
+  forged.state = "verifying";
+  assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
 });
 
 test("accepts reducer verification while another ledger owns the active step", () => {

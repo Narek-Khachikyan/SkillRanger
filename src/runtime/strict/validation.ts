@@ -246,10 +246,14 @@ const assertAggregateRunState = (run: Record<string, unknown>, ledgers: Array<Re
       && (ledger.readReceipts as unknown[]).length === (ledger.contentChunks as unknown[]).length
       && (pendingWorkflow || untouchedRepairOnly);
   });
-  const hasVerifiableLedger = ledgers.some((ledger) => ledger.state === "used"
-    || (["ready", "verifying"].includes(ledger.state as string)
-      && ledger.outcome === undefined && (ledger.steps as Array<Record<string, unknown>>)
-      .every((step) => step.type === "repair" || step.status === "satisfied")));
+  const hasVerifiableLedger = ledgers.some((ledger) => {
+    if (ledger.state === "used") return true;
+    const steps = ledger.steps as Array<Record<string, unknown>>;
+    return ["ready", "verifying"].includes(ledger.state as string)
+      && ledger.outcome === undefined
+      && steps.some((step) => step.type !== "repair")
+      && steps.every((step) => step.type === "repair" || step.status === "satisfied");
+  });
   const hasUsedLedger = ledgers.some((ledger) => ledger.state === "used" && ledger.outcome === "used");
   if (state === "running" && activeCount !== 1) fail("Aggregate running state has no active step.");
   if (state === "failed" && activeCount !== 0) fail("Aggregate failed state cannot retain an active step.");
