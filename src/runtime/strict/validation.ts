@@ -237,15 +237,22 @@ const assertAggregateRunState = (run: Record<string, unknown>, ledgers: Array<Re
   const terminal = ledgers.filter((ledger) => ledger.outcome !== undefined);
   const hasReadingLedger = ledgers.some((ledger) => ledger.state === "reading" && ledger.outcome === undefined
     && (ledger.readReceipts as unknown[]).length < (ledger.contentChunks as unknown[]).length);
-  const hasReadyLedger = ledgers.some((ledger) => ledger.state === "ready" && ledger.outcome === undefined
-    && (ledger.readReceipts as unknown[]).length === (ledger.contentChunks as unknown[]).length
-    && (ledger.steps as Array<Record<string, unknown>>)
-      .some((step) => step.type !== "repair" && step.status === "pending"));
+  const hasReadyLedger = ledgers.some((ledger) => {
+    const steps = ledger.steps as Array<Record<string, unknown>>;
+    const pendingWorkflow = steps.some((step) => step.type !== "repair" && step.status === "pending");
+    const untouchedRepairOnly = steps.every((step) => step.type === "repair" && step.status === "skipped")
+      && ledger.repairIterations === 0 && (ledger.verificationReports as unknown[]).length === 0;
+    return ledger.state === "ready" && ledger.outcome === undefined
+      && (ledger.readReceipts as unknown[]).length === (ledger.contentChunks as unknown[]).length
+      && (pendingWorkflow || untouchedRepairOnly);
+  });
   const hasVerifiableLedger = ledgers.some((ledger) => ledger.state === "used"
     || (["ready", "verifying"].includes(ledger.state as string)
       && ledger.outcome === undefined && (ledger.steps as Array<Record<string, unknown>>)
       .every((step) => step.type === "repair" || step.status === "satisfied")));
-  if ((state === "running") !== (activeCount === 1)) fail("Aggregate running state does not match active steps.");
+  const hasUsedLedger = ledgers.some((ledger) => ledger.state === "used" && ledger.outcome === "used");
+  if (state === "running" && activeCount !== 1) fail("Aggregate running state has no active step.");
+  if (state === "failed" && activeCount !== 0) fail("Aggregate failed state cannot retain an active step.");
   if (state === "planned" && (terminal.length !== ledgers.length || ledgers.some((ledger) => ledger.outcome === "used"))) {
     fail("Aggregate planned state is incompatible with its ledger outcomes.");
   }
@@ -253,7 +260,9 @@ const assertAggregateRunState = (run: Record<string, unknown>, ledgers: Array<Re
     fail("Aggregate reading state has no unread skill content.");
   }
   if (state === "ready" && !hasReadyLedger) fail("Aggregate ready state has no ready ledger.");
-  if (state === "verifying" && !hasVerifiableLedger) fail("Aggregate verifying state has no verifiable ledger.");
+  if (state === "verifying" && !(activeCount === 0 ? hasVerifiableLedger : hasUsedLedger)) {
+    fail("Aggregate verifying state has no compatible verification result.");
+  }
   if (state === "repair-required" && !ledgers.some((ledger) => ledger.state === "repair-required")) {
     fail("Aggregate repair-required state has no repair-required ledger.");
   }

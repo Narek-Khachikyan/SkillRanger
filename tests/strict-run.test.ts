@@ -142,6 +142,85 @@ const renamedContract = (skillId: string): ExecutionContractV2 => JSON.parse(
   JSON.stringify(contract()).replaceAll("frontend.test-skill", skillId),
 ) as ExecutionContractV2;
 
+const attachForSkill = (
+  run: ReturnType<typeof created>,
+  skillId: string,
+  kind: string,
+  stepId: string,
+  validatedAs?: "output",
+) => {
+  const ledger = run.skillLedgers.find((candidate) => candidate.skillId === skillId)!;
+  const attempt = ledger.steps.find(({ id }) => id === stepId)!.attempts.at(-1)!.attempt;
+  return addStrictEvidence(run, {
+    artifactId: `artifact-${skillId}-${kind}-${run.revision}`,
+    kind,
+    path: `artifacts/${skillId}-${kind}.json`,
+    sha256: sha(`${skillId}-${kind}-${run.revision}`),
+    size: 10,
+    sourceControl: { mode: "non-git" },
+    ...(validatedAs ? { validatedAs } : {}),
+    attributions: [{ skillId, stepId, attempt, relation: "produced", ruleIds: ledger.contract.rules.map(({ id }) => id) }],
+  });
+};
+
+test("accepts a reducer-produced ready ledger for a repair-only contract", () => {
+  const skillId = "frontend.repair-only";
+  const repairOnly = renamedContract(skillId);
+  repairOnly.steps = repairOnly.steps.filter(({ type }) => type === "repair");
+  let run = createStrictSkillRun({
+    runId: "run_repair_only", domain: "frontend", targetAgent: "codex", locale: "en",
+    intent: { sha256: sha("repair only"), normalizedGoal: "validate a repair-only contract" },
+    selectedSkills: [selection({
+      skillId,
+      contract: repairOnly,
+      contractChecksum: sha(JSON.stringify(repairOnly)),
+    })],
+  });
+  while (run.state === "reading") run = readNextStrictChunk(run, skillId).run;
+
+  assert.equal(run.state, "ready");
+  assert.equal(run.skillLedgers[0].state, "ready");
+  assert.deepEqual(run.skillLedgers[0].steps.map(({ status }) => status), ["skipped"]);
+  assert.doesNotThrow(() => assertValidStrictSkillRun(run));
+});
+
+test("accepts reducer verification while another ledger owns the active step", () => {
+  const firstSkillId = "frontend.first";
+  const secondSkillId = "frontend.second";
+  const firstContract = renamedContract(firstSkillId);
+  const secondContract = renamedContract(secondSkillId);
+  let run = createStrictSkillRun({
+    runId: "run_multi_active", domain: "frontend", targetAgent: "codex", locale: "en",
+    intent: { sha256: sha("multi active"), normalizedGoal: "verify one active multi-ledger run" },
+    selectedSkills: [
+      selection({ skillId: firstSkillId, contract: firstContract, contractChecksum: sha(JSON.stringify(firstContract)) }),
+      selection({ skillId: secondSkillId, contract: secondContract, contractChecksum: sha(JSON.stringify(secondContract)) }),
+    ],
+  });
+  for (const skillId of [firstSkillId, secondSkillId]) {
+    const ledger = () => run.skillLedgers.find((candidate) => candidate.skillId === skillId)!;
+    while (ledger().readReceipts.length < ledger().contentChunks.length) run = readNextStrictChunk(run, skillId).run;
+  }
+  run = beginStrictStep(run, firstSkillId, firstContract.steps[0].id);
+  run = attachForSkill(run, firstSkillId, "inspection", firstContract.steps[0].id);
+  run = completeStrictStep(run, firstSkillId, firstContract.steps[0].id);
+  run = beginStrictStep(run, firstSkillId, firstContract.steps[2].id);
+  run = attachForSkill(run, firstSkillId, "skill-output", firstContract.steps[2].id, "output");
+  run = completeStrictStep(run, firstSkillId, firstContract.steps[2].id);
+  run = beginStrictStep(run, secondSkillId, secondContract.steps[0].id);
+  run = verifyStrictSkill(run, firstSkillId, {
+    validatorResults: { "core/artifact-integrity": { passed: true } },
+  });
+
+  assert.equal(run.state, "verifying");
+  assert.deepEqual(run.skillLedgers.map(({ state }) => state), ["used", "running"]);
+  assert.doesNotThrow(() => assertValidStrictSkillRun(run));
+
+  const forged = structuredClone(run);
+  forged.state = "failed";
+  assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
+});
+
 test("chunks UTF-8 content deterministically and requires every sequential receipt", () => {
   const chunks = createContentChunks("SKILL.md", "1234567890\nабвгд\nlast", 12);
   assert.equal(chunks.map(({ content }) => content).join(""), "1234567890\nабвгд\nlast");
