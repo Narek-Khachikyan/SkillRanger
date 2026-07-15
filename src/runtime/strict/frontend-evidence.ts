@@ -127,10 +127,47 @@ export const deriveBrowserGateResults = (
   };
 };
 
-const oldFileHeader = /^--- (?:a\/\S+|\/dev\/null)(?:\t.*)?$/;
-const newFileHeader = /^\+\+\+ (?:b\/\S+|\/dev\/null)(?:\t.*)?$/;
-const diffHeader = /^diff --git a\/\S+ b\/\S+$/;
+const quotedPathEnd = (value: string, start: number) => {
+  if (value[start] !== "\"") return undefined;
+  for (let index = start + 1; index < value.length; index += 1) {
+    if (value[index] === "\\") index += 1;
+    else if (value[index] === "\"") return index + 1;
+  }
+  return undefined;
+};
+const validFileHeader = (line: string, prefix: "--- " | "+++ ") => {
+  if (!line.startsWith(prefix)) return false;
+  const value = line.slice(prefix.length);
+  if (value.startsWith("\"")) {
+    const end = quotedPathEnd(value, 0);
+    if (end === undefined || end === 2) return false;
+    return end === value.length || value[end] === "\t";
+  }
+  const tab = value.indexOf("\t");
+  const filePath = tab === -1 ? value : value.slice(0, tab);
+  return filePath !== "" && !/[\r\n]/.test(filePath);
+};
+const oldFileHeader = (line: string) => validFileHeader(line, "--- ");
+const newFileHeader = (line: string) => validFileHeader(line, "+++ ");
+const diffPathEnd = (value: string, start: number) => {
+  if (value[start] === "\"") return quotedPathEnd(value, start);
+  let index = start;
+  while (index < value.length && !/\s/.test(value[index])) index += 1;
+  return index === start ? undefined : index;
+};
+const diffHeader = (line: string) => {
+  const prefix = "diff --git ";
+  if (!line.startsWith(prefix)) return false;
+  let cursor = prefix.length;
+  const oldEnd = diffPathEnd(line, cursor);
+  if (oldEnd === undefined || line[oldEnd] !== " ") return false;
+  cursor = oldEnd;
+  while (line[cursor] === " ") cursor += 1;
+  const newEnd = diffPathEnd(line, cursor);
+  return newEnd !== undefined && newEnd === line.length;
+};
 const hunkHeader = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@(?: .*)?$/;
+const noNewlineMarker = "\\ No newline at end of file";
 const parseUnifiedDiffAddedContent = (content: string) => {
   const lines = content.split(/\r?\n/);
   const added: string[] = [];
@@ -138,14 +175,14 @@ const parseUnifiedDiffAddedContent = (content: string) => {
   let files = 0;
   while (index < lines.length) {
     if (lines.slice(index).every((line) => line === "")) break;
-    if (diffHeader.test(lines[index])) {
+    if (diffHeader(lines[index])) {
       index += 1;
-      while (index < lines.length && !oldFileHeader.test(lines[index])) {
-        if (diffHeader.test(lines[index]) || hunkHeader.test(lines[index])) return undefined;
+      while (index < lines.length && !oldFileHeader(lines[index])) {
+        if (diffHeader(lines[index]) || hunkHeader.test(lines[index])) return undefined;
         index += 1;
       }
     }
-    if (!oldFileHeader.test(lines[index] ?? "") || !newFileHeader.test(lines[index + 1] ?? "")) return undefined;
+    if (!oldFileHeader(lines[index] ?? "") || !newFileHeader(lines[index + 1] ?? "")) return undefined;
     files += 1;
     index += 2;
     let hunks = 0;
@@ -163,15 +200,17 @@ const parseUnifiedDiffAddedContent = (content: string) => {
         if (prefix === " ") { oldRemaining -= 1; newRemaining -= 1; }
         else if (prefix === "-") oldRemaining -= 1;
         else if (prefix === "+") { newRemaining -= 1; added.push(line.slice(1)); }
-        else if (prefix === "\\") { index += 1; continue; }
         else return undefined;
         if (oldRemaining < 0 || newRemaining < 0) return undefined;
         index += 1;
+        if (lines[index] === noNewlineMarker) {
+          index += 1;
+          if (lines[index] === noNewlineMarker) return undefined;
+        }
       }
-      if (lines[index]?.startsWith("\\ No newline at end of file")) index += 1;
     }
     if (hunks === 0) return undefined;
-    if (index < lines.length && lines[index] !== "" && !diffHeader.test(lines[index]) && !oldFileHeader.test(lines[index])) return undefined;
+    if (index < lines.length && lines[index] !== "" && !diffHeader(lines[index]) && !oldFileHeader(lines[index])) return undefined;
   }
   return files > 0 ? added.join("\n") : undefined;
 };

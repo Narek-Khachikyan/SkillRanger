@@ -28,35 +28,240 @@ const lineNumber = (content: string, index: number) =>
 const sourceEvidence = (source: SourceInput, index: number, snippet: string) =>
   `${source.path}:${lineNumber(source.content, index)} ${snippet.trim()}`;
 
-const dynamicUtilityToken = /(?:^|:)(?:bg|text|border|ring|fill|stroke|grid-cols|col-span|row-span|flex|gap|space-[xy]|[mp][trblxy]?|z|translate-[xy]|scale|rotate|opacity)-\S*__DYNAMIC__/i;
+const utilityPrefix = "(?:bg|text|border|ring|fill|stroke|grid-cols|col-span|row-span|flex|gap|space-[xy]|[mp][trblxy]?|z|translate-[xy]|scale|rotate|opacity)";
+const dynamicUtilityToken = new RegExp(`(?:^|:)${utilityPrefix}-\\S*__DYNAMIC__`, "i");
+const completeStaticUtilityToken = new RegExp(`^(?:[^\\s:]+:)*${utilityPrefix}-[^\\s"'\\\`{}$+]+$`, "i");
 const staticConditionalClasses = (expression: string) => {
   const match = /^\s*[^?]+\?\s*(["'])(.*?)\1\s*:\s*(["'])(.*?)\3\s*$/s.exec(expression);
   if (!match) return false;
   return [match[2], match[4]].every((branch) => {
     const tokens = branch.trim().split(/\s+/).filter(Boolean);
-    return tokens.length > 0 && tokens.every((token) => /^[^\s"'`{}$+]+$/.test(token));
+    return tokens.length > 0 && tokens.every((token) => completeStaticUtilityToken.test(token));
   });
+};
+
+type ParsedTemplate = {
+  start: number;
+  end: number;
+  segments: string[];
+  expressions: string[];
+  nested: ParsedTemplate[];
+};
+
+const quotedEnd = (content: string, start: number, quote: "\"" | "'") => {
+  for (let index = start + 1; index < content.length; index += 1) {
+    if (content[index] === "\\") index += 1;
+    else if (content[index] === quote) return index + 1;
+  }
+  return undefined;
+};
+
+const commentEnd = (content: string, start: number) => {
+  if (content[start + 1] === "/") {
+    const newline = content.indexOf("\n", start + 2);
+    return newline === -1 ? content.length : newline;
+  }
+  if (content[start + 1] === "*") {
+    const close = content.indexOf("*/", start + 2);
+    return close === -1 ? undefined : close + 2;
+  }
+  return undefined;
+};
+
+function templateExpressionEnd(content: string, start: number): { end: number; nested: ParsedTemplate[] } | undefined {
+  const nested: ParsedTemplate[] = [];
+  let depth = 1;
+  for (let index = start; index < content.length; index += 1) {
+    const character = content[index];
+    if (character === "\"" || character === "'") {
+      const end = quotedEnd(content, index, character);
+      if (end === undefined) return undefined;
+      index = end - 1;
+    } else if (character === "`") {
+      const template = parseTemplateAt(content, index);
+      if (!template) return undefined;
+      nested.push(template);
+      index = template.end - 1;
+    } else if (character === "/" && (content[index + 1] === "/" || content[index + 1] === "*")) {
+      const end = commentEnd(content, index);
+      if (end === undefined) return undefined;
+      index = end - 1;
+    } else if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return { end: index, nested };
+    }
+  }
+  return undefined;
+}
+
+function parseTemplateAt(content: string, start: number): ParsedTemplate | undefined {
+  const segments: string[] = [];
+  const expressions: string[] = [];
+  const nested: ParsedTemplate[] = [];
+  let segmentStart = start + 1;
+  for (let index = segmentStart; index < content.length; index += 1) {
+    if (content[index] === "\\") {
+      index += 1;
+      continue;
+    }
+    if (content[index] === "`") {
+      segments.push(content.slice(segmentStart, index));
+      return { start, end: index + 1, segments, expressions, nested };
+    }
+    if (content[index] !== "$" || content[index + 1] !== "{") continue;
+    segments.push(content.slice(segmentStart, index));
+    const expressionStart = index + 2;
+    const expression = templateExpressionEnd(content, expressionStart);
+    if (!expression) return undefined;
+    expressions.push(content.slice(expressionStart, expression.end));
+    nested.push(...expression.nested);
+    index = expression.end;
+    segmentStart = index + 1;
+  }
+  return undefined;
+}
+
+const parsedTemplates = (content: string) => {
+  const templates: ParsedTemplate[] = [];
+  const append = (template: ParsedTemplate) => {
+    templates.push(template);
+    template.nested.forEach(append);
+  };
+  for (let index = 0; index < content.length; index += 1) {
+    if (content[index] !== "`") continue;
+    const template = parseTemplateAt(content, index);
+    if (!template) continue;
+    append(template);
+    index = template.end - 1;
+  }
+  return templates;
+};
+
+const balancedDelimiterEnd = (content: string, start: number, open: string, close: string) => {
+  let depth = 1;
+  for (let index = start + 1; index < content.length; index += 1) {
+    const character = content[index];
+    if (character === "\"" || character === "'") {
+      const end = quotedEnd(content, index, character);
+      if (end === undefined) return undefined;
+      index = end - 1;
+    } else if (character === "`") {
+      const template = parseTemplateAt(content, index);
+      if (!template) return undefined;
+      index = template.end - 1;
+    } else if (character === "/" && (content[index + 1] === "/" || content[index + 1] === "*")) {
+      const end = commentEnd(content, index);
+      if (end === undefined) return undefined;
+      index = end - 1;
+    } else if (character === open) {
+      depth += 1;
+    } else if (character === close) {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return undefined;
+};
+
+type SourceRange = { start: number; end: number };
+const relevantClassExpressionRanges = (content: string) => {
+  const ranges: SourceRange[] = [];
+  const assignment = /\b(?:className|class)\s*=\s*/g;
+  for (const match of content.matchAll(assignment)) {
+    const start = (match.index ?? 0) + match[0].length;
+    if (content[start] === "{") {
+      const end = balancedDelimiterEnd(content, start, "{", "}");
+      if (end !== undefined) ranges.push({ start: start + 1, end });
+    }
+  }
+  const compositionCall = /\b(?:cn|clsx|classnames|classNames|twMerge|twJoin|cva)\s*\(/g;
+  for (const match of content.matchAll(compositionCall)) {
+    const open = (match.index ?? 0) + match[0].lastIndexOf("(");
+    const end = balancedDelimiterEnd(content, open, "(", ")");
+    if (end !== undefined) ranges.push({ start: open + 1, end });
+  }
+  return ranges;
+};
+
+type ConcatenationOperand = { end: number; value?: string };
+const concatenationOperand = (content: string, start: number, end: number): ConcatenationOperand | undefined => {
+  let index = start;
+  while (index < end && /\s/.test(content[index])) index += 1;
+  if (content[index] === "\"" || content[index] === "'") {
+    const literalEnd = quotedEnd(content, index, content[index] as "\"" | "'");
+    if (literalEnd === undefined || literalEnd > end) return undefined;
+    return { end: literalEnd, value: content.slice(index + 1, literalEnd - 1) };
+  }
+  const operandStart = index;
+  const delimiters: string[] = [];
+  const pairs: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
+  while (index < end) {
+    const character = content[index];
+    if (character === "\"" || character === "'") {
+      const literalEnd = quotedEnd(content, index, character);
+      if (literalEnd === undefined || literalEnd > end) return undefined;
+      index = literalEnd;
+      continue;
+    }
+    if (character === "`") {
+      const template = parseTemplateAt(content, index);
+      if (!template || template.end > end) return undefined;
+      index = template.end;
+      continue;
+    }
+    if (pairs[character]) delimiters.push(pairs[character]);
+    else if (delimiters.at(-1) === character) delimiters.pop();
+    else if (delimiters.length === 0 && (character === "," || character === ";" || character === "+")) break;
+    index += 1;
+  }
+  return content.slice(operandStart, index).trim() === "" ? undefined : { end: index };
+};
+
+const dynamicConcatenations = (content: string) => {
+  const matches: Array<{ index: number; value: string }> = [];
+  const matchedStarts = new Set<number>();
+  for (const range of relevantClassExpressionRanges(content)) {
+    for (let start = range.start; start < range.end; start += 1) {
+      if ((content[start] !== "\"" && content[start] !== "'") || matchedStarts.has(start)) continue;
+      let operand = concatenationOperand(content, start, range.end);
+      if (!operand?.value) continue;
+      let combined = operand.value;
+      let cursor = operand.end;
+      let dynamic = false;
+      let operators = 0;
+      while (cursor < range.end) {
+        while (cursor < range.end && /\s/.test(content[cursor])) cursor += 1;
+        if (content[cursor] !== "+" || content[cursor + 1] === "+") break;
+        operators += 1;
+        operand = concatenationOperand(content, cursor + 1, range.end);
+        if (!operand) break;
+        if (operand.value === undefined) {
+          combined += "__DYNAMIC__";
+          dynamic = true;
+        } else {
+          combined += operand.value;
+        }
+        cursor = operand.end;
+      }
+      const unsafe = dynamic && combined.split(/\s+/).some((token) => dynamicUtilityToken.test(token));
+      if (operators > 0 && unsafe) {
+        matchedStarts.add(start);
+        matches.push({ index: start, value: content.slice(start, cursor) });
+      }
+    }
+  }
+  return matches;
 };
 
 const dynamicTailwindFindings = (source: SourceInput) => {
   const findings: VerificationFinding[] = [];
-  const templates = /`((?:\\.|[^`])*)`/gs;
-  for (const template of source.content.matchAll(templates)) {
-    const body = template[1];
-    const interpolation = /\$\{([^{}]*)\}/g;
-    const segments: string[] = [];
-    const expressions: string[] = [];
-    let cursor = 0;
-    for (const match of body.matchAll(interpolation)) {
-      segments.push(body.slice(cursor, match.index));
-      expressions.push(match[1]);
-      cursor = (match.index ?? 0) + match[0].length;
-    }
-    segments.push(body.slice(cursor));
-    const unsafe = expressions.some((expression, index) => {
-      if (staticConditionalClasses(expression)) return false;
-      const left = segments[index].match(/\S*$/)?.[0] ?? "";
-      const right = segments[index + 1].match(/^\S*/)?.[0] ?? "";
+  for (const template of parsedTemplates(source.content)) {
+    const unsafe = template.expressions.some((expression, index) => {
+      const left = template.segments[index].match(/\S*$/)?.[0] ?? "";
+      const right = template.segments[index + 1].match(/^\S*/)?.[0] ?? "";
+      if (left === "" && right === "" && staticConditionalClasses(expression)) return false;
       return dynamicUtilityToken.test(`${left}__DYNAMIC__${right}`);
     });
     if (unsafe) {
@@ -65,20 +270,18 @@ const dynamicTailwindFindings = (source: SourceInput) => {
         severity: "high",
         gate: "hard",
         message: "Dynamic Tailwind utility construction may be absent from generated CSS.",
-        evidence: [sourceEvidence(source, template.index ?? 0, template[0])],
+        evidence: [sourceEvidence(source, template.start, source.content.slice(template.start, template.end))],
         remediation: "Map variants to complete static utility strings that Tailwind can detect.",
       }));
     }
   }
-  const concatenation = /(?:className|class)\s*=\s*\{?['"][^'"]*['"]\s*\+\s*[^}\n]+/g;
-  for (const match of source.content.matchAll(concatenation)) {
-    if (!/(?:^|[\s"'])(?:bg|text|border|ring|fill|stroke|grid-cols|col-span|row-span|flex|gap|space-[xy]|[mp][trblxy]?|z|translate-[xy]|scale|rotate|opacity)-/i.test(match[0])) continue;
+  for (const match of dynamicConcatenations(source.content)) {
     findings.push(finding({
       code: "tailwind-dynamic-class",
       severity: "high",
       gate: "hard",
       message: "Dynamic Tailwind utility construction may be absent from generated CSS.",
-      evidence: [sourceEvidence(source, match.index ?? 0, match[0])],
+      evidence: [sourceEvidence(source, match.index, match.value)],
       remediation: "Map variants to complete static utility strings that Tailwind can detect.",
     }));
   }

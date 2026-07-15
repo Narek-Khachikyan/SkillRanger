@@ -194,6 +194,38 @@ test("keeps parsing added diff payload after an increment expression", () => {
   assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
 });
 
+test("falls back to whole-source validation for arbitrary diff marker lines", () => {
+  const results = deriveTailwindSourceResults(`diff --git a/Card.tsx b/Card.tsx
+--- a/Card.tsx
++++ b/Card.tsx
+@@ -1 +1 @@
+-<div className={\`bg-\${color}-600\`}>Save</div>
+\\ arbitrary marker
++<div className="bg-brand-600">Save</div>
+`);
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("accepts quoted Git and space-containing unified diff paths", () => {
+  const quotedGit = deriveTailwindSourceResults(`diff --git "a/components/My Card.tsx" "b/components/My Card.tsx"
+--- "a/components/My Card.tsx"
++++ "b/components/My Card.tsx"
+@@ -1 +1 @@
+-<div className={\`bg-\${color}-600\`}>Save</div>
++<div className="bg-brand-600">Save</div>
+`);
+  const standardUnified = deriveTailwindSourceResults(`--- old/components/My Card.tsx\t2026-07-15
++++ new/components/My Card.tsx\t2026-07-15
+@@ -1 +1 @@
+-<div className={\`bg-\${color}-600\`}>Save</div>
++<div className="bg-brand-600">Save</div>
+`);
+
+  assert.equal(quotedGit["no-dynamic-tailwind-classes"].passed, true);
+  assert.equal(standardUnified["no-dynamic-tailwind-classes"].passed, true);
+});
+
 test("falls back to whole-source validation for diff-like ordinary source", () => {
   const results = deriveTailwindSourceResults(`/*
 --- a/Card.tsx
@@ -218,6 +250,12 @@ test("detects dynamic Tailwind construction inside class composition calls", () 
   assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
 });
 
+test("detects dynamic Tailwind concatenation inside class composition calls", () => {
+  const results = deriveTailwindSourceResults('const classes = cn("bg-" + color + "-500");');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
 test("detects dynamic Tailwind construction after a variant prefix", () => {
   const results = deriveTailwindSourceResults('<div className={`hover:bg-${color}-600`}>Save</div>');
 
@@ -228,6 +266,18 @@ test("accepts conditional interpolation of complete static Tailwind tokens", () 
   const results = deriveTailwindSourceResults('<div className={`${active ? "bg-red-500" : "bg-blue-500"}`}>Save</div>');
 
   assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
+test("rejects conditional interpolation of Tailwind token fragments", () => {
+  const results = deriveTailwindSourceResults('<div className={`bg-${active ? "red" : "blue"}-500`}>Save</div>');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("parses balanced braces in dynamic Tailwind interpolation expressions", () => {
+  const results = deriveTailwindSourceResults('<div className={`bg-${({ color }).color}-500`}>Save</div>');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
 });
 
 test("strict store writes atomically and rejects a tampered persisted content snapshot", async () => {
