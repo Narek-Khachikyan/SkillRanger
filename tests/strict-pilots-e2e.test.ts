@@ -76,7 +76,10 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
   const store = new StrictSkillRunStore(root); run = await readAll(store, run, skillId);
   run = await step(root, store, run, skillId, [{ kind: "project-archetype", value: "tailwind\n" }]);
   run = await step(root, store, run, skillId, [{ kind: "browser-screenshot-before", value: "before\n" }]);
-  run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: { checks: { "no-dynamic-tailwind-classes": true }, diff: "+ <div className={`p-4 bg-${color}-600`}>Save</div>" } }]);
+  run = await step(root, store, run, skillId, [
+    { kind: "implementation-diff", value: '+ <div className={`p-4 bg-${color}-600`}>Save</div>\n' },
+    { kind: "implementation-diff", value: { checks: { "no-dynamic-tailwind-classes": true }, diff: '+ <div className="bg-brand-600">Save</div>' } },
+  ]);
   run = await step(root, store, run, skillId, [{ kind: "browser-screenshot-initial", value: "initial\n" }]);
   run = await step(root, store, run, skillId, [{ kind: "critic-report", validatedAs: "critic-report", value: { schemaVersion: "2.0", skillId, criticInvocationId: "critic-2", executorInvocationId: "executor-1", outcome: "clean", findings: [] } }]);
   run = await step(root, store, run, skillId, ["browser-screenshot-390", "browser-screenshot-768", "browser-screenshot-1440"].map((kind) => ({ kind, value: `${kind}\n` })));
@@ -113,6 +116,6 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
   run = await step(root, store, run, skillId, [{ kind: "verification-input", value: { observations } }]);
   run = await step(root, store, run, skillId, [{ kind: "skill-output", validatedAs: "output", value: { outcome: "verified", classification: "hierarchy", changes: ["repaired"], verification: {}, residualRisks: [] } }]);
   run = await store.verifySkill(run.runId, skillId);
-  assert.equal(run.skillLedgers[0].outcome, "used");
+  assert.equal(run.skillLedgers[0].outcome, "used", JSON.stringify(run.skillLedgers[0].verificationReports.at(-1)));
   assert.equal(finalizeStrictRun(run).state, "verified");
 });

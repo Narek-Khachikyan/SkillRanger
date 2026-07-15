@@ -85,13 +85,30 @@ export const deriveStrictValidatorResults = async (
 
   const output = parse(artifacts.findLast(({ validatedAs }) => validatedAs === "output"), artifactBytes);
   const verificationInput = parse(artifacts.findLast(({ kind }) => kind === "verification-input"), artifactBytes);
-  const implementationDiff = artifacts.findLast(({ kind }) => kind === "implementation-diff");
-  const sourceReview = parse(implementationDiff, artifactBytes);
+  const latestImplementationDiff = artifacts.findLast(({ kind }) => kind === "implementation-diff");
+  const latestSourceProducer = latestImplementationDiff?.attributions.find(({ relation }) => relation === "produced");
+  const implementationDiffs = latestSourceProducer
+    ? artifacts.filter((artifact) => artifact.kind === "implementation-diff" && artifact.attributions.some((attribution) =>
+      attribution.relation === "produced"
+      && attribution.skillId === latestSourceProducer.skillId
+      && attribution.stepId === latestSourceProducer.stepId
+      && attribution.attempt === latestSourceProducer.attempt))
+    : [];
+  const sourceReview = parse(implementationDiffs.at(-1), artifactBytes);
   const criticReport = parse(artifacts.findLast(({ validatedAs }) => validatedAs === "critic-report"), artifactBytes);
   const browser = deriveBrowserGateResults(verificationInput, artifacts);
-  const source = deriveTailwindSourceResults(
-    implementationDiff ? artifactBytes.get(implementationDiff.artifactId)?.toString("utf8") ?? "" : "",
-  );
+  const sourceResults = implementationDiffs.map((artifact) =>
+    deriveTailwindSourceResults(artifactBytes.get(artifact.artifactId)?.toString("utf8") ?? ""));
+  const source = Object.fromEntries([
+    "no-dynamic-tailwind-classes",
+    "raw-colors-reviewed",
+    "repeated-class-bundles-reviewed",
+  ].map((slug) => {
+    const failed = sourceResults.find((candidate) => candidate[slug]?.passed !== true)?.[slug];
+    return [slug, failed ?? (sourceResults.length > 0
+      ? { passed: true }
+      : { passed: false, message: "No implementation diff evidence was staged." })];
+  }));
 
   for (const gate of ledger.contract.gates) {
     if (gate.evaluator.type !== "validator") continue;

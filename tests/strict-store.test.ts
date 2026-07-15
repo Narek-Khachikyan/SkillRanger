@@ -123,6 +123,33 @@ test("derives browser gates only from closed observations bound to screenshot ev
   assert.ok(Object.values(openShape).every(({ passed }) => !passed));
 });
 
+test("rejects reuse of one screenshot across required browser viewports", () => {
+  const observations = [390, 768, 1440].map((width) => ({
+    ...browserObservation(width),
+    screenshotPath: "evidence/shared.png",
+  }));
+  const artifacts = [390, 768, 1440].map((width) => ({
+    kind: `browser-screenshot-${width}`,
+    sourcePath: "evidence/shared.png",
+  })) as EvidenceArtifact[];
+
+  const results = deriveBrowserGateResults({ observations }, artifacts);
+
+  assert.ok(Object.values(results).every(({ passed, message }) => !passed && /distinct screenshot/i.test(message ?? "")));
+});
+
+test("binds each browser observation viewport to its screenshot artifact kind", () => {
+  const observations = [390, 768, 1440].map(browserObservation);
+  const mismatched = browserArtifacts.map((artifact, index) => ({
+    ...artifact,
+    kind: `browser-screenshot-${[768, 390, 1440][index]}`,
+  }));
+
+  const results = deriveBrowserGateResults({ observations }, mismatched);
+
+  assert.ok(Object.values(results).every(({ passed, message }) => !passed && /not bound/i.test(message ?? "")));
+});
+
 test("derives Tailwind source gates from staged source text instead of checks claims", () => {
   const dynamic = deriveTailwindSourceResults('{"checks":{"no-dynamic-tailwind-classes":true},"diff":"+ <div className={`p-4 bg-${color}-600`}>"}');
   assert.equal(dynamic["no-dynamic-tailwind-classes"].passed, false);
@@ -133,6 +160,32 @@ test("derives Tailwind source gates from staged source text instead of checks cl
 
   const conflicting = deriveTailwindSourceResults('+ <div className="block flex">Save</div>');
   assert.equal(conflicting["repeated-class-bundles-reviewed"].passed, false);
+});
+
+test("detects dynamic Tailwind templates in first and later class positions", () => {
+  const first = deriveTailwindSourceResults('<div className={`bg-${color}-600`}>Save</div>');
+  const later = deriveTailwindSourceResults('<div className={`p-4 bg-${color}-600`}>Save</div>');
+
+  assert.equal(first["no-dynamic-tailwind-classes"].passed, false);
+  assert.equal(later["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("validates only added content in a unified implementation diff", () => {
+  const results = deriveTailwindSourceResults(`diff --git a/Card.tsx b/Card.tsx
+--- a/Card.tsx
++++ b/Card.tsx
+@@ -1 +1 @@
+-<div className={\`p-4 bg-\${color}-600\`}>Save</div>
++<div className="bg-brand-600">Save</div>
+`);
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
+test("derives the raw color advisory from staged source text", () => {
+  const results = deriveTailwindSourceResults('<div className="bg-red-500">Save</div>');
+
+  assert.equal(results["raw-colors-reviewed"].passed, false);
 });
 
 test("strict store writes atomically and rejects a tampered persisted content snapshot", async () => {

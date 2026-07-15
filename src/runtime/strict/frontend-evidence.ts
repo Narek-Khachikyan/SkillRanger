@@ -102,13 +102,17 @@ export const deriveBrowserGateResults = (
   } catch (error) {
     return failed(error instanceof Error ? error.message : "verification-input must contain valid browser observations.");
   }
-  const screenshotSources = new Set(
+  const screenshotBindings = new Set(
     artifacts
-      .filter(({ kind }) => kind.startsWith("browser-screenshot-"))
-      .map(({ sourcePath }) => sourcePath)
-      .filter((sourcePath): sourcePath is string => typeof sourcePath === "string"),
+      .filter((artifact): artifact is EvidenceArtifact & { sourcePath: string } =>
+        /^browser-screenshot-\d+$/.test(artifact.kind) && typeof artifact.sourcePath === "string")
+      .map(({ kind, sourcePath }) => `${kind.slice("browser-screenshot-".length)}::${sourcePath}`),
   );
-  if (observations.some(({ screenshotPath }) => !screenshotSources.has(screenshotPath))) {
+  const observationScreenshotPaths = observations.map(({ screenshotPath }) => screenshotPath);
+  if (new Set(observationScreenshotPaths).size !== observationScreenshotPaths.length) {
+    return failed("Browser observations must use distinct screenshot paths.");
+  }
+  if (observations.some(({ viewport, screenshotPath }) => !screenshotBindings.has(`${viewport.width}::${screenshotPath}`))) {
     return failed("Observation screenshot is not bound to ingested evidence.");
   }
   const widths = new Set(observations.map(({ viewport }) => viewport.width));
@@ -123,8 +127,26 @@ export const deriveBrowserGateResults = (
   };
 };
 
+const addedUnifiedDiffContent = (content: string) => {
+  const lines = content.split(/\r?\n/);
+  const hasHunk = lines.some((line) => /^@@(?:\s|$)/.test(line));
+  const hasFileHeaders = lines.some((line) => /^---\s/.test(line)) && lines.some((line) => /^\+\+\+\s/.test(line));
+  if (!hasHunk || !hasFileHeaders) return content;
+  const added: string[] = [];
+  let inHunk = false;
+  for (const line of lines) {
+    if (/^@@(?:\s|$)/.test(line)) { inHunk = true; continue; }
+    if (/^(?:diff --git |---\s|\+\+\+\s)/.test(line)) { inHunk = false; continue; }
+    if (inHunk && line.startsWith("+")) added.push(line.slice(1));
+  }
+  return added.join("\n");
+};
+
 export const deriveTailwindSourceResults = (content: string): Record<string, Result> => {
-  const findings = validateFrontendSources([{ path: "implementation.diff", content }]);
+  const findings = validateFrontendSources(
+    [{ path: "implementation.diff", content: addedUnifiedDiffContent(content) }],
+    { semanticTokensPresent: true },
+  );
   return {
     "no-dynamic-tailwind-classes": { passed: !findings.some(({ code, gate }) => code === "tailwind-dynamic-class" && gate === "hard") },
     "raw-colors-reviewed": { passed: !findings.some(({ code }) => code === "design-system-raw-color") },

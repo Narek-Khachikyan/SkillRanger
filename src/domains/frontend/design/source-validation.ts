@@ -37,7 +37,7 @@ const dynamicTailwindFindings = (source: SourceInput) => {
   for (const pattern of patterns) {
     for (const match of source.content.matchAll(pattern)) {
       const value = match[0];
-      if (!/(?:^|\s)(?:bg|text|border|ring|fill|stroke|grid-cols|col-span|row-span|flex|gap|space-[xy]|[mp][trblxy]?|z|translate-[xy]|scale|rotate|opacity)-/i.test(value)) continue;
+      if (!/(?:^|[\s"'`])(?:bg|text|border|ring|fill|stroke|grid-cols|col-span|row-span|flex|gap|space-[xy]|[mp][trblxy]?|z|translate-[xy]|scale|rotate|opacity)-/i.test(value)) continue;
       findings.push(finding({
         code: "tailwind-dynamic-class",
         severity: "high",
