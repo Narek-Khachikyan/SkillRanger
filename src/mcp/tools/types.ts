@@ -32,7 +32,17 @@ export type McpToolErrorCode =
   | "stale-plan"
   | "unsupported-target"
   | "unknown-tool"
-  | "verification-blocked";
+  | "verification-blocked"
+  | "strict-contract-missing"
+  | "strict-skill-not-installed"
+  | "skill-content-unread"
+  | "step-out-of-order"
+  | "evidence-missing"
+  | "unknown-rule-id"
+  | "artifact-integrity"
+  | "hard-gate-failed"
+  | "repair-limit"
+  | "run-not-finalizable";
 
 export class McpToolError extends Error {
   code: McpToolErrorCode;

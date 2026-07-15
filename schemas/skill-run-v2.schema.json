@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/schemas/skill-run-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "certification", "runId", "domain", "targetAgent", "locale", "state", "revision", "createdAt", "updatedAt", "intent", "recommendations", "excludedRecommendations", "skillLedgers", "artifacts", "sourceControl"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "certification": { "const": "strict" },
+    "runId": { "type": "string", "pattern": "^run_[a-z0-9_-]{7,127}$" },
+    "domain": { "type": "string", "minLength": 1 },
+    "targetAgent": { "type": "string", "minLength": 1 },
+    "locale": { "enum": ["en", "ru", "mixed", "unknown"] },
+    "state": { "enum": ["planned", "reading", "ready", "running", "verifying", "repair-required", "verified", "blocked", "failed"] },
+    "revision": { "type": "integer", "minimum": 0 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "intent": { "$ref": "#/$defs/intent" },
+    "recommendations": { "type": "array", "items": { "$ref": "#/$defs/recommendation" } },
+    "excludedRecommendations": { "type": "array", "items": { "$ref": "#/$defs/excluded" } },
+    "skillLedgers": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/ledger" } },
+    "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
+    "sourceControl": { "$ref": "#/$defs/sourceControl" }
+  },
+  "$defs": {
+    "intent": { "type": "object", "additionalProperties": false, "required": ["sha256", "normalizedGoal"], "properties": { "sha256": { "$ref": "#/$defs/sha" }, "normalizedGoal": { "type": "string" }, "raw": { "type": "string" } } },
+    "recommendation": { "type": "object", "additionalProperties": false, "required": ["skillId", "role", "strictCompatible"], "properties": { "skillId": { "type": "string" }, "role": { "enum": ["primary", "companion"] }, "strictCompatible": { "type": "boolean" } } },
+    "excluded": { "type": "object", "additionalProperties": false, "required": ["skillId", "reason"], "properties": { "skillId": { "type": "string" }, "reason": { "const": "strict-contract-missing" } } },
+    "ledger": { "type": "object", "additionalProperties": false, "required": ["skillId", "role", "mandatory", "version", "packageChecksum", "contractChecksum", "contract", "schemaSnapshots", "schemaChecksums", "input", "state", "applicability", "contentChunks", "readReceipts", "steps", "repairIterations", "verificationReports", "repairRequests"], "properties": {
+      "skillId": { "type": "string" }, "role": { "enum": ["primary", "companion"] }, "mandatory": { "type": "boolean" }, "version": { "type": "string" }, "packageChecksum": { "$ref": "#/$defs/sha" }, "contractChecksum": { "$ref": "#/$defs/sha" },
+      "contract": { "$ref": "execution-contract-v2.schema.json" }, "schemaSnapshots": { "type": "object", "additionalProperties": false, "required": ["input", "output"], "properties": { "input": { "type": "object" }, "output": { "type": "object" } } }, "schemaChecksums": { "type": "object", "additionalProperties": false, "required": ["input", "output"], "properties": { "input": { "$ref": "#/$defs/sha" }, "output": { "$ref": "#/$defs/sha" } } }, "input": { "type": "object" },
+      "state": { "enum": ["reading", "ready", "running", "verifying", "repair-required", "used", "no-op", "blocked"] }, "outcome": { "enum": ["used", "no-op", "blocked"] },
+      "applicability": { "type": "object", "additionalProperties": false, "required": ["applicable", "unmetPrerequisites"], "properties": { "applicable": { "type": "boolean" }, "unmetPrerequisites": { "type": "array", "items": { "type": "string" } } } },
+      "contentChunks": { "type": "array", "items": { "$ref": "#/$defs/contentChunk" } }, "readReceipts": { "type": "array", "items": { "$ref": "#/$defs/readReceipt" } }, "steps": { "type": "array", "items": { "$ref": "#/$defs/step" } },
+      "repairIterations": { "type": "integer", "minimum": 0 }, "verificationReports": { "type": "array", "items": { "$ref": "verification-report-v2.schema.json" } }, "repairRequests": { "type": "array", "items": { "$ref": "repair-request-v2.schema.json" } }
+    } },
+    "contentChunk": { "type": "object", "additionalProperties": false, "required": ["path", "ordinal", "total", "sha256", "content"], "properties": { "path": { "type": "string" }, "ordinal": { "type": "integer" }, "total": { "type": "integer" }, "sha256": { "$ref": "#/$defs/sha" }, "content": { "type": "string" } } },
+    "readReceipt": { "type": "object", "additionalProperties": false, "required": ["path", "ordinal", "total", "sha256", "deliveredAt"], "properties": { "path": { "type": "string" }, "ordinal": { "type": "integer" }, "total": { "type": "integer" }, "sha256": { "$ref": "#/$defs/sha" }, "deliveredAt": { "type": "string", "format": "date-time" } } },
+    "step": { "type": "object", "additionalProperties": false, "required": ["id", "type", "requiredEvidenceKinds", "ruleIds", "status", "attempts"], "properties": { "id": { "type": "string" }, "type": { "enum": ["collect", "validate", "implement", "critic", "verify", "repair", "report"] }, "requiredEvidenceKinds": { "type": "array", "items": { "type": "string" } }, "ruleIds": { "type": "array", "items": { "type": "string" } }, "repairable": { "type": "boolean" }, "status": { "enum": ["pending", "active", "satisfied", "skipped", "blocked"] }, "attempts": { "type": "array", "items": { "$ref": "#/$defs/attempt" } } } },
+    "attempt": { "type": "object", "additionalProperties": false, "required": ["attempt", "startedAt", "evidenceIds"], "properties": { "attempt": { "type": "integer", "minimum": 1 }, "startedAt": { "type": "string", "format": "date-time" }, "completedAt": { "type": "string", "format": "date-time" }, "evidenceIds": { "type": "array", "items": { "type": "string" } } } },
+    "artifact": { "type": "object", "additionalProperties": false, "required": ["artifactId", "kind", "path", "sha256", "size", "attributions", "sourceControl"], "properties": { "artifactId": { "type": "string" }, "kind": { "type": "string" }, "path": { "type": "string" }, "sourcePath": { "type": "string" }, "sha256": { "$ref": "#/$defs/sha" }, "size": { "type": "integer", "minimum": 0 }, "validatedAs": { "enum": ["input", "output", "critic-report"] }, "attributions": { "type": "array", "items": { "$ref": "#/$defs/attribution" } }, "sourceControl": { "$ref": "#/$defs/sourceControl" } } },
+    "attribution": { "type": "object", "additionalProperties": false, "required": ["skillId", "stepId", "attempt", "relation", "ruleIds"], "properties": { "skillId": { "type": "string" }, "stepId": { "type": "string" }, "attempt": { "type": "integer", "minimum": 1 }, "relation": { "enum": ["produced", "informed", "verified"] }, "ruleIds": { "type": "array", "items": { "type": "string" } } } },
+    "sourceControl": { "oneOf": [ { "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "const": "non-git" } } }, { "type": "object", "additionalProperties": false, "required": ["mode", "base", "head", "patchSha256"], "properties": { "mode": { "const": "git" }, "base": { "type": "string" }, "head": { "type": "string" }, "patchSha256": { "$ref": "#/$defs/sha" } } } ] },
+    "sha": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

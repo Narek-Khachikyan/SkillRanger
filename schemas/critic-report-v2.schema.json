@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/schemas/critic-report-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "skillId", "criticInvocationId", "executorInvocationId", "outcome", "findings"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "skillId": { "type": "string", "minLength": 1 },
+    "criticInvocationId": { "type": "string", "minLength": 1 },
+    "executorInvocationId": { "type": "string", "minLength": 1 },
+    "outcome": { "enum": ["clean", "findings"] },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "ruleId", "severity", "message", "evidenceArtifactIds", "remediation"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "ruleId": { "type": "string", "minLength": 1 },
+          "severity": { "enum": ["critical", "high", "medium", "low"] },
+          "message": { "type": "string", "minLength": 1 },
+          "evidenceArtifactIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "remediation": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

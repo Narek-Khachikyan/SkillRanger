@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mode", "findings", "measurementsInspected", "measurementGaps", "residualRisks"],
+  "properties": {
+    "mode": { "enum": ["risk-review", "validate-change"] },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["affectedFlow", "dimension", "basis", "impact", "confidence", "behavior", "evidence", "expectedBenefit", "tradeoff"],
+        "properties": {
+          "affectedFlow": { "type": "string", "minLength": 1 },
+          "dimension": { "enum": ["LCP", "INP", "CLS", "bundle-size", "route-transition", "render-cost", "memory", "data-waterfall", "cache-behavior"] },
+          "basis": { "enum": ["measured", "risk"] },
+          "impact": { "enum": ["critical", "high", "medium", "low"] },
+          "confidence": { "enum": ["high", "medium", "low"] },
+          "behavior": { "type": "string", "minLength": 1 },
+          "file": { "type": "string", "minLength": 1 },
+          "evidence": { "type": "array", "items": { "type": "string" } },
+          "expectedBenefit": { "type": "string", "minLength": 1 },
+          "tradeoff": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "measurementsInspected": { "type": "array", "items": { "type": "string" } },
+    "measurementGaps": { "type": "array", "items": { "type": "string" } },
+    "residualRisks": { "type": "array", "items": { "type": "string" } }
+  }
+}

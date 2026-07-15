@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "2.0",
+  "skillId": "frontend.performance-review",
+  "contractVersion": "2.0.0",
+  "inputSchema": "input.schema.json",
+  "outputSchema": "output.schema.json",
+  "mustRead": ["SKILL.md"],
+  "applicability": { "op": "signal", "collection": "projectTypes", "name": "frontend", "minConfidence": 0.5 },
+  "prerequisites": [{ "id": "affected-flows", "kind": "input", "path": "affectedFlows" }],
+  "steps": [
+    { "id": "frontend.performance-review/step/inventory-affected-flows", "type": "collect", "requiredEvidenceKinds": ["affected-flow-inventory"], "ruleIds": ["frontend.performance-review/rule/affected-surface-inventory"] },
+    { "id": "frontend.performance-review/step/inspect-static-risks", "type": "collect", "requiredEvidenceKinds": ["static-performance-review"], "ruleIds": ["frontend.performance-review/rule/finding-dimension-present"] },
+    { "id": "frontend.performance-review/step/inspect-runtime-evidence", "type": "collect", "requiredEvidenceKinds": [], "ruleIds": ["frontend.performance-review/rule/measured-claim-has-artifact"] },
+    { "id": "frontend.performance-review/step/compile-findings", "type": "report", "requiredEvidenceKinds": ["performance-report"], "ruleIds": ["frontend.performance-review/rule/unmeasured-claims-labeled-risk", "frontend.performance-review/rule/priority-confidence-present"] },
+    { "id": "frontend.performance-review/step/repair-report", "type": "repair", "requiredEvidenceKinds": ["performance-report"], "ruleIds": ["frontend.performance-review/rule/unmeasured-claims-labeled-risk", "frontend.performance-review/rule/before-after-required-for-win"], "repairable": true },
+    { "id": "frontend.performance-review/step/verify-claims", "type": "verify", "requiredEvidenceKinds": ["verification-input"], "ruleIds": ["frontend.performance-review/rule/before-after-required-for-win", "frontend.performance-review/rule/no-false-performance-win"] }
+  ],
+  "rules": [
+    { "id": "frontend.performance-review/rule/affected-surface-inventory", "description": "Identify affected user flows and frontend surfaces." },
+    { "id": "frontend.performance-review/rule/finding-dimension-present", "description": "Name the user-visible performance dimension for each finding." },
+    { "id": "frontend.performance-review/rule/measured-claim-has-artifact", "description": "Back every measured claim with a measurement artifact." },
+    { "id": "frontend.performance-review/rule/before-after-required-for-win", "description": "Require before and after evidence for a performance win." },
+    { "id": "frontend.performance-review/rule/unmeasured-claims-labeled-risk", "description": "Label unmeasured findings as risk-based hypotheses." },
+    { "id": "frontend.performance-review/rule/exact-missing-measurement", "description": "State the exact measurement needed to confirm each hypothesis." },
+    { "id": "frontend.performance-review/rule/priority-confidence-present", "description": "Rank findings by user-visible impact and confidence." },
+    { "id": "frontend.performance-review/rule/output-schema-valid", "description": "Return the complete structured performance report." },
+    { "id": "frontend.performance-review/rule/no-false-performance-win", "description": "Never claim a performance win from code shape alone." }
+  ],
+  "gates": [
+    { "id": "frontend.performance-review/gate/affected-surface-inventory", "level": "hard", "evaluator": { "type": "evidence-present", "evidenceKind": "affected-flow-inventory" }, "ruleIds": ["frontend.performance-review/rule/affected-surface-inventory"] },
+    { "id": "frontend.performance-review/gate/finding-dimension-present", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/performance-claims" }, "ruleIds": ["frontend.performance-review/rule/finding-dimension-present"] },
+    { "id": "frontend.performance-review/gate/measured-claim-has-artifact", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/performance-claims" }, "ruleIds": ["frontend.performance-review/rule/measured-claim-has-artifact"] },
+    { "id": "frontend.performance-review/gate/before-after-required-for-win", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/performance-claims" }, "ruleIds": ["frontend.performance-review/rule/before-after-required-for-win"] },
+    { "id": "frontend.performance-review/gate/unmeasured-claims-labeled-risk", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/performance-claims" }, "ruleIds": ["frontend.performance-review/rule/unmeasured-claims-labeled-risk"] },
+    { "id": "frontend.performance-review/gate/exact-missing-measurement", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/performance-claims" }, "ruleIds": ["frontend.performance-review/rule/exact-missing-measurement"] },
+    { "id": "frontend.performance-review/gate/priority-confidence-present", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/performance-claims" }, "ruleIds": ["frontend.performance-review/rule/priority-confidence-present"] },
+    { "id": "frontend.performance-review/gate/output-schema-valid", "level": "hard", "evaluator": { "type": "schema-valid", "schema": "output" }, "ruleIds": ["frontend.performance-review/rule/output-schema-valid"] },
+    { "id": "frontend.performance-review/gate/no-false-performance-win", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/performance-claims" }, "ruleIds": ["frontend.performance-review/rule/no-false-performance-win"] }
+  ],
+  "maxRepairIterations": 1
+}

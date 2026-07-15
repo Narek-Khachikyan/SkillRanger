@@ -17,7 +17,41 @@ test("execution rejects empty or partial objects and schema publishes explicit c
   manifest.execution={contractVersion:"1.0"};assert.ok(validateSkillManifest(manifest).some(({path})=>path==="execution.inputSchema"));
   manifest.execution={sharedContracts:["frontend/browser-evidence"]};assert.equal(validateSkillManifest(manifest).filter(({path})=>path.startsWith("execution")).length,0);
   const schema=JSON.parse(await readFile("schemas/registry.schema.json","utf8"));
-  assert.equal(schema.properties.execution.oneOf.length,2);
+  assert.equal(schema.properties.execution.oneOf.length,3);
   assert.ok(schema.properties.execution.oneOf[0].required.includes("contractVersion"));
-  assert.deepEqual(schema.properties.execution.oneOf[1].required,["sharedContracts"]);
+  assert.deepEqual(schema.properties.execution.oneOf[2].required,["sharedContracts"]);
+});
+
+test("execution accepts the strict v2 contract index without legacy workflow and gates paths", async () => {
+  const manifest = JSON.parse(await readFile("registry/skills/frontend.tailwind-ui-polish/skill.manifest.json", "utf8"));
+  manifest.execution = {
+    contractVersion: "2.0",
+    contract: "execution.contract.json",
+    inputSchema: "input.schema.json",
+    outputSchema: "output.schema.json",
+    evals: "evals.json",
+    modelProfiles: ["constrained", "standard", "advanced"],
+    sharedContracts: [
+      "frontend/browser-evidence",
+      "frontend/bounded-repair",
+      "frontend/visual-verification",
+    ],
+  };
+
+  assert.deepEqual(validateSkillManifest(manifest), []);
+
+  const schema = JSON.parse(await readFile("schemas/registry.schema.json", "utf8"));
+  const v2 = schema.properties.execution.oneOf.find(
+    (candidate: { properties?: { contractVersion?: { const?: string } } }) =>
+      candidate.properties?.contractVersion?.const === "2.0",
+  );
+  assert.ok(v2);
+  assert.deepEqual(v2.required, [
+    "contractVersion",
+    "contract",
+    "inputSchema",
+    "outputSchema",
+    "evals",
+    "modelProfiles",
+  ]);
 });

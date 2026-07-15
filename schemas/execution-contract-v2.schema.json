@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/schemas/execution-contract-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "skillId", "contractVersion", "inputSchema", "outputSchema", "mustRead", "applicability", "prerequisites", "steps", "rules", "gates", "maxRepairIterations"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "skillId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]+$" },
+    "contractVersion": { "type": "string", "minLength": 1 },
+    "inputSchema": { "type": "string", "minLength": 1 },
+    "outputSchema": { "type": "string", "minLength": 1 },
+    "mustRead": { "type": "array", "minItems": 1, "uniqueItems": true, "contains": { "const": "SKILL.md" }, "items": { "type": "string", "minLength": 1 } },
+    "applicability": { "$ref": "#/$defs/predicate" },
+    "prerequisites": { "type": "array", "items": { "$ref": "#/$defs/prerequisite" } },
+    "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/step" } },
+    "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } },
+    "gates": { "type": "array", "items": { "$ref": "#/$defs/gate" } },
+    "maxRepairIterations": { "type": "integer", "minimum": 1, "maximum": 5 }
+  },
+  "$defs": {
+    "prerequisite": { "oneOf": [
+      { "type": "object", "additionalProperties": false, "required": ["id", "kind", "capability", "requiredStatus"], "properties": { "id": { "type": "string" }, "kind": { "const": "capability" }, "capability": { "type": "string" }, "requiredStatus": { "const": "ready" } } },
+      { "type": "object", "additionalProperties": false, "required": ["id", "kind", "path"], "properties": { "id": { "type": "string" }, "kind": { "const": "input" }, "path": { "type": "string" } } }
+    ] },
+    "step": { "type": "object", "additionalProperties": false, "required": ["id", "type", "requiredEvidenceKinds", "ruleIds"], "properties": { "id": { "type": "string" }, "type": { "enum": ["collect", "validate", "implement", "critic", "verify", "repair", "report"] }, "requiredEvidenceKinds": { "type": "array", "items": { "type": "string" } }, "ruleIds": { "type": "array", "items": { "type": "string" } }, "repairable": { "type": "boolean" } } },
+    "rule": { "type": "object", "additionalProperties": false, "required": ["id", "description"], "properties": { "id": { "type": "string" }, "description": { "type": "string" } } },
+    "gate": { "type": "object", "additionalProperties": false, "required": ["id", "level", "evaluator", "ruleIds"], "properties": { "id": { "type": "string" }, "level": { "enum": ["hard", "advisory"] }, "evaluator": { "$ref": "#/$defs/evaluator" }, "ruleIds": { "type": "array", "items": { "type": "string" } } } },
+    "evaluator": { "oneOf": [
+      { "type": "object", "additionalProperties": false, "required": ["type", "evidenceKind"], "properties": { "type": { "const": "evidence-present" }, "evidenceKind": { "type": "string" } } },
+      { "type": "object", "additionalProperties": false, "required": ["type", "schema"], "properties": { "type": { "const": "schema-valid" }, "schema": { "enum": ["input", "output", "critic-report"] } } },
+      { "type": "object", "additionalProperties": false, "required": ["type", "validatorId"], "properties": { "type": { "const": "validator" }, "validatorId": { "enum": ["core/artifact-integrity", "core/critic-independence", "frontend/tailwind-source", "frontend/browser-hard-gates", "frontend/performance-claims"] } } }
+    ] },
+    "predicate": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["op", "conditions"], "properties": { "op": { "enum": ["all", "any"] }, "conditions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/predicate" } } } },
+        { "type": "object", "additionalProperties": false, "required": ["op", "condition"], "properties": { "op": { "const": "not" }, "condition": { "$ref": "#/$defs/predicate" } } },
+        { "type": "object", "additionalProperties": false, "required": ["op", "value"], "properties": { "op": { "const": "tag" }, "value": { "type": "string", "minLength": 1 } } },
+        { "type": "object", "additionalProperties": false, "required": ["op", "collection", "name"], "properties": { "op": { "const": "signal" }, "collection": { "enum": ["projectTypes", "languages", "frameworks", "styling", "testing", "infrastructure"] }, "name": { "type": "string", "minLength": 1 }, "minConfidence": { "type": "number", "minimum": 0, "maximum": 1 } } },
+        { "type": "object", "additionalProperties": false, "required": ["op", "path"], "properties": { "op": { "const": "input" }, "path": { "type": "string", "minLength": 1 }, "present": { "type": "boolean" }, "equals": { "type": ["string", "number", "boolean"] } }, "anyOf": [{ "required": ["present"] }, { "required": ["equals"] }] }
+      ]
+    }
+  }
+}

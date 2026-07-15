@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import type { RegistrySkill, ResolvedSharedContract } from "../types.ts";
+import { assertValidExecutionContract } from "../runtime/strict/contract.ts";
+import type { ExecutionContractV2 } from "../runtime/strict/types.ts";
 import {
   assertValidSkillManifest,
   RegistryValidationError,
@@ -50,6 +52,7 @@ const allowedSkillTopLevelEntries = new Set([
   "workflow.json",
   "gates.json",
   "evals.json",
+  "execution.contract.json",
 ]);
 
 const hasHiddenPart = (relativePath: string) =>
@@ -287,6 +290,20 @@ export const loadLocalRegistry = async (
       skillText,
     });
     const sharedContracts = await resolveSharedContracts(resolvedRegistryRoot, manifest.execution?.sharedContracts);
+    let executionContract: ExecutionContractV2 | undefined;
+    if (manifest.execution?.contractVersion === "2.0") {
+      const contractPath = path.join(skillRoot, manifest.execution.contract!);
+      const parsedContract = JSON.parse(await readFile(contractPath, "utf8")) as unknown;
+      assertValidExecutionContract(parsedContract);
+      if (parsedContract.skillId !== manifest.id) throw new Error(`Execution contract skillId must match ${manifest.id}.`);
+      if (parsedContract.inputSchema !== manifest.execution.inputSchema || parsedContract.outputSchema !== manifest.execution.outputSchema) {
+        throw new Error(`Execution contract schema paths must match the manifest for ${manifest.id}.`);
+      }
+      for (const requiredPath of parsedContract.mustRead) {
+        if (!(await fileExists(path.join(skillRoot, requiredPath)))) throw new Error(`Execution contract mustRead file does not exist: ${requiredPath}.`);
+      }
+      executionContract = parsedContract;
+    }
     const contentIssues = validateSkillContent(skillText, skillRoot, {
       lane: manifest.routing?.lane,
       skillId: manifest.id,
@@ -319,6 +336,7 @@ export const loadLocalRegistry = async (
       skillPath,
       checksum,
       sharedContracts,
+      ...(executionContract === undefined ? {} : { executionContract }),
     });
   }
 

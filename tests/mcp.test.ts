@@ -15,6 +15,7 @@ import {
   type SkillRunErrorCode,
 } from "../src/runtime/skill-run/index.ts";
 import type { VerificationReport } from "../src/runtime/types.ts";
+import type { SkillRunV2 } from "../src/runtime/strict/index.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -55,11 +56,62 @@ test("MCP exposes the project, install, and domain workflow tool set", () => {
       "complete_skill_run",
       "verify_skill_run",
       "inspect_skill_run",
+      "read_next_skill_chunk",
+      "begin_skill_step",
+      "add_skill_evidence",
+      "complete_skill_step",
+      "verify_skill",
+      "finalize_skill_run",
       "capture_ui_evidence",
       "compare_design_variants",
       "verify_visual_result",
     ]
   );
+});
+
+test("MCP exposes the strict v2 lifecycle", () => {
+  const names = new Set(mcpTools.map((tool) => tool.name));
+  for (const name of [
+    "start_skill_run",
+    "read_next_skill_chunk",
+    "begin_skill_step",
+    "add_skill_evidence",
+    "complete_skill_step",
+    "verify_skill",
+    "finalize_skill_run",
+    "inspect_skill_run",
+  ]) assert.equal(names.has(name), true, name);
+
+  const start = mcpTools.find(({ name }) => name === "start_skill_run");
+  assert.deepEqual((start?.inputSchema.properties as Record<string, unknown>).strict, { type: "boolean" });
+});
+
+test("MCP starts, reads, and inspects a strict v2 run", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "skillranger-mcp-strict-"));
+  await cp("fixtures/vite-react-ts", root, { recursive: true });
+  const skill = await findSkill("frontend.performance-review");
+  assert.ok(skill);
+  await getAdapter("codex").applyInstall(skill, {
+    projectRoot: root, targetAgent: "codex", scope: "repo", dryRun: false, mode: "copy",
+  });
+  let run = parseStructuredContent<SkillRunV2>(await callMcpTool("start_skill_run", {
+    projectRoot: root, targetAgent: "codex", domain: "frontend", strict: true,
+    intent: "Review frontend performance risks",
+    skillInputs: { "frontend.performance-review": { mode: "risk-review", affectedFlows: ["initial load"] } },
+    hostCapabilities: [],
+  }));
+  while (run.state === "reading") {
+    const result = parseStructuredContent<{ run: SkillRunV2; chunk: { content: string } }>(await callMcpTool("read_next_skill_chunk", {
+      projectRoot: root, runId: run.runId, skillId: "frontend.performance-review",
+    }));
+    assert.equal(typeof result.chunk.content, "string");
+    run = result.run;
+  }
+  const inspected = parseStructuredContent<SkillRunV2>(await callMcpTool("inspect_skill_run", {
+    projectRoot: root, runId: run.runId,
+  }));
+  assert.deepEqual(inspected, run);
+  assert.equal(run.state, "ready");
 });
 
 test("MCP exposes the complete skill run lifecycle", () => {

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/schemas/verification-report-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "skillId", "iteration", "generatedAt", "gateResults", "hardPassed", "evidenceIds"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "skillId": { "type": "string", "minLength": 1 },
+    "iteration": { "type": "integer", "minimum": 0 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "gateResults": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["gateId", "passed", "level"], "properties": { "gateId": { "type": "string" }, "passed": { "type": "boolean" }, "level": { "enum": ["hard", "advisory"] }, "message": { "type": "string" } } } },
+    "hardPassed": { "type": "boolean" },
+    "evidenceIds": { "type": "array", "items": { "type": "string" } }
+  }
+}

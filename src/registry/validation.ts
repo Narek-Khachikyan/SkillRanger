@@ -449,25 +449,31 @@ export const validateSkillManifest = (
       issues.push({ path: "execution", message: "Must be an object when present." });
     } else {
       const execution = input.execution;
-      const structuredFields = ["contractVersion", "inputSchema", "outputSchema", "workflow", "gates", "evals", "modelProfiles"] as const;
-      const allowedExecutionFields = new Set([...structuredFields, "sharedContracts"]);
-      const unknownExecutionField = Object.keys(input.execution).find((key) => !allowedExecutionFields.has(key as typeof structuredFields[number] | "sharedContracts"));
+      const v1Fields = ["contractVersion", "inputSchema", "outputSchema", "workflow", "gates", "evals", "modelProfiles"] as const;
+      const v2Fields = ["contractVersion", "contract", "inputSchema", "outputSchema", "evals", "modelProfiles"] as const;
+      const allowedExecutionFields = new Set([...v1Fields, "contract", "sharedContracts"]);
+      const unknownExecutionField = Object.keys(input.execution).find((key) => !allowedExecutionFields.has(key as typeof v1Fields[number] | "contract" | "sharedContracts"));
       if (unknownExecutionField) issues.push({ path: `execution.${unknownExecutionField}`, message: "Unknown execution property." });
-      const structuredExecution = structuredFields.some((key) => execution[key] !== undefined);
+      const structuredExecution = [...v1Fields, "contract" as const].some((key) => execution[key] !== undefined);
       if (!structuredExecution && input.execution.sharedContracts === undefined) {
         issues.push({ path: "execution", message: "Must be a complete structured execution contract or declare sharedContracts." });
       }
       if (structuredExecution) {
-        for (const key of structuredFields) {
+        const requiredFields = execution.contractVersion === "2.0" ? v2Fields : v1Fields;
+        for (const key of requiredFields) {
           if (input.execution[key] === undefined) issues.push({ path: `execution.${key}`, message: "Required for structured execution." });
         }
       }
-      if (structuredExecution && input.execution.contractVersion !== "1.0") {
-        issues.push({ path: "execution.contractVersion", message: "Must be 1.0." });
+      if (structuredExecution && input.execution.contractVersion !== "1.0" && input.execution.contractVersion !== "2.0") {
+        issues.push({ path: "execution.contractVersion", message: "Must be 1.0 or 2.0." });
       }
-      for (const key of ["inputSchema", "outputSchema", "workflow", "gates", "evals"] as const) {
+      const pathFields = execution.contractVersion === "2.0"
+        ? ["contract", "inputSchema", "outputSchema", "workflow", "gates", "evals"] as const
+        : ["inputSchema", "outputSchema", "workflow", "gates", "evals"] as const;
+      for (const key of pathFields) {
         if (!structuredExecution) continue;
         const value = input.execution[key];
+        if (execution.contractVersion === "2.0" && (key === "workflow" || key === "gates") && value === undefined) continue;
         if (
           typeof value !== "string" ||
           value.trim() === "" ||

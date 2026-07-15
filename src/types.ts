@@ -104,7 +104,8 @@ export type SkillManifest = {
     fallback: Exclude<VerificationStatus, "ready">;
   };
   execution?: {
-    contractVersion?: "1.0";
+    contractVersion?: "1.0" | "2.0";
+    contract?: string;
     inputSchema?: string;
     outputSchema?: string;
     workflow?: string;
@@ -150,6 +151,7 @@ export type RegistrySkill = {
   skillPath: string;
   checksum: string;
   sharedContracts?: ResolvedSharedContract[];
+  executionContract?: import("./runtime/strict/types.ts").ExecutionContractV2;
 };
 
 export type AuditFinding = {

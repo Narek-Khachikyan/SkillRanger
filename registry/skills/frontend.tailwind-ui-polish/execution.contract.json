@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "2.0",
+  "skillId": "frontend.tailwind-ui-polish",
+  "contractVersion": "2.0.0",
+  "inputSchema": "input.schema.json",
+  "outputSchema": "output.schema.json",
+  "mustRead": ["SKILL.md", "references/mechanical-rules.md"],
+  "applicability": { "op": "signal", "collection": "styling", "name": "tailwindcss", "minConfidence": 0.5 },
+  "prerequisites": [
+    { "id": "approved-direction", "kind": "input", "path": "existingDirection" },
+    { "id": "browser-ready", "kind": "capability", "capability": "browser", "requiredStatus": "ready" },
+    { "id": "screenshots-ready", "kind": "capability", "capability": "screenshots", "requiredStatus": "ready" }
+  ],
+  "steps": [
+    { "id": "frontend.tailwind-ui-polish/step/classify-project", "type": "collect", "requiredEvidenceKinds": ["project-archetype"], "ruleIds": ["frontend.tailwind-ui-polish/rule/tailwind-project-confirmed"] },
+    { "id": "frontend.tailwind-ui-polish/step/capture-before", "type": "collect", "requiredEvidenceKinds": ["browser-screenshot-before"], "ruleIds": ["frontend.tailwind-ui-polish/rule/required-states-covered"] },
+    { "id": "frontend.tailwind-ui-polish/step/implement-bounded-fix", "type": "implement", "requiredEvidenceKinds": ["implementation-diff"], "ruleIds": ["frontend.tailwind-ui-polish/rule/no-dynamic-tailwind-classes"] },
+    { "id": "frontend.tailwind-ui-polish/step/capture-initial-evidence", "type": "collect", "requiredEvidenceKinds": ["browser-screenshot-initial"], "ruleIds": ["frontend.tailwind-ui-polish/rule/no-horizontal-overflow", "frontend.tailwind-ui-polish/rule/focus-visible"] },
+    { "id": "frontend.tailwind-ui-polish/step/independent-critique", "type": "critic", "requiredEvidenceKinds": ["critic-report"], "ruleIds": ["frontend.tailwind-ui-polish/rule/required-states-covered"] },
+    { "id": "frontend.tailwind-ui-polish/step/bounded-repair", "type": "repair", "requiredEvidenceKinds": [], "ruleIds": ["frontend.tailwind-ui-polish/rule/required-states-covered"], "repairable": true },
+    { "id": "frontend.tailwind-ui-polish/step/capture-recheck-evidence", "type": "collect", "requiredEvidenceKinds": ["browser-screenshot-390", "browser-screenshot-768", "browser-screenshot-1440"], "ruleIds": ["frontend.tailwind-ui-polish/rule/no-horizontal-overflow", "frontend.tailwind-ui-polish/rule/no-clipped-controls", "frontend.tailwind-ui-polish/rule/no-sticky-overlap"] },
+    { "id": "frontend.tailwind-ui-polish/step/final-verify", "type": "verify", "requiredEvidenceKinds": ["verification-input"], "ruleIds": ["frontend.tailwind-ui-polish/rule/no-runtime-console-errors", "frontend.tailwind-ui-polish/rule/reduced-motion-verified"] },
+    { "id": "frontend.tailwind-ui-polish/step/final-report", "type": "report", "requiredEvidenceKinds": ["skill-output"], "ruleIds": ["frontend.tailwind-ui-polish/rule/required-states-covered"] }
+  ],
+  "rules": [
+    { "id": "frontend.tailwind-ui-polish/rule/existing-direction-present", "description": "Preserve an approved existing visual direction." },
+    { "id": "frontend.tailwind-ui-polish/rule/tailwind-project-confirmed", "description": "Confirm Tailwind and classify the local token archetype." },
+    { "id": "frontend.tailwind-ui-polish/rule/required-states-covered", "description": "Cover required states and supported viewports." },
+    { "id": "frontend.tailwind-ui-polish/rule/no-horizontal-overflow", "description": "Do not leave page-level horizontal overflow." },
+    { "id": "frontend.tailwind-ui-polish/rule/no-clipped-controls", "description": "Do not leave clipped or unreachable controls." },
+    { "id": "frontend.tailwind-ui-polish/rule/no-sticky-overlap", "description": "Do not leave sticky elements covering content." },
+    { "id": "frontend.tailwind-ui-polish/rule/focus-visible", "description": "Keep keyboard focus visible." },
+    { "id": "frontend.tailwind-ui-polish/rule/no-dynamic-tailwind-classes", "description": "Use complete static Tailwind class strings." },
+    { "id": "frontend.tailwind-ui-polish/rule/no-runtime-console-errors", "description": "Leave no runtime console errors in the verified flow." },
+    { "id": "frontend.tailwind-ui-polish/rule/reduced-motion-verified", "description": "Verify reduced-motion behavior." },
+    { "id": "frontend.tailwind-ui-polish/rule/raw-colors-reviewed", "description": "Review raw colors against semantic token roles." },
+    { "id": "frontend.tailwind-ui-polish/rule/repeated-class-bundles-reviewed", "description": "Review repeated class bundles for stable variants." },
+    { "id": "frontend.tailwind-ui-polish/rule/genericity-findings-reviewed", "description": "Remove unsupported generic visual decoration." }
+  ],
+  "gates": [
+    { "id": "frontend.tailwind-ui-polish/gate/existing-direction-present", "level": "hard", "evaluator": { "type": "schema-valid", "schema": "input" }, "ruleIds": ["frontend.tailwind-ui-polish/rule/existing-direction-present"] },
+    { "id": "frontend.tailwind-ui-polish/gate/tailwind-project-confirmed", "level": "hard", "evaluator": { "type": "evidence-present", "evidenceKind": "project-archetype" }, "ruleIds": ["frontend.tailwind-ui-polish/rule/tailwind-project-confirmed"] },
+    { "id": "frontend.tailwind-ui-polish/gate/required-states-covered", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/browser-hard-gates" }, "ruleIds": ["frontend.tailwind-ui-polish/rule/required-states-covered"] },
+    { "id": "frontend.tailwind-ui-polish/gate/no-horizontal-overflow", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/browser-hard-gates" }, "ruleIds": ["frontend.tailwind-ui-polish/rule/no-horizontal-overflow"] },
+    { "id": "frontend.tailwind-ui-polish/gate/no-clipped-controls", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/browser-hard-gates" }, "ruleIds": ["frontend.tailwind-ui-polish/rule/no-clipped-controls"] },
+    { "id": "frontend.tailwind-ui-polish/gate/no-sticky-overlap", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/browser-hard-gates" }, "ruleIds": ["frontend.tailwind-ui-polish/rule/no-sticky-overlap"] },
+    { "id": "frontend.tailwind-ui-polish/gate/focus-visible", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/browser-hard-gates" }, "ruleIds": ["frontend.tailwind-ui-polish/rule/focus-visible"] },
+    { "id": "frontend.tailwind-ui-polish/gate/no-dynamic-tailwind-classes", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/tailwind-source" }, "ruleIds": ["frontend.tailwind-ui-polish/rule/no-dynamic-tailwind-classes"] },
+    { "id": "frontend.tailwind-ui-polish/gate/no-runtime-console-errors", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/browser-hard-gates" }, "ruleIds": ["frontend.tailwind-ui-polish/rule/no-runtime-console-errors"] },
+    { "id": "frontend.tailwind-ui-polish/gate/reduced-motion-verified", "level": "hard", "evaluator": { "type": "validator", "validatorId": "frontend/browser-hard-gates" }, "ruleIds": ["frontend.tailwind-ui-polish/rule/reduced-motion-verified"] },
+    { "id": "frontend.tailwind-ui-polish/gate/raw-colors-reviewed", "level": "advisory", "evaluator": { "type": "validator", "validatorId": "frontend/tailwind-source" }, "ruleIds": ["frontend.tailwind-ui-polish/rule/raw-colors-reviewed"] },
+    { "id": "frontend.tailwind-ui-polish/gate/repeated-class-bundles-reviewed", "level": "advisory", "evaluator": { "type": "validator", "validatorId": "frontend/tailwind-source" }, "ruleIds": ["frontend.tailwind-ui-polish/rule/repeated-class-bundles-reviewed"] },
+    { "id": "frontend.tailwind-ui-polish/gate/genericity-findings-reviewed", "level": "advisory", "evaluator": { "type": "schema-valid", "schema": "critic-report" }, "ruleIds": ["frontend.tailwind-ui-polish/rule/genericity-findings-reviewed"] }
+  ],
+  "maxRepairIterations": 3
+}

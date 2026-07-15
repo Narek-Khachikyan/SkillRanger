@@ -84,6 +84,14 @@
     "requiredCapabilities": ["browser", "measurement"],
     "fallback": "unverified"
   },
+  "execution": {
+    "contractVersion": "2.0",
+    "contract": "execution.contract.json",
+    "inputSchema": "input.schema.json",
+    "outputSchema": "output.schema.json",
+    "evals": "evals.json",
+    "modelProfiles": ["constrained", "standard", "advanced"]
+  },
   "maintainer": {
     "name": "local-curated",
     "trustTier": "curated"
