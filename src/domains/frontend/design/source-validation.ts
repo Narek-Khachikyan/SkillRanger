@@ -68,6 +68,32 @@ const commentEnd = (content: string, start: number) => {
   return undefined;
 };
 
+const regexLiteralEnd = (content: string, start: number) => {
+  let inCharacterClass = false;
+  for (let index = start + 1; index < content.length; index += 1) {
+    const character = content[index];
+    if (character === "\n" || character === "\r") return undefined;
+    if (character === "\\") {
+      index += 1;
+      continue;
+    }
+    if (character === "[") inCharacterClass = true;
+    else if (character === "]") inCharacterClass = false;
+    else if (character === "/" && !inCharacterClass) {
+      index += 1;
+      while (/[a-z]/i.test(content[index] ?? "")) index += 1;
+      return index;
+    }
+  }
+  return undefined;
+};
+
+const canStartRegexLiteral = (content: string, index: number, expressionStart: number) => {
+  let previous = index - 1;
+  while (previous >= expressionStart && /\s/.test(content[previous])) previous -= 1;
+  return previous < expressionStart || /[([{,:;!?=+\-*%&|^~<>]/.test(content[previous]);
+};
+
 function templateExpressionEnd(content: string, start: number): { end: number; nested: ParsedTemplate[] } | undefined {
   const nested: ParsedTemplate[] = [];
   let depth = 1;
@@ -82,10 +108,16 @@ function templateExpressionEnd(content: string, start: number): { end: number; n
       if (!template) return undefined;
       nested.push(template);
       index = template.end - 1;
-    } else if (character === "/" && (content[index + 1] === "/" || content[index + 1] === "*")) {
-      const end = commentEnd(content, index);
-      if (end === undefined) return undefined;
-      index = end - 1;
+    } else if (character === "/") {
+      if (content[index + 1] === "/" || content[index + 1] === "*") {
+        const end = commentEnd(content, index);
+        if (end === undefined) return undefined;
+        index = end - 1;
+      } else if (canStartRegexLiteral(content, index, start)) {
+        const end = regexLiteralEnd(content, index);
+        if (end === undefined) return undefined;
+        index = end - 1;
+      }
     } else if (character === "{") {
       depth += 1;
     } else if (character === "}") {
@@ -137,6 +169,18 @@ const parsedTemplates = (content: string) => {
     index = template.end - 1;
   }
   return templates;
+};
+
+const unparseableClassTemplates = (content: string) => {
+  const failures: Array<{ start: number; end: number }> = [];
+  const relevantPrefix = /(?:\b(?:className|class)\s*=\s*\{[^}\n]*|\b(?:cn|clsx|classnames|classNames|twMerge|twJoin|cva)\s*\([^);\n]*)$/;
+  for (let start = 0; start < content.length; start += 1) {
+    if (content[start] !== "`" || !relevantPrefix.test(content.slice(0, start))) continue;
+    if (parseTemplateAt(content, start)) continue;
+    const newline = content.indexOf("\n", start);
+    failures.push({ start, end: newline === -1 ? content.length : newline });
+  }
+  return failures;
 };
 
 const balancedDelimiterEnd = (content: string, start: number, open: string, close: string) => {
@@ -257,11 +301,23 @@ const dynamicConcatenations = (content: string) => {
 
 const dynamicTailwindFindings = (source: SourceInput) => {
   const findings: VerificationFinding[] = [];
+  const classRanges = relevantClassExpressionRanges(source.content);
+  for (const failure of unparseableClassTemplates(source.content)) {
+    findings.push(finding({
+      code: "tailwind-dynamic-class",
+      severity: "high",
+      gate: "hard",
+      message: "A class-relevant template could not be parsed safely.",
+      evidence: [sourceEvidence(source, failure.start, source.content.slice(failure.start, failure.end))],
+      remediation: "Use complete static utility strings or simplify the class expression so it can be verified.",
+    }));
+  }
   for (const template of parsedTemplates(source.content)) {
+    const classRelevant = classRanges.some(({ start, end }) => template.start >= start && template.end <= end);
     const unsafe = template.expressions.some((expression, index) => {
       const left = template.segments[index].match(/\S*$/)?.[0] ?? "";
       const right = template.segments[index + 1].match(/^\S*/)?.[0] ?? "";
-      if (left === "" && right === "" && staticConditionalClasses(expression)) return false;
+      if (left === "" && right === "" && classRelevant) return !staticConditionalClasses(expression);
       return dynamicUtilityToken.test(`${left}__DYNAMIC__${right}`);
     });
     if (unsafe) {

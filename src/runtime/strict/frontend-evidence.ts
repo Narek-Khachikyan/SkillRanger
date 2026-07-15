@@ -197,13 +197,18 @@ const parseUnifiedDiffAddedContent = (content: string) => {
         const line = lines[index];
         if (line === undefined) return undefined;
         const prefix = line[0];
+        let markerApplies = false;
         if (prefix === " ") { oldRemaining -= 1; newRemaining -= 1; }
         else if (prefix === "-") oldRemaining -= 1;
         else if (prefix === "+") { newRemaining -= 1; added.push(line.slice(1)); }
         else return undefined;
         if (oldRemaining < 0 || newRemaining < 0) return undefined;
+        if (prefix === "-") markerApplies = oldRemaining === 0;
+        else if (prefix === "+") markerApplies = newRemaining === 0;
+        else markerApplies = oldRemaining === 0 && newRemaining === 0;
         index += 1;
         if (lines[index] === noNewlineMarker) {
+          if (!markerApplies) return undefined;
           index += 1;
           if (lines[index] === noNewlineMarker) return undefined;
         }

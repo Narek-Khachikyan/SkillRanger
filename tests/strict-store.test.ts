@@ -207,6 +207,20 @@ test("falls back to whole-source validation for arbitrary diff marker lines", ()
   assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
 });
 
+test("rejects a no-newline marker before its affected diff side is exhausted", () => {
+  const results = deriveTailwindSourceResults(`diff --git a/Card.tsx b/Card.tsx
+--- a/Card.tsx
++++ b/Card.tsx
+@@ -1,2 +1 @@
+-<div className={\`bg-\${color}-600\`}>Save</div>
+\\ No newline at end of file
+-<span>Old</span>
++<div className="bg-brand-600">Save</div>
+`);
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
 test("accepts quoted Git and space-containing unified diff paths", () => {
   const quotedGit = deriveTailwindSourceResults(`diff --git "a/components/My Card.tsx" "b/components/My Card.tsx"
 --- "a/components/My Card.tsx"
@@ -268,6 +282,18 @@ test("accepts conditional interpolation of complete static Tailwind tokens", () 
   assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
 });
 
+test("rejects a whole-token dynamic Tailwind variable interpolation", () => {
+  const results = deriveTailwindSourceResults('<div className={`${computedClass}`}>Save</div>');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("rejects a whole-token dynamic Tailwind call interpolation", () => {
+  const results = deriveTailwindSourceResults('<div className={`${getClass()}`}>Save</div>');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
 test("rejects conditional interpolation of Tailwind token fragments", () => {
   const results = deriveTailwindSourceResults('<div className={`bg-${active ? "red" : "blue"}-500`}>Save</div>');
 
@@ -276,6 +302,12 @@ test("rejects conditional interpolation of Tailwind token fragments", () => {
 
 test("parses balanced braces in dynamic Tailwind interpolation expressions", () => {
   const results = deriveTailwindSourceResults('<div className={`bg-${({ color }).color}-500`}>Save</div>');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("does not fail open on regex literals inside dynamic Tailwind interpolation", () => {
+  const results = deriveTailwindSourceResults('<div className={`bg-${/\\{/.test(color) ? "red" : "blue"}-500`}>Save</div>');
 
   assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
 });
