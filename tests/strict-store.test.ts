@@ -182,10 +182,52 @@ test("validates only added content in a unified implementation diff", () => {
   assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
 });
 
+test("keeps parsing added diff payload after an increment expression", () => {
+  const results = deriveTailwindSourceResults(`diff --git a/Card.tsx b/Card.tsx
+--- a/Card.tsx
++++ b/Card.tsx
+@@ -0,0 +1,2 @@
++++ counter;
++<div className={\`p-4 bg-\${color}-600\`}>Save</div>
+`);
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("falls back to whole-source validation for diff-like ordinary source", () => {
+  const results = deriveTailwindSourceResults(`/*
+--- a/Card.tsx
++++ b/Card.tsx
+@@ -1 +1 @@
+*/
+const card = <div className={\`p-4 bg-\${color}-600\`}>Save</div>;
+`);
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
 test("derives the raw color advisory from staged source text", () => {
   const results = deriveTailwindSourceResults('<div className="bg-red-500">Save</div>');
 
   assert.equal(results["raw-colors-reviewed"].passed, false);
+});
+
+test("detects dynamic Tailwind construction inside class composition calls", () => {
+  const results = deriveTailwindSourceResults('const classes = cn("p-4", `bg-${color}-600`);');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("detects dynamic Tailwind construction after a variant prefix", () => {
+  const results = deriveTailwindSourceResults('<div className={`hover:bg-${color}-600`}>Save</div>');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("accepts conditional interpolation of complete static Tailwind tokens", () => {
+  const results = deriveTailwindSourceResults('<div className={`${active ? "bg-red-500" : "bg-blue-500"}`}>Save</div>');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
 });
 
 test("strict store writes atomically and rejects a tampered persisted content snapshot", async () => {

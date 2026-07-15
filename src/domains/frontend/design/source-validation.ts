@@ -28,25 +28,59 @@ const lineNumber = (content: string, index: number) =>
 const sourceEvidence = (source: SourceInput, index: number, snippet: string) =>
   `${source.path}:${lineNumber(source.content, index)} ${snippet.trim()}`;
 
+const dynamicUtilityToken = /(?:^|:)(?:bg|text|border|ring|fill|stroke|grid-cols|col-span|row-span|flex|gap|space-[xy]|[mp][trblxy]?|z|translate-[xy]|scale|rotate|opacity)-\S*__DYNAMIC__/i;
+const staticConditionalClasses = (expression: string) => {
+  const match = /^\s*[^?]+\?\s*(["'])(.*?)\1\s*:\s*(["'])(.*?)\3\s*$/s.exec(expression);
+  if (!match) return false;
+  return [match[2], match[4]].every((branch) => {
+    const tokens = branch.trim().split(/\s+/).filter(Boolean);
+    return tokens.length > 0 && tokens.every((token) => /^[^\s"'`{}$+]+$/.test(token));
+  });
+};
+
 const dynamicTailwindFindings = (source: SourceInput) => {
   const findings: VerificationFinding[] = [];
-  const patterns = [
-    /(?:className|class)\s*=\s*\{?`[^`]*\$\{[^}]+\}[^`]*`/g,
-    /(?:className|class)\s*=\s*\{?['"][^'"]*['"]\s*\+\s*[^}\n]+/g,
-  ];
-  for (const pattern of patterns) {
-    for (const match of source.content.matchAll(pattern)) {
-      const value = match[0];
-      if (!/(?:^|[\s"'`])(?:bg|text|border|ring|fill|stroke|grid-cols|col-span|row-span|flex|gap|space-[xy]|[mp][trblxy]?|z|translate-[xy]|scale|rotate|opacity)-/i.test(value)) continue;
+  const templates = /`((?:\\.|[^`])*)`/gs;
+  for (const template of source.content.matchAll(templates)) {
+    const body = template[1];
+    const interpolation = /\$\{([^{}]*)\}/g;
+    const segments: string[] = [];
+    const expressions: string[] = [];
+    let cursor = 0;
+    for (const match of body.matchAll(interpolation)) {
+      segments.push(body.slice(cursor, match.index));
+      expressions.push(match[1]);
+      cursor = (match.index ?? 0) + match[0].length;
+    }
+    segments.push(body.slice(cursor));
+    const unsafe = expressions.some((expression, index) => {
+      if (staticConditionalClasses(expression)) return false;
+      const left = segments[index].match(/\S*$/)?.[0] ?? "";
+      const right = segments[index + 1].match(/^\S*/)?.[0] ?? "";
+      return dynamicUtilityToken.test(`${left}__DYNAMIC__${right}`);
+    });
+    if (unsafe) {
       findings.push(finding({
         code: "tailwind-dynamic-class",
         severity: "high",
         gate: "hard",
         message: "Dynamic Tailwind utility construction may be absent from generated CSS.",
-        evidence: [sourceEvidence(source, match.index ?? 0, value)],
+        evidence: [sourceEvidence(source, template.index ?? 0, template[0])],
         remediation: "Map variants to complete static utility strings that Tailwind can detect.",
       }));
     }
+  }
+  const concatenation = /(?:className|class)\s*=\s*\{?['"][^'"]*['"]\s*\+\s*[^}\n]+/g;
+  for (const match of source.content.matchAll(concatenation)) {
+    if (!/(?:^|[\s"'])(?:bg|text|border|ring|fill|stroke|grid-cols|col-span|row-span|flex|gap|space-[xy]|[mp][trblxy]?|z|translate-[xy]|scale|rotate|opacity)-/i.test(match[0])) continue;
+    findings.push(finding({
+      code: "tailwind-dynamic-class",
+      severity: "high",
+      gate: "hard",
+      message: "Dynamic Tailwind utility construction may be absent from generated CSS.",
+      evidence: [sourceEvidence(source, match.index ?? 0, match[0])],
+      remediation: "Map variants to complete static utility strings that Tailwind can detect.",
+    }));
   }
   return findings;
 };

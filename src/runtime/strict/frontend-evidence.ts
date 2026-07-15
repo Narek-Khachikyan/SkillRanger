@@ -127,20 +127,56 @@ export const deriveBrowserGateResults = (
   };
 };
 
-const addedUnifiedDiffContent = (content: string) => {
+const oldFileHeader = /^--- (?:a\/\S+|\/dev\/null)(?:\t.*)?$/;
+const newFileHeader = /^\+\+\+ (?:b\/\S+|\/dev\/null)(?:\t.*)?$/;
+const diffHeader = /^diff --git a\/\S+ b\/\S+$/;
+const hunkHeader = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@(?: .*)?$/;
+const parseUnifiedDiffAddedContent = (content: string) => {
   const lines = content.split(/\r?\n/);
-  const hasHunk = lines.some((line) => /^@@(?:\s|$)/.test(line));
-  const hasFileHeaders = lines.some((line) => /^---\s/.test(line)) && lines.some((line) => /^\+\+\+\s/.test(line));
-  if (!hasHunk || !hasFileHeaders) return content;
   const added: string[] = [];
-  let inHunk = false;
-  for (const line of lines) {
-    if (/^@@(?:\s|$)/.test(line)) { inHunk = true; continue; }
-    if (/^(?:diff --git |---\s|\+\+\+\s)/.test(line)) { inHunk = false; continue; }
-    if (inHunk && line.startsWith("+")) added.push(line.slice(1));
+  let index = 0;
+  let files = 0;
+  while (index < lines.length) {
+    if (lines.slice(index).every((line) => line === "")) break;
+    if (diffHeader.test(lines[index])) {
+      index += 1;
+      while (index < lines.length && !oldFileHeader.test(lines[index])) {
+        if (diffHeader.test(lines[index]) || hunkHeader.test(lines[index])) return undefined;
+        index += 1;
+      }
+    }
+    if (!oldFileHeader.test(lines[index] ?? "") || !newFileHeader.test(lines[index + 1] ?? "")) return undefined;
+    files += 1;
+    index += 2;
+    let hunks = 0;
+    while (index < lines.length) {
+      const header = hunkHeader.exec(lines[index]);
+      if (!header) break;
+      hunks += 1;
+      let oldRemaining = header[1] === undefined ? 1 : Number(header[1]);
+      let newRemaining = header[2] === undefined ? 1 : Number(header[2]);
+      index += 1;
+      while (oldRemaining > 0 || newRemaining > 0) {
+        const line = lines[index];
+        if (line === undefined) return undefined;
+        const prefix = line[0];
+        if (prefix === " ") { oldRemaining -= 1; newRemaining -= 1; }
+        else if (prefix === "-") oldRemaining -= 1;
+        else if (prefix === "+") { newRemaining -= 1; added.push(line.slice(1)); }
+        else if (prefix === "\\") { index += 1; continue; }
+        else return undefined;
+        if (oldRemaining < 0 || newRemaining < 0) return undefined;
+        index += 1;
+      }
+      if (lines[index]?.startsWith("\\ No newline at end of file")) index += 1;
+    }
+    if (hunks === 0) return undefined;
+    if (index < lines.length && lines[index] !== "" && !diffHeader.test(lines[index]) && !oldFileHeader.test(lines[index])) return undefined;
   }
-  return added.join("\n");
+  return files > 0 ? added.join("\n") : undefined;
 };
+
+const addedUnifiedDiffContent = (content: string) => parseUnifiedDiffAddedContent(content) ?? content;
 
 export const deriveTailwindSourceResults = (content: string): Record<string, Result> => {
   const findings = validateFrontendSources(
