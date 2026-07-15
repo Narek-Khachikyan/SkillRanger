@@ -238,7 +238,9 @@ const assertAggregateRunState = (run: Record<string, unknown>, ledgers: Array<Re
   const hasReadingLedger = ledgers.some((ledger) => ledger.state === "reading" && ledger.outcome === undefined
     && (ledger.readReceipts as unknown[]).length < (ledger.contentChunks as unknown[]).length);
   const hasReadyLedger = ledgers.some((ledger) => ledger.state === "ready" && ledger.outcome === undefined
-    && (ledger.readReceipts as unknown[]).length === (ledger.contentChunks as unknown[]).length);
+    && (ledger.readReceipts as unknown[]).length === (ledger.contentChunks as unknown[]).length
+    && (ledger.steps as Array<Record<string, unknown>>)
+      .some((step) => step.type !== "repair" && step.status === "pending"));
   const hasVerifiableLedger = ledgers.some((ledger) => ledger.state === "used"
     || (["ready", "verifying"].includes(ledger.state as string)
       && ledger.outcome === undefined && (ledger.steps as Array<Record<string, unknown>>)

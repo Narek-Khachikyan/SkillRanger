@@ -106,7 +106,7 @@ const attach = (run: ReturnType<typeof created>, kind: string, stepId: string, v
   });
 };
 
-const fullyExecutedFixture = () => {
+const verificationReadyFixture = () => {
   let run = fullyRead();
   run = beginStrictStep(run, "frontend.test-skill", contract().steps[0].id);
   run = attach(run, "inspection", contract().steps[0].id);
@@ -114,23 +114,16 @@ const fullyExecutedFixture = () => {
   run = beginStrictStep(run, "frontend.test-skill", contract().steps[2].id);
   run = attach(run, "skill-output", contract().steps[2].id, "output");
   run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
-  return verifyStrictSkill(run, "frontend.test-skill", {
-    validatorResults: { "core/artifact-integrity": { passed: true } },
-  });
+  return run;
 };
 
-const repairRequiredFixture = () => {
-  let run = fullyRead();
-  run = beginStrictStep(run, "frontend.test-skill", contract().steps[0].id);
-  run = attach(run, "inspection", contract().steps[0].id);
-  run = completeStrictStep(run, "frontend.test-skill", contract().steps[0].id);
-  run = beginStrictStep(run, "frontend.test-skill", contract().steps[2].id);
-  run = attach(run, "skill-output", contract().steps[2].id, "output");
-  run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
-  return verifyStrictSkill(run, "frontend.test-skill", {
-    validatorResults: { "core/artifact-integrity": { passed: false } },
-  });
-};
+const fullyExecutedFixture = () => verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", {
+  validatorResults: { "core/artifact-integrity": { passed: true } },
+});
+
+const repairRequiredFixture = () => verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", {
+  validatorResults: { "core/artifact-integrity": { passed: false } },
+});
 
 const repairExhaustedFixture = () => {
   let run = repairRequiredFixture();
@@ -254,6 +247,14 @@ test("rejects persisted terminal and aggregate states inconsistent with their li
   }
 });
 
+test("rejects a pre-verification aggregate forged from verifying to ready", () => {
+  const forged = verificationReadyFixture();
+  assert.equal(forged.state, "verifying");
+  assert.equal(forged.skillLedgers[0].state, "ready");
+  forged.state = "ready";
+  assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
+});
+
 test("rejects a repair-required ledger globally relabeled ready", () => {
   const forged = repairRequiredFixture();
   forged.state = "ready";
@@ -275,6 +276,7 @@ test("rejects a repair-required ledger globally relabeled verifying", () => {
 
 test("accepts reducer-produced persisted lifecycle graphs", () => {
   assert.doesNotThrow(() => assertValidStrictSkillRun(created()));
+  assert.doesNotThrow(() => assertValidStrictSkillRun(verificationReadyFixture()));
   assert.doesNotThrow(() => assertValidStrictSkillRun(repairRequiredFixture()));
   assert.doesNotThrow(() => assertValidStrictSkillRun(fullyExecutedFixture()));
   assert.doesNotThrow(() => assertValidStrictSkillRun(repairExhaustedFixture()));
