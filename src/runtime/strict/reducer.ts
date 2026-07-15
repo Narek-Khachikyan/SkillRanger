@@ -163,8 +163,13 @@ export const completeStrictStep = (source: SkillRunV2, skillId: string, stepId: 
 };
 
 export const verifyStrictSkill = (source: SkillRunV2, skillId: string, input: {
+  artifactIntegrity: { passed: boolean; message?: string };
   validatorResults: Record<string, { passed: boolean; message?: string }>;
+  systemGateResults?: Array<{ gateId: string; passed: boolean; level: "hard"; message?: string }>;
 }): SkillRunV2 => {
+  if (!input.artifactIntegrity.passed) {
+    fail("artifact-integrity", input.artifactIntegrity.message ?? "Strict evidence integrity failed.");
+  }
   const run = clone(source);
   const ledger = ledgerFor(run, skillId);
   if (ledger.steps.some((step) => step.status === "active" || step.status === "pending")) fail("step-out-of-order", `Skill ${skillId} has incomplete workflow steps.`);

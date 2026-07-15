@@ -1,10 +1,14 @@
 import { createHash } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 import { assertValidCriticReportV2 } from "./critic.ts";
 import type { EvidenceArtifact, SkillLedger, SkillRunV2 } from "./types.ts";
 
 type Result = { passed: boolean; message?: string };
+export type StrictValidatorDerivation = {
+  artifactIntegrity: Result;
+  validatorResults: Record<string, Result>;
+};
 const digest = (bytes: Uint8Array) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const parse = async (root: string, artifact: EvidenceArtifact | undefined) => {
@@ -14,7 +18,11 @@ const parse = async (root: string, artifact: EvidenceArtifact | undefined) => {
 };
 const gateSlug = (gateId: string) => gateId.slice(gateId.lastIndexOf("/") + 1);
 
-export const deriveStrictValidatorResults = async (projectRoot: string, run: SkillRunV2, ledger: SkillLedger): Promise<Record<string, Result>> => {
+export const deriveStrictValidatorResults = async (
+  projectRoot: string,
+  run: SkillRunV2,
+  ledger: SkillLedger,
+): Promise<StrictValidatorDerivation> => {
   const results: Record<string, Result> = {};
   const ids = new Set(ledger.steps.flatMap((step) => step.attempts.at(-1)?.evidenceIds ?? []));
   const artifacts = run.artifacts.filter(({ artifactId }) => ids.has(artifactId));
@@ -23,9 +31,14 @@ export const deriveStrictValidatorResults = async (projectRoot: string, run: Ski
     const target = path.resolve(projectRoot, artifact.path);
     const root = path.resolve(projectRoot);
     if (!target.startsWith(`${root}${path.sep}`)) { integrity = false; break; }
-    const [bytes, info] = await Promise.all([readFile(target).catch(() => undefined), stat(target).catch(() => undefined)]);
+    const [bytes, info] = await Promise.all([readFile(target).catch(() => undefined), lstat(target).catch(() => undefined)]);
     if (!bytes || !info?.isFile() || bytes.byteLength !== artifact.size || digest(bytes) !== artifact.sha256) { integrity = false; break; }
   }
+  const artifactIntegrity: Result = integrity
+    ? { passed: true }
+    : { passed: false, message: "Staged artifact digest, size, path, or file type changed." };
+  if (!artifactIntegrity.passed) return { artifactIntegrity, validatorResults: results };
+
   const output = await parse(projectRoot, artifacts.findLast(({ validatedAs }) => validatedAs === "output"));
   const verificationInput = await parse(projectRoot, artifacts.findLast(({ kind }) => kind === "verification-input"));
   const sourceReview = await parse(projectRoot, artifacts.findLast(({ kind }) => kind === "implementation-diff"));
@@ -63,5 +76,5 @@ export const deriveStrictValidatorResults = async (projectRoot: string, run: Ski
     }
     results[gate.id] = result;
   }
-  return results;
+  return { artifactIntegrity, validatorResults: results };
 };

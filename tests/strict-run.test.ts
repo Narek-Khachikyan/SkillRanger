@@ -118,10 +118,12 @@ const verificationReadyFixture = () => {
 };
 
 const fullyExecutedFixture = () => verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", {
+  artifactIntegrity: { passed: true },
   validatorResults: { "core/artifact-integrity": { passed: true } },
 });
 
 const repairRequiredFixture = () => verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", {
+  artifactIntegrity: { passed: true },
   validatorResults: { "core/artifact-integrity": { passed: false } },
 });
 
@@ -134,6 +136,7 @@ const repairExhaustedFixture = () => {
   run = attach(run, "skill-output", contract().steps[2].id, "output");
   run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
   return verifyStrictSkill(run, "frontend.test-skill", {
+    artifactIntegrity: { passed: true },
     validatorResults: { "core/artifact-integrity": { passed: false } },
   });
 };
@@ -213,6 +216,7 @@ test("accepts reducer verification while another ledger owns the active step", (
   run = completeStrictStep(run, firstSkillId, firstContract.steps[2].id);
   run = beginStrictStep(run, secondSkillId, secondContract.steps[0].id);
   run = verifyStrictSkill(run, firstSkillId, {
+    artifactIntegrity: { passed: true },
     validatorResults: { "core/artifact-integrity": { passed: true } },
   });
 
@@ -375,6 +379,7 @@ test("computes verification, opens one bounded repair, and refuses caller-contro
   run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
 
   const failed = verifyStrictSkill(run, "frontend.test-skill", {
+    artifactIntegrity: { passed: true },
     validatorResults: { "core/artifact-integrity": { passed: false, message: "Digest mismatch." } },
   });
   assert.equal(failed.state, "repair-required");
@@ -389,10 +394,21 @@ test("computes verification, opens one bounded repair, and refuses caller-contro
   run = attach(run, "skill-output", contract().steps[2].id, "output");
   run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
   run = verifyStrictSkill(run, "frontend.test-skill", {
+    artifactIntegrity: { passed: true },
     validatorResults: { "core/artifact-integrity": { passed: true } },
   });
   assert.equal(run.skillLedgers[0].outcome, "used");
   assert.equal(finalizeStrictRun(run).state, "verified");
+});
+
+test("rejects failed artifact integrity before reducing contract gates", () => {
+  assert.throws(
+    () => verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", {
+      artifactIntegrity: { passed: false, message: "Digest mismatch." },
+      validatorResults: { "core/artifact-integrity": { passed: true } },
+    }),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
+  );
 });
 
 test("derives no-op and blocked ledgers before execution and blocks aggregate certification", () => {

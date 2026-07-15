@@ -25,7 +25,6 @@ const contract: ExecutionContractV2 = {
   gates: [
     { id: "frontend.store-test/gate/report", level: "hard", evaluator: { type: "evidence-present", evidenceKind: "report" }, ruleIds: ["frontend.store-test/rule/evidence"] },
     { id: "frontend.store-test/gate/output", level: "hard", evaluator: { type: "schema-valid", schema: "output" }, ruleIds: ["frontend.store-test/rule/evidence"] },
-    { id: "frontend.store-test/gate/integrity", level: "hard", evaluator: { type: "validator", validatorId: "core/artifact-integrity" }, ruleIds: ["frontend.store-test/rule/evidence"] },
   ],
 };
 
@@ -125,6 +124,28 @@ test("derives verification gates inside the runtime from immutable artifacts", a
   run = await store.verifySkill(run.runId, contract.skillId);
   assert.equal(run.skillLedgers[0].outcome, "used");
   assert.equal(run.skillLedgers[0].verificationReports[0].hardPassed, true);
+});
+
+test("rejects changed evidence even when the contract omits an integrity gate", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-evidence-mutated-"));
+  const source = path.join(root, "report.json");
+  await writeFile(source, "{}\n");
+  const store = new StrictSkillRunStore(root);
+  let run = beginStrictStep(readNextStrictChunk(fixtureRun(), contract.skillId).run, contract.skillId, contract.steps[0].id);
+  await store.create(run);
+  run = await store.ingestEvidence(run.runId, {
+    sourcePath: source,
+    kind: "report",
+    validatedAs: "output",
+    attributions: [{ skillId: contract.skillId, stepId: contract.steps[0].id, attempt: 1, relation: "produced", ruleIds: contract.rules.map(({ id }) => id) }],
+  });
+  await writeFile(path.join(root, run.artifacts[0].path), "changed\n");
+  run = await store.update(run.runId, (current) => completeStrictStep(current, contract.skillId, contract.steps[0].id));
+
+  await assert.rejects(
+    store.verifySkill(run.runId, contract.skillId),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
+  );
 });
 
 test("rejects symlink evidence before creating an artifact", async () => {

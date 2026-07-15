@@ -163,8 +163,8 @@ export class StrictSkillRunStore {
     return this.update(runId, async (run) => {
       const ledger = run.skillLedgers.find((candidate) => candidate.skillId === skillId);
       if (!ledger) throw new StrictSkillRunError("run-integrity", `Unknown selected skill ${skillId}.`);
-      const validatorResults = await deriveStrictValidatorResults(this.projectRoot, run, ledger);
-      return verifyStrictSkill(run, skillId, { validatorResults });
+      const derivation = await deriveStrictValidatorResults(this.projectRoot, run, ledger);
+      return verifyStrictSkill(run, skillId, derivation);
     });
   }
 }
