@@ -132,6 +132,19 @@ const repairRequiredFixture = () => {
   });
 };
 
+const repairExhaustedFixture = () => {
+  let run = repairRequiredFixture();
+  run = beginStrictStep(run, "frontend.test-skill", contract().steps[1].id);
+  run = attach(run, "repair-diff", contract().steps[1].id);
+  run = completeStrictStep(run, "frontend.test-skill", contract().steps[1].id);
+  run = beginStrictStep(run, "frontend.test-skill", contract().steps[2].id);
+  run = attach(run, "skill-output", contract().steps[2].id, "output");
+  run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
+  return verifyStrictSkill(run, "frontend.test-skill", {
+    validatorResults: { "core/artifact-integrity": { passed: false } },
+  });
+};
+
 const renamedContract = (skillId: string): ExecutionContractV2 => JSON.parse(
   JSON.stringify(contract()).replaceAll("frontend.test-skill", skillId),
 ) as ExecutionContractV2;
@@ -172,6 +185,14 @@ test("rejects persisted step snapshots that diverge from the execution contract"
 test("rejects a persisted used ledger without a passing verification report", () => {
   const forged = fullyExecutedFixture();
   forged.skillLedgers[0].verificationReports = [];
+  assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
+});
+
+test("rejects a passing verified ledger forged as report-driven blocked", () => {
+  const forged = fullyExecutedFixture();
+  forged.state = "blocked";
+  forged.skillLedgers[0].state = "blocked";
+  forged.skillLedgers[0].outcome = "blocked";
   assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
 });
 
@@ -233,10 +254,30 @@ test("rejects persisted terminal and aggregate states inconsistent with their li
   }
 });
 
+test("rejects a repair-required ledger globally relabeled ready", () => {
+  const forged = repairRequiredFixture();
+  forged.state = "ready";
+  assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
+
+  forged.skillLedgers[0].state = "ready";
+  assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
+});
+
+test("rejects a repair-required ledger globally relabeled verifying", () => {
+  const forged = repairRequiredFixture();
+  forged.state = "verifying";
+  forged.skillLedgers[0].steps[2].status = "satisfied";
+  assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
+
+  forged.skillLedgers[0].state = "verifying";
+  assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
+});
+
 test("accepts reducer-produced persisted lifecycle graphs", () => {
   assert.doesNotThrow(() => assertValidStrictSkillRun(created()));
   assert.doesNotThrow(() => assertValidStrictSkillRun(repairRequiredFixture()));
   assert.doesNotThrow(() => assertValidStrictSkillRun(fullyExecutedFixture()));
+  assert.doesNotThrow(() => assertValidStrictSkillRun(repairExhaustedFixture()));
 });
 
 test("computes verification, opens one bounded repair, and refuses caller-controlled completion", () => {

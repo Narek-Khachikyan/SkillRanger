@@ -158,9 +158,49 @@ const assertTerminalLifecycle = (ledger: Record<string, unknown>) => {
   if (ledger.outcome === "no-op" && applicability.applicable !== false) {
     fail(`No-op ledger ${skillId} must be inapplicable.`);
   }
-  if (ledger.outcome === "blocked" && reports.length === 0
-    && (applicability.applicable !== true || (applicability.unmetPrerequisites as unknown[]).length === 0)) {
-    fail(`Prerequisite-blocked ledger ${skillId} lacks unmet prerequisites.`);
+  if (ledger.outcome !== "blocked") return;
+  if (reports.length === 0) {
+    if (applicability.applicable !== true || (applicability.unmetPrerequisites as unknown[]).length === 0) {
+      fail(`Prerequisite-blocked ledger ${skillId} lacks unmet prerequisites.`);
+    }
+    return;
+  }
+  const contract = ledger.contract as ExecutionContractV2;
+  const latest = reports.at(-1);
+  const steps = ledger.steps as Array<Record<string, unknown>>;
+  if (applicability.applicable !== true
+    || (applicability.unmetPrerequisites as unknown[]).length !== 0
+    || !record(latest)
+    || latest.hardPassed !== false
+    || failedHardGateIds(latest).length === 0
+    || ledger.repairIterations !== contract.maxRepairIterations
+    || reports.length !== contract.maxRepairIterations + 1
+    || steps.some((step) => step.status !== "satisfied")) {
+    fail(`Report-blocked ledger ${skillId} is inconsistent with exhausted hard-gate repair.`);
+  }
+};
+
+const assertLedgerStateCoherence = (ledger: Record<string, unknown>) => {
+  const skillId = String(ledger.skillId);
+  const steps = ledger.steps as Array<Record<string, unknown>>;
+  const activeSteps = steps.filter((step) => step.status === "active");
+  const pendingRepair = steps.some((step) => step.type === "repair" && step.status === "pending");
+  const allRead = (ledger.readReceipts as unknown[]).length === (ledger.contentChunks as unknown[]).length;
+  if (ledger.state === "reading" && (allRead || ledger.outcome !== undefined)) {
+    fail(`Reading ledger ${skillId} has no unread skill content.`);
+  }
+  if (ledger.state === "ready" && (!allRead || activeSteps.length !== 0 || pendingRepair || ledger.outcome !== undefined)) {
+    fail(`Ready ledger ${skillId} is incompatible with its workflow state.`);
+  }
+  if (ledger.state === "running" && (activeSteps.length !== 1 || ledger.outcome !== undefined)) {
+    fail(`Running ledger ${skillId} must own exactly one active step.`);
+  }
+  if (ledger.state !== "running" && activeSteps.length !== 0) {
+    fail(`Active step for ${skillId} requires a running ledger.`);
+  }
+  if (ledger.state === "verifying" && (!allRead || ledger.outcome !== undefined
+    || steps.some((step) => step.status === "active" || step.status === "pending"))) {
+    fail(`Verifying ledger ${skillId} has incomplete workflow steps.`);
   }
 };
 
@@ -195,16 +235,19 @@ const assertArtifactAttributions = (
 const assertAggregateRunState = (run: Record<string, unknown>, ledgers: Array<Record<string, unknown>>, activeCount: number) => {
   const state = run.state;
   const terminal = ledgers.filter((ledger) => ledger.outcome !== undefined);
-  const hasReadyLedger = ledgers.some((ledger) => ledger.outcome === undefined
+  const hasReadingLedger = ledgers.some((ledger) => ledger.state === "reading" && ledger.outcome === undefined
+    && (ledger.readReceipts as unknown[]).length < (ledger.contentChunks as unknown[]).length);
+  const hasReadyLedger = ledgers.some((ledger) => ledger.state === "ready" && ledger.outcome === undefined
     && (ledger.readReceipts as unknown[]).length === (ledger.contentChunks as unknown[]).length);
-  const hasVerifiableLedger = ledgers.some((ledger) => ledger.outcome === "used"
-    || (ledger.outcome === undefined && (ledger.steps as Array<Record<string, unknown>>)
+  const hasVerifiableLedger = ledgers.some((ledger) => ledger.state === "used"
+    || (["ready", "verifying"].includes(ledger.state as string)
+      && ledger.outcome === undefined && (ledger.steps as Array<Record<string, unknown>>)
       .every((step) => step.type === "repair" || step.status === "satisfied")));
   if ((state === "running") !== (activeCount === 1)) fail("Aggregate running state does not match active steps.");
   if (state === "planned" && (terminal.length !== ledgers.length || ledgers.some((ledger) => ledger.outcome === "used"))) {
     fail("Aggregate planned state is incompatible with its ledger outcomes.");
   }
-  if (state === "reading" && !ledgers.some((ledger) => ledger.outcome === undefined && (ledger.readReceipts as unknown[]).length < (ledger.contentChunks as unknown[]).length)) {
+  if (state === "reading" && !hasReadingLedger) {
     fail("Aggregate reading state has no unread skill content.");
   }
   if (state === "ready" && !hasReadyLedger) fail("Aggregate ready state has no ready ledger.");
@@ -281,6 +324,7 @@ export const assertValidStrictSkillRun: (input: unknown) => asserts input is Ski
     assertRepairLifecycle(skillId, rawLedger);
     assertTerminalLifecycle(rawLedger);
     assertUsedLedger(rawLedger);
+    assertLedgerStateCoherence(rawLedger);
   }
   if (activeCount > 1) fail("Only one strict step may be active.");
   assertArtifactAttributions(artifacts, ledgerBySkillId);
