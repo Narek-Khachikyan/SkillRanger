@@ -294,6 +294,12 @@ test("rejects a whole-token dynamic Tailwind call interpolation", () => {
   assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
 });
 
+test("keeps a class expression range open across regex closing braces", () => {
+  const results = deriveTailwindSourceResults('<div className={/\\}/.test(color) ? `${computedClass}` : "bg-brand-500"}>Save</div>');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
 test("rejects conditional interpolation of Tailwind token fragments", () => {
   const results = deriveTailwindSourceResults('<div className={`bg-${active ? "red" : "blue"}-500`}>Save</div>');
 
@@ -308,6 +314,16 @@ test("parses balanced braces in dynamic Tailwind interpolation expressions", () 
 
 test("does not fail open on regex literals inside dynamic Tailwind interpolation", () => {
   const results = deriveTailwindSourceResults('<div className={`bg-${/\\{/.test(color) ? "red" : "blue"}-500`}>Save</div>');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("fails closed for an unparseable multiline class template", () => {
+  const results = deriveTailwindSourceResults([
+    '<div className={',
+    '  `bg-${(() => { return /\\{/.test(color) ? "red" : "blue"; })()}-500`',
+    '}></div>',
+  ].join("\n"));
 
   assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
 });
