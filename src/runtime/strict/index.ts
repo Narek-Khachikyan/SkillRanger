@@ -6,7 +6,6 @@ export {
   completeStrictStep,
   createContentChunks,
   createStrictSkillRun,
-  finalizeStrictRun,
   readNextStrictChunk,
 } from "./reducer.ts";
 export * from "./validation.ts";

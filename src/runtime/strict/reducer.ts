@@ -1,14 +1,14 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { assertValidExecutionContract } from "./contract.ts";
-import { deriveVerificationEvidenceIds } from "./report-evidence.ts";
+import { deriveStrictCertificationProjection } from "./certification.ts";
+import { assertRuntimeStrictValidatorDerivation, type StrictValidatorDerivation } from "./verification.ts";
 import {
   StrictSkillRunError,
   type EvidenceArtifact,
   type SkillContentChunk,
   type SkillLedger,
   type SkillRunV2,
-  type StrictSystemGateResult,
   type StrictSkillSelection,
 } from "./types.ts";
 
@@ -164,37 +164,17 @@ export const completeStrictStep = (source: SkillRunV2, skillId: string, stepId: 
   return nextRevision(run, ledger.steps.some((candidate) => candidate.status === "pending") ? "ready" : "verifying");
 };
 
-export const verifyStrictSkill = (source: SkillRunV2, skillId: string, input: {
-  artifactIntegrity: { passed: boolean; message?: string };
-  validatorResults: Record<string, { passed: boolean; message?: string }>;
-  systemGateResults?: StrictSystemGateResult[];
-}): SkillRunV2 => {
+export const verifyStrictSkill = (source: SkillRunV2, skillId: string, input: StrictValidatorDerivation): SkillRunV2 => {
+  assertRuntimeStrictValidatorDerivation(input);
   if (!input.artifactIntegrity.passed) {
     fail("artifact-integrity", input.artifactIntegrity.message ?? "Strict evidence integrity failed.");
   }
   const run = clone(source);
   const ledger = ledgerFor(run, skillId);
   if (ledger.steps.some((step) => step.status === "active" || step.status === "pending")) fail("step-out-of-order", `Skill ${skillId} has incomplete workflow steps.`);
-  const evidenceIds = deriveVerificationEvidenceIds(ledger, ledger.repairIterations);
-  const artifactIds = new Set(evidenceIds);
-  const artifacts = run.artifacts.filter(({ artifactId }) => artifactIds.has(artifactId));
-  const contractGateResults = ledger.contract.gates.map((gate) => {
-    let passed = false;
-    let message: string | undefined;
-    const evaluator = gate.evaluator;
-    if (evaluator.type === "evidence-present") passed = artifacts.some(({ kind }) => kind === evaluator.evidenceKind);
-    else if (evaluator.type === "schema-valid") passed = evaluator.schema === "input" ? true : artifacts.some(({ validatedAs }) => validatedAs === evaluator.schema);
-    else {
-      const result = input.validatorResults[gate.id] ?? input.validatorResults[evaluator.validatorId];
-      passed = result?.passed === true;
-      message = result?.message ?? (result ? undefined : `Validator result missing: ${evaluator.validatorId}.`);
-    }
-    return { gateId: gate.id, passed, level: gate.level, ...(message === undefined ? {} : { message }) };
-  });
-  const gateResults = [...contractGateResults, ...(input.systemGateResults ?? [])];
+  const projection = deriveStrictCertificationProjection(run, ledger, input);
   const report = {
-    schemaVersion: "2.0" as const, skillId, iteration: ledger.repairIterations, generatedAt: now(), gateResults,
-    hardPassed: gateResults.every((gate) => gate.level !== "hard" || gate.passed), evidenceIds,
+    schemaVersion: "2.0" as const, skillId, generatedAt: now(), ...projection,
   };
   ledger.verificationReports.push(report);
   if (report.hardPassed) {
@@ -202,7 +182,7 @@ export const verifyStrictSkill = (source: SkillRunV2, skillId: string, input: {
     ledger.outcome = "used";
     return nextRevision(run, "verifying");
   }
-  const failedGateIds = gateResults.filter((gate) => gate.level === "hard" && !gate.passed).map(({ gateId }) => gateId);
+  const failedGateIds = projection.gateResults.filter((gate) => gate.level === "hard" && !gate.passed).map(({ gateId }) => gateId);
   if (ledger.repairIterations >= ledger.contract.maxRepairIterations) {
     ledger.state = "blocked";
     ledger.outcome = "blocked";
@@ -220,10 +200,4 @@ export const verifyStrictSkill = (source: SkillRunV2, skillId: string, input: {
   });
   ledger.state = "repair-required";
   return nextRevision(run, "repair-required");
-};
-
-export const finalizeStrictRun = (source: SkillRunV2): SkillRunV2 => {
-  const run = clone(source);
-  if (run.skillLedgers.some((ledger) => !terminal(ledger))) fail("run-not-finalizable", "Every selected skill must have a terminal outcome.");
-  return nextRevision(run, run.skillLedgers.some(({ outcome }) => outcome === "blocked") ? "blocked" : "verified");
 };

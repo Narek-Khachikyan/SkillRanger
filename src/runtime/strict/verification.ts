@@ -7,7 +7,7 @@ import { isRfc3339DateTime } from "./date-time.ts";
 import { deriveBrowserGateResults, deriveTailwindSourceResults } from "./frontend-evidence.ts";
 import { deriveVerificationEvidenceIds } from "./report-evidence.ts";
 import { criticSystemGateId } from "./system-gates.ts";
-import type { EvidenceArtifact, SkillLedger, SkillRunV2, StrictSystemGateResult } from "./types.ts";
+import { StrictSkillRunError, type EvidenceArtifact, type SkillLedger, type SkillRunV2, type StrictSystemGateResult } from "./types.ts";
 
 type Result = { passed: boolean; message?: string };
 export { criticSystemGateId };
@@ -15,6 +15,16 @@ export type StrictValidatorDerivation = {
   artifactIntegrity: Result;
   validatorResults: Record<string, Result>;
   systemGateResults: StrictSystemGateResult[];
+};
+const authenticDerivations = new WeakSet<object>();
+const registerDerivation = (derivation: StrictValidatorDerivation) => {
+  authenticDerivations.add(derivation);
+  return derivation;
+};
+export const assertRuntimeStrictValidatorDerivation: (input: unknown) => asserts input is StrictValidatorDerivation = (input) => {
+  if (typeof input !== "object" || input === null || !authenticDerivations.has(input)) {
+    throw new StrictSkillRunError("run-integrity", "Strict verification requires a runtime-derived validator result.");
+  }
 };
 export type StrictValidatorObservation = {
   gateId: string;
@@ -123,7 +133,7 @@ export const deriveStrictValidatorResults = async (
   const artifactIntegrity: Result = integrity
     ? { passed: true }
     : { passed: false, message: "Staged artifact digest, size, path, or file type changed." };
-  if (!artifactIntegrity.passed) return { artifactIntegrity, validatorResults: results, systemGateResults: [] };
+  if (!artifactIntegrity.passed) return registerDerivation({ artifactIntegrity, validatorResults: results, systemGateResults: [] });
 
   const output = parse(artifacts.findLast(({ validatedAs }) => validatedAs === "output"), artifactBytes);
   const verificationInput = parse(artifacts.findLast(({ kind }) => kind === "verification-input"), artifactBytes);
@@ -195,9 +205,9 @@ export const deriveStrictValidatorResults = async (
       try { await observer(observation); } catch { /* Instrumentation cannot alter certification. */ }
     }
   }
-  return {
+  return registerDerivation({
     artifactIntegrity,
     validatorResults: results,
     systemGateResults: criticSystemGate ? [criticSystemGate] : [],
-  };
+  });
 };

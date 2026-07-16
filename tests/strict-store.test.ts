@@ -13,6 +13,7 @@ import {
   createStrictSkillRun,
   deriveStrictValidatorResults,
   readNextStrictChunk,
+  assertValidStrictSkillRun,
   type EvidenceArtifact,
   type ExecutionContractV2,
   type SkillRunV2,
@@ -882,6 +883,73 @@ test("derives verification gates inside the runtime from immutable artifacts", a
   run = await store.verifySkill(run.runId, contract.skillId);
   assert.equal(run.skillLedgers[0].outcome, "used");
   assert.equal(run.skillLedgers[0].verificationReports[0].hardPassed, true);
+});
+
+test("honest store verification and store-owned finalization persist a verified run", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-finalize-honest-"));
+  const store = new StrictSkillRunStore(root);
+  const verified = await store.verifySkill((await stageCompletedEvidence(root, store)).runId, contract.skillId);
+
+  const finalized = await store.finalizeRun(verified.runId);
+
+  assert.equal(finalized.state, "verified");
+  assert.deepEqual(await store.read(finalized.runId), finalized);
+});
+
+test("generic store updates cannot persist a caller-constructed verified state", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-finalize-authority-"));
+  const store = new StrictSkillRunStore(root);
+  const verified = await store.verifySkill((await stageCompletedEvidence(root, store)).runId, contract.skillId);
+
+  await assert.rejects(
+    store.update(verified.runId, (current) => ({
+      ...current,
+      state: "verified",
+      revision: current.revision + 1,
+      updatedAt: new Date().toISOString(),
+    })),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+  );
+  assert.equal((await store.read(verified.runId)).state, "verifying");
+});
+
+test("store finalization rejects a used report whose artifact disappeared after verification", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-finalize-missing-"));
+  const store = new StrictSkillRunStore(root);
+  const verified = await store.verifySkill((await stageCompletedEvidence(root, store)).runId, contract.skillId);
+  await unlink(path.join(root, verified.artifacts[0].path));
+
+  await assert.rejects(
+    store.finalizeRun(verified.runId),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
+  );
+});
+
+test("store finalization rejects a structurally valid forged passing report for a runtime-failing gate", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-finalize-forged-gate-"));
+  const store = new StrictSkillRunStore(root);
+  const prepared = await stageCompletedEvidence(root, store, tailwindValidatorContract);
+  const forged = structuredClone(prepared);
+  const ledger = forged.skillLedgers[0];
+  ledger.verificationReports.push({
+    schemaVersion: "2.0",
+    skillId: ledger.skillId,
+    iteration: 0,
+    generatedAt: new Date().toISOString(),
+    gateResults: ledger.contract.gates.map((gate) => ({ gateId: gate.id, passed: true, level: gate.level })),
+    hardPassed: true,
+    evidenceIds: ledger.steps.flatMap((step) => step.attempts.at(-1)?.evidenceIds ?? []),
+  });
+  ledger.state = "used";
+  ledger.outcome = "used";
+  forged.state = "verifying";
+  assert.doesNotThrow(() => assertValidStrictSkillRun(forged));
+  await writeFile(path.join(root, ".skillranger", "runs", `${forged.runId}.json`), `${JSON.stringify(forged)}\n`);
+
+  await assert.rejects(
+    store.finalizeRun(forged.runId),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+  );
 });
 
 test("caller constructor callbacks cannot make a failing Tailwind gate pass", async () => {

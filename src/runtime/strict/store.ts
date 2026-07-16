@@ -8,6 +8,7 @@ import { validateJsonSchema } from "./json-schema.ts";
 import { assertValidStrictSkillRun } from "./validation.ts";
 import { StrictSkillRunError, type EvidenceArtifact, type SkillRunV2 } from "./types.ts";
 import { deriveStrictValidatorResults } from "./verification.ts";
+import { deriveStrictCertificationProjection, strictCertificationMatches } from "./certification.ts";
 import { captureSourceControl } from "./git.ts";
 import { ContainedFileReadError, readContainedFile } from "./contained-file.ts";
 
@@ -20,6 +21,18 @@ const readContainedEvidenceSource = async (projectRoot: string, sourcePath: stri
     const message = error instanceof ContainedFileReadError ? error.message : "Evidence source could not be read securely.";
     throw new StrictSkillRunError("artifact-integrity", message.replace(/^Contained source/, "Evidence source"));
   }
+};
+const finalizeStrictRun = (source: SkillRunV2): SkillRunV2 => {
+  if (source.skillLedgers.some(({ outcome }) => outcome === undefined)) {
+    throw new StrictSkillRunError("run-not-finalizable", "Every selected skill must have a terminal outcome.");
+  }
+  const run = structuredClone(source);
+  return {
+    ...run,
+    state: run.skillLedgers.some(({ outcome }) => outcome === "blocked") ? "blocked" : "verified",
+    revision: run.revision + 1,
+    updatedAt: new Date().toISOString(),
+  };
 };
 
 export class StrictSkillRunStore {
@@ -81,6 +94,9 @@ export class StrictSkillRunStore {
       const current = await this.readUnlocked(runId);
       const next = await apply(structuredClone(current));
       if (next.runId !== runId || next.revision <= current.revision) throw new StrictSkillRunError("run-integrity", "Strict update must preserve id and advance revision.");
+      if (current.state !== "verified" && next.state === "verified") {
+        throw new StrictSkillRunError("run-integrity", "Strict certification must be finalized by the run store.");
+      }
       await this.writeUnlocked(next);
       return next;
     } finally { await this.lock.release(lock); }
@@ -145,5 +161,29 @@ export class StrictSkillRunStore {
       const derivation = await deriveStrictValidatorResults(this.projectRoot, run, ledger);
       return verifyStrictSkill(run, skillId, derivation);
     });
+  }
+
+  async finalizeRun(runId: string) {
+    const lock = await this.lock.acquire(runId);
+    try {
+      const current = await this.readUnlocked(runId);
+      for (const ledger of current.skillLedgers) {
+        if (ledger.outcome !== "used") continue;
+        const derivation = await deriveStrictValidatorResults(this.projectRoot, current, ledger);
+        if (!derivation.artifactIntegrity.passed) {
+          throw new StrictSkillRunError(
+            "artifact-integrity",
+            derivation.artifactIntegrity.message ?? "Strict evidence integrity failed during finalization.",
+          );
+        }
+        const expected = deriveStrictCertificationProjection(current, ledger, derivation);
+        if (!strictCertificationMatches(ledger.verificationReports.at(-1), expected)) {
+          throw new StrictSkillRunError("run-integrity", `Latest verification report for ${ledger.skillId} does not match runtime-derived certification evidence.`);
+        }
+      }
+      const finalized = finalizeStrictRun(current);
+      await this.writeUnlocked(finalized);
+      return finalized;
+    } finally { await this.lock.release(lock); }
   }
 }

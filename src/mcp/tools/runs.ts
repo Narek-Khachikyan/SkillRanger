@@ -18,7 +18,6 @@ import type { VerificationReport } from "../../runtime/types.ts";
 import {
   beginStrictStep,
   completeStrictStep,
-  finalizeStrictRun,
   readNextStrictChunk,
   startPreparedStrictSkillRun,
   StrictSkillRunError,
@@ -209,7 +208,7 @@ const verifyStrict: McpToolHandler = async (args) => {
 
 const finalizeStrict: McpToolHandler = async (args) => {
   const store = new StrictSkillRunStore(asProjectRoot(args.projectRoot));
-  return strictRunResult(await store.update(requireString(args.runId, "runId"), finalizeStrictRun));
+  return strictRunResult(await store.finalizeRun(requireString(args.runId, "runId")));
 };
 
 const recordRead: McpToolHandler = async (args) => runResult(await recordSkillRead(

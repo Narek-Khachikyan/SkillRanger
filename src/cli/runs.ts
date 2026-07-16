@@ -19,7 +19,6 @@ import {
   StrictSkillRunStore,
   beginStrictStep,
   completeStrictStep,
-  finalizeStrictRun,
   readNextStrictChunk,
   startPreparedStrictSkillRun,
   type SkillRunV2,
@@ -217,7 +216,7 @@ const executeRunCommand = async (input: RunCliInput): Promise<RunCommandResult> 
   if (command === "run:skill:verify") {
     return strictStore.verifySkill(runId, flag(input.flags, "skill"));
   }
-  if (command === "run:finalize") return strictStore.update(runId, finalizeStrictRun);
+  if (command === "run:finalize") return strictStore.finalizeRun(runId);
   if (command === "run:record-read") {
     const skillId = flag(input.flags, "skill");
     const run = await store.read(runId);

@@ -5,6 +5,7 @@ import { assertValidExecutionContract } from "./contract.ts";
 import { isRfc3339DateTime } from "./date-time.ts";
 import { deriveVerificationEvidenceIds } from "./report-evidence.ts";
 import { criticSystemGateId } from "./system-gates.ts";
+import { strictGateOrder } from "./certification.ts";
 import { StrictSkillRunError, type ExecutionContractV2, type SkillLedger, type SkillRunV2 } from "./types.ts";
 
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -86,14 +87,21 @@ const assertVerificationReports = (
       fail(`Verification report ${reportIndex} for ${skillId} has a forged evidence snapshot.`);
     }
     const contractGateById = new Map(contract.gates.map((gate) => [gate.id, gate]));
-    const gateCounts = new Map<string, number>();
+    const criticEvidenceRelevant = expectedEvidenceIds.some((artifactId) =>
+      artifactsById.get(artifactId)?.validatedAs === "critic-report");
+    const expectedGateIds = strictGateOrder(
+      ledger as unknown as Pick<SkillLedger, "contract">,
+      criticEvidenceRelevant ? [criticSystemGateId] : [],
+    );
+    if (!same(rawReport.gateResults.map((gate) => record(gate) ? gate.gateId : undefined), expectedGateIds)) {
+      fail(`Verification report ${reportIndex} for ${skillId} has an inconsistent gate order or cardinality.`);
+    }
     rawReport.gateResults.forEach((rawGate, gateIndex) => {
       if (!record(rawGate)) fail(`Invalid gate result ${gateIndex} in report ${reportIndex} for ${skillId}.`);
       exactKeys(rawGate, ["gateId", "passed", "level"], ["message"], `gate result ${gateIndex} in report ${reportIndex} for ${skillId}`);
       const gateId = rawGate.gateId;
       const expected = typeof gateId === "string" ? contractGateById.get(gateId) : undefined;
       const systemGate = gateId === criticSystemGateId;
-      gateCounts.set(String(gateId), (gateCounts.get(String(gateId)) ?? 0) + 1);
       if ((!expected && !systemGate)
         || (expected && rawGate.level !== expected.level)
         || (systemGate && rawGate.level !== "hard")
@@ -102,13 +110,6 @@ const assertVerificationReports = (
         fail(`Gate result ${gateIndex} in report ${reportIndex} is not an allowed gate for ${skillId}.`);
       }
     });
-    const criticEvidenceRelevant = expectedEvidenceIds.some((artifactId) =>
-      artifactsById.get(artifactId)?.validatedAs === "critic-report");
-    const expectedCriticGateCount = criticEvidenceRelevant ? 1 : 0;
-    if (contract.gates.some(({ id }) => gateCounts.get(id) !== 1)
-      || (gateCounts.get(criticSystemGateId) ?? 0) !== expectedCriticGateCount) {
-      fail(`Verification report ${reportIndex} for ${skillId} has an inconsistent system-gate set.`);
-    }
     const hardPassed = rawReport.gateResults.every((gate) => record(gate) && (gate.level !== "hard" || gate.passed === true));
     if (rawReport.hardPassed !== hardPassed) fail(`Derived hard-gate result mismatch in report ${reportIndex} for ${skillId}.`);
   });

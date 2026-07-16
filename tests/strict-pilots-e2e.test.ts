@@ -6,7 +6,7 @@ import path from "node:path";
 import { findSkill } from "../src/registry/index.ts";
 import { getAdapter } from "../src/installers/codex.ts";
 import {
-  StrictSkillRunStore, beginStrictStep, completeStrictStep, finalizeStrictRun,
+  StrictSkillRunStore, beginStrictStep, completeStrictStep,
   readNextStrictChunk, startPreparedStrictSkillRun, type SkillRunV2,
 } from "../src/runtime/strict/index.ts";
 
@@ -58,7 +58,7 @@ test("performance risk-review verifies hypotheses with an exact measurement gap"
   const { store, run: prepared } = await preparePerformance("risk-review", []);
   const run = await store.verifySkill(prepared.runId, "frontend.performance-review");
   assert.equal(run.skillLedgers[0].outcome, "used");
-  assert.equal(finalizeStrictRun(run).state, "verified");
+  assert.equal((await store.finalizeRun(run.runId)).state, "verified");
 });
 
 test("performance validate-change enters bounded report repair without before/after evidence", async () => {
@@ -125,7 +125,7 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
   run = await step(root, store, run, skillId, [{ kind: "skill-output", validatedAs: "output", value: { outcome: "verified", classification: "hierarchy", changes: ["polished"], verification: {}, residualRisks: [] } }]);
   run = await store.verifySkill(run.runId, skillId);
   assert.equal(run.state, "repair-required");
-  assert.throws(() => finalizeStrictRun(run), (error: unknown) => error instanceof Error && "code" in error && error.code === "run-not-finalizable");
+  await assert.rejects(store.finalizeRun(run.runId), (error: unknown) => error instanceof Error && "code" in error && error.code === "run-not-finalizable");
   const firstReport = run.skillLedgers[0].verificationReports.at(-1)!;
   assert.deepEqual(firstReport.gateResults.find(({ gateId }) => gateId === "core/gate/critic-findings"), {
     gateId: "core/gate/critic-findings",
@@ -170,5 +170,5 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
     passed: true,
     level: "hard",
   });
-  assert.equal(finalizeStrictRun(run).state, "verified");
+  assert.equal((await store.finalizeRun(run.runId)).state, "verified");
 });

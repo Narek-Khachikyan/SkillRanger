@@ -10,7 +10,7 @@ import {
   completeStrictStep,
   createContentChunks,
   createStrictSkillRun,
-  finalizeStrictRun,
+  deriveStrictValidatorResults,
   readNextStrictChunk,
   StrictSkillRunError,
   StrictSkillRunStore,
@@ -42,6 +42,18 @@ const contract = (): ExecutionContractV2 => ({
 
 test("public strict API does not expose decisive verification booleans", () => {
   assert.equal("verifyStrictSkill" in strictApi, false);
+  assert.equal("finalizeStrictRun" in strictApi, false);
+});
+
+test("deep raw verification rejects a caller-constructed derivation", () => {
+  assert.throws(
+    () => verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", {
+      artifactIntegrity: { passed: true },
+      validatorResults: { "core/artifact-integrity": { passed: true } },
+      systemGateResults: [],
+    }),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+  );
 });
 
 test("publishes closed run, critic, verification, and repair schemas", async () => {
@@ -131,15 +143,40 @@ const verificationReadyFixture = (includeCriticEvidence = false) => {
   return run;
 };
 
-const fullyExecutedFixture = () => verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", {
-  artifactIntegrity: { passed: true },
-  validatorResults: { "core/artifact-integrity": { passed: true } },
+const derivationRoot = await mkdtemp(path.join(os.tmpdir(), "strict-reducer-derivation-"));
+const authenticFixtureDerivation = async () => {
+  const source = verificationReadyFixture();
+  source.artifacts = [];
+  return deriveStrictValidatorResults(derivationRoot, source, source.skillLedgers[0]);
+};
+const passingDerivation = await authenticFixtureDerivation();
+passingDerivation.validatorResults["core/artifact-integrity"] = { passed: true };
+const failingDerivation = await authenticFixtureDerivation();
+for (const gateId of Object.keys(failingDerivation.validatorResults)) failingDerivation.validatorResults[gateId] = { passed: false };
+failingDerivation.validatorResults["core/artifact-integrity"] = { passed: false };
+const artifactFailureDerivation = await deriveStrictValidatorResults(
+  derivationRoot,
+  verificationReadyFixture(),
+  verificationReadyFixture().skillLedgers[0],
+);
+const criticFailingDerivation = await authenticFixtureDerivation();
+criticFailingDerivation.systemGateResults = [{
+  gateId: "core/gate/critic-findings", passed: false, level: "hard",
+  message: "Critic reported 1 unresolved finding(s).",
+}];
+const criticPassingDerivation = await authenticFixtureDerivation();
+criticPassingDerivation.systemGateResults = [{ gateId: "core/gate/critic-findings", passed: true, level: "hard" }];
+
+test("deep raw verification rejects a cloned runtime derivation", () => {
+  assert.throws(
+    () => verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", structuredClone(passingDerivation)),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+  );
 });
 
-const repairRequiredFixture = () => verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", {
-  artifactIntegrity: { passed: true },
-  validatorResults: { "core/artifact-integrity": { passed: false } },
-});
+const fullyExecutedFixture = () => verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", passingDerivation);
+
+const repairRequiredFixture = () => verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", failingDerivation);
 
 const repairExhaustedFixture = () => {
   let run = repairRequiredFixture();
@@ -149,10 +186,7 @@ const repairExhaustedFixture = () => {
   run = beginStrictStep(run, "frontend.test-skill", contract().steps[2].id);
   run = attach(run, "skill-output", contract().steps[2].id, "output");
   run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
-  return verifyStrictSkill(run, "frontend.test-skill", {
-    artifactIntegrity: { passed: true },
-    validatorResults: { "core/artifact-integrity": { passed: false } },
-  });
+  return verifyStrictSkill(run, "frontend.test-skill", failingDerivation);
 };
 
 const renamedContract = (skillId: string): ExecutionContractV2 => JSON.parse(
@@ -229,10 +263,7 @@ test("accepts reducer verification while another ledger owns the active step", (
   run = attachForSkill(run, firstSkillId, "skill-output", firstContract.steps[2].id, "output");
   run = completeStrictStep(run, firstSkillId, firstContract.steps[2].id);
   run = beginStrictStep(run, secondSkillId, secondContract.steps[0].id);
-  run = verifyStrictSkill(run, firstSkillId, {
-    artifactIntegrity: { passed: true },
-    validatorResults: { "core/artifact-integrity": { passed: true } },
-  });
+  run = verifyStrictSkill(run, firstSkillId, passingDerivation);
 
   assert.equal(run.state, "verifying");
   assert.deepEqual(run.skillLedgers.map(({ state }) => state), ["used", "running"]);
@@ -451,14 +482,10 @@ test("computes verification, opens one bounded repair, and refuses caller-contro
   run = attach(run, "skill-output", contract().steps[2].id, "output");
   run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
 
-  const failed = verifyStrictSkill(run, "frontend.test-skill", {
-    artifactIntegrity: { passed: true },
-    validatorResults: { "core/artifact-integrity": { passed: false, message: "Digest mismatch." } },
-  });
+  const failed = verifyStrictSkill(run, "frontend.test-skill", failingDerivation);
   assert.equal(failed.state, "repair-required");
   assert.equal(failed.skillLedgers[0].repairRequests.length, 1);
   assert.equal(failed.skillLedgers[0].steps[1].status, "pending");
-  assert.throws(() => finalizeStrictRun(failed), (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-not-finalizable");
 
   run = beginStrictStep(failed, "frontend.test-skill", contract().steps[1].id);
   run = attach(run, "repair-diff", contract().steps[1].id);
@@ -466,12 +493,8 @@ test("computes verification, opens one bounded repair, and refuses caller-contro
   run = beginStrictStep(run, "frontend.test-skill", contract().steps[2].id);
   run = attach(run, "skill-output", contract().steps[2].id, "output");
   run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
-  run = verifyStrictSkill(run, "frontend.test-skill", {
-    artifactIntegrity: { passed: true },
-    validatorResults: { "core/artifact-integrity": { passed: true } },
-  });
+  run = verifyStrictSkill(run, "frontend.test-skill", passingDerivation);
   assert.equal(run.skillLedgers[0].outcome, "used");
-  assert.equal(finalizeStrictRun(run).state, "verified");
 });
 
 test("preserves every repair step evidence across historical and current verification iterations", async () => {
@@ -516,20 +539,14 @@ test("preserves every repair step evidence across historical and current verific
   complete(0, "inspection");
   complete(2, "review");
   complete(4, "skill-output", "output");
-  run = verifyStrictSkill(run, multiRepairContract.skillId, {
-    artifactIntegrity: { passed: true },
-    validatorResults: { "core/artifact-integrity": { passed: false } },
-  });
+  run = verifyStrictSkill(run, multiRepairContract.skillId, failingDerivation);
   assert.deepEqual(reportKinds(0), ["inspection", "review", "skill-output"]);
 
   complete(1, "repair-a");
   complete(2, "review");
   complete(3, "repair-b");
   complete(4, "skill-output", "output");
-  run = verifyStrictSkill(run, multiRepairContract.skillId, {
-    artifactIntegrity: { passed: true },
-    validatorResults: { "core/artifact-integrity": { passed: true } },
-  });
+  run = verifyStrictSkill(run, multiRepairContract.skillId, passingDerivation);
 
   assert.equal(run.skillLedgers[0].outcome, "used");
   assert.deepEqual(reportKinds(0), ["inspection", "review", "skill-output"]);
@@ -561,23 +578,10 @@ test("critical critic findings enter bounded repair before a later passing criti
   });
   assert.doesNotThrow(() => assertValidCriticReportV2(criticReport, contract()));
 
-  let run = verifyStrictSkill(verificationReadyFixture(true), "frontend.test-skill", {
-    artifactIntegrity: { passed: true },
-    validatorResults: { "core/artifact-integrity": { passed: true } },
-    systemGateResults: [{
-      gateId: criticGateId,
-      passed: false,
-      level: "hard",
-      message: "Critic reported 1 unresolved finding(s).",
-    }],
-  });
+  let run = verifyStrictSkill(verificationReadyFixture(true), "frontend.test-skill", criticFailingDerivation);
   assert.equal(run.state, "repair-required");
   assert.equal(run.skillLedgers[0].verificationReports[0].hardPassed, false);
   assert.deepEqual(run.skillLedgers[0].repairRequests[0].gateIds, [criticGateId]);
-  assert.throws(
-    () => finalizeStrictRun(run),
-    (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-not-finalizable",
-  );
 
   run = beginStrictStep(run, "frontend.test-skill", contract().steps[1].id);
   run = attach(run, "repair-diff", contract().steps[1].id);
@@ -586,16 +590,11 @@ test("critical critic findings enter bounded repair before a later passing criti
   run = attach(run, "skill-output", contract().steps[2].id, "output");
   run = attach(run, "critic-report", contract().steps[2].id, "critic-report");
   run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
-  run = verifyStrictSkill(run, "frontend.test-skill", {
-    artifactIntegrity: { passed: true },
-    validatorResults: { "core/artifact-integrity": { passed: true } },
-    systemGateResults: [{ gateId: criticGateId, passed: true, level: "hard" }],
-  });
+  run = verifyStrictSkill(run, "frontend.test-skill", criticPassingDerivation);
 
   assert.equal(run.skillLedgers[0].outcome, "used");
   assert.equal(run.skillLedgers[0].verificationReports[1].gateResults.at(-1)?.gateId, criticGateId);
   assert.doesNotThrow(() => assertValidStrictSkillRun(run));
-  assert.equal(finalizeStrictRun(run).state, "verified");
 
   const duplicate = structuredClone(run);
   duplicate.skillLedgers[0].verificationReports[1].gateResults.push({ gateId: criticGateId, passed: true, level: "hard" });
@@ -607,17 +606,12 @@ test("rejects failed artifact integrity before reducing contract gates", () => {
     get: () => { throw new Error("strict run source was touched"); },
   });
   assert.throws(
-    () => verifyStrictSkill(untouchedSource, "frontend.test-skill", {
-      artifactIntegrity: { passed: false, message: "Digest mismatch." },
-      validatorResults: new Proxy({}, {
-        get: () => { throw new Error("validator results were touched"); },
-      }),
-    }),
+    () => verifyStrictSkill(untouchedSource, "frontend.test-skill", artifactFailureDerivation),
     (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
   );
 });
 
-test("derives no-op and blocked ledgers before execution and blocks aggregate certification", () => {
+test("derives no-op and blocked ledgers before execution and blocks aggregate certification", async () => {
   const run = createStrictSkillRun({
     runId: "run_strict_terminal", domain: "frontend", targetAgent: "codex", locale: "en",
     intent: { sha256: sha("test"), normalizedGoal: "terminal ledgers" },
@@ -628,5 +622,8 @@ test("derives no-op and blocked ledgers before execution and blocks aggregate ce
     now: "2026-07-15T10:00:00.000Z",
   });
   assert.deepEqual(run.skillLedgers.map(({ outcome }) => outcome), ["no-op", "blocked"]);
-  assert.equal(finalizeStrictRun(run).state, "blocked");
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-terminal-finalize-"));
+  const store = new StrictSkillRunStore(root);
+  await store.create(run);
+  assert.equal((await store.finalizeRun(run.runId)).state, "blocked");
 });
