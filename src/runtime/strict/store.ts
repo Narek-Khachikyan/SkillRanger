@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { lstat, mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { RunFileLock } from "../run-lock.ts";
 import { addStrictEvidence, verifyStrictSkill } from "./reducer.ts";
 import { assertValidCriticReportV2 } from "./critic.ts";
 import { validateJsonSchema } from "./json-schema.ts";
@@ -9,50 +10,26 @@ import { StrictSkillRunError, type EvidenceArtifact, type SkillRunV2 } from "./t
 import { deriveStrictValidatorResults, type StrictValidatorCallbacks } from "./verification.ts";
 import { captureSourceControl } from "./git.ts";
 
-const lockTimeoutMs = 5_000;
-const staleLockMs = 30_000;
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const errno = (error: unknown, code: string) => typeof error === "object" && error !== null && (error as { code?: unknown }).code === code;
 const digestBytes = (bytes: Uint8Array) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 
 export class StrictSkillRunStore {
   private readonly projectRoot: string;
   private readonly validatorCallbacks: StrictValidatorCallbacks;
+  private readonly lock: RunFileLock;
 
   constructor(projectRoot: string, validatorCallbacks: StrictValidatorCallbacks = {}) {
     this.projectRoot = projectRoot;
     this.validatorCallbacks = validatorCallbacks;
+    this.lock = new RunFileLock({
+      lockPath: (runId) => `${this.runPath(runId).slice(0, -5)}.lock`,
+      error: (message) => new StrictSkillRunError("run-integrity", message),
+    });
   }
 
   private runPath(runId: string) {
     if (!/^run_[a-z0-9_-]{7,127}$/.test(runId)) throw new StrictSkillRunError("run-integrity", `Invalid run id ${runId}.`);
     return path.join(this.projectRoot, ".skillranger", "runs", `${runId}.json`);
-  }
-
-  private async acquire(runId: string) {
-    const lockPath = `${this.runPath(runId).slice(0, -5)}.lock`;
-    await mkdir(path.dirname(lockPath), { recursive: true });
-    const started = Date.now();
-    const token = randomUUID();
-    while (true) {
-      try {
-        const handle = await open(lockPath, "wx");
-        await handle.writeFile(JSON.stringify({ token, pid: process.pid }), "utf8");
-        await handle.close();
-        return { lockPath, token };
-      } catch (error) {
-        if (!errno(error, "EEXIST")) throw error;
-        const info = await stat(lockPath).catch(() => undefined);
-        if (info && Date.now() - info.mtimeMs > staleLockMs) await unlink(lockPath).catch(() => undefined);
-        if (Date.now() - started > lockTimeoutMs) throw new StrictSkillRunError("run-integrity", "Timed out waiting for strict run lock.");
-        await delay(25);
-      }
-    }
-  }
-
-  private async release(lock: { lockPath: string; token: string }) {
-    const source = await readFile(lock.lockPath, "utf8").catch(() => "");
-    if (source.includes(lock.token)) await unlink(lock.lockPath).catch(() => undefined);
   }
 
   private async readUnlocked(runId: string): Promise<SkillRunV2> {
@@ -80,26 +57,26 @@ export class StrictSkillRunStore {
   }
 
   async create(run: SkillRunV2) {
-    const lock = await this.acquire(run.runId);
+    const lock = await this.lock.acquire(run.runId);
     try {
       try { await stat(this.runPath(run.runId)); throw new StrictSkillRunError("run-integrity", `Strict run already exists: ${run.runId}.`); }
       catch (error) { if (!errno(error, "ENOENT")) throw error; }
       await this.writeUnlocked(run);
       return run;
-    } finally { await this.release(lock); }
+    } finally { await this.lock.release(lock); }
   }
 
   async read(runId: string) { return this.readUnlocked(runId); }
 
   async update(runId: string, apply: (run: SkillRunV2) => SkillRunV2 | Promise<SkillRunV2>) {
-    const lock = await this.acquire(runId);
+    const lock = await this.lock.acquire(runId);
     try {
       const current = await this.readUnlocked(runId);
       const next = await apply(structuredClone(current));
       if (next.runId !== runId || next.revision <= current.revision) throw new StrictSkillRunError("run-integrity", "Strict update must preserve id and advance revision.");
       await this.writeUnlocked(next);
       return next;
-    } finally { await this.release(lock); }
+    } finally { await this.lock.release(lock); }
   }
 
   async ingestEvidence(runId: string, input: {

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rename, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rename, symlink, unlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -453,6 +453,64 @@ test("strict store writes atomically and rejects a tampered persisted content sn
   tampered.skillLedgers[0].contentChunks[0].content = "mutated";
   await writeFile(runPath, `${JSON.stringify(tampered)}\n`);
   await assert.rejects(store.read(run.runId), (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity");
+});
+
+test("does not reclaim an old strict lock owned by a live process", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-live-lock-"));
+  const store = new StrictSkillRunStore(root);
+  const run = fixtureRun();
+  await store.create(run);
+  const lockPath = path.join(root, ".skillranger", "runs", `${run.runId}.lock`);
+  await writeFile(lockPath, JSON.stringify({ token: "live-owner", pid: process.pid }));
+  const old = new Date(Date.now() - 31_000);
+  await utimes(lockPath, old, old);
+
+  let entered = false;
+  const pending = store.update(run.runId, (current) => {
+    entered = true;
+    return readNextStrictChunk(current, contract.skillId).run;
+  });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(entered, false);
+  await unlink(lockPath);
+  await pending;
+  assert.equal(entered, true);
+});
+
+test("reclaims an old strict lock owned by a dead process", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-dead-lock-"));
+  const store = new StrictSkillRunStore(root);
+  const run = fixtureRun();
+  await store.create(run);
+  const lockPath = path.join(root, ".skillranger", "runs", `${run.runId}.lock`);
+  await writeFile(lockPath, JSON.stringify({ token: "dead-owner", pid: 999_999 }));
+  const old = new Date(Date.now() - 31_000);
+  await utimes(lockPath, old, old);
+
+  const updated = await store.update(run.runId, (current) => readNextStrictChunk(current, contract.skillId).run);
+
+  assert.equal(updated.revision, 1);
+  await assert.rejects(readFile(lockPath, "utf8"), (error: unknown) => (
+    error instanceof Error && "code" in error && error.code === "ENOENT"
+  ));
+});
+
+test("serializes concurrent strict chunk updates without losing either receipt", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-concurrent-lock-"));
+  const store = new StrictSkillRunStore(root);
+  const run = fixtureRun();
+  run.skillLedgers[0].contentChunks = createContentChunks("SKILL.md", "a\nb\n", 2);
+  await store.create(run);
+
+  const updates = await Promise.all([
+    store.update(run.runId, (current) => readNextStrictChunk(current, contract.skillId).run),
+    store.update(run.runId, (current) => readNextStrictChunk(current, contract.skillId).run),
+  ]);
+
+  const persisted = await store.read(run.runId);
+  assert.deepEqual(new Set(updates.map(({ revision }) => revision)), new Set([1, 2]));
+  assert.deepEqual(persisted.skillLedgers[0].readReceipts.map(({ ordinal }) => ordinal), [0, 1]);
+  assert.equal(persisted.revision, run.revision + 2);
 });
 
 test("rejects a persisted used outcome without completed steps and verification", async () => {
