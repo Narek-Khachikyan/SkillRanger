@@ -74,6 +74,20 @@ test("rejects non-canonical ids, unknown rule references, and unregistered valid
   );
 });
 
+test("reserves only the runtime-owned critic system gate id from core contracts", () => {
+  const core = JSON.parse(
+    JSON.stringify(contract()).replaceAll("frontend.test-skill", "core"),
+  ) as ExecutionContractV2;
+  core.gates[0].id = "core/gate/critic-findings";
+  assert.throws(
+    () => assertValidExecutionContract(core),
+    /reserved|runtime/i,
+  );
+
+  core.gates[0].id = "core/gate/custom";
+  assert.doesNotThrow(() => assertValidExecutionContract(core));
+});
+
 test("evaluates applicability only from allowlisted fingerprint and input predicates", () => {
   const value = contract().applicability;
   assert.equal(evaluateApplicability(value, {

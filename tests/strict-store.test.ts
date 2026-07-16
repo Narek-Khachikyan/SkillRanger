@@ -531,6 +531,7 @@ test("strict store reload rejects parseable non-RFC3339 and impossible persisted
   const timestamps = [
     "March 1, 2026 12:00:00 GMT",
     "2026-02-30T12:00:00Z",
+    "2026-07-16T08:00:59.1234+04:00",
   ];
   const targets = [
     (run: SkillRunV2, value: string) => { run.skillLedgers[0].steps[0].attempts[0].startedAt = value; },
@@ -560,21 +561,29 @@ test("strict store reload rejects parseable non-RFC3339 and impossible persisted
   }
 });
 
-test("strict store reload preserves valid RFC3339 timestamps with UTC offsets", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "strict-timestamp-valid-"));
-  const store = new StrictSkillRunStore(root);
-  const verified = await store.verifySkill(
-    (await stageCompletedEvidence(root, store)).runId,
-    contract.skillId,
-  );
-  const runPath = path.join(root, ".skillranger", "runs", `${verified.runId}.json`);
-  const persisted = JSON.parse(await readFile(runPath, "utf8")) as SkillRunV2;
-  persisted.skillLedgers[0].steps[0].attempts[0].startedAt = "2026-07-16T08:00:58.125+04:00";
-  persisted.skillLedgers[0].steps[0].attempts[0].completedAt = "2026-07-16T08:00:59.250+04:00";
-  persisted.skillLedgers[0].verificationReports[0].generatedAt = "2026-07-16T08:00:59.500+04:00";
-  await writeFile(runPath, `${JSON.stringify(persisted)}\n`);
+test("strict store reload preserves no-fraction and 1-3 digit fractional RFC3339 offsets", async () => {
+  const timestamps = [
+    "2026-07-16T08:00:59+04:00",
+    "2026-07-16T08:00:59.1+04:00",
+    "2026-07-16T08:00:59.12+04:00",
+    "2026-07-16T08:00:59.123+04:00",
+  ];
+  for (const [index, timestamp] of timestamps.entries()) {
+    const root = await mkdtemp(path.join(os.tmpdir(), `strict-timestamp-valid-${index}-`));
+    const store = new StrictSkillRunStore(root);
+    const verified = await store.verifySkill(
+      (await stageCompletedEvidence(root, store)).runId,
+      contract.skillId,
+    );
+    const runPath = path.join(root, ".skillranger", "runs", `${verified.runId}.json`);
+    const persisted = JSON.parse(await readFile(runPath, "utf8")) as SkillRunV2;
+    persisted.skillLedgers[0].steps[0].attempts[0].startedAt = timestamp;
+    persisted.skillLedgers[0].steps[0].attempts[0].completedAt = timestamp;
+    persisted.skillLedgers[0].verificationReports[0].generatedAt = timestamp;
+    await writeFile(runPath, `${JSON.stringify(persisted)}\n`);
 
-  assert.deepEqual(await store.read(verified.runId), persisted);
+    assert.deepEqual(await store.read(verified.runId), persisted);
+  }
 });
 
 test("strict store reload rejects leap seconds outside the runtime date-time subset", async () => {
@@ -644,7 +653,7 @@ test("a findings report produced after completed repair consumes the exhausted b
   assert.equal(ledger.verificationReports.at(-1)!.gateResults.find(({ gateId }) => gateId === "core/gate/critic-findings")?.passed, false);
 });
 
-test("invalid repair timestamps are rejected before critic causality derivation", async () => {
+test("submillisecond timestamps are rejected before critic causality can collapse ordering", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-critic-timestamps-"));
   const store = new StrictSkillRunStore(root);
   let run = readNextStrictChunk(fixtureRun(criticRepairContract), criticRepairContract.skillId).run;
@@ -672,9 +681,12 @@ test("invalid repair timestamps are rejected before critic causality derivation"
 
   const runPath = path.join(root, ".skillranger", "runs", `${run.runId}.json`);
   const forged = JSON.parse(await readFile(runPath, "utf8"));
+  const sourceReport = forged.skillLedgers[0].verificationReports[0];
   const repairAttempt = forged.skillLedgers[0].steps[1].attempts[0];
-  repairAttempt.startedAt = "not-a-timestamp";
-  repairAttempt.completedAt = "not-a-timestamp";
+  sourceReport.generatedAt = "2026-07-16T08:00:00.1234Z";
+  repairAttempt.startedAt = "2026-07-16T08:00:00.1235Z";
+  repairAttempt.completedAt = "2026-07-16T08:00:00.1235Z";
+  assert.equal(Date.parse(sourceReport.generatedAt), Date.parse(repairAttempt.startedAt));
   await writeFile(runPath, `${JSON.stringify(forged)}\n`);
   await assert.rejects(
     store.verifySkill(run.runId, criticRepairContract.skillId),

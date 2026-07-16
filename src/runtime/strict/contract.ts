@@ -1,4 +1,5 @@
 import path from "node:path";
+import { isReservedStrictSystemGateId } from "./system-gates.ts";
 import type { ApplicabilityContext, ApplicabilityPredicate, ExecutionContractV2 } from "./types.ts";
 
 const coreValidators = new Set([
@@ -107,6 +108,7 @@ export const assertValidExecutionContract: (input: unknown) => asserts input is 
     ownKeys(raw, ["id", "level", "evaluator", "ruleIds"], `gates[${index}]`);
     nonEmpty(raw.id, `gates[${index}].id`);
     if (!canonicalId.test(raw.id) || !raw.id.startsWith(`${prefix}/gate/`)) throw new Error(`Gate id ${raw.id} is not canonical.`);
+    if (isReservedStrictSystemGateId(raw.id)) throw new Error(`Gate id ${raw.id} is reserved for a runtime system gate.`);
     if (gateIds.has(raw.id)) throw new Error(`Duplicate gate id ${raw.id}.`);
     gateIds.add(raw.id);
     if (raw.level !== "hard" && raw.level !== "advisory") throw new Error(`gates[${index}].level is invalid.`);

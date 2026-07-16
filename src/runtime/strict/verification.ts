@@ -5,10 +5,11 @@ import path from "node:path";
 import { assertValidCriticReportV2 } from "./critic.ts";
 import { isRfc3339DateTime } from "./date-time.ts";
 import { deriveBrowserGateResults, deriveTailwindSourceResults } from "./frontend-evidence.ts";
+import { criticSystemGateId } from "./system-gates.ts";
 import type { EvidenceArtifact, SkillLedger, SkillRunV2, StrictSystemGateResult } from "./types.ts";
 
 type Result = { passed: boolean; message?: string };
-export const criticSystemGateId = "core/gate/critic-findings";
+export { criticSystemGateId };
 export type StrictValidatorDerivation = {
   artifactIntegrity: Result;
   validatorResults: Record<string, Result>;

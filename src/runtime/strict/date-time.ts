@@ -1,4 +1,4 @@
-const dateTimePattern = /^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:[Zz]|[+-](\d{2}):(\d{2}))$/;
+const dateTimePattern = /^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:[Zz]|[+-](\d{2}):(\d{2}))$/;
 
 const leapYear = (year: number) => year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
 

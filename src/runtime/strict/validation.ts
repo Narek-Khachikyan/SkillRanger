@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { assertValidExecutionContract } from "./contract.ts";
-import { StrictSkillRunError, type ExecutionContractV2, type SkillRunV2 } from "./types.ts";
-import { criticSystemGateId } from "./verification.ts";
 import { isRfc3339DateTime } from "./date-time.ts";
+import { criticSystemGateId } from "./system-gates.ts";
+import { StrictSkillRunError, type ExecutionContractV2, type SkillRunV2 } from "./types.ts";
 
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const checksum = /^sha256:[a-f0-9]{64}$/;
