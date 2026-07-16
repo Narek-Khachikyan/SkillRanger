@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { lstat, mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, mkdir, open, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { RunFileLock } from "../run-lock.ts";
 import { addStrictEvidence, verifyStrictSkill } from "./reducer.ts";
@@ -12,6 +13,40 @@ import { captureSourceControl } from "./git.ts";
 
 const errno = (error: unknown, code: string) => typeof error === "object" && error !== null && (error as { code?: unknown }).code === code;
 const digestBytes = (bytes: Uint8Array) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+const containedBy = (root: string, target: string) => {
+  const relative = path.relative(root, target);
+  return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+};
+
+const readContainedEvidenceSource = async (projectRoot: string, sourcePath: string) => {
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    const [canonicalRoot, leaf] = await Promise.all([realpath(projectRoot), lstat(sourcePath)]);
+    if (!leaf.isFile() || leaf.isSymbolicLink()) {
+      throw new StrictSkillRunError("artifact-integrity", "Evidence source must be a real file, not a symlink.");
+    }
+    const canonicalBeforeOpen = await realpath(sourcePath);
+    if (!containedBy(canonicalRoot, canonicalBeforeOpen)) {
+      throw new StrictSkillRunError("artifact-integrity", "Evidence source must stay inside the project root.");
+    }
+    handle = await open(sourcePath, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const info = await handle.stat();
+    const bytes = await handle.readFile();
+    const canonicalAfterRead = await realpath(sourcePath);
+    if (canonicalAfterRead !== canonicalBeforeOpen || !containedBy(canonicalRoot, canonicalAfterRead)) {
+      throw new StrictSkillRunError("artifact-integrity", "Evidence source changed containment while it was read.");
+    }
+    if (!info.isFile() || info.size !== bytes.byteLength) {
+      throw new StrictSkillRunError("artifact-integrity", "Evidence source changed while it was read.");
+    }
+    return bytes;
+  } catch (error) {
+    if (error instanceof StrictSkillRunError) throw error;
+    throw new StrictSkillRunError("artifact-integrity", "Evidence source could not be read securely.");
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+};
 
 export class StrictSkillRunStore {
   private readonly projectRoot: string;
@@ -86,9 +121,7 @@ export class StrictSkillRunStore {
     const sourcePath = path.resolve(input.sourcePath);
     const root = path.resolve(this.projectRoot);
     if (sourcePath !== root && !sourcePath.startsWith(`${root}${path.sep}`)) throw new StrictSkillRunError("artifact-integrity", "Evidence source must stay inside the project root.");
-    const sourceInfo = await lstat(sourcePath).catch(() => undefined);
-    if (!sourceInfo?.isFile() || sourceInfo.isSymbolicLink()) throw new StrictSkillRunError("artifact-integrity", "Evidence source must be a real file, not a symlink.");
-    const bytes = await readFile(sourcePath);
+    const bytes = await readContainedEvidenceSource(root, sourcePath);
     if (input.validatedAs !== undefined) {
       const run = await this.read(runId);
       const producer = input.attributions.find(({ relation }) => relation === "produced");
@@ -110,32 +143,25 @@ export class StrictSkillRunStore {
     const relativeArtifactPath = path.join(".skillranger", "runs", runId, "artifacts", hex).replace(/\\/g, "/");
     const destination = path.join(this.projectRoot, relativeArtifactPath);
     await mkdir(path.dirname(destination), { recursive: true });
-    let created = false;
     try {
       await writeFile(destination, bytes, { flag: "wx" });
-      created = true;
     } catch (error) {
       if (!errno(error, "EEXIST")) throw error;
       if (digestBytes(await readFile(destination)) !== sha256) throw new StrictSkillRunError("artifact-integrity", "Existing content-addressed artifact is corrupt.");
     }
-    try {
-      const current = await this.read(runId);
-      const sourceControl = await captureSourceControl(this.projectRoot, current.sourceControl.mode === "git" ? current.sourceControl.base : undefined);
-      return await this.update(runId, (run) => addStrictEvidence(run, {
-        artifactId: `artifact_${randomUUID()}`,
-        kind: input.kind,
-        path: relativeArtifactPath,
-        sourcePath: path.relative(this.projectRoot, sourcePath).replace(/\\/g, "/"),
-        sha256,
-        size: bytes.byteLength,
-        sourceControl,
-        ...(input.validatedAs === undefined ? {} : { validatedAs: input.validatedAs }),
-        attributions: input.attributions,
-      }));
-    } catch (error) {
-      if (created) await unlink(destination).catch(() => undefined);
-      throw error;
-    }
+    const current = await this.read(runId);
+    const sourceControl = await captureSourceControl(this.projectRoot, current.sourceControl.mode === "git" ? current.sourceControl.base : undefined);
+    return this.update(runId, (run) => addStrictEvidence(run, {
+      artifactId: `artifact_${randomUUID()}`,
+      kind: input.kind,
+      path: relativeArtifactPath,
+      sourcePath: path.relative(this.projectRoot, sourcePath).replace(/\\/g, "/"),
+      sha256,
+      size: bytes.byteLength,
+      sourceControl,
+      ...(input.validatedAs === undefined ? {} : { validatedAs: input.validatedAs }),
+      attributions: input.attributions,
+    }));
   }
 
   async verifySkill(runId: string, skillId: string) {

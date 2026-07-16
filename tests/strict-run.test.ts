@@ -12,7 +12,6 @@ import {
   createStrictSkillRun,
   finalizeStrictRun,
   readNextStrictChunk,
-  verifyStrictSkill,
   StrictSkillRunError,
   StrictSkillRunStore,
   assertValidCriticReportV2,
@@ -20,6 +19,8 @@ import {
   type ExecutionContractV2,
   type StrictSkillSelection,
 } from "../src/runtime/strict/index.ts";
+import * as strictApi from "../src/runtime/strict/index.ts";
+import { verifyStrictSkill } from "../src/runtime/strict/reducer.ts";
 
 const sha = (value: string) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
 const contract = (): ExecutionContractV2 => ({
@@ -37,6 +38,10 @@ const contract = (): ExecutionContractV2 => ({
     { id: "frontend.test-skill/gate/output", level: "hard", evaluator: { type: "schema-valid", schema: "output" }, ruleIds: ["frontend.test-skill/rule/complete"] },
     { id: "frontend.test-skill/gate/custom", level: "hard", evaluator: { type: "validator", validatorId: "core/artifact-integrity" }, ruleIds: ["frontend.test-skill/rule/complete"] },
   ],
+});
+
+test("public strict API does not expose decisive verification booleans", () => {
+  assert.equal("verifyStrictSkill" in strictApi, false);
 });
 
 test("publishes closed run, critic, verification, and repair schemas", async () => {

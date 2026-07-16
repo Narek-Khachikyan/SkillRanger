@@ -252,6 +252,151 @@ const parsedTemplates = (content: string) => {
   return templates;
 };
 
+type LocalInitializer = SourceRange & { name: string };
+
+const opaqueLexicalRanges = (content: string) => {
+  const ranges: SourceRange[] = [];
+  for (let index = 0; index < content.length; index += 1) {
+    const character = content[index];
+    if (character === "\"" || character === "'") {
+      const end = quotedEnd(content, index, character);
+      if (end === undefined) break;
+      ranges.push({ start: index, end });
+      index = end - 1;
+      continue;
+    }
+    if (character === "`") {
+      const template = parseTemplateAt(content, index);
+      if (!template) break;
+      ranges.push({ start: index, end: template.end });
+      index = template.end - 1;
+      continue;
+    }
+    if (character === "/" && (content[index + 1] === "/" || content[index + 1] === "*")) {
+      const end = commentEnd(content, index);
+      if (end === undefined) break;
+      ranges.push({ start: index, end });
+      index = end - 1;
+    }
+  }
+  return ranges;
+};
+
+const insideRange = (index: number, ranges: SourceRange[]) =>
+  ranges.some(({ start, end }) => index >= start && index < end);
+
+const initializerEnd = (content: string, start: number) => {
+  const delimiters: string[] = [];
+  const pairs: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
+  for (let index = start; index < content.length; index += 1) {
+    const character = content[index];
+    if (character === "\"" || character === "'") {
+      const end = quotedEnd(content, index, character);
+      if (end === undefined) return undefined;
+      index = end - 1;
+      continue;
+    }
+    if (character === "`") {
+      const template = parseTemplateAt(content, index);
+      if (!template) return undefined;
+      index = template.end - 1;
+      continue;
+    }
+    if (character === "/" && (content[index + 1] === "/" || content[index + 1] === "*")) {
+      const end = commentEnd(content, index);
+      if (end === undefined) return undefined;
+      index = end - 1;
+      continue;
+    }
+    if (pairs[character]) delimiters.push(pairs[character]);
+    else if (delimiters.at(-1) === character) delimiters.pop();
+    else if (delimiters.length === 0 && (character === ";" || character === ",")) return index;
+    else if (delimiters.length === 0 && (character === "\n" || character === "\r")) {
+      const expression = content.slice(start, index).trimEnd();
+      if (!/(?:[?:,+*/%&|^=!<>-]|=>)$/.test(expression)) return index;
+    }
+  }
+  return content.length;
+};
+
+const localInitializers = (content: string) => {
+  const declarations = new Map<string, LocalInitializer[]>();
+  const opaque = opaqueLexicalRanges(content);
+  const pattern = /\b(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*/g;
+  for (const match of content.matchAll(pattern)) {
+    const declarationStart = match.index ?? 0;
+    if (insideRange(declarationStart, opaque)) continue;
+    const start = declarationStart + match[0].length;
+    const end = initializerEnd(content, start);
+    if (end === undefined || content.slice(start, end).trim() === "") continue;
+    const name = match[1];
+    declarations.set(name, [...(declarations.get(name) ?? []), { name, start, end }]);
+  }
+  return declarations;
+};
+
+const referencedIdentifiers = (content: string, range: SourceRange) => {
+  const identifiers: string[] = [];
+  for (let index = range.start; index < range.end; index += 1) {
+    const character = content[index];
+    if (character === "\"" || character === "'") {
+      const end = quotedEnd(content, index, character);
+      if (end === undefined || end > range.end) break;
+      index = end - 1;
+      continue;
+    }
+    if (character === "`") {
+      const template = parseTemplateAt(content, index);
+      if (!template || template.end > range.end) break;
+      index = template.end - 1;
+      continue;
+    }
+    if (character === "/" && (content[index + 1] === "/" || content[index + 1] === "*")) {
+      const end = commentEnd(content, index);
+      if (end === undefined || end > range.end) break;
+      index = end - 1;
+      continue;
+    }
+    if (!/[A-Za-z_$]/.test(character)) continue;
+    let end = index + 1;
+    while (/[A-Za-z0-9_$]/.test(content[end] ?? "")) end += 1;
+    let previous = index - 1;
+    while (previous >= range.start && /\s/.test(content[previous])) previous -= 1;
+    if (content[previous] !== ".") identifiers.push(content.slice(index, end));
+    index = end - 1;
+  }
+  return identifiers;
+};
+
+const traceClassValueRanges = (content: string, seeds: SourceRange[]) => {
+  const declarations = localInitializers(content);
+  const ranges = [...seeds];
+  const failures: ScanFailure[] = [];
+  const states = new Map<string, "visiting" | "done">();
+  const resolve = (name: string, origin: SourceRange) => {
+    const candidates = declarations.get(name);
+    if (!candidates) return;
+    if (candidates.length !== 1) {
+      failures.push({ ...origin, reason: `ambiguous class value ${name}` });
+      return;
+    }
+    if (states.get(name) === "visiting") {
+      failures.push({ ...origin, reason: `cyclic class value ${name}` });
+      return;
+    }
+    if (states.get(name) === "done") return;
+    states.set(name, "visiting");
+    const initializer = candidates[0];
+    ranges.push(initializer);
+    for (const reference of referencedIdentifiers(content, initializer)) resolve(reference, initializer);
+    states.set(name, "done");
+  };
+  for (const seed of seeds) {
+    for (const reference of referencedIdentifiers(content, seed)) resolve(reference, seed);
+  }
+  return { ranges, failures };
+};
+
 const relevantClassExpressionRanges = (content: string) => {
   const ranges: SourceRange[] = [];
   const failures: ScanFailure[] = [];
@@ -271,7 +416,8 @@ const relevantClassExpressionRanges = (content: string) => {
     if (scanned.failure) failures.push(scanned.failure);
     else ranges.push({ start: open + 1, end: scanned.end });
   }
-  return { ranges, failures };
+  const traced = traceClassValueRanges(content, ranges);
+  return { ranges: traced.ranges, failures: [...failures, ...traced.failures] };
 };
 
 type ConcatenationOperand = { end: number; value?: string };

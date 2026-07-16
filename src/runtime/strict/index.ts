@@ -1,6 +1,14 @@
 export * from "./types.ts";
 export * from "./contract.ts";
-export * from "./reducer.ts";
+export {
+  addStrictEvidence,
+  beginStrictStep,
+  completeStrictStep,
+  createContentChunks,
+  createStrictSkillRun,
+  finalizeStrictRun,
+  readNextStrictChunk,
+} from "./reducer.ts";
 export * from "./validation.ts";
 export * from "./store.ts";
 export * from "./critic.ts";

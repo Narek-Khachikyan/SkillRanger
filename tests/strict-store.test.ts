@@ -276,6 +276,82 @@ test("detects dynamic Tailwind templates in first and later class positions", ()
   assert.equal(later["no-dynamic-tailwind-classes"].passed, false);
 });
 
+test("traces dynamic Tailwind templates and concatenation through class variables", () => {
+  const template = deriveTailwindSourceResults([
+    "const classes = `bg-${color}-600`;",
+    "const card = <div className={classes}>Save</div>;",
+  ].join("\n"));
+  const concatenation = deriveTailwindSourceResults([
+    "const classes = \"bg-\" + color + \"-600\";",
+    "const card = <div class={classes}>Save</div>;",
+  ].join("\n"));
+
+  assert.equal(template["no-dynamic-tailwind-classes"].passed, false);
+  assert.equal(concatenation["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("traces a dynamic Tailwind template through a className alias chain", () => {
+  const results = deriveTailwindSourceResults([
+    "const generated = `bg-${color}-600`;",
+    "const alias = generated;",
+    "const classes = alias;",
+    "const card = <div className={classes}>Save</div>;",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("traces a dynamic Tailwind template through a className conditional branch", () => {
+  const results = deriveTailwindSourceResults([
+    "const generated = `bg-${color}-600`;",
+    "const classes = active ? \"bg-brand-500\" : generated;",
+    "const card = <div className={classes}>Save</div>;",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("traces dynamic Tailwind variables passed to class composition helpers", () => {
+  const results = deriveTailwindSourceResults([
+    "const generated = `bg-${color}-600`;",
+    "const classes = cn(\"p-4\", generated);",
+    "const card = <div className={classes}>Save</div>;",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("accepts static class variables, aliases, conditionals, and composition arguments", () => {
+  const results = deriveTailwindSourceResults([
+    "const base = \"bg-brand-500\";",
+    "const alias = base;",
+    "const conditional = active ? alias : \"bg-brand-600\";",
+    "const classes = cn(\"p-4\", conditional);",
+    "const card = <div className={classes}>Save</div>;",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
+test("does not treat unrelated dynamic strings as class values", () => {
+  const results = deriveTailwindSourceResults([
+    "const analyticsLabel = `bg-${color}-600`;",
+    "const card = <div className=\"bg-brand-500\">Save</div>;",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
+test("fails closed when class-value aliases form a cycle", () => {
+  const results = deriveTailwindSourceResults([
+    "const first = second;",
+    "const second = first;",
+    "const card = <div className={first}>Save</div>;",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
 test("validates only added content in a unified implementation diff", () => {
   const results = deriveTailwindSourceResults(`diff --git a/Card.tsx b/Card.tsx
 --- a/Card.tsx
@@ -593,6 +669,100 @@ test("ingests immutable evidence and binds it to the active step", async () => {
   assert.equal(artifact.sha256, sha("{}\n"));
   await writeFile(source, "mutated source\n");
   assert.equal(await readFile(path.join(root, artifact.path), "utf8"), "{}\n");
+});
+
+test("rejects evidence whose parent symlink escapes the project root", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-evidence-parent-link-"));
+  const outside = await mkdtemp(path.join(os.tmpdir(), "strict-evidence-outside-"));
+  const linkedParent = path.join(root, "linked-reports");
+  const source = path.join(linkedParent, "report.json");
+  await writeFile(path.join(outside, "report.json"), "{}\n");
+  await symlink(outside, linkedParent);
+  const store = new StrictSkillRunStore(root);
+  let run = beginStrictStep(
+    readNextStrictChunk(fixtureRun(), contract.skillId).run,
+    contract.skillId,
+    contract.steps[0].id,
+  );
+  await store.create(run);
+
+  await assert.rejects(store.ingestEvidence(run.runId, {
+    sourcePath: source,
+    kind: "report",
+    attributions: [{
+      skillId: contract.skillId,
+      stepId: contract.steps[0].id,
+      attempt: 1,
+      relation: "produced",
+      ruleIds: contract.rules.map(({ id }) => id),
+    }],
+  }), (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity");
+});
+
+test("retains a shared evidence blob when one concurrent update fails", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-evidence-shared-digest-"));
+  const firstSource = path.join(root, "first.json");
+  const secondSource = path.join(root, "second.json");
+  await writeFile(firstSource, "{}\n");
+  await writeFile(secondSource, "{}\n");
+  let firstUpdateReachedResolve!: () => void;
+  let secondUpdateFinishedResolve!: () => void;
+  const firstUpdateReached = new Promise<void>((resolve) => { firstUpdateReachedResolve = resolve; });
+  const secondUpdateFinished = new Promise<void>((resolve) => { secondUpdateFinishedResolve = resolve; });
+
+  class CoordinatedStrictStore extends StrictSkillRunStore {
+    private updateCalls = 0;
+
+    override async update(
+      runId: string,
+      apply: (run: SkillRunV2) => SkillRunV2 | Promise<SkillRunV2>,
+    ) {
+      const call = ++this.updateCalls;
+      if (call === 1) {
+        firstUpdateReachedResolve();
+        await secondUpdateFinished;
+        throw new StrictSkillRunError("run-integrity", "Injected first update failure.");
+      }
+      try {
+        return await super.update(runId, apply);
+      } finally {
+        secondUpdateFinishedResolve();
+      }
+    }
+  }
+
+  const store = new CoordinatedStrictStore(root);
+  const run = beginStrictStep(
+    readNextStrictChunk(fixtureRun(), contract.skillId).run,
+    contract.skillId,
+    contract.steps[0].id,
+  );
+  await store.create(run);
+  const input = (sourcePath: string) => ({
+    sourcePath,
+    kind: "report",
+    attributions: [{
+      skillId: contract.skillId,
+      stepId: contract.steps[0].id,
+      attempt: 1,
+      relation: "produced" as const,
+      ruleIds: contract.rules.map(({ id }) => id),
+    }],
+  });
+
+  const first = store.ingestEvidence(run.runId, input(firstSource));
+  await firstUpdateReached;
+  const second = store.ingestEvidence(run.runId, input(secondSource));
+  const [firstResult, secondResult] = await Promise.allSettled([first, second]);
+
+  assert.equal(firstResult.status, "rejected");
+  assert.equal(secondResult.status, "fulfilled");
+  const persisted = await store.read(run.runId);
+  assert.equal(persisted.artifacts.length, 1);
+  const artifact = persisted.artifacts[0];
+  assert.equal(await readFile(path.join(root, artifact.path), "utf8"), "{}\n");
+  const derivation = await deriveStrictValidatorResults(root, persisted, persisted.skillLedgers[0]);
+  assert.equal(derivation.artifactIntegrity.passed, true);
 });
 
 test("rejects evidence falsely declared as schema-validated", async () => {
