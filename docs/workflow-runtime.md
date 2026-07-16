@@ -88,7 +88,7 @@ The strict Tailwind workflow derives browser gates from measurements in `verific
 }
 ```
 
-`checks` maps and other caller-authored approval fields are rejected. Every `screenshotPath` must reference separately ingested screenshot evidence for that viewport; one screenshot cannot stand in for multiple observations. The runtime derives required viewport/state coverage, overflow, clipped or unreachable controls, sticky overlap, focus and keyboard behavior, console errors, and reduced-motion results from those observations.
+`checks` maps and other caller-authored approval fields are rejected: the root object may contain only `observations`, and every observation has the closed shape shown above. Every `screenshotPath` must reference separately ingested screenshot evidence for that viewport; one screenshot cannot stand in for multiple observations. The runtime requires viewport coverage at widths 390, 768, and 1440 and a non-empty `state` label on each observation; it does not prescribe a set of state names. It derives overflow, clipped or unreachable controls, sticky overlap, focus and keyboard behavior, console errors, and reduced-motion results from those observations.
 
 `implementation-diff` evidence is diff/source text, not JSON gate decisions. The runtime validates added lines from a structurally valid unified diff, or the complete content when it is not a diff, and derives the Tailwind source gates from the resulting findings. Embedded `checks` properties have no authority.
 

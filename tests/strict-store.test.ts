@@ -188,6 +188,14 @@ test("derives browser gates only from closed observations bound to screenshot ev
   assert.ok(Object.values(openShape).every(({ passed }) => !passed));
 });
 
+test("rejects root checks beside otherwise valid browser observations", () => {
+  const observations = [390, 768, 1440].map(browserObservation);
+
+  const results = deriveBrowserGateResults({ observations, checks: { "required-states-covered": true } }, browserArtifacts);
+
+  assert.ok(Object.values(results).every(({ passed, message }) => !passed && /closed shape/i.test(message ?? "")));
+});
+
 test("rejects reuse of one screenshot across required browser viewports", () => {
   const observations = [390, 768, 1440].map((width) => ({
     ...browserObservation(width),

@@ -93,8 +93,8 @@ export const deriveBrowserGateResults = (
   const failed = (message: string) => Object.fromEntries(
     browserGateSlugs.map((slug) => [slug, { passed: false, message }]),
   );
-  if (!record(value) || !Array.isArray(value.observations)) {
-    return failed("verification-input must contain valid browser observations.");
+  if (!record(value) || !exactKeys(value, ["observations"]) || !Array.isArray(value.observations)) {
+    return failed("verification-input must have the required closed shape with valid browser observations.");
   }
   let observations: Observation[];
   try {
