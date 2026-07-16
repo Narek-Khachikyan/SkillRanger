@@ -164,6 +164,13 @@ function scanBalancedDelimiter(content: string, start: number, open: string, clo
       index = end;
       continue;
     }
+    if ((character === "+" || character === "-") && content[index + 1] === character) {
+      const postfix = !regexAllowed;
+      pendingControlHead = false;
+      regexAllowed = !postfix;
+      index += 2;
+      continue;
+    }
     if (character === "(") {
       parenthesisControls.push(pendingControlHead);
       pendingControlHead = false;

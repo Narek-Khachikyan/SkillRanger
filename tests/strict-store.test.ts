@@ -324,6 +324,18 @@ test("keeps ordinary division expressions out of regex-literal handling", () => 
   assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
 });
 
+test("keeps division after a postfix increment out of regex-literal handling", () => {
+  const results = deriveTailwindSourceResults('<div className={(() => { let counter = 1; counter++ / count; return "bg-brand-500"; })()} />');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
+test("keeps division after a postfix decrement out of regex-literal handling", () => {
+  const results = deriveTailwindSourceResults('<div className={(() => { let counter = 1; counter-- / count; return "bg-brand-500"; })()} />');
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
 test("rejects conditional interpolation of Tailwind token fragments", () => {
   const results = deriveTailwindSourceResults('<div className={`bg-${active ? "red" : "blue"}-500`}>Save</div>');
 
