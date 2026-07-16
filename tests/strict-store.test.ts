@@ -40,6 +40,26 @@ const domainValidatorContract: ExecutionContractV2 = {
   }],
 };
 
+const criticRepairContract: ExecutionContractV2 = {
+  ...contract,
+  maxRepairIterations: 1,
+  steps: [
+    { id: "frontend.store-test/step/critic", type: "critic", requiredEvidenceKinds: ["critic-report"], ruleIds: ["frontend.store-test/rule/evidence"] },
+    { id: "frontend.store-test/step/repair", type: "repair", requiredEvidenceKinds: ["repair-diff"], ruleIds: ["frontend.store-test/rule/evidence"], repairable: true },
+    { id: "frontend.store-test/step/report", type: "report", requiredEvidenceKinds: ["report"], ruleIds: ["frontend.store-test/rule/evidence"] },
+  ],
+};
+
+const criticValidatorContract: ExecutionContractV2 = {
+  ...criticRepairContract,
+  gates: [...criticRepairContract.gates, {
+    id: "frontend.store-test/gate/critic-validator",
+    level: "hard",
+    evaluator: { type: "validator", validatorId: "frontend/performance-claims" },
+    ruleIds: ["frontend.store-test/rule/evidence"],
+  }],
+};
+
 const fixtureRun = (executionContract = contract) => createStrictSkillRun({
   runId: "run_strict_store", domain: "frontend", targetAgent: "codex", locale: "en",
   intent: { sha256: sha("store"), normalizedGoal: "store evidence" }, now: "2026-07-15T10:00:00.000Z",
@@ -78,6 +98,50 @@ const stageCompletedEvidence = async (
     }],
   });
   return store.update(run.runId, (current) => completeStrictStep(current, executionContract.skillId, executionContract.steps[0].id));
+};
+
+const criticReport = (outcome: "clean" | "findings", id: string) => ({
+  schemaVersion: "2.0",
+  skillId: criticRepairContract.skillId,
+  criticInvocationId: `critic-${id}`,
+  executorInvocationId: `executor-${id}`,
+  outcome,
+  findings: outcome === "clean" ? [] : [{
+    id: `finding-${id}`,
+    ruleId: criticRepairContract.rules[0].id,
+    severity: "critical",
+    message: "The verified surface is still broken.",
+    evidenceArtifactIds: [`evidence-${id}`],
+    remediation: "Repair and recapture the surface.",
+  }],
+});
+
+const completeStoreStep = async (
+  root: string,
+  store: StrictSkillRunStore,
+  run: ReturnType<typeof fixtureRun>,
+  stepId: string,
+  evidence: Array<{ kind: string; value: unknown; validatedAs?: "output" | "critic-report" }>,
+) => {
+  run = await store.update(run.runId, (current) => beginStrictStep(current, criticRepairContract.skillId, stepId));
+  for (const [index, item] of evidence.entries()) {
+    const sourcePath = path.join(root, `${run.revision}-${index}-${item.kind}.json`);
+    await writeFile(sourcePath, `${JSON.stringify(item.value)}\n`);
+    const step = run.skillLedgers[0].steps.find(({ id }) => id === stepId)!;
+    run = await store.ingestEvidence(run.runId, {
+      sourcePath,
+      kind: item.kind,
+      ...(item.validatedAs === undefined ? {} : { validatedAs: item.validatedAs }),
+      attributions: [{
+        skillId: criticRepairContract.skillId,
+        stepId,
+        attempt: step.attempts.at(-1)!.attempt,
+        relation: "produced",
+        ruleIds: step.ruleIds,
+      }],
+    });
+  }
+  return store.update(run.runId, (current) => completeStrictStep(current, criticRepairContract.skillId, stepId));
 };
 
 const redirectArtifactParentOutsideRoot = async (root: string, run: Awaited<ReturnType<typeof stageCompletedEvidence>>) => {
@@ -460,6 +524,147 @@ test("derives verification gates inside the runtime from immutable artifacts", a
   run = await store.verifySkill(run.runId, contract.skillId);
   assert.equal(run.skillLedgers[0].outcome, "used");
   assert.equal(run.skillLedgers[0].verificationReports[0].hardPassed, true);
+});
+
+test("a findings report produced after completed repair consumes the exhausted budget", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-critic-causal-"));
+  const store = new StrictSkillRunStore(root);
+  let run = readNextStrictChunk(fixtureRun(criticRepairContract), criticRepairContract.skillId).run;
+  await store.create(run);
+  run = await completeStoreStep(root, store, run, criticRepairContract.steps[0].id, [{
+    kind: "critic-report",
+    value: criticReport("findings", "initial"),
+    validatedAs: "critic-report",
+  }]);
+  run = await completeStoreStep(root, store, run, criticRepairContract.steps[2].id, [{
+    kind: "report",
+    value: {},
+    validatedAs: "output",
+  }]);
+  run = await store.verifySkill(run.runId, criticRepairContract.skillId);
+  assert.equal(run.state, "repair-required");
+
+  run = await completeStoreStep(root, store, run, criticRepairContract.steps[1].id, [{
+    kind: "repair-diff",
+    value: { repaired: true },
+  }]);
+  run = await completeStoreStep(root, store, run, criticRepairContract.steps[2].id, [
+    { kind: "report", value: { repaired: true }, validatedAs: "output" },
+    { kind: "critic-report", value: criticReport("findings", "after-repair"), validatedAs: "critic-report" },
+  ]);
+  run = await store.verifySkill(run.runId, criticRepairContract.skillId);
+
+  const ledger = run.skillLedgers[0];
+  assert.equal(run.state, "blocked");
+  assert.equal(ledger.outcome, "blocked");
+  assert.equal(ledger.repairIterations, 1);
+  assert.equal(ledger.verificationReports.at(-1)!.gateResults.find(({ gateId }) => gateId === "core/gate/critic-findings")?.passed, false);
+});
+
+test("invalid repair timestamps cannot establish causality for critic findings", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-critic-timestamps-"));
+  const store = new StrictSkillRunStore(root);
+  let run = readNextStrictChunk(fixtureRun(criticRepairContract), criticRepairContract.skillId).run;
+  await store.create(run);
+  run = await completeStoreStep(root, store, run, criticRepairContract.steps[0].id, [{
+    kind: "critic-report",
+    value: criticReport("findings", "timestamp"),
+    validatedAs: "critic-report",
+  }]);
+  run = await completeStoreStep(root, store, run, criticRepairContract.steps[2].id, [{
+    kind: "report",
+    value: {},
+    validatedAs: "output",
+  }]);
+  run = await store.verifySkill(run.runId, criticRepairContract.skillId);
+  run = await completeStoreStep(root, store, run, criticRepairContract.steps[1].id, [{
+    kind: "repair-diff",
+    value: { repaired: true },
+  }]);
+  run = await completeStoreStep(root, store, run, criticRepairContract.steps[2].id, [{
+    kind: "report",
+    value: { repaired: true },
+    validatedAs: "output",
+  }]);
+
+  const runPath = path.join(root, ".skillranger", "runs", `${run.runId}.json`);
+  const forged = JSON.parse(await readFile(runPath, "utf8"));
+  const repairAttempt = forged.skillLedgers[0].steps[1].attempts[0];
+  repairAttempt.startedAt = "not-a-timestamp";
+  repairAttempt.completedAt = "not-a-timestamp";
+  await writeFile(runPath, `${JSON.stringify(forged)}\n`);
+  run = await store.verifySkill(run.runId, criticRepairContract.skillId);
+
+  assert.equal(run.state, "blocked");
+  assert.equal(run.skillLedgers[0].verificationReports.at(-1)!.gateResults.find(({ gateId }) => gateId === "core/gate/critic-findings")?.passed, false);
+});
+
+test("a clean critic report cannot hide findings from the same current attempt", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-critic-duplicate-"));
+  const store = new StrictSkillRunStore(root);
+  let run = readNextStrictChunk(fixtureRun(criticRepairContract), criticRepairContract.skillId).run;
+  await store.create(run);
+  run = await completeStoreStep(root, store, run, criticRepairContract.steps[0].id, [
+    { kind: "critic-report", value: criticReport("findings", "duplicate"), validatedAs: "critic-report" },
+    { kind: "critic-report", value: criticReport("clean", "duplicate-clean"), validatedAs: "critic-report" },
+  ]);
+  run = await completeStoreStep(root, store, run, criticRepairContract.steps[2].id, [{
+    kind: "report",
+    value: {},
+    validatedAs: "output",
+  }]);
+  run = await store.verifySkill(run.runId, criticRepairContract.skillId);
+
+  assert.equal(run.state, "repair-required");
+  assert.equal(run.skillLedgers[0].verificationReports[0].gateResults.find(({ gateId }) => gateId === "core/gate/critic-findings")?.passed, false);
+});
+
+test("a clean critic report from another current step cannot hide findings", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-critic-multi-source-"));
+  const store = new StrictSkillRunStore(root);
+  let run = readNextStrictChunk(fixtureRun(criticRepairContract), criticRepairContract.skillId).run;
+  await store.create(run);
+  run = await completeStoreStep(root, store, run, criticRepairContract.steps[0].id, [{
+    kind: "critic-report",
+    value: criticReport("findings", "critic-step"),
+    validatedAs: "critic-report",
+  }]);
+  run = await completeStoreStep(root, store, run, criticRepairContract.steps[2].id, [
+    { kind: "report", value: {}, validatedAs: "output" },
+    { kind: "critic-report", value: criticReport("clean", "report-step"), validatedAs: "critic-report" },
+  ]);
+  run = await store.verifySkill(run.runId, criticRepairContract.skillId);
+
+  assert.equal(run.state, "repair-required");
+  assert.equal(run.skillLedgers[0].verificationReports[0].gateResults.find(({ gateId }) => gateId === "core/gate/critic-findings")?.passed, false);
+});
+
+test("domain validators receive the canonical critic-step report across multiple sources", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-critic-canonical-"));
+  const store = new StrictSkillRunStore(root, {
+    "frontend/performance-claims": ({ evidence }) => ({
+      passed: typeof evidence.criticReport === "object"
+        && evidence.criticReport !== null
+        && "outcome" in evidence.criticReport
+        && evidence.criticReport.outcome === "findings",
+    }),
+  });
+  let run = readNextStrictChunk(fixtureRun(criticValidatorContract), criticValidatorContract.skillId).run;
+  await store.create(run);
+  run = await completeStoreStep(root, store, run, criticValidatorContract.steps[0].id, [{
+    kind: "critic-report",
+    value: criticReport("findings", "canonical"),
+    validatedAs: "critic-report",
+  }]);
+  run = await completeStoreStep(root, store, run, criticValidatorContract.steps[2].id, [
+    { kind: "report", value: {}, validatedAs: "output" },
+    { kind: "critic-report", value: criticReport("clean", "non-canonical"), validatedAs: "critic-report" },
+  ]);
+  run = await store.verifySkill(run.runId, criticValidatorContract.skillId);
+
+  const gates = run.skillLedgers[0].verificationReports[0].gateResults;
+  assert.equal(gates.find(({ gateId }) => gateId === "frontend.store-test/gate/critic-validator")?.passed, true);
+  assert.equal(gates.find(({ gateId }) => gateId === "core/gate/critic-findings")?.passed, false);
 });
 
 test("rejects changed evidence even when the contract omits an integrity gate", async () => {

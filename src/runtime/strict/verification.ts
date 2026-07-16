@@ -34,23 +34,55 @@ const parse = (artifact: EvidenceArtifact | undefined, artifactBytes: Map<string
   catch { return undefined; }
 };
 const gateSlug = (gateId: string) => gateId.slice(gateId.lastIndexOf("/") + 1);
+const canonicalCriticArtifact = (ledger: SkillLedger, artifacts: EvidenceArtifact[]) => {
+  const criticAttempts = new Set(ledger.steps
+    .filter(({ type }) => type === "critic")
+    .flatMap((step) => {
+      const attempt = step.attempts.at(-1)?.attempt;
+      return attempt === undefined ? [] : [`${step.id}\u0000${attempt}`];
+    }));
+  const candidates = artifacts.filter((artifact) => artifact.validatedAs === "critic-report"
+    && artifact.attributions.some((attribution) => attribution.relation === "produced"
+      && attribution.skillId === ledger.skillId
+      && criticAttempts.has(`${attribution.stepId}\u0000${attribution.attempt}`)));
+  return candidates.length === 1 ? candidates[0] : undefined;
+};
+const atOrAfter = (candidate: string, basis: string) => {
+  const candidateTime = Date.parse(candidate);
+  const basisTime = Date.parse(basis);
+  return Number.isFinite(candidateTime) && Number.isFinite(basisTime) && candidateTime >= basisTime;
+};
+const repairedAfterFindings = (ledger: SkillLedger, artifactId: string) => ledger.repairRequests.some((request) => {
+  if (!request.gateIds.includes(criticSystemGateId)) return false;
+  const sourceReport = ledger.verificationReports[request.sourceReportIndex];
+  if (!sourceReport?.evidenceIds.includes(artifactId)
+    || !sourceReport.gateResults.some(({ gateId, passed, level }) =>
+      gateId === criticSystemGateId && level === "hard" && !passed)) return false;
+  return ledger.steps.some(({ type, attempts }) => type === "repair" && attempts.some((attempt) =>
+    attempt.attempt === request.iteration
+    && attempt.completedAt !== undefined
+    && atOrAfter(attempt.startedAt, sourceReport.generatedAt)
+    && atOrAfter(attempt.completedAt, attempt.startedAt)));
+});
 const deriveCriticSystemGate = (
   ledger: SkillLedger,
   artifacts: EvidenceArtifact[],
   artifactBytes: Map<string, Buffer>,
 ): StrictSystemGateResult | undefined => {
-  const artifact = artifacts.findLast(({ validatedAs }) => validatedAs === "critic-report");
-  if (!artifact) return undefined;
-  const report = parse(artifact, artifactBytes);
-  assertValidCriticReportV2(report, ledger.contract);
-  if (report.outcome === "clean") return { gateId: criticSystemGateId, passed: true, level: "hard" };
-  const repaired = ledger.steps.some(({ type, attempts }) =>
-    type === "repair" && attempts.some(({ completedAt }) => completedAt !== undefined));
+  const criticArtifacts = artifacts.filter(({ validatedAs }) => validatedAs === "critic-report");
+  if (criticArtifacts.length === 0) return undefined;
+  const unresolved = criticArtifacts.flatMap((artifact) => {
+    const report = parse(artifact, artifactBytes);
+    assertValidCriticReportV2(report, ledger.contract);
+    return report.outcome === "findings" && !repairedAfterFindings(ledger, artifact.artifactId)
+      ? report.findings
+      : [];
+  });
   return {
     gateId: criticSystemGateId,
-    passed: repaired,
+    passed: unresolved.length === 0,
     level: "hard",
-    ...(repaired ? {} : { message: `Critic reported ${report.findings.length} unresolved finding(s).` }),
+    ...(unresolved.length === 0 ? {} : { message: `Critic reported ${unresolved.length} unresolved finding(s).` }),
   };
 };
 const containedBy = (root: string, target: string) => {
@@ -116,7 +148,7 @@ export const deriveStrictValidatorResults = async (
       && attribution.attempt === latestSourceProducer.attempt))
     : [];
   const sourceReview = parse(implementationDiffs.at(-1), artifactBytes);
-  const criticReport = parse(artifacts.findLast(({ validatedAs }) => validatedAs === "critic-report"), artifactBytes);
+  const criticReport = parse(canonicalCriticArtifact(ledger, artifacts), artifactBytes);
   const criticSystemGate = deriveCriticSystemGate(ledger, artifacts, artifactBytes);
   const browser = deriveBrowserGateResults(verificationInput, artifacts);
   const sourceResults = implementationDiffs.map((artifact) =>
