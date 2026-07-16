@@ -14,6 +14,7 @@ import {
   readNextStrictChunk,
   type EvidenceArtifact,
   type ExecutionContractV2,
+  type SkillRunV2,
 } from "../src/runtime/strict/index.ts";
 import { deriveBrowserGateResults, deriveTailwindSourceResults } from "../src/runtime/strict/frontend-evidence.ts";
 
@@ -526,6 +527,56 @@ test("derives verification gates inside the runtime from immutable artifacts", a
   assert.equal(run.skillLedgers[0].verificationReports[0].hardPassed, true);
 });
 
+test("strict store reload rejects parseable non-RFC3339 and impossible persisted timestamps", async () => {
+  const timestamps = [
+    "March 1, 2026 12:00:00 GMT",
+    "2026-02-30T12:00:00Z",
+  ];
+  const targets = [
+    (run: SkillRunV2, value: string) => { run.skillLedgers[0].steps[0].attempts[0].startedAt = value; },
+    (run: SkillRunV2, value: string) => { run.skillLedgers[0].steps[0].attempts[0].completedAt = value; },
+    (run: SkillRunV2, value: string) => { run.skillLedgers[0].verificationReports[0].generatedAt = value; },
+  ];
+  for (const [timestampIndex, timestamp] of timestamps.entries()) {
+    assert.ok(Number.isFinite(Date.parse(timestamp)), timestamp);
+    for (const [targetIndex, mutate] of targets.entries()) {
+      const root = await mkdtemp(path.join(os.tmpdir(), `strict-timestamp-${timestampIndex}-${targetIndex}-`));
+      const store = new StrictSkillRunStore(root);
+      const verified = await store.verifySkill(
+        (await stageCompletedEvidence(root, store)).runId,
+        contract.skillId,
+      );
+      const runPath = path.join(root, ".skillranger", "runs", `${verified.runId}.json`);
+      const forged = JSON.parse(await readFile(runPath, "utf8")) as SkillRunV2;
+      mutate(forged, timestamp);
+      await writeFile(runPath, `${JSON.stringify(forged)}\n`);
+
+      await assert.rejects(
+        store.read(verified.runId),
+        (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+        `${timestamp} target ${targetIndex}`,
+      );
+    }
+  }
+});
+
+test("strict store reload preserves valid RFC3339 timestamps with UTC offsets", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-timestamp-valid-"));
+  const store = new StrictSkillRunStore(root);
+  const verified = await store.verifySkill(
+    (await stageCompletedEvidence(root, store)).runId,
+    contract.skillId,
+  );
+  const runPath = path.join(root, ".skillranger", "runs", `${verified.runId}.json`);
+  const persisted = JSON.parse(await readFile(runPath, "utf8")) as SkillRunV2;
+  persisted.skillLedgers[0].steps[0].attempts[0].startedAt = "2026-07-16T08:00:00+04:00";
+  persisted.skillLedgers[0].steps[0].attempts[0].completedAt = "2026-07-16T08:00:01+04:00";
+  persisted.skillLedgers[0].verificationReports[0].generatedAt = "2026-07-16T08:00:02+04:00";
+  await writeFile(runPath, `${JSON.stringify(persisted)}\n`);
+
+  assert.deepEqual(await store.read(verified.runId), persisted);
+});
+
 test("a findings report produced after completed repair consumes the exhausted budget", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-critic-causal-"));
   const store = new StrictSkillRunStore(root);
@@ -561,7 +612,7 @@ test("a findings report produced after completed repair consumes the exhausted b
   assert.equal(ledger.verificationReports.at(-1)!.gateResults.find(({ gateId }) => gateId === "core/gate/critic-findings")?.passed, false);
 });
 
-test("invalid repair timestamps cannot establish causality for critic findings", async () => {
+test("invalid repair timestamps are rejected before critic causality derivation", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-critic-timestamps-"));
   const store = new StrictSkillRunStore(root);
   let run = readNextStrictChunk(fixtureRun(criticRepairContract), criticRepairContract.skillId).run;
@@ -593,10 +644,10 @@ test("invalid repair timestamps cannot establish causality for critic findings",
   repairAttempt.startedAt = "not-a-timestamp";
   repairAttempt.completedAt = "not-a-timestamp";
   await writeFile(runPath, `${JSON.stringify(forged)}\n`);
-  run = await store.verifySkill(run.runId, criticRepairContract.skillId);
-
-  assert.equal(run.state, "blocked");
-  assert.equal(run.skillLedgers[0].verificationReports.at(-1)!.gateResults.find(({ gateId }) => gateId === "core/gate/critic-findings")?.passed, false);
+  await assert.rejects(
+    store.verifySkill(run.runId, criticRepairContract.skillId),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+  );
 });
 
 test("a clean critic report cannot hide findings from the same current attempt", async () => {

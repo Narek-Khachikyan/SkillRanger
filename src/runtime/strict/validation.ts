@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from "node:util";
 import { assertValidExecutionContract } from "./contract.ts";
 import { StrictSkillRunError, type ExecutionContractV2, type SkillRunV2 } from "./types.ts";
 import { criticSystemGateId } from "./verification.ts";
+import { isRfc3339DateTime } from "./date-time.ts";
 
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const checksum = /^sha256:[a-f0-9]{64}$/;
@@ -31,13 +32,13 @@ const assertAttempts = (skillId: string, step: Record<string, unknown>, artifact
   attempts.forEach((raw, index) => {
     if (!record(raw)
       || raw.attempt !== index + 1
-      || typeof raw.startedAt !== "string"
+      || !isRfc3339DateTime(raw.startedAt)
       || !Array.isArray(raw.evidenceIds)
       || !raw.evidenceIds.every((id) => typeof id === "string" && artifactIds.has(id))) {
       fail(`Invalid attempt ${index + 1} for ${skillId}/${String(step.id)}.`);
     }
     exactKeys(raw, ["attempt", "startedAt", "evidenceIds"], ["completedAt"], `attempt ${index + 1} for ${skillId}/${String(step.id)}`);
-    if (raw.completedAt !== undefined && typeof raw.completedAt !== "string") {
+    if (raw.completedAt !== undefined && !isRfc3339DateTime(raw.completedAt)) {
       fail(`Invalid completion timestamp for ${skillId}/${String(step.id)}.`);
     }
   });
@@ -63,7 +64,7 @@ const assertVerificationReports = (
     if (rawReport.schemaVersion !== "2.0"
       || rawReport.skillId !== skillId
       || rawReport.iteration !== reportIndex
-      || typeof rawReport.generatedAt !== "string"
+      || !isRfc3339DateTime(rawReport.generatedAt)
       || !Array.isArray(rawReport.gateResults)
       || !Array.isArray(rawReport.evidenceIds)
       || !rawReport.evidenceIds.every((id) => typeof id === "string" && artifactIds.has(id))) {

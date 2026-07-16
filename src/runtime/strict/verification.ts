@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 import { assertValidCriticReportV2 } from "./critic.ts";
+import { isRfc3339DateTime } from "./date-time.ts";
 import { deriveBrowserGateResults, deriveTailwindSourceResults } from "./frontend-evidence.ts";
 import type { EvidenceArtifact, SkillLedger, SkillRunV2, StrictSystemGateResult } from "./types.ts";
 
@@ -48,6 +49,7 @@ const canonicalCriticArtifact = (ledger: SkillLedger, artifacts: EvidenceArtifac
   return candidates.length === 1 ? candidates[0] : undefined;
 };
 const atOrAfter = (candidate: string, basis: string) => {
+  if (!isRfc3339DateTime(candidate) || !isRfc3339DateTime(basis)) return false;
   const candidateTime = Date.parse(candidate);
   const basisTime = Date.parse(basis);
   return Number.isFinite(candidateTime) && Number.isFinite(basisTime) && candidateTime >= basisTime;
