@@ -401,6 +401,65 @@ test("computes verification, opens one bounded repair, and refuses caller-contro
   assert.equal(finalizeStrictRun(run).state, "verified");
 });
 
+test("critical critic findings enter bounded repair before a later passing critic gate can be used", () => {
+  const criticGateId = "core/gate/critic-findings";
+  const criticReport = Object.freeze({
+    schemaVersion: "2.0" as const,
+    skillId: "frontend.test-skill",
+    criticInvocationId: "critic-2",
+    executorInvocationId: "executor-1",
+    outcome: "findings" as const,
+    findings: [Object.freeze({
+      id: "critical-1",
+      ruleId: contract().rules[0].id,
+      severity: "critical" as const,
+      message: "The verified surface is still broken.",
+      evidenceArtifactIds: ["artifact-screenshot"],
+      remediation: "Repair and recapture the surface.",
+    })],
+  });
+  assert.doesNotThrow(() => assertValidCriticReportV2(criticReport, contract()));
+
+  let run = verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", {
+    artifactIntegrity: { passed: true },
+    validatorResults: { "core/artifact-integrity": { passed: true } },
+    systemGateResults: [{
+      gateId: criticGateId,
+      passed: false,
+      level: "hard",
+      message: "Critic reported 1 unresolved finding(s).",
+    }],
+  });
+  assert.equal(run.state, "repair-required");
+  assert.equal(run.skillLedgers[0].verificationReports[0].hardPassed, false);
+  assert.deepEqual(run.skillLedgers[0].repairRequests[0].gateIds, [criticGateId]);
+  assert.throws(
+    () => finalizeStrictRun(run),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-not-finalizable",
+  );
+
+  run = beginStrictStep(run, "frontend.test-skill", contract().steps[1].id);
+  run = attach(run, "repair-diff", contract().steps[1].id);
+  run = completeStrictStep(run, "frontend.test-skill", contract().steps[1].id);
+  run = beginStrictStep(run, "frontend.test-skill", contract().steps[2].id);
+  run = attach(run, "skill-output", contract().steps[2].id, "output");
+  run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
+  run = verifyStrictSkill(run, "frontend.test-skill", {
+    artifactIntegrity: { passed: true },
+    validatorResults: { "core/artifact-integrity": { passed: true } },
+    systemGateResults: [{ gateId: criticGateId, passed: true, level: "hard" }],
+  });
+
+  assert.equal(run.skillLedgers[0].outcome, "used");
+  assert.equal(run.skillLedgers[0].verificationReports[1].gateResults.at(-1)?.gateId, criticGateId);
+  assert.doesNotThrow(() => assertValidStrictSkillRun(run));
+  assert.equal(finalizeStrictRun(run).state, "verified");
+
+  const duplicate = structuredClone(run);
+  duplicate.skillLedgers[0].verificationReports[1].gateResults.push({ gateId: criticGateId, passed: true, level: "hard" });
+  assert.throws(() => assertValidStrictSkillRun(duplicate), StrictSkillRunError);
+});
+
 test("rejects failed artifact integrity before reducing contract gates", () => {
   const untouchedSource = new Proxy({} as ReturnType<typeof verificationReadyFixture>, {
     get: () => { throw new Error("strict run source was touched"); },

@@ -4,12 +4,14 @@ import { lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 import { assertValidCriticReportV2 } from "./critic.ts";
 import { deriveBrowserGateResults, deriveTailwindSourceResults } from "./frontend-evidence.ts";
-import type { EvidenceArtifact, SkillLedger, SkillRunV2 } from "./types.ts";
+import type { EvidenceArtifact, SkillLedger, SkillRunV2, StrictSystemGateResult } from "./types.ts";
 
 type Result = { passed: boolean; message?: string };
+export const criticSystemGateId = "core/gate/critic-findings";
 export type StrictValidatorDerivation = {
   artifactIntegrity: Result;
   validatorResults: Record<string, Result>;
+  systemGateResults: StrictSystemGateResult[];
 };
 export type StrictValidatorCallback = (context: {
   gateId: string;
@@ -32,6 +34,25 @@ const parse = (artifact: EvidenceArtifact | undefined, artifactBytes: Map<string
   catch { return undefined; }
 };
 const gateSlug = (gateId: string) => gateId.slice(gateId.lastIndexOf("/") + 1);
+const deriveCriticSystemGate = (
+  ledger: SkillLedger,
+  artifacts: EvidenceArtifact[],
+  artifactBytes: Map<string, Buffer>,
+): StrictSystemGateResult | undefined => {
+  const artifact = artifacts.findLast(({ validatedAs }) => validatedAs === "critic-report");
+  if (!artifact) return undefined;
+  const report = parse(artifact, artifactBytes);
+  assertValidCriticReportV2(report, ledger.contract);
+  if (report.outcome === "clean") return { gateId: criticSystemGateId, passed: true, level: "hard" };
+  const repaired = ledger.steps.some(({ type, attempts }) =>
+    type === "repair" && attempts.some(({ completedAt }) => completedAt !== undefined));
+  return {
+    gateId: criticSystemGateId,
+    passed: repaired,
+    level: "hard",
+    ...(repaired ? {} : { message: `Critic reported ${report.findings.length} unresolved finding(s).` }),
+  };
+};
 const containedBy = (root: string, target: string) => {
   const relative = path.relative(root, target);
   return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
@@ -81,7 +102,7 @@ export const deriveStrictValidatorResults = async (
   const artifactIntegrity: Result = integrity
     ? { passed: true }
     : { passed: false, message: "Staged artifact digest, size, path, or file type changed." };
-  if (!artifactIntegrity.passed) return { artifactIntegrity, validatorResults: results };
+  if (!artifactIntegrity.passed) return { artifactIntegrity, validatorResults: results, systemGateResults: [] };
 
   const output = parse(artifacts.findLast(({ validatedAs }) => validatedAs === "output"), artifactBytes);
   const verificationInput = parse(artifacts.findLast(({ kind }) => kind === "verification-input"), artifactBytes);
@@ -96,6 +117,7 @@ export const deriveStrictValidatorResults = async (
     : [];
   const sourceReview = parse(implementationDiffs.at(-1), artifactBytes);
   const criticReport = parse(artifacts.findLast(({ validatedAs }) => validatedAs === "critic-report"), artifactBytes);
+  const criticSystemGate = deriveCriticSystemGate(ledger, artifacts, artifactBytes);
   const browser = deriveBrowserGateResults(verificationInput, artifacts);
   const sourceResults = implementationDiffs.map((artifact) =>
     deriveTailwindSourceResults(artifactBytes.get(artifact.artifactId)?.toString("utf8") ?? ""));
@@ -149,5 +171,9 @@ export const deriveStrictValidatorResults = async (
     }
     results[gate.id] = result;
   }
-  return { artifactIntegrity, validatorResults: results };
+  return {
+    artifactIntegrity,
+    validatorResults: results,
+    systemGateResults: criticSystemGate ? [criticSystemGate] : [],
+  };
 };

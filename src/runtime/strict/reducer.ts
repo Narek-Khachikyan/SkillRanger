@@ -7,6 +7,7 @@ import {
   type SkillContentChunk,
   type SkillLedger,
   type SkillRunV2,
+  type StrictSystemGateResult,
   type StrictSkillSelection,
 } from "./types.ts";
 
@@ -165,7 +166,7 @@ export const completeStrictStep = (source: SkillRunV2, skillId: string, stepId: 
 export const verifyStrictSkill = (source: SkillRunV2, skillId: string, input: {
   artifactIntegrity: { passed: boolean; message?: string };
   validatorResults: Record<string, { passed: boolean; message?: string }>;
-  systemGateResults?: Array<{ gateId: string; passed: boolean; level: "hard"; message?: string }>;
+  systemGateResults?: StrictSystemGateResult[];
 }): SkillRunV2 => {
   if (!input.artifactIntegrity.passed) {
     fail("artifact-integrity", input.artifactIntegrity.message ?? "Strict evidence integrity failed.");
@@ -175,7 +176,7 @@ export const verifyStrictSkill = (source: SkillRunV2, skillId: string, input: {
   if (ledger.steps.some((step) => step.status === "active" || step.status === "pending")) fail("step-out-of-order", `Skill ${skillId} has incomplete workflow steps.`);
   const artifactIds = new Set(ledger.steps.flatMap((step) => step.attempts.at(-1)?.evidenceIds ?? []));
   const artifacts = run.artifacts.filter(({ artifactId }) => artifactIds.has(artifactId));
-  const gateResults = ledger.contract.gates.map((gate) => {
+  const contractGateResults = ledger.contract.gates.map((gate) => {
     let passed = false;
     let message: string | undefined;
     const evaluator = gate.evaluator;
@@ -188,6 +189,7 @@ export const verifyStrictSkill = (source: SkillRunV2, skillId: string, input: {
     }
     return { gateId: gate.id, passed, level: gate.level, ...(message === undefined ? {} : { message }) };
   });
+  const gateResults = [...contractGateResults, ...(input.systemGateResults ?? [])];
   const report = {
     schemaVersion: "2.0" as const, skillId, iteration: ledger.repairIterations, generatedAt: now(), gateResults,
     hardPassed: gateResults.every((gate) => gate.level !== "hard" || gate.passed), evidenceIds: [...artifactIds],

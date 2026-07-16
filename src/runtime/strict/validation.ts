@@ -3,6 +3,7 @@ import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { assertValidExecutionContract } from "./contract.ts";
 import { StrictSkillRunError, type ExecutionContractV2, type SkillRunV2 } from "./types.ts";
+import { criticSystemGateId } from "./verification.ts";
 
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const checksum = /^sha256:[a-f0-9]{64}$/;
@@ -64,22 +65,31 @@ const assertVerificationReports = (
       || rawReport.iteration !== reportIndex
       || typeof rawReport.generatedAt !== "string"
       || !Array.isArray(rawReport.gateResults)
-      || rawReport.gateResults.length !== contract.gates.length
       || !Array.isArray(rawReport.evidenceIds)
       || !rawReport.evidenceIds.every((id) => typeof id === "string" && artifactIds.has(id))) {
       fail(`Invalid verification report ${reportIndex} for ${skillId}.`);
     }
+    const contractGateById = new Map(contract.gates.map((gate) => [gate.id, gate]));
+    const gateCounts = new Map<string, number>();
     rawReport.gateResults.forEach((rawGate, gateIndex) => {
-      const expected = contract.gates[gateIndex];
       if (!record(rawGate)) fail(`Invalid gate result ${gateIndex} in report ${reportIndex} for ${skillId}.`);
       exactKeys(rawGate, ["gateId", "passed", "level"], ["message"], `gate result ${gateIndex} in report ${reportIndex} for ${skillId}`);
-      if (rawGate.gateId !== expected.id
-        || rawGate.level !== expected.level
+      const gateId = rawGate.gateId;
+      const expected = typeof gateId === "string" ? contractGateById.get(gateId) : undefined;
+      const systemGate = gateId === criticSystemGateId;
+      gateCounts.set(String(gateId), (gateCounts.get(String(gateId)) ?? 0) + 1);
+      if ((!expected && !systemGate)
+        || (expected && rawGate.level !== expected.level)
+        || (systemGate && rawGate.level !== "hard")
         || typeof rawGate.passed !== "boolean"
         || (rawGate.message !== undefined && typeof rawGate.message !== "string")) {
-        fail(`Gate result ${gateIndex} in report ${reportIndex} does not match ${skillId}'s contract.`);
+        fail(`Gate result ${gateIndex} in report ${reportIndex} is not an allowed gate for ${skillId}.`);
       }
     });
+    if (contract.gates.some(({ id }) => gateCounts.get(id) !== 1)
+      || (gateCounts.get(criticSystemGateId) ?? 0) > 1) {
+      fail(`Verification report ${reportIndex} for ${skillId} must contain every contract gate exactly once and each system gate at most once.`);
+    }
     const hardPassed = rawReport.gateResults.every((gate) => record(gate) && (gate.level !== "hard" || gate.passed === true));
     if (rawReport.hardPassed !== hardPassed) fail(`Derived hard-gate result mismatch in report ${reportIndex} for ${skillId}.`);
   });

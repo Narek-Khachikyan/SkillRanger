@@ -86,6 +86,12 @@ export type VerificationReportV2 = {
   hardPassed: boolean;
   evidenceIds: string[];
 };
+export type StrictSystemGateResult = {
+  gateId: string;
+  passed: boolean;
+  level: "hard";
+  message?: string;
+};
 export type CriticReportV2 = {
   schemaVersion: "2.0";
   skillId: string;

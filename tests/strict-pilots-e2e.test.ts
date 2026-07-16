@@ -81,14 +81,41 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
     { kind: "implementation-diff", value: { checks: { "no-dynamic-tailwind-classes": true }, diff: '+ <div className="bg-brand-600">Save</div>' } },
   ]);
   run = await step(root, store, run, skillId, [{ kind: "browser-screenshot-initial", value: "initial\n" }]);
-  run = await step(root, store, run, skillId, [{ kind: "critic-report", validatedAs: "critic-report", value: { schemaVersion: "2.0", skillId, criticInvocationId: "critic-2", executorInvocationId: "executor-1", outcome: "clean", findings: [] } }]);
+  const screenshotArtifactId = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial")!.artifactId;
+  run = await step(root, store, run, skillId, [{
+    kind: "critic-report",
+    validatedAs: "critic-report",
+    value: {
+      schemaVersion: "2.0",
+      skillId,
+      criticInvocationId: "critic-2",
+      executorInvocationId: "executor-1",
+      outcome: "findings",
+      findings: [{
+        id: "critical-1",
+        ruleId: run.skillLedgers[0].contract.rules[0].id,
+        severity: "critical",
+        message: "The verified surface is still broken.",
+        evidenceArtifactIds: [screenshotArtifactId],
+        remediation: "Repair and recapture the surface.",
+      }],
+    },
+  }]);
   run = await step(root, store, run, skillId, ["browser-screenshot-390", "browser-screenshot-768", "browser-screenshot-1440"].map((kind) => ({ kind, value: `${kind}\n` })));
   const browserChecks = { "required-states-covered": true, "no-horizontal-overflow": true, "no-clipped-controls": true, "no-sticky-overlap": true, "focus-visible": true, "no-runtime-console-errors": true, "reduced-motion-verified": true };
   run = await step(root, store, run, skillId, [{ kind: "verification-input", value: { checks: browserChecks } }]);
   run = await step(root, store, run, skillId, [{ kind: "skill-output", validatedAs: "output", value: { outcome: "verified", classification: "hierarchy", changes: ["polished"], verification: {}, residualRisks: [] } }]);
   run = await store.verifySkill(run.runId, skillId);
   assert.equal(run.state, "repair-required");
+  assert.throws(() => finalizeStrictRun(run), (error: unknown) => error instanceof Error && "code" in error && error.code === "run-not-finalizable");
   const firstReport = run.skillLedgers[0].verificationReports.at(-1)!;
+  assert.deepEqual(firstReport.gateResults.find(({ gateId }) => gateId === "core/gate/critic-findings"), {
+    gateId: "core/gate/critic-findings",
+    passed: false,
+    level: "hard",
+    message: "Critic reported 1 unresolved finding(s).",
+  });
+  assert.ok(run.skillLedgers[0].repairRequests[0].gateIds.includes("core/gate/critic-findings"));
   const browserGateIds = new Set(run.skillLedgers[0].contract.gates
     .filter(({ evaluator }) => evaluator.type === "validator" && evaluator.validatorId === "frontend/browser-hard-gates")
     .map(({ id }) => id));
@@ -117,5 +144,10 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
   run = await step(root, store, run, skillId, [{ kind: "skill-output", validatedAs: "output", value: { outcome: "verified", classification: "hierarchy", changes: ["repaired"], verification: {}, residualRisks: [] } }]);
   run = await store.verifySkill(run.runId, skillId);
   assert.equal(run.skillLedgers[0].outcome, "used", JSON.stringify(run.skillLedgers[0].verificationReports.at(-1)));
+  assert.deepEqual(run.skillLedgers[0].verificationReports.at(-1)!.gateResults.find(({ gateId }) => gateId === "core/gate/critic-findings"), {
+    gateId: "core/gate/critic-findings",
+    passed: true,
+    level: "hard",
+  });
   assert.equal(finalizeStrictRun(run).state, "verified");
 });

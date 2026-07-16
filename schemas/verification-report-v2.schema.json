@@ -9,7 +9,7 @@
     "skillId": { "type": "string", "minLength": 1 },
     "iteration": { "type": "integer", "minimum": 0 },
     "generatedAt": { "type": "string", "format": "date-time" },
-    "gateResults": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["gateId", "passed", "level"], "properties": { "gateId": { "type": "string" }, "passed": { "type": "boolean" }, "level": { "enum": ["hard", "advisory"] }, "message": { "type": "string" } } } },
+    "gateResults": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["gateId", "passed", "level"], "properties": { "gateId": { "type": "string", "description": "Execution-contract gate id or the allowlisted runtime system gate core/gate/critic-findings." }, "passed": { "type": "boolean" }, "level": { "enum": ["hard", "advisory"] }, "message": { "type": "string" } } } },
     "hardPassed": { "type": "boolean" },
     "evidenceIds": { "type": "array", "items": { "type": "string" } }
   }
