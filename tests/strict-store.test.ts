@@ -11,6 +11,7 @@ import {
   completeStrictStep,
   createContentChunks,
   createStrictSkillRun,
+  deriveStrictValidatorResults,
   readNextStrictChunk,
   type EvidenceArtifact,
   type ExecutionContractV2,
@@ -37,6 +38,26 @@ const domainValidatorContract: ExecutionContractV2 = {
     id: "frontend.store-test/gate/domain-validator",
     level: "hard",
     evaluator: { type: "validator", validatorId: "frontend/performance-claims" },
+    ruleIds: ["frontend.store-test/rule/evidence"],
+  }],
+};
+
+const tailwindValidatorContract: ExecutionContractV2 = {
+  ...contract,
+  steps: [
+    ...contract.steps,
+    {
+      id: "frontend.store-test/step/repair",
+      type: "repair",
+      requiredEvidenceKinds: ["repair-diff"],
+      ruleIds: ["frontend.store-test/rule/evidence"],
+      repairable: true,
+    },
+  ],
+  gates: [...contract.gates, {
+    id: "frontend.store-test/gate/focus-visible",
+    level: "hard",
+    evaluator: { type: "validator", validatorId: "frontend/browser-hard-gates" },
     ruleIds: ["frontend.store-test/rule/evidence"],
   }],
 };
@@ -221,6 +242,18 @@ test("binds each browser observation viewport to its screenshot artifact kind", 
   const results = deriveBrowserGateResults({ observations }, mismatched);
 
   assert.ok(Object.values(results).every(({ passed, message }) => !passed && /not bound/i.test(message ?? "")));
+});
+
+test("fails the accessibility hard gate for a critical axe violation", () => {
+  const observations = [390, 768, 1440].map(browserObservation);
+  observations[0].criticalAxeViolations = ["button-name"];
+
+  const results = deriveBrowserGateResults({ observations }, browserArtifacts);
+
+  assert.equal(results["focus-visible"].passed, false);
+  assert.ok(Object.entries(results)
+    .filter(([gate]) => gate !== "focus-visible")
+    .every(([, result]) => result.passed));
 });
 
 test("derives Tailwind source gates from staged source text instead of checks claims", () => {
@@ -593,6 +626,24 @@ test("derives verification gates inside the runtime from immutable artifacts", a
   assert.equal(run.skillLedgers[0].verificationReports[0].hardPassed, true);
 });
 
+test("caller constructor callbacks cannot make a failing Tailwind gate pass", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-tailwind-authority-"));
+  const StoreWithLegacyCallback = StrictSkillRunStore as unknown as new (
+    projectRoot: string,
+    callbacks: Record<string, () => { passed: boolean }>,
+  ) => StrictSkillRunStore;
+  const store = new StoreWithLegacyCallback(root, {
+    "frontend/browser-hard-gates": () => ({ passed: true }),
+  });
+  const run = await stageCompletedEvidence(root, store, tailwindValidatorContract);
+
+  const verified = await store.verifySkill(run.runId, tailwindValidatorContract.skillId);
+
+  assert.equal(verified.state, "repair-required");
+  assert.equal(verified.skillLedgers[0].verificationReports[0].gateResults
+    .find(({ gateId }) => gateId.endsWith("/focus-visible"))?.passed, false);
+});
+
 test("strict store reload rejects parseable non-RFC3339 and impossible persisted timestamps", async () => {
   const timestamps = [
     "March 1, 2026 12:00:00 GMT",
@@ -800,16 +851,9 @@ test("a clean critic report from another current step cannot hide findings", asy
   assert.equal(run.skillLedgers[0].verificationReports[0].gateResults.find(({ gateId }) => gateId === "core/gate/critic-findings")?.passed, false);
 });
 
-test("domain validators receive the canonical critic-step report across multiple sources", async () => {
+test("validator observation exposes the canonical critic-step report without result authority", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-critic-canonical-"));
-  const store = new StrictSkillRunStore(root, {
-    "frontend/performance-claims": ({ evidence }) => ({
-      passed: typeof evidence.criticReport === "object"
-        && evidence.criticReport !== null
-        && "outcome" in evidence.criticReport
-        && evidence.criticReport.outcome === "findings",
-    }),
-  });
+  const store = new StrictSkillRunStore(root);
   let run = readNextStrictChunk(fixtureRun(criticValidatorContract), criticValidatorContract.skillId).run;
   await store.create(run);
   run = await completeStoreStep(root, store, run, criticValidatorContract.steps[0].id, [{
@@ -821,11 +865,60 @@ test("domain validators receive the canonical critic-step report across multiple
     { kind: "report", value: {}, validatedAs: "output" },
     { kind: "critic-report", value: criticReport("clean", "non-canonical"), validatedAs: "critic-report" },
   ]);
+  let observedCriticReport: unknown;
+  const derivation = await deriveStrictValidatorResults(root, run, run.skillLedgers[0], ({ gateId, evidence }) => {
+    if (gateId === "frontend.store-test/gate/critic-validator") observedCriticReport = evidence.criticReport;
+  });
+  assert.equal(
+    typeof observedCriticReport === "object"
+      && observedCriticReport !== null
+      && "outcome" in observedCriticReport
+      && observedCriticReport.outcome,
+    "findings",
+  );
+  assert.equal(derivation.validatorResults["frontend.store-test/gate/critic-validator"].passed, false);
+
   run = await store.verifySkill(run.runId, criticValidatorContract.skillId);
 
   const gates = run.skillLedgers[0].verificationReports[0].gateResults;
-  assert.equal(gates.find(({ gateId }) => gateId === "frontend.store-test/gate/critic-validator")?.passed, true);
+  assert.equal(gates.find(({ gateId }) => gateId === "frontend.store-test/gate/critic-validator")?.passed, false);
   assert.equal(gates.find(({ gateId }) => gateId === "core/gate/critic-findings")?.passed, false);
+});
+
+test("rejects a persisted used report with critic evidence and its system gate deleted", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-critic-report-forgery-"));
+  const store = new StrictSkillRunStore(root);
+  let run = readNextStrictChunk(fixtureRun(criticRepairContract), criticRepairContract.skillId).run;
+  await store.create(run);
+  run = await completeStoreStep(root, store, run, criticRepairContract.steps[0].id, [{
+    kind: "critic-report",
+    value: criticReport("clean", "persisted"),
+    validatedAs: "critic-report",
+  }]);
+  run = await completeStoreStep(root, store, run, criticRepairContract.steps[2].id, [{
+    kind: "report",
+    value: {},
+    validatedAs: "output",
+  }]);
+  run = await store.verifySkill(run.runId, criticRepairContract.skillId);
+  assert.equal(run.skillLedgers[0].outcome, "used");
+
+  const runPath = path.join(root, ".skillranger", "runs", `${run.runId}.json`);
+  const forged = JSON.parse(await readFile(runPath, "utf8"));
+  const ledger = forged.skillLedgers[0];
+  const report = ledger.verificationReports.at(-1);
+  const criticArtifactIds = new Set(forged.artifacts
+    .filter((artifact: EvidenceArtifact) => artifact.validatedAs === "critic-report")
+    .map((artifact: EvidenceArtifact) => artifact.artifactId));
+  report.evidenceIds = report.evidenceIds.filter((id: string) => !criticArtifactIds.has(id));
+  report.gateResults = report.gateResults.filter(({ gateId }: { gateId: string }) => gateId !== "core/gate/critic-findings");
+  report.hardPassed = true;
+  await writeFile(runPath, `${JSON.stringify(forged)}\n`);
+
+  await assert.rejects(
+    store.read(run.runId),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+  );
 });
 
 test("rejects changed evidence even when the contract omits an integrity gate", async () => {
@@ -850,33 +943,30 @@ test("rejects changed evidence even when the contract omits an integrity gate", 
   );
 });
 
-test("invokes a registered domain validator only after artifact integrity passes", async () => {
+test("observes a built-in domain validator only after artifact integrity passes", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-domain-validator-"));
   let calls = 0;
-  const store = new StrictSkillRunStore(root, {
-    "frontend/performance-claims": () => { calls += 1; return { passed: true }; },
-  });
+  const store = new StrictSkillRunStore(root);
   const run = await stageCompletedEvidence(root, store, domainValidatorContract);
 
-  const verified = await store.verifySkill(run.runId, domainValidatorContract.skillId);
+  const derivation = await deriveStrictValidatorResults(root, run, run.skillLedgers[0], (observation) => {
+    calls += 1;
+    (observation.result as { passed: boolean }).passed = true;
+  });
 
-  assert.equal(verified.skillLedgers[0].outcome, "used");
   assert.equal(calls, 1);
+  assert.equal(derivation.validatorResults["frontend.store-test/gate/domain-validator"].passed, false);
 });
 
-test("rejects an artifact reached through an escaping parent symlink before domain validation", async () => {
+test("rejects an artifact reached through an escaping parent symlink before validator observation", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-parent-link-"));
   let calls = 0;
-  const store = new StrictSkillRunStore(root, {
-    "frontend/performance-claims": () => { calls += 1; throw new Error("domain validator invoked"); },
-  });
+  const store = new StrictSkillRunStore(root);
   const run = await stageCompletedEvidence(root, store, domainValidatorContract);
   await redirectArtifactParentOutsideRoot(root, run);
 
-  await assert.rejects(
-    store.verifySkill(run.runId, domainValidatorContract.skillId),
-    (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
-  );
+  const derivation = await deriveStrictValidatorResults(root, run, run.skillLedgers[0], () => { calls += 1; });
+  assert.equal(derivation.artifactIntegrity.passed, false);
   assert.equal(calls, 0);
 });
 

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { assertValidExecutionContract } from "./contract.ts";
+import { deriveVerificationEvidenceIds } from "./report-evidence.ts";
 import {
   StrictSkillRunError,
   type EvidenceArtifact,
@@ -174,7 +175,8 @@ export const verifyStrictSkill = (source: SkillRunV2, skillId: string, input: {
   const run = clone(source);
   const ledger = ledgerFor(run, skillId);
   if (ledger.steps.some((step) => step.status === "active" || step.status === "pending")) fail("step-out-of-order", `Skill ${skillId} has incomplete workflow steps.`);
-  const artifactIds = new Set(ledger.steps.flatMap((step) => step.attempts.at(-1)?.evidenceIds ?? []));
+  const evidenceIds = deriveVerificationEvidenceIds(ledger, ledger.repairIterations);
+  const artifactIds = new Set(evidenceIds);
   const artifacts = run.artifacts.filter(({ artifactId }) => artifactIds.has(artifactId));
   const contractGateResults = ledger.contract.gates.map((gate) => {
     let passed = false;
@@ -192,7 +194,7 @@ export const verifyStrictSkill = (source: SkillRunV2, skillId: string, input: {
   const gateResults = [...contractGateResults, ...(input.systemGateResults ?? [])];
   const report = {
     schemaVersion: "2.0" as const, skillId, iteration: ledger.repairIterations, generatedAt: now(), gateResults,
-    hardPassed: gateResults.every((gate) => gate.level !== "hard" || gate.passed), evidenceIds: [...artifactIds],
+    hardPassed: gateResults.every((gate) => gate.level !== "hard" || gate.passed), evidenceIds,
   };
   ledger.verificationReports.push(report);
   if (report.hardPassed) {

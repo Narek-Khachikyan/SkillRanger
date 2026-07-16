@@ -121,7 +121,8 @@ export const deriveBrowserGateResults = (
     "no-horizontal-overflow": { passed: observations.every(({ horizontalOverflow }) => !horizontalOverflow) },
     "no-clipped-controls": { passed: observations.every(({ clippedControls, unreachableActions }) => clippedControls.length === 0 && unreachableActions.length === 0) },
     "no-sticky-overlap": { passed: observations.every(({ stickyOverlaps }) => stickyOverlaps.length === 0) },
-    "focus-visible": { passed: observations.every(({ invisibleFocus, keyboardTraps }) => invisibleFocus.length === 0 && keyboardTraps.length === 0) },
+    "focus-visible": { passed: observations.every(({ invisibleFocus, keyboardTraps, criticalAxeViolations }) =>
+      invisibleFocus.length === 0 && keyboardTraps.length === 0 && criticalAxeViolations.length === 0) },
     "no-runtime-console-errors": { passed: observations.every(({ consoleErrors }) => consoleErrors.length === 0) },
     "reduced-motion-verified": { passed: observations.every(({ reducedMotionVerified }) => reducedMotionVerified) },
   };

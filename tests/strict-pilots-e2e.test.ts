@@ -101,9 +101,27 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
       }],
     },
   }]);
-  run = await step(root, store, run, skillId, ["browser-screenshot-390", "browser-screenshot-768", "browser-screenshot-1440"].map((kind) => ({ kind, value: `${kind}\n` })));
-  const browserChecks = { "required-states-covered": true, "no-horizontal-overflow": true, "no-clipped-controls": true, "no-sticky-overlap": true, "focus-visible": true, "no-runtime-console-errors": true, "reduced-motion-verified": true };
-  run = await step(root, store, run, skillId, [{ kind: "verification-input", value: { checks: browserChecks } }]);
+  const initialWidths = [390, 768, 1440];
+  run = await step(root, store, run, skillId, initialWidths.map((width) => ({
+    kind: `browser-screenshot-${width}`,
+    value: `browser-screenshot-${width}\n`,
+    sourcePath: `evidence/initial-${width}.png`,
+  })));
+  const initialObservations = initialWidths.map((width, index) => ({
+    viewport: { width, height: width === 390 ? 844 : width === 768 ? 1024 : 900 },
+    state: "default",
+    screenshotPath: `evidence/initial-${width}.png`,
+    horizontalOverflow: false,
+    clippedControls: [],
+    unreachableActions: [],
+    stickyOverlaps: [],
+    consoleErrors: [],
+    keyboardTraps: [],
+    invisibleFocus: [],
+    criticalAxeViolations: index === 0 ? ["button-name"] : [],
+    reducedMotionVerified: true,
+  }));
+  run = await step(root, store, run, skillId, [{ kind: "verification-input", value: { observations: initialObservations } }]);
   run = await step(root, store, run, skillId, [{ kind: "skill-output", validatedAs: "output", value: { outcome: "verified", classification: "hierarchy", changes: ["polished"], verification: {}, residualRisks: [] } }]);
   run = await store.verifySkill(run.runId, skillId);
   assert.equal(run.state, "repair-required");
@@ -121,7 +139,10 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
     .map(({ id }) => id));
   const browserResults = firstReport.gateResults.filter(({ gateId }) => browserGateIds.has(gateId));
   assert.equal(browserResults.length, 7);
-  assert.ok(browserResults.every(({ passed, message }) => !passed && /valid browser observations/i.test(message ?? "")));
+  assert.equal(browserResults.find(({ gateId }) => gateId.endsWith("/focus-visible"))?.passed, false);
+  assert.ok(browserResults
+    .filter(({ gateId }) => !gateId.endsWith("/focus-visible"))
+    .every(({ passed }) => passed));
   assert.equal(firstReport.gateResults.find(({ gateId }) => gateId.endsWith("/no-dynamic-tailwind-classes"))?.passed, false);
   run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: '+ <div className="bg-brand-600 text-on-brand">Save</div>\n' }]);
   const repairKinds = ["browser-screenshot-390", "browser-screenshot-768", "browser-screenshot-1440"];

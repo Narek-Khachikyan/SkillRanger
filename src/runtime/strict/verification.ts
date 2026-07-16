@@ -5,6 +5,7 @@ import path from "node:path";
 import { assertValidCriticReportV2 } from "./critic.ts";
 import { isRfc3339DateTime } from "./date-time.ts";
 import { deriveBrowserGateResults, deriveTailwindSourceResults } from "./frontend-evidence.ts";
+import { deriveVerificationEvidenceIds } from "./report-evidence.ts";
 import { criticSystemGateId } from "./system-gates.ts";
 import type { EvidenceArtifact, SkillLedger, SkillRunV2, StrictSystemGateResult } from "./types.ts";
 
@@ -15,7 +16,7 @@ export type StrictValidatorDerivation = {
   validatorResults: Record<string, Result>;
   systemGateResults: StrictSystemGateResult[];
 };
-export type StrictValidatorCallback = (context: {
+export type StrictValidatorObservation = {
   gateId: string;
   validatorId: string;
   skillId: string;
@@ -26,8 +27,9 @@ export type StrictValidatorCallback = (context: {
     sourceReview?: unknown;
     criticReport?: unknown;
   };
-}) => Result | Promise<Result>;
-export type StrictValidatorCallbacks = Partial<Record<string, StrictValidatorCallback>>;
+  result: Readonly<Result>;
+};
+export type StrictValidatorObserver = (observation: StrictValidatorObservation) => void | Promise<void>;
 const digest = (bytes: Uint8Array) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const parse = (artifact: EvidenceArtifact | undefined, artifactBytes: Map<string, Buffer>) => {
@@ -119,10 +121,10 @@ export const deriveStrictValidatorResults = async (
   projectRoot: string,
   run: SkillRunV2,
   ledger: SkillLedger,
-  validatorCallbacks: StrictValidatorCallbacks = {},
+  observer?: StrictValidatorObserver,
 ): Promise<StrictValidatorDerivation> => {
   const results: Record<string, Result> = {};
-  const ids = new Set(ledger.steps.flatMap((step) => step.attempts.at(-1)?.evidenceIds ?? []));
+  const ids = new Set(deriveVerificationEvidenceIds(ledger, ledger.repairIterations));
   const artifacts = run.artifacts.filter(({ artifactId }) => ids.has(artifactId));
   const artifactBytes = new Map<string, Buffer>();
   const canonicalRoot = await realpath(projectRoot).catch(() => undefined);
@@ -170,15 +172,7 @@ export const deriveStrictValidatorResults = async (
   for (const gate of ledger.contract.gates) {
     if (gate.evaluator.type !== "validator") continue;
     let result: Result = { passed: false, message: `Runtime validator ${gate.evaluator.validatorId} found no valid evidence.` };
-    const callback = validatorCallbacks[gate.evaluator.validatorId];
-    if (callback) result = await callback({
-      gateId: gate.id,
-      validatorId: gate.evaluator.validatorId,
-      skillId: ledger.skillId,
-      artifacts,
-      evidence: { output, verificationInput, sourceReview, criticReport },
-    });
-    else if (gate.evaluator.validatorId === "core/artifact-integrity") result = { passed: true };
+    if (gate.evaluator.validatorId === "core/artifact-integrity") result = { passed: true };
     else if (gate.evaluator.validatorId === "core/critic-independence") {
       try { assertValidCriticReportV2(criticReport, ledger.contract); result = { passed: true }; }
       catch (error) { result = { passed: false, message: (error as Error).message }; }
@@ -205,6 +199,17 @@ export const deriveStrictValidatorResults = async (
         : source[gateSlug(gate.id)];
     }
     results[gate.id] = result;
+    if (observer) {
+      const observation = structuredClone({
+        gateId: gate.id,
+        validatorId: gate.evaluator.validatorId,
+        skillId: ledger.skillId,
+        artifacts,
+        evidence: { output, verificationInput, sourceReview, criticReport },
+        result,
+      });
+      try { await observer(observation); } catch { /* Instrumentation cannot alter certification. */ }
+    }
   }
   return {
     artifactIntegrity,

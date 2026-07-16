@@ -91,7 +91,12 @@ const fullyRead = () => {
   return run;
 };
 
-const attach = (run: ReturnType<typeof created>, kind: string, stepId: string, validatedAs?: "output") => {
+const attach = (
+  run: ReturnType<typeof created>,
+  kind: string,
+  stepId: string,
+  validatedAs?: "output" | "critic-report",
+) => {
   const step = run.skillLedgers.flatMap(({ steps }) => steps).find(({ id }) => id === stepId)!;
   const attempt = step.attempts.at(-1)!.attempt;
   return addStrictEvidence(run, {
@@ -106,13 +111,14 @@ const attach = (run: ReturnType<typeof created>, kind: string, stepId: string, v
   });
 };
 
-const verificationReadyFixture = () => {
+const verificationReadyFixture = (includeCriticEvidence = false) => {
   let run = fullyRead();
   run = beginStrictStep(run, "frontend.test-skill", contract().steps[0].id);
   run = attach(run, "inspection", contract().steps[0].id);
   run = completeStrictStep(run, "frontend.test-skill", contract().steps[0].id);
   run = beginStrictStep(run, "frontend.test-skill", contract().steps[2].id);
   run = attach(run, "skill-output", contract().steps[2].id, "output");
+  if (includeCriticEvidence) run = attach(run, "critic-report", contract().steps[2].id, "critic-report");
   run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
   return run;
 };
@@ -292,6 +298,24 @@ test("rejects persisted verification reports inconsistent with their contract", 
     mutate(forged);
     assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
   }
+
+  const missingEvidence = fullyExecutedFixture();
+  missingEvidence.skillLedgers[0].verificationReports[0].evidenceIds.pop();
+  assert.throws(() => assertValidStrictSkillRun(missingEvidence), StrictSkillRunError);
+
+  const duplicateEvidence = fullyExecutedFixture();
+  duplicateEvidence.skillLedgers[0].verificationReports[0].evidenceIds.push(
+    duplicateEvidence.skillLedgers[0].verificationReports[0].evidenceIds[0],
+  );
+  assert.throws(() => assertValidStrictSkillRun(duplicateEvidence), StrictSkillRunError);
+
+  const systemGateWithoutCriticEvidence = fullyExecutedFixture();
+  systemGateWithoutCriticEvidence.skillLedgers[0].verificationReports[0].gateResults.push({
+    gateId: "core/gate/critic-findings",
+    passed: true,
+    level: "hard",
+  });
+  assert.throws(() => assertValidStrictSkillRun(systemGateWithoutCriticEvidence), StrictSkillRunError);
 });
 
 test("rejects persisted repair bookkeeping outside contract bounds", () => {
@@ -314,6 +338,47 @@ test("rejects persisted artifact attributions outside the declared execution gra
     mutate(forged);
     assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
   }
+});
+
+test("rejects cross-ledger and cross-attempt artifact ownership rewiring", () => {
+  const firstSkillId = "frontend.first-owner";
+  const secondSkillId = "frontend.second-owner";
+  const firstContract = renamedContract(firstSkillId);
+  const secondContract = renamedContract(secondSkillId);
+  let multi = createStrictSkillRun({
+    runId: "run_owner_ledgers", domain: "frontend", targetAgent: "codex", locale: "en",
+    intent: { sha256: sha("owner ledgers"), normalizedGoal: "validate cross-ledger ownership" },
+    selectedSkills: [
+      selection({ skillId: firstSkillId, contract: firstContract, contractChecksum: sha(JSON.stringify(firstContract)) }),
+      selection({ skillId: secondSkillId, contract: secondContract, contractChecksum: sha(JSON.stringify(secondContract)) }),
+    ],
+  });
+  for (const skillId of [firstSkillId, secondSkillId]) {
+    const ledger = () => multi.skillLedgers.find((candidate) => candidate.skillId === skillId)!;
+    while (ledger().readReceipts.length < ledger().contentChunks.length) multi = readNextStrictChunk(multi, skillId).run;
+    const stepId = ledger().contract.steps[0].id;
+    multi = beginStrictStep(multi, skillId, stepId);
+    multi = attachForSkill(multi, skillId, "inspection", stepId);
+    multi = completeStrictStep(multi, skillId, stepId);
+  }
+  const crossLedger = structuredClone(multi);
+  const [firstLedger, secondLedger] = crossLedger.skillLedgers;
+  firstLedger.steps[0].attempts[0].evidenceIds[0] = secondLedger.steps[0].attempts[0].evidenceIds[0];
+  assert.throws(
+    () => assertValidStrictSkillRun(crossLedger),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+  );
+
+  const crossAttempt = repairExhaustedFixture();
+  const reportAttempts = crossAttempt.skillLedgers[0].steps[2].attempts;
+  [reportAttempts[0].evidenceIds, reportAttempts[1].evidenceIds] = [
+    reportAttempts[1].evidenceIds,
+    reportAttempts[0].evidenceIds,
+  ];
+  assert.throws(
+    () => assertValidStrictSkillRun(crossAttempt),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+  );
 });
 
 test("rejects persisted terminal and aggregate states inconsistent with their lifecycle", () => {
@@ -420,7 +485,7 @@ test("critical critic findings enter bounded repair before a later passing criti
   });
   assert.doesNotThrow(() => assertValidCriticReportV2(criticReport, contract()));
 
-  let run = verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", {
+  let run = verifyStrictSkill(verificationReadyFixture(true), "frontend.test-skill", {
     artifactIntegrity: { passed: true },
     validatorResults: { "core/artifact-integrity": { passed: true } },
     systemGateResults: [{
@@ -443,6 +508,7 @@ test("critical critic findings enter bounded repair before a later passing criti
   run = completeStrictStep(run, "frontend.test-skill", contract().steps[1].id);
   run = beginStrictStep(run, "frontend.test-skill", contract().steps[2].id);
   run = attach(run, "skill-output", contract().steps[2].id, "output");
+  run = attach(run, "critic-report", contract().steps[2].id, "critic-report");
   run = completeStrictStep(run, "frontend.test-skill", contract().steps[2].id);
   run = verifyStrictSkill(run, "frontend.test-skill", {
     artifactIntegrity: { passed: true },

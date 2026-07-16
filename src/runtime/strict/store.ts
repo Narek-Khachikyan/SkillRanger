@@ -7,7 +7,7 @@ import { assertValidCriticReportV2 } from "./critic.ts";
 import { validateJsonSchema } from "./json-schema.ts";
 import { assertValidStrictSkillRun } from "./validation.ts";
 import { StrictSkillRunError, type EvidenceArtifact, type SkillRunV2 } from "./types.ts";
-import { deriveStrictValidatorResults, type StrictValidatorCallbacks } from "./verification.ts";
+import { deriveStrictValidatorResults } from "./verification.ts";
 import { captureSourceControl } from "./git.ts";
 
 const errno = (error: unknown, code: string) => typeof error === "object" && error !== null && (error as { code?: unknown }).code === code;
@@ -15,12 +15,10 @@ const digestBytes = (bytes: Uint8Array) => `sha256:${createHash("sha256").update
 
 export class StrictSkillRunStore {
   private readonly projectRoot: string;
-  private readonly validatorCallbacks: StrictValidatorCallbacks;
   private readonly lock: RunFileLock;
 
-  constructor(projectRoot: string, validatorCallbacks: StrictValidatorCallbacks = {}) {
+  constructor(projectRoot: string) {
     this.projectRoot = projectRoot;
-    this.validatorCallbacks = validatorCallbacks;
     this.lock = new RunFileLock({
       lockPath: (runId) => `${this.runPath(runId).slice(0, -5)}.lock`,
       error: (message) => new StrictSkillRunError("run-integrity", message),
@@ -144,7 +142,7 @@ export class StrictSkillRunStore {
     return this.update(runId, async (run) => {
       const ledger = run.skillLedgers.find((candidate) => candidate.skillId === skillId);
       if (!ledger) throw new StrictSkillRunError("run-integrity", `Unknown selected skill ${skillId}.`);
-      const derivation = await deriveStrictValidatorResults(this.projectRoot, run, ledger, this.validatorCallbacks);
+      const derivation = await deriveStrictValidatorResults(this.projectRoot, run, ledger);
       return verifyStrictSkill(run, skillId, derivation);
     });
   }

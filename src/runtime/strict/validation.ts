@@ -3,8 +3,9 @@ import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { assertValidExecutionContract } from "./contract.ts";
 import { isRfc3339DateTime } from "./date-time.ts";
+import { deriveVerificationEvidenceIds } from "./report-evidence.ts";
 import { criticSystemGateId } from "./system-gates.ts";
-import { StrictSkillRunError, type ExecutionContractV2, type SkillRunV2 } from "./types.ts";
+import { StrictSkillRunError, type ExecutionContractV2, type SkillLedger, type SkillRunV2 } from "./types.ts";
 
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const checksum = /^sha256:[a-f0-9]{64}$/;
@@ -54,7 +55,7 @@ const assertAttempts = (skillId: string, step: Record<string, unknown>, artifact
 const assertVerificationReports = (
   skillId: string,
   ledger: Record<string, unknown>,
-  artifactIds: Set<string>,
+  artifactsById: Map<string, Record<string, unknown>>,
 ) => {
   const contract = ledger.contract as ExecutionContractV2;
   const reports = ledger.verificationReports as unknown[];
@@ -67,8 +68,16 @@ const assertVerificationReports = (
       || !isRfc3339DateTime(rawReport.generatedAt)
       || !Array.isArray(rawReport.gateResults)
       || !Array.isArray(rawReport.evidenceIds)
-      || !rawReport.evidenceIds.every((id) => typeof id === "string" && artifactIds.has(id))) {
+      || !rawReport.evidenceIds.every((id) => typeof id === "string" && artifactsById.has(id))) {
       fail(`Invalid verification report ${reportIndex} for ${skillId}.`);
+    }
+    const expectedEvidenceIds = deriveVerificationEvidenceIds(
+      ledger as unknown as Pick<SkillLedger, "steps">,
+      reportIndex,
+    );
+    if (new Set(rawReport.evidenceIds).size !== rawReport.evidenceIds.length
+      || !same(rawReport.evidenceIds, expectedEvidenceIds)) {
+      fail(`Verification report ${reportIndex} for ${skillId} has a forged evidence snapshot.`);
     }
     const contractGateById = new Map(contract.gates.map((gate) => [gate.id, gate]));
     const gateCounts = new Map<string, number>();
@@ -87,9 +96,12 @@ const assertVerificationReports = (
         fail(`Gate result ${gateIndex} in report ${reportIndex} is not an allowed gate for ${skillId}.`);
       }
     });
+    const criticEvidenceRelevant = expectedEvidenceIds.some((artifactId) =>
+      artifactsById.get(artifactId)?.validatedAs === "critic-report");
+    const expectedCriticGateCount = criticEvidenceRelevant ? 1 : 0;
     if (contract.gates.some(({ id }) => gateCounts.get(id) !== 1)
-      || (gateCounts.get(criticSystemGateId) ?? 0) > 1) {
-      fail(`Verification report ${reportIndex} for ${skillId} must contain every contract gate exactly once and each system gate at most once.`);
+      || (gateCounts.get(criticSystemGateId) ?? 0) !== expectedCriticGateCount) {
+      fail(`Verification report ${reportIndex} for ${skillId} has an inconsistent system-gate set.`);
     }
     const hardPassed = rawReport.gateResults.every((gate) => record(gate) && (gate.level !== "hard" || gate.passed === true));
     if (rawReport.hardPassed !== hardPassed) fail(`Derived hard-gate result mismatch in report ${reportIndex} for ${skillId}.`);
@@ -243,6 +255,42 @@ const assertArtifactAttributions = (
   });
 };
 
+const assertArtifactOwnership = (
+  artifacts: Array<Record<string, unknown>>,
+  ledgers: Map<string, Record<string, unknown>>,
+) => {
+  const artifactsById = new Map(artifacts.map((artifact) => [artifact.artifactId as string, artifact]));
+  for (const [skillId, ledger] of ledgers) {
+    for (const step of ledger.steps as Array<Record<string, unknown>>) {
+      for (const attempt of step.attempts as Array<Record<string, unknown>>) {
+        for (const artifactId of attempt.evidenceIds as string[]) {
+          const artifact = artifactsById.get(artifactId);
+          const producers = (artifact?.attributions as unknown[] | undefined)?.filter((attribution) =>
+            record(attribution) && attribution.relation === "produced") ?? [];
+          if (producers.length !== 1
+            || !record(producers[0])
+            || producers[0].skillId !== skillId
+            || producers[0].stepId !== step.id
+            || producers[0].attempt !== attempt.attempt) {
+            fail(`Evidence ${artifactId} is not owned by ${skillId}/${String(step.id)}/${String(attempt.attempt)}.`);
+          }
+        }
+      }
+    }
+  }
+  for (const artifact of artifacts) {
+    const producer = (artifact.attributions as unknown[]).find((attribution) =>
+      record(attribution) && attribution.relation === "produced");
+    if (!record(producer)) fail(`Artifact ${String(artifact.artifactId)} lacks a producer.`);
+    const ledger = ledgers.get(producer.skillId as string)!;
+    const step = (ledger.steps as Array<Record<string, unknown>>).find(({ id }) => id === producer.stepId)!;
+    const attempt = (step.attempts as Array<Record<string, unknown>>).find(({ attempt }) => attempt === producer.attempt)!;
+    if (!(attempt.evidenceIds as unknown[]).includes(artifact.artifactId)) {
+      fail(`Artifact ${String(artifact.artifactId)} is absent from its producing attempt.`);
+    }
+  }
+};
+
 const assertAggregateRunState = (run: Record<string, unknown>, ledgers: Array<Record<string, unknown>>, activeCount: number) => {
   const state = run.state;
   const terminal = ledgers.filter((ledger) => ledger.outcome !== undefined);
@@ -324,12 +372,14 @@ export const assertValidStrictSkillRun: (input: unknown) => asserts input is Ski
     if (rawLedger.outcome !== undefined && !["used", "no-op", "blocked"].includes(rawLedger.outcome as string)) fail(`Invalid outcome for ${skillId}.`);
   }
   const artifactIds = new Set<string>();
+  const artifactsById = new Map<string, Record<string, unknown>>();
   const artifacts: Array<Record<string, unknown>> = [];
   for (const [index, artifact] of input.artifacts.entries()) {
     if (!record(artifact)) fail(`artifacts[${index}] must be an object.`);
     exactKeys(artifact, ["artifactId", "kind", "path", "sha256", "size", "attributions", "sourceControl"], ["sourcePath", "validatedAs"], `artifacts[${index}]`);
     if (typeof artifact.artifactId !== "string" || artifactIds.has(artifact.artifactId) || typeof artifact.kind !== "string" || artifact.kind.length === 0 || !safeRelative(artifact.path) || (artifact.sourcePath !== undefined && !safeRelative(artifact.sourcePath)) || !checksum.test(artifact.sha256 as string) || !Number.isInteger(artifact.size) || (artifact.size as number) < 0 || (artifact.validatedAs !== undefined && !["input", "output", "critic-report"].includes(artifact.validatedAs as string)) || !Array.isArray(artifact.attributions)) fail(`Invalid artifact at index ${index}.`);
     artifactIds.add(artifact.artifactId);
+    artifactsById.set(artifact.artifactId, artifact);
     artifacts.push(artifact);
     if (!record(artifact.sourceControl) || (artifact.sourceControl.mode !== "git" && artifact.sourceControl.mode !== "non-git")) fail(`Invalid artifact source-control snapshot at index ${index}.`);
   }
@@ -346,7 +396,7 @@ export const assertValidStrictSkillRun: (input: unknown) => asserts input is Ski
       assertAttempts(skillId, step, artifactIds);
       if (step.status === "active") activeCount += 1;
     });
-    assertVerificationReports(skillId, rawLedger, artifactIds);
+    assertVerificationReports(skillId, rawLedger, artifactsById);
     assertRepairLifecycle(skillId, rawLedger);
     assertTerminalLifecycle(rawLedger);
     assertUsedLedger(rawLedger);
@@ -354,5 +404,6 @@ export const assertValidStrictSkillRun: (input: unknown) => asserts input is Ski
   }
   if (activeCount > 1) fail("Only one strict step may be active.");
   assertArtifactAttributions(artifacts, ledgerBySkillId);
+  assertArtifactOwnership(artifacts, ledgerBySkillId);
   assertAggregateRunState(input, ledgers, activeCount);
 };
