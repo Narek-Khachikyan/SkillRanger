@@ -18,6 +18,7 @@ import {
   type SkillRunV2,
 } from "../src/runtime/strict/index.ts";
 import { deriveBrowserGateResults, deriveTailwindSourceResults } from "../src/runtime/strict/frontend-evidence.ts";
+import { internalContainedFileReadHooks } from "../src/runtime/strict/contained-file.ts";
 
 const sha = (value: string | Buffer) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
 const contract: ExecutionContractV2 = {
@@ -257,7 +258,7 @@ test("fails the accessibility hard gate for a critical axe violation", () => {
 });
 
 test("derives Tailwind source gates from staged source text instead of checks claims", () => {
-  const dynamic = deriveTailwindSourceResults('{"checks":{"no-dynamic-tailwind-classes":true},"diff":"+ <div className={`p-4 bg-${color}-600`}>"}');
+  const dynamic = deriveTailwindSourceResults('const checks = { "no-dynamic-tailwind-classes": true }; <div className={`p-4 bg-${color}-600`}>');
   assert.equal(dynamic["no-dynamic-tailwind-classes"].passed, false);
 
   const staticSource = deriveTailwindSourceResults('+ <div className="bg-brand-600 text-on-brand">Save</div>');
@@ -331,6 +332,59 @@ test("accepts static class variables, aliases, conditionals, and composition arg
   ].join("\n"));
 
   assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
+test("resolves same-named static class bindings in disjoint lexical scopes", () => {
+  const results = deriveTailwindSourceResults([
+    "function PrimaryCard() {",
+    "  const classes = \"bg-brand-500\";",
+    "  return <div className={classes}>Primary</div>;",
+    "}",
+    "function SecondaryCard() {",
+    "  const classes = \"bg-brand-600\";",
+    "  return <div className={classes}>Secondary</div>;",
+    "}",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
+test("ignores className-like text inside quoted strings", () => {
+  const results = deriveTailwindSourceResults([
+    "const generated = `bg-${color}-600`;",
+    "const example = '<div className={generated}>Example</div>';",
+    "const card = <div className=\"bg-brand-500\">Save</div>;",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
+test("ignores className-like text inside comments", () => {
+  const results = deriveTailwindSourceResults([
+    "const generated = `bg-${color}-600`;",
+    "// <div className={generated}>Example</div>",
+    "/* className={generated} */",
+    "const card = <div className=\"bg-brand-500\">Save</div>;",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
+test("traces conditional class branches without treating the control as a class value", () => {
+  const staticBranches = deriveTailwindSourceResults([
+    "const active = `bg-${color}-600`;",
+    "const classes = active ? \"bg-brand-500\" : \"bg-brand-600\";",
+    "const card = <div className={classes}>Save</div>;",
+  ].join("\n"));
+  const dynamicBranch = deriveTailwindSourceResults([
+    "const active = true;",
+    "const generated = `bg-${color}-600`;",
+    "const classes = active ? \"bg-brand-500\" : generated;",
+    "const card = <div className={classes}>Save</div>;",
+  ].join("\n"));
+
+  assert.equal(staticBranches["no-dynamic-tailwind-classes"].passed, true);
+  assert.equal(dynamicBranch["no-dynamic-tailwind-classes"].passed, false);
 });
 
 test("does not treat unrelated dynamic strings as class values", () => {
@@ -697,6 +751,40 @@ test("rejects evidence whose parent symlink escapes the project root", async () 
       ruleIds: contract.rules.map(({ id }) => id),
     }],
   }), (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity");
+});
+
+test("rejects ingestion when the opened source pathname is replaced during the read", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-evidence-inode-race-"));
+  const source = path.join(root, "report.json");
+  await writeFile(source, "{}\n");
+  const store = new StrictSkillRunStore(root);
+  const run = beginStrictStep(
+    readNextStrictChunk(fixtureRun(), contract.skillId).run,
+    contract.skillId,
+    contract.steps[0].id,
+  );
+  await store.create(run);
+  internalContainedFileReadHooks.ingestion = async (target) => {
+    assert.equal(target, source);
+    await rename(target, `${target}.opened`);
+    await writeFile(target, "{}\n");
+  };
+
+  try {
+    await assert.rejects(store.ingestEvidence(run.runId, {
+      sourcePath: source,
+      kind: "report",
+      attributions: [{
+        skillId: contract.skillId,
+        stepId: contract.steps[0].id,
+        attempt: 1,
+        relation: "produced",
+        ruleIds: contract.rules.map(({ id }) => id),
+      }],
+    }), (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity");
+  } finally {
+    delete internalContainedFileReadHooks.ingestion;
+  }
 });
 
 test("retains a shared evidence blob when one concurrent update fails", async () => {
@@ -1166,6 +1254,26 @@ test("rejects changed evidence even when the contract omits an integrity gate", 
     store.verifySkill(run.runId, contract.skillId),
     (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
   );
+});
+
+test("fails verification when an artifact pathname is replaced during the read", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-verify-inode-race-"));
+  const store = new StrictSkillRunStore(root);
+  const run = await stageCompletedEvidence(root, store);
+  const artifactPath = path.join(root, run.artifacts[0].path);
+  const artifactBytes = await readFile(artifactPath);
+  internalContainedFileReadHooks.verification = async (target) => {
+    assert.equal(target, artifactPath);
+    await rename(target, `${target}.opened`);
+    await writeFile(target, artifactBytes);
+  };
+
+  try {
+    const derivation = await deriveStrictValidatorResults(root, run, run.skillLedgers[0]);
+    assert.equal(derivation.artifactIntegrity.passed, false);
+  } finally {
+    delete internalContainedFileReadHooks.verification;
+  }
 });
 
 test("observes a built-in domain validator only after artifact integrity passes", async () => {

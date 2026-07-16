@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { constants } from "node:fs";
-import { lstat, mkdir, open, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { RunFileLock } from "../run-lock.ts";
 import { addStrictEvidence, verifyStrictSkill } from "./reducer.ts";
@@ -10,41 +9,16 @@ import { assertValidStrictSkillRun } from "./validation.ts";
 import { StrictSkillRunError, type EvidenceArtifact, type SkillRunV2 } from "./types.ts";
 import { deriveStrictValidatorResults } from "./verification.ts";
 import { captureSourceControl } from "./git.ts";
+import { ContainedFileReadError, readContainedFile } from "./contained-file.ts";
 
 const errno = (error: unknown, code: string) => typeof error === "object" && error !== null && (error as { code?: unknown }).code === code;
 const digestBytes = (bytes: Uint8Array) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-const containedBy = (root: string, target: string) => {
-  const relative = path.relative(root, target);
-  return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
-};
-
 const readContainedEvidenceSource = async (projectRoot: string, sourcePath: string) => {
-  let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
-    const [canonicalRoot, leaf] = await Promise.all([realpath(projectRoot), lstat(sourcePath)]);
-    if (!leaf.isFile() || leaf.isSymbolicLink()) {
-      throw new StrictSkillRunError("artifact-integrity", "Evidence source must be a real file, not a symlink.");
-    }
-    const canonicalBeforeOpen = await realpath(sourcePath);
-    if (!containedBy(canonicalRoot, canonicalBeforeOpen)) {
-      throw new StrictSkillRunError("artifact-integrity", "Evidence source must stay inside the project root.");
-    }
-    handle = await open(sourcePath, constants.O_RDONLY | constants.O_NOFOLLOW);
-    const info = await handle.stat();
-    const bytes = await handle.readFile();
-    const canonicalAfterRead = await realpath(sourcePath);
-    if (canonicalAfterRead !== canonicalBeforeOpen || !containedBy(canonicalRoot, canonicalAfterRead)) {
-      throw new StrictSkillRunError("artifact-integrity", "Evidence source changed containment while it was read.");
-    }
-    if (!info.isFile() || info.size !== bytes.byteLength) {
-      throw new StrictSkillRunError("artifact-integrity", "Evidence source changed while it was read.");
-    }
-    return bytes;
+    return (await readContainedFile({ projectRoot, target: sourcePath, phase: "ingestion" })).bytes;
   } catch (error) {
-    if (error instanceof StrictSkillRunError) throw error;
-    throw new StrictSkillRunError("artifact-integrity", "Evidence source could not be read securely.");
-  } finally {
-    await handle?.close().catch(() => undefined);
+    const message = error instanceof ContainedFileReadError ? error.message : "Evidence source could not be read securely.";
+    throw new StrictSkillRunError("artifact-integrity", message.replace(/^Contained source/, "Evidence source"));
   }
 };
 

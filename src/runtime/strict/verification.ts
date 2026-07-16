@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { constants } from "node:fs";
-import { lstat, open, realpath } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
 import path from "node:path";
+import { readContainedFile } from "./contained-file.ts";
 import { assertValidCriticReportV2 } from "./critic.ts";
 import { isRfc3339DateTime } from "./date-time.ts";
 import { deriveBrowserGateResults, deriveTailwindSourceResults } from "./frontend-evidence.ts";
@@ -90,30 +90,14 @@ const deriveCriticSystemGate = (
     ...(unresolved.length === 0 ? {} : { message: `Critic reported ${unresolved.length} unresolved finding(s).` }),
   };
 };
-const containedBy = (root: string, target: string) => {
-  const relative = path.relative(root, target);
-  return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
-};
-
 const readVerifiedArtifact = async (projectRoot: string, canonicalRoot: string, artifact: EvidenceArtifact) => {
   const target = path.resolve(projectRoot, artifact.path);
-  let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
-    const leaf = await lstat(target);
-    if (!leaf.isFile() || leaf.isSymbolicLink()) return undefined;
-    const canonicalBeforeOpen = await realpath(target);
-    if (!containedBy(canonicalRoot, canonicalBeforeOpen)) return undefined;
-    handle = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
-    const info = await handle.stat();
-    const bytes = await handle.readFile();
-    const canonicalAfterRead = await realpath(target);
-    if (canonicalAfterRead !== canonicalBeforeOpen || !containedBy(canonicalRoot, canonicalAfterRead)) return undefined;
-    if (!info.isFile() || bytes.byteLength !== artifact.size || digest(bytes) !== artifact.sha256) return undefined;
+    const { bytes } = await readContainedFile({ projectRoot, canonicalRoot, target, phase: "verification" });
+    if (bytes.byteLength !== artifact.size || digest(bytes) !== artifact.sha256) return undefined;
     return bytes;
   } catch {
     return undefined;
-  } finally {
-    await handle?.close().catch(() => undefined);
   }
 };
 

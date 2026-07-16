@@ -45,6 +45,7 @@ type ParsedTemplate = {
   end: number;
   segments: string[];
   expressions: string[];
+  expressionRanges: SourceRange[];
   nested: ParsedTemplate[];
 };
 type SourceRange = { start: number; end: number };
@@ -212,6 +213,7 @@ function templateExpressionEnd(content: string, start: number): { end: number; n
 function parseTemplateAt(content: string, start: number): ParsedTemplate | undefined {
   const segments: string[] = [];
   const expressions: string[] = [];
+  const expressionRanges: SourceRange[] = [];
   const nested: ParsedTemplate[] = [];
   let segmentStart = start + 1;
   for (let index = segmentStart; index < content.length; index += 1) {
@@ -221,7 +223,7 @@ function parseTemplateAt(content: string, start: number): ParsedTemplate | undef
     }
     if (content[index] === "`") {
       segments.push(content.slice(segmentStart, index));
-      return { start, end: index + 1, segments, expressions, nested };
+      return { start, end: index + 1, segments, expressions, expressionRanges, nested };
     }
     if (content[index] !== "$" || content[index + 1] !== "{") continue;
     segments.push(content.slice(segmentStart, index));
@@ -229,6 +231,7 @@ function parseTemplateAt(content: string, start: number): ParsedTemplate | undef
     const expression = templateExpressionEnd(content, expressionStart);
     if (!expression) return undefined;
     expressions.push(content.slice(expressionStart, expression.end));
+    expressionRanges.push({ start: expressionStart, end: expression.end });
     nested.push(...expression.nested);
     index = expression.end;
     segmentStart = index + 1;
@@ -252,38 +255,73 @@ const parsedTemplates = (content: string) => {
   return templates;
 };
 
-type LocalInitializer = SourceRange & { name: string };
+type LexicalScope = SourceRange & { id: number; parent?: number; depth: number };
+type LocalInitializer = SourceRange & { name: string; scope: number };
+type ClassValueRange = SourceRange & { kind: "expression" | "arguments" };
 
 const opaqueLexicalRanges = (content: string) => {
   const ranges: SourceRange[] = [];
-  for (let index = 0; index < content.length; index += 1) {
-    const character = content[index];
-    if (character === "\"" || character === "'") {
-      const end = quotedEnd(content, index, character);
-      if (end === undefined) break;
-      ranges.push({ start: index, end });
-      index = end - 1;
-      continue;
+  const scan = (start: number, end: number) => {
+    for (let index = start; index < end; index += 1) {
+      const character = content[index];
+      if (character === "\"" || character === "'") {
+        const lexicalEnd = quotedEnd(content, index, character);
+        if (lexicalEnd === undefined || lexicalEnd > end) return;
+        ranges.push({ start: index, end: lexicalEnd });
+        index = lexicalEnd - 1;
+        continue;
+      }
+      if (character === "`") {
+        const template = parseTemplateAt(content, index);
+        if (!template || template.end > end) return;
+        let quasiStart = template.start;
+        for (const expression of template.expressionRanges) {
+          ranges.push({ start: quasiStart, end: expression.start });
+          scan(expression.start, expression.end);
+          quasiStart = expression.end;
+        }
+        ranges.push({ start: quasiStart, end: template.end });
+        index = template.end - 1;
+        continue;
+      }
+      if (character === "/" && (content[index + 1] === "/" || content[index + 1] === "*")) {
+        const lexicalEnd = commentEnd(content, index);
+        if (lexicalEnd === undefined || lexicalEnd > end) return;
+        ranges.push({ start: index, end: lexicalEnd });
+        index = lexicalEnd - 1;
+      }
     }
-    if (character === "`") {
-      const template = parseTemplateAt(content, index);
-      if (!template) break;
-      ranges.push({ start: index, end: template.end });
-      index = template.end - 1;
-      continue;
-    }
-    if (character === "/" && (content[index + 1] === "/" || content[index + 1] === "*")) {
-      const end = commentEnd(content, index);
-      if (end === undefined) break;
-      ranges.push({ start: index, end });
-      index = end - 1;
-    }
-  }
+  };
+  scan(0, content.length);
   return ranges;
 };
 
 const insideRange = (index: number, ranges: SourceRange[]) =>
   ranges.some(({ start, end }) => index >= start && index < end);
+
+const lexicalCode = (content: string, opaque: SourceRange[]) => [...content]
+  .map((character, index) => insideRange(index, opaque) && character !== "\n" && character !== "\r" ? " " : character)
+  .join("");
+
+const lexicalScopes = (code: string) => {
+  const scopes: LexicalScope[] = [{ id: 0, start: 0, end: code.length, depth: 0 }];
+  const stack = [0];
+  for (let index = 0; index < code.length; index += 1) {
+    if (code[index] === "{") {
+      const parent = stack.at(-1) ?? 0;
+      const scope = { id: scopes.length, parent, start: index, end: code.length, depth: scopes[parent].depth + 1 };
+      scopes.push(scope);
+      stack.push(scope.id);
+    } else if (code[index] === "}" && stack.length > 1) {
+      const scope = scopes[stack.pop() as number];
+      scope.end = index + 1;
+    }
+  }
+  return scopes;
+};
+
+const scopeAt = (index: number, scopes: LexicalScope[]) => scopes.reduce((selected, scope) =>
+  index > scope.start && index < scope.end && scope.depth > selected.depth ? scope : selected, scopes[0]);
 
 const initializerEnd = (content: string, start: number) => {
   const delimiters: string[] = [];
@@ -319,102 +357,181 @@ const initializerEnd = (content: string, start: number) => {
   return content.length;
 };
 
-const localInitializers = (content: string) => {
+const localInitializers = (content: string, code: string, scopes: LexicalScope[]) => {
   const declarations = new Map<string, LocalInitializer[]>();
-  const opaque = opaqueLexicalRanges(content);
-  const pattern = /\b(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*/g;
-  for (const match of content.matchAll(pattern)) {
+  const pattern = /\b(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=/g;
+  for (const match of code.matchAll(pattern)) {
     const declarationStart = match.index ?? 0;
-    if (insideRange(declarationStart, opaque)) continue;
-    const start = declarationStart + match[0].length;
+    let start = declarationStart + match[0].length;
+    while (/\s/.test(content[start] ?? "")) start += 1;
     const end = initializerEnd(content, start);
     if (end === undefined || content.slice(start, end).trim() === "") continue;
     const name = match[1];
-    declarations.set(name, [...(declarations.get(name) ?? []), { name, start, end }]);
+    declarations.set(name, [...(declarations.get(name) ?? []), {
+      name,
+      start,
+      end,
+      scope: scopeAt(declarationStart, scopes).id,
+    }]);
   }
   return declarations;
 };
 
-const referencedIdentifiers = (content: string, range: SourceRange) => {
-  const identifiers: string[] = [];
+const trimmedRange = (code: string, range: SourceRange): SourceRange => {
+  let { start, end } = range;
+  while (start < end && /\s/.test(code[start])) start += 1;
+  while (end > start && /\s/.test(code[end - 1])) end -= 1;
+  return { start, end };
+};
+
+const topLevelSegments = (code: string, range: SourceRange, separator: string) => {
+  const segments: SourceRange[] = [];
+  const delimiters: string[] = [];
+  const pairs: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
+  let start = range.start;
   for (let index = range.start; index < range.end; index += 1) {
-    const character = content[index];
-    if (character === "\"" || character === "'") {
-      const end = quotedEnd(content, index, character);
-      if (end === undefined || end > range.end) break;
-      index = end - 1;
-      continue;
+    const character = code[index];
+    if (pairs[character]) delimiters.push(pairs[character]);
+    else if (delimiters.at(-1) === character) delimiters.pop();
+    else if (delimiters.length === 0 && character === separator) {
+      segments.push({ start, end: index });
+      start = index + 1;
     }
-    if (character === "`") {
-      const template = parseTemplateAt(content, index);
-      if (!template || template.end > range.end) break;
-      index = template.end - 1;
-      continue;
-    }
-    if (character === "/" && (content[index + 1] === "/" || content[index + 1] === "*")) {
-      const end = commentEnd(content, index);
-      if (end === undefined || end > range.end) break;
-      index = end - 1;
-      continue;
-    }
-    if (!/[A-Za-z_$]/.test(character)) continue;
-    let end = index + 1;
-    while (/[A-Za-z0-9_$]/.test(content[end] ?? "")) end += 1;
-    let previous = index - 1;
-    while (previous >= range.start && /\s/.test(content[previous])) previous -= 1;
-    if (content[previous] !== ".") identifiers.push(content.slice(index, end));
-    index = end - 1;
   }
+  segments.push({ start, end: range.end });
+  return segments;
+};
+
+const conditionalBranches = (code: string, range: SourceRange) => {
+  const delimiters: string[] = [];
+  const pairs: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
+  let question: number | undefined;
+  let nested = 0;
+  for (let index = range.start; index < range.end; index += 1) {
+    const character = code[index];
+    if (pairs[character]) delimiters.push(pairs[character]);
+    else if (delimiters.at(-1) === character) delimiters.pop();
+    else if (delimiters.length === 0 && character === "?" && code[index + 1] !== "?" && code[index - 1] !== "?") {
+      if (question === undefined) question = index;
+      else nested += 1;
+    } else if (delimiters.length === 0 && character === ":" && question !== undefined) {
+      if (nested > 0) nested -= 1;
+      else return [{ start: question + 1, end: index }, { start: index + 1, end: range.end }];
+    }
+  }
+  return undefined;
+};
+
+const identifierKeywords = new Set([
+  "const", "let", "var", "return", "true", "false", "null", "undefined", "new", "typeof", "void", "await", "yield",
+]);
+
+const referencedIdentifiers = (content: string, code: string, input: ClassValueRange) => {
+  const identifiers: string[] = [];
+  const visit = (rawRange: SourceRange, kind: ClassValueRange["kind"] = "expression") => {
+    let range = trimmedRange(code, rawRange);
+    if (range.start >= range.end) return;
+    if (kind === "arguments") {
+      topLevelSegments(code, range, ",").forEach((segment) => visit(segment));
+      return;
+    }
+    while (code[range.start] === "(") {
+      const scanned = scanBalancedDelimiter(content, range.start, "(", ")");
+      if (scanned.failure || scanned.end !== range.end - 1) break;
+      range = trimmedRange(code, { start: range.start + 1, end: range.end - 1 });
+    }
+    const branches = conditionalBranches(code, range);
+    if (branches) {
+      branches.forEach((branch) => visit(branch));
+      return;
+    }
+    const call = /^(?:cn|clsx|classnames|classNames|twMerge|twJoin|cva)\s*\(/.exec(code.slice(range.start, range.end));
+    if (call) {
+      const open = range.start + call[0].lastIndexOf("(");
+      const scanned = scanBalancedDelimiter(content, open, "(", ")");
+      if (!scanned.failure && scanned.end === range.end - 1) {
+        visit({ start: open + 1, end: scanned.end }, "arguments");
+        return;
+      }
+    }
+    for (let index = range.start; index < range.end; index += 1) {
+      if (!/[A-Za-z_$]/.test(code[index])) continue;
+      let end = index + 1;
+      while (/[A-Za-z0-9_$]/.test(code[end] ?? "")) end += 1;
+      let previous = index - 1;
+      while (previous >= range.start && /\s/.test(code[previous])) previous -= 1;
+      const name = content.slice(index, end);
+      if (code[previous] !== "." && !identifierKeywords.has(name)) identifiers.push(name);
+      index = end - 1;
+    }
+  };
+  visit(input, input.kind);
   return identifiers;
 };
 
-const traceClassValueRanges = (content: string, seeds: SourceRange[]) => {
-  const declarations = localInitializers(content);
-  const ranges = [...seeds];
+const traceClassValueRanges = (content: string, seeds: ClassValueRange[]) => {
+  const opaque = opaqueLexicalRanges(content);
+  const code = lexicalCode(content, opaque);
+  const scopes = lexicalScopes(code);
+  const declarations = localInitializers(content, code, scopes);
+  const ranges: SourceRange[] = [...seeds];
   const failures: ScanFailure[] = [];
-  const states = new Map<string, "visiting" | "done">();
+  const states = new Map<number, "visiting" | "done">();
+  const isAncestor = (candidate: number, origin: number) => {
+    for (let scope: LexicalScope | undefined = scopes[origin]; scope; scope = scope.parent === undefined ? undefined : scopes[scope.parent]) {
+      if (scope.id === candidate) return true;
+    }
+    return false;
+  };
   const resolve = (name: string, origin: SourceRange) => {
-    const candidates = declarations.get(name);
-    if (!candidates) return;
-    if (candidates.length !== 1) {
+    const originScope = scopeAt(origin.start, scopes);
+    const candidates = (declarations.get(name) ?? [])
+      .filter((candidate) => isAncestor(candidate.scope, originScope.id))
+      .sort((left, right) => scopes[right.scope].depth - scopes[left.scope].depth);
+    if (candidates.length === 0) return;
+    const nearestDepth = scopes[candidates[0].scope].depth;
+    const nearest = candidates.filter((candidate) => scopes[candidate.scope].depth === nearestDepth);
+    if (nearest.length !== 1) {
       failures.push({ ...origin, reason: `ambiguous class value ${name}` });
       return;
     }
-    if (states.get(name) === "visiting") {
+    const initializer = nearest[0];
+    if (states.get(initializer.start) === "visiting") {
       failures.push({ ...origin, reason: `cyclic class value ${name}` });
       return;
     }
-    if (states.get(name) === "done") return;
-    states.set(name, "visiting");
-    const initializer = candidates[0];
+    if (states.get(initializer.start) === "done") return;
+    states.set(initializer.start, "visiting");
     ranges.push(initializer);
-    for (const reference of referencedIdentifiers(content, initializer)) resolve(reference, initializer);
-    states.set(name, "done");
+    for (const reference of referencedIdentifiers(content, code, { ...initializer, kind: "expression" })) resolve(reference, initializer);
+    states.set(initializer.start, "done");
   };
   for (const seed of seeds) {
-    for (const reference of referencedIdentifiers(content, seed)) resolve(reference, seed);
+    for (const reference of referencedIdentifiers(content, code, seed)) resolve(reference, seed);
   }
   return { ranges, failures };
 };
 
 const relevantClassExpressionRanges = (content: string) => {
-  const ranges: SourceRange[] = [];
+  const ranges: ClassValueRange[] = [];
   const failures: ScanFailure[] = [];
-  const assignment = /\b(?:className|class)\s*=\s*/g;
-  for (const match of content.matchAll(assignment)) {
-    const start = (match.index ?? 0) + match[0].length;
+  const code = lexicalCode(content, opaqueLexicalRanges(content));
+  const assignment = /\b(?:className|class)\s*=/g;
+  for (const match of code.matchAll(assignment)) {
+    let start = (match.index ?? 0) + match[0].length;
+    while (/\s/.test(content[start] ?? "")) start += 1;
     if (content[start] === "{") {
       const scanned = scanBalancedDelimiter(content, start, "{", "}");
       if (scanned.failure) failures.push(scanned.failure);
-      else ranges.push({ start: start + 1, end: scanned.end });
+      else ranges.push({ start: start + 1, end: scanned.end, kind: "expression" });
     }
   }
   const compositionCall = /\b(?:cn|clsx|classnames|classNames|twMerge|twJoin|cva)\s*\(/g;
-  for (const match of content.matchAll(compositionCall)) {
+  for (const match of code.matchAll(compositionCall)) {
     const open = (match.index ?? 0) + match[0].lastIndexOf("(");
     const scanned = scanBalancedDelimiter(content, open, "(", ")");
     if (scanned.failure) failures.push(scanned.failure);
-    else ranges.push({ start: open + 1, end: scanned.end });
+    else ranges.push({ start: open + 1, end: scanned.end, kind: "arguments" });
   }
   const traced = traceClassValueRanges(content, ranges);
   return { ranges: traced.ranges, failures: [...failures, ...traced.failures] };
