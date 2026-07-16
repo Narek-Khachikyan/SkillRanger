@@ -103,39 +103,54 @@ const scanFailure = (content: string, start: number, reason: string): ScanFailur
   return { start, end: newline === -1 ? content.length : newline, reason };
 };
 
-type LexicalItem = { end: number; kind: "comment" | "value"; template?: ParsedTemplate; failure?: undefined } | { failure: ScanFailure } | undefined;
+type LexicalValue = {
+  start: number;
+  end: number;
+  kind: "comment" | "value";
+  type: "comment" | "quoted" | "template" | "regex";
+  template?: ParsedTemplate;
+  failure?: undefined;
+};
+type LexicalItem = LexicalValue | { failure: ScanFailure } | undefined;
 function lexicalItemAt(content: string, index: number, regexAllowed: boolean): LexicalItem {
   const character = content[index];
   if (character === "\"" || character === "'") {
     const end = quotedEnd(content, index, character);
-    return end === undefined ? { failure: scanFailure(content, index, "unterminated string") } : { end, kind: "value" };
+    return end === undefined ? { failure: scanFailure(content, index, "unterminated string") } : { start: index, end, kind: "value", type: "quoted" };
   }
   if (character === "`") {
     const template = parseTemplateAt(content, index);
-    return template ? { end: template.end, kind: "value", template } : { failure: scanFailure(content, index, "unparseable template") };
+    return template ? { start: index, end: template.end, kind: "value", type: "template", template } : { failure: scanFailure(content, index, "unparseable template") };
   }
   if (character !== "/") return undefined;
   if (content[index + 1] === "/" || content[index + 1] === "*") {
     const end = commentEnd(content, index);
-    return end === undefined ? { failure: scanFailure(content, index, "unterminated comment") } : { end, kind: "comment" };
+    return end === undefined ? { failure: scanFailure(content, index, "unterminated comment") } : { start: index, end, kind: "comment", type: "comment" };
   }
   if (!regexAllowed) return undefined;
   const end = regexLiteralEnd(content, index);
-  return end === undefined ? { failure: scanFailure(content, index, "unterminated regular expression") } : { end, kind: "value" };
+  return end === undefined ? { failure: scanFailure(content, index, "unterminated regular expression") } : { start: index, end, kind: "value", type: "regex" };
 }
 
-function scanBalancedDelimiter(content: string, start: number, open: string, close: string): BalancedScan {
-  const nested: ParsedTemplate[] = [];
-  const parenthesisControls = open === "(" ? [false] : [];
-  let depth = 1;
-  let index = start + 1;
+const scanLexicalRange = (
+  content: string,
+  start: number,
+  end: number,
+  options: {
+    initialParenthesisControls?: boolean[];
+    onLexical?: (item: LexicalValue) => void;
+    onCode?: (index: number, character: string) => boolean;
+  } = {},
+) => {
+  const parenthesisControls = [...(options.initialParenthesisControls ?? [])];
+  let index = start;
   let regexAllowed = true;
   let pendingControlHead = false;
-  while (index < content.length) {
+  while (index < end) {
     const lexical = lexicalItemAt(content, index, regexAllowed);
     if (lexical?.failure) return { failure: lexical.failure };
     if (lexical) {
-      if (lexical.template) nested.push(lexical.template);
+      options.onLexical?.(lexical);
       if (lexical.kind === "value") {
         regexAllowed = false;
         pendingControlHead = false;
@@ -176,32 +191,42 @@ function scanBalancedDelimiter(content: string, start: number, open: string, clo
       parenthesisControls.push(pendingControlHead);
       pendingControlHead = false;
       regexAllowed = true;
-      if (open === "(") depth += 1;
+      if (options.onCode?.(index, character)) return { stoppedAt: index };
       index += 1;
       continue;
     }
     if (character === ")") {
       const closedControlHead = parenthesisControls.pop() ?? false;
-      if (close === ")") {
-        depth -= 1;
-        if (depth === 0) return { end: index, nested };
-      }
       pendingControlHead = false;
       regexAllowed = closedControlHead;
+      if (options.onCode?.(index, character)) return { stoppedAt: index };
       index += 1;
       continue;
-    }
-    if (character === open) depth += 1;
-    else if (character === close) {
-      depth -= 1;
-      if (depth === 0) return { end: index, nested };
     }
     if (character === "\\") return { failure: scanFailure(content, index, "unexpected escape outside lexical value") };
     pendingControlHead = false;
     if (regexPrefixPunctuation.has(character)) regexAllowed = true;
     else if (valueSuffixPunctuation.has(character)) regexAllowed = false;
+    if (options.onCode?.(index, character)) return { stoppedAt: index };
     index += 1;
   }
+  return {};
+};
+
+function scanBalancedDelimiter(content: string, start: number, open: string, close: string): BalancedScan {
+  const nested: ParsedTemplate[] = [];
+  let depth = 1;
+  const scanned = scanLexicalRange(content, start + 1, content.length, {
+    initialParenthesisControls: open === "(" ? [false] : [],
+    onLexical: (lexical) => { if (lexical.template) nested.push(lexical.template); },
+    onCode: (index, character) => {
+      if (character === open) depth += 1;
+      else if (character === close) depth -= 1;
+      return depth === 0;
+    },
+  });
+  if (scanned.failure) return { failure: scanned.failure };
+  if (scanned.stoppedAt !== undefined) return { end: scanned.stoppedAt, nested };
   return { failure: scanFailure(content, start, `unterminated ${open}${close} expression`) };
 }
 
@@ -256,41 +281,33 @@ const parsedTemplates = (content: string) => {
 };
 
 type LexicalScope = SourceRange & { id: number; parent?: number; depth: number };
-type LocalInitializer = SourceRange & { name: string; scope: number };
+type LocalValue = SourceRange & { assignedAt: number; kind: "declaration" | "assignment" };
+type LocalBinding = {
+  name: string;
+  scope: number;
+  depth: number;
+  visibility?: SourceRange;
+  values: LocalValue[];
+};
 type ClassValueRange = SourceRange & { kind: "expression" | "arguments" };
 
 const opaqueLexicalRanges = (content: string) => {
   const ranges: SourceRange[] = [];
   const scan = (start: number, end: number) => {
-    for (let index = start; index < end; index += 1) {
-      const character = content[index];
-      if (character === "\"" || character === "'") {
-        const lexicalEnd = quotedEnd(content, index, character);
-        if (lexicalEnd === undefined || lexicalEnd > end) return;
-        ranges.push({ start: index, end: lexicalEnd });
-        index = lexicalEnd - 1;
-        continue;
-      }
-      if (character === "`") {
-        const template = parseTemplateAt(content, index);
-        if (!template || template.end > end) return;
-        let quasiStart = template.start;
-        for (const expression of template.expressionRanges) {
-          ranges.push({ start: quasiStart, end: expression.start });
-          scan(expression.start, expression.end);
-          quasiStart = expression.end;
-        }
-        ranges.push({ start: quasiStart, end: template.end });
-        index = template.end - 1;
-        continue;
-      }
-      if (character === "/" && (content[index + 1] === "/" || content[index + 1] === "*")) {
-        const lexicalEnd = commentEnd(content, index);
-        if (lexicalEnd === undefined || lexicalEnd > end) return;
-        ranges.push({ start: index, end: lexicalEnd });
-        index = lexicalEnd - 1;
-      }
-    }
+    scanLexicalRange(content, start, end, {
+      onLexical: (lexical) => {
+        if (lexical.template) {
+          const template = lexical.template;
+          let quasiStart = template.start;
+          for (const expression of template.expressionRanges) {
+            ranges.push({ start: quasiStart, end: expression.start });
+            scan(expression.start, expression.end);
+            quasiStart = expression.end;
+          }
+          ranges.push({ start: quasiStart, end: template.end });
+        } else ranges.push({ start: lexical.start, end: lexical.end });
+      },
+    });
   };
   scan(0, content.length);
   return ranges;
@@ -300,7 +317,7 @@ const insideRange = (index: number, ranges: SourceRange[]) =>
   ranges.some(({ start, end }) => index >= start && index < end);
 
 const lexicalCode = (content: string, opaque: SourceRange[]) => [...content]
-  .map((character, index) => insideRange(index, opaque) && character !== "\n" && character !== "\r" ? " " : character)
+  .map((character, index) => insideRange(index, opaque) ? " " : character)
   .join("");
 
 const lexicalScopes = (code: string) => {
@@ -323,58 +340,170 @@ const lexicalScopes = (code: string) => {
 const scopeAt = (index: number, scopes: LexicalScope[]) => scopes.reduce((selected, scope) =>
   index > scope.start && index < scope.end && scope.depth > selected.depth ? scope : selected, scopes[0]);
 
-const initializerEnd = (content: string, start: number) => {
+const initializerEnd = (code: string, start: number) => {
   const delimiters: string[] = [];
   const pairs: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
-  for (let index = start; index < content.length; index += 1) {
-    const character = content[index];
-    if (character === "\"" || character === "'") {
-      const end = quotedEnd(content, index, character);
-      if (end === undefined) return undefined;
-      index = end - 1;
-      continue;
-    }
-    if (character === "`") {
-      const template = parseTemplateAt(content, index);
-      if (!template) return undefined;
-      index = template.end - 1;
-      continue;
-    }
-    if (character === "/" && (content[index + 1] === "/" || content[index + 1] === "*")) {
-      const end = commentEnd(content, index);
-      if (end === undefined) return undefined;
-      index = end - 1;
-      continue;
-    }
+  for (let index = start; index < code.length; index += 1) {
+    const character = code[index];
     if (pairs[character]) delimiters.push(pairs[character]);
     else if (delimiters.at(-1) === character) delimiters.pop();
     else if (delimiters.length === 0 && (character === ";" || character === ",")) return index;
     else if (delimiters.length === 0 && (character === "\n" || character === "\r")) {
-      const expression = content.slice(start, index).trimEnd();
+      const expression = code.slice(start, index).trimEnd();
       if (!/(?:[?:,+*/%&|^=!<>-]|=>)$/.test(expression)) return index;
     }
   }
-  return content.length;
+  return code.length;
 };
 
-const localInitializers = (content: string, code: string, scopes: LexicalScope[]) => {
-  const declarations = new Map<string, LocalInitializer[]>();
-  const pattern = /\b(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=/g;
-  for (const match of code.matchAll(pattern)) {
-    const declarationStart = match.index ?? 0;
-    let start = declarationStart + match[0].length;
-    while (/\s/.test(content[start] ?? "")) start += 1;
-    const end = initializerEnd(content, start);
-    if (end === undefined || content.slice(start, end).trim() === "") continue;
-    const name = match[1];
-    declarations.set(name, [...(declarations.get(name) ?? []), {
-      name,
-      start,
-      end,
-      scope: scopeAt(declarationStart, scopes).id,
-    }]);
+const isAncestorScope = (candidate: number, origin: number, scopes: LexicalScope[]) => {
+  for (let scope: LexicalScope | undefined = scopes[origin]; scope; scope = scope.parent === undefined ? undefined : scopes[scope.parent]) {
+    if (scope.id === candidate) return true;
   }
-  return declarations;
+  return false;
+};
+
+const visibleBindings = (
+  bindings: Map<string, LocalBinding[]>,
+  name: string,
+  origin: number,
+  scopes: LexicalScope[],
+) => {
+  const originScope = scopeAt(origin, scopes);
+  const candidates = (bindings.get(name) ?? [])
+    .filter((binding) => binding.visibility
+      ? origin >= binding.visibility.start && origin < binding.visibility.end
+      : isAncestorScope(binding.scope, originScope.id, scopes))
+    .sort((left, right) => right.depth - left.depth);
+  if (candidates.length === 0) return [];
+  return candidates.filter((candidate) => candidate.depth === candidates[0].depth);
+};
+
+const localBindings = (content: string, code: string, scopes: LexicalScope[]) => {
+  const bindings = new Map<string, LocalBinding[]>();
+  const declarationOperators = new Set<number>();
+  const loopDeclarationBodies = new Map<number, number>();
+  const addBinding = (binding: LocalBinding) => {
+    bindings.set(binding.name, [...(bindings.get(binding.name) ?? []), binding]);
+  };
+  const addParameters = (start: number, end: number, bodyStart: number, bodyEnd?: number) => {
+    const bodyScope = scopeAt(bodyStart, scopes);
+    const braced = code[bodyStart - 1] === "{";
+    let offset = 0;
+    for (const rawParameter of code.slice(start, end).split(",")) {
+      const parsed = /^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*(?:=([\s\S]*))?$/.exec(rawParameter);
+      if (!parsed) {
+        offset += rawParameter.length + 1;
+        continue;
+      }
+      const binding: LocalBinding = {
+        name: parsed[1],
+        scope: bodyScope.id,
+        depth: braced ? bodyScope.depth : bodyScope.depth + 1,
+        ...(bodyEnd === undefined ? {} : { visibility: { start: bodyStart, end: bodyEnd } }),
+        values: [],
+      };
+      const relativeOperator = rawParameter.indexOf("=");
+      if (relativeOperator !== -1) {
+        const operator = start + offset + relativeOperator;
+        let valueStart = operator + 1;
+        while (/\s/.test(content[valueStart] ?? "")) valueStart += 1;
+        let valueEnd = start + offset + rawParameter.length;
+        while (valueEnd > valueStart && /\s/.test(content[valueEnd - 1])) valueEnd -= 1;
+        binding.values.push({ start: valueStart, end: valueEnd, assignedAt: operator, kind: "declaration" });
+      }
+      addBinding(binding);
+      offset += rawParameter.length + 1;
+    }
+  };
+
+  const loopHead = /\bfor\s*\(/g;
+  for (const match of code.matchAll(loopHead)) {
+    const open = (match.index ?? 0) + match[0].lastIndexOf("(");
+    const scanned = scanBalancedDelimiter(content, open, "(", ")");
+    if (scanned.failure) continue;
+    let body = scanned.end + 1;
+    while (/\s/.test(code[body] ?? "")) body += 1;
+    if (code[body] !== "{") continue;
+    for (const declaration of code.slice(open + 1, scanned.end).matchAll(/\b(?:const|let)\s+[A-Za-z_$][A-Za-z0-9_$]*\b/g)) {
+      loopDeclarationBodies.set(open + 1 + (declaration.index ?? 0), body + 1);
+    }
+  }
+
+  const declaration = /\b(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\b/g;
+  for (const match of code.matchAll(declaration)) {
+    const declarationStart = match.index ?? 0;
+    const name = match[1];
+    let cursor = declarationStart + match[0].length;
+    while (/\s/.test(code[cursor] ?? "")) cursor += 1;
+    const scope = scopeAt(loopDeclarationBodies.get(declarationStart) ?? declarationStart, scopes);
+    const binding: LocalBinding = { name, scope: scope.id, depth: scope.depth, values: [] };
+    if (code[cursor] === "=" && code[cursor + 1] !== "=" && code[cursor + 1] !== ">") {
+      declarationOperators.add(cursor);
+      let start = cursor + 1;
+      while (/\s/.test(content[start] ?? "")) start += 1;
+      const end = initializerEnd(code, start);
+      if (content.slice(start, end).trim() !== "") {
+        binding.values.push({ start, end, assignedAt: cursor, kind: "declaration" });
+      }
+    }
+    addBinding(binding);
+  }
+
+  const functionHead = /\bfunction(?:\s+[A-Za-z_$][A-Za-z0-9_$]*)?\s*\(/g;
+  for (const match of code.matchAll(functionHead)) {
+    const open = (match.index ?? 0) + match[0].lastIndexOf("(");
+    const scanned = scanBalancedDelimiter(content, open, "(", ")");
+    if (scanned.failure) continue;
+    let body = scanned.end + 1;
+    while (/\s/.test(code[body] ?? "")) body += 1;
+    if (code[body] === "{") addParameters(open + 1, scanned.end, body + 1);
+  }
+
+  for (const match of code.matchAll(/\(/g)) {
+    const open = match.index ?? 0;
+    const scanned = scanBalancedDelimiter(content, open, "(", ")");
+    if (scanned.failure) continue;
+    let arrow = scanned.end + 1;
+    while (/\s/.test(code[arrow] ?? "")) arrow += 1;
+    if (code.slice(arrow, arrow + 2) !== "=>") continue;
+    let body = arrow + 2;
+    while (/\s/.test(code[body] ?? "")) body += 1;
+    if (code[body] === "{") addParameters(open + 1, scanned.end, body + 1);
+    else addParameters(open + 1, scanned.end, body, initializerEnd(code, body));
+  }
+  const singleArrow = /\b([A-Za-z_$][A-Za-z0-9_$]*)\s*=>/g;
+  for (const match of code.matchAll(singleArrow)) {
+    let body = (match.index ?? 0) + match[0].length;
+    while (/\s/.test(code[body] ?? "")) body += 1;
+    const parameterStart = (match.index ?? 0) + match[0].indexOf(match[1]);
+    if (code[body] === "{") addParameters(parameterStart, parameterStart + match[1].length, body + 1);
+    else addParameters(parameterStart, parameterStart + match[1].length, body, initializerEnd(code, body));
+  }
+
+  const catchHead = /\bcatch\s*\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\)\s*\{/g;
+  for (const match of code.matchAll(catchHead)) {
+    const parameterStart = (match.index ?? 0) + match[0].indexOf(match[1]);
+    const body = (match.index ?? 0) + match[0].lastIndexOf("{") + 1;
+    addParameters(parameterStart, parameterStart + match[1].length, body);
+  }
+
+  const assignment = /\b([A-Za-z_$][A-Za-z0-9_$]*)\s*=/g;
+  for (const match of code.matchAll(assignment)) {
+    const target = match.index ?? 0;
+    const operator = target + match[0].lastIndexOf("=");
+    let previous = target - 1;
+    while (previous >= 0 && /\s/.test(code[previous])) previous -= 1;
+    if (code[previous] === "." || declarationOperators.has(operator) || /[=!<>]/.test(code[operator - 1] ?? "") || /[=>]/.test(code[operator + 1] ?? "")) continue;
+    const nearest = visibleBindings(bindings, match[1], target, scopes);
+    if (nearest.length !== 1) continue;
+    let start = operator + 1;
+    while (/\s/.test(content[start] ?? "")) start += 1;
+    const end = initializerEnd(code, start);
+    if (content.slice(start, end).trim() === "") continue;
+    nearest[0].values.push({ start, end, assignedAt: operator, kind: "assignment" });
+  }
+  return bindings;
 };
 
 const trimmedRange = (code: string, range: SourceRange): SourceRange => {
@@ -473,38 +602,32 @@ const traceClassValueRanges = (content: string, seeds: ClassValueRange[]) => {
   const opaque = opaqueLexicalRanges(content);
   const code = lexicalCode(content, opaque);
   const scopes = lexicalScopes(code);
-  const declarations = localInitializers(content, code, scopes);
+  const bindings = localBindings(content, code, scopes);
   const ranges: SourceRange[] = [...seeds];
   const failures: ScanFailure[] = [];
   const states = new Map<number, "visiting" | "done">();
-  const isAncestor = (candidate: number, origin: number) => {
-    for (let scope: LexicalScope | undefined = scopes[origin]; scope; scope = scope.parent === undefined ? undefined : scopes[scope.parent]) {
-      if (scope.id === candidate) return true;
-    }
-    return false;
-  };
   const resolve = (name: string, origin: SourceRange) => {
-    const originScope = scopeAt(origin.start, scopes);
-    const candidates = (declarations.get(name) ?? [])
-      .filter((candidate) => isAncestor(candidate.scope, originScope.id))
-      .sort((left, right) => scopes[right.scope].depth - scopes[left.scope].depth);
+    const candidates = visibleBindings(bindings, name, origin.start, scopes);
     if (candidates.length === 0) return;
-    const nearestDepth = scopes[candidates[0].scope].depth;
-    const nearest = candidates.filter((candidate) => scopes[candidate.scope].depth === nearestDepth);
-    if (nearest.length !== 1) {
+    if (candidates.length !== 1) {
       failures.push({ ...origin, reason: `ambiguous class value ${name}` });
       return;
     }
-    const initializer = nearest[0];
-    if (states.get(initializer.start) === "visiting") {
+    const binding = candidates[0];
+    const assignment = binding.values
+      .filter((value) => value.kind === "assignment" && value.assignedAt < origin.start)
+      .sort((left, right) => right.assignedAt - left.assignedAt)[0];
+    const value = assignment ?? binding.values.find((candidate) => candidate.kind === "declaration");
+    if (!value) return;
+    if (states.get(value.start) === "visiting") {
       failures.push({ ...origin, reason: `cyclic class value ${name}` });
       return;
     }
-    if (states.get(initializer.start) === "done") return;
-    states.set(initializer.start, "visiting");
-    ranges.push(initializer);
-    for (const reference of referencedIdentifiers(content, code, { ...initializer, kind: "expression" })) resolve(reference, initializer);
-    states.set(initializer.start, "done");
+    if (states.get(value.start) === "done") return;
+    states.set(value.start, "visiting");
+    ranges.push(value);
+    for (const reference of referencedIdentifiers(content, code, { ...value, kind: "expression" })) resolve(reference, value);
+    states.set(value.start, "done");
   };
   for (const seed of seeds) {
     for (const reference of referencedIdentifiers(content, code, seed)) resolve(reference, seed);

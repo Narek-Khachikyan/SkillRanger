@@ -292,6 +292,61 @@ test("traces dynamic Tailwind templates and concatenation through class variable
   assert.equal(concatenation["no-dynamic-tailwind-classes"].passed, false);
 });
 
+test("traces a dynamic Tailwind post-declaration assignment before the className sink", () => {
+  const results = deriveTailwindSourceResults([
+    "let classes;",
+    "classes = `bg-${color}-600`;",
+    "const card = <div className={classes}>Save</div>;",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("traces the latest pre-sink assignment through aliases, conditionals, and composition", () => {
+  const results = deriveTailwindSourceResults([
+    "const generated = `bg-${color}-600`;",
+    "let alias;",
+    "alias = generated;",
+    "let conditional;",
+    "conditional = active ? \"bg-brand-500\" : alias;",
+    "let classes;",
+    "classes = cn(\"p-4\", conditional);",
+    "const card = <div className={classes}>Save</div>;",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("does not resolve assignments after a className sink or from a disjoint scope", () => {
+  const afterSink = deriveTailwindSourceResults([
+    "let classes = \"bg-brand-500\";",
+    "const card = <div className={classes}>Save</div>;",
+    "classes = `bg-${color}-600`;",
+  ].join("\n"));
+  const disjoint = deriveTailwindSourceResults([
+    "let classes = \"bg-brand-500\";",
+    "if (active) {",
+    "  let classes;",
+    "  classes = `bg-${color}-600`;",
+    "}",
+    "const card = <div className={classes}>Save</div>;",
+  ].join("\n"));
+
+  assert.equal(afterSink["no-dynamic-tailwind-classes"].passed, true);
+  assert.equal(disjoint["no-dynamic-tailwind-classes"].passed, true);
+});
+
+test("uses the latest assignment before the className sink", () => {
+  const results = deriveTailwindSourceResults([
+    "let classes;",
+    "classes = `bg-${color}-600`;",
+    "classes = \"bg-brand-500\";",
+    "const card = <div className={classes}>Save</div>;",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
 test("traces a dynamic Tailwind template through a className alias chain", () => {
   const results = deriveTailwindSourceResults([
     "const generated = `bg-${color}-600`;",
@@ -350,6 +405,72 @@ test("resolves same-named static class bindings in disjoint lexical scopes", () 
   assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
 });
 
+test("treats function and arrow parameters as lexical class-value shadows", () => {
+  const functionParameter = deriveTailwindSourceResults([
+    "const classes = `bg-${color}-600`;",
+    "function Card(classes) {",
+    "  return <div className={classes}>Save</div>;",
+    "}",
+  ].join("\n"));
+  const arrowParameter = deriveTailwindSourceResults([
+    "const classes = `bg-${color}-600`;",
+    "const Card = (classes) => <div className={classes}>Save</div>;",
+  ].join("\n"));
+
+  assert.equal(functionParameter["no-dynamic-tailwind-classes"].passed, true);
+  assert.equal(arrowParameter["no-dynamic-tailwind-classes"].passed, true);
+});
+
+test("still rejects a dynamic local assignment to a shadowing parameter", () => {
+  const results = deriveTailwindSourceResults([
+    "const classes = \"bg-brand-500\";",
+    "function Card(classes) {",
+    "  classes = `bg-${color}-600`;",
+    "  return <div className={classes}>Save</div>;",
+    "}",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("traces dynamic defaults on function and arrow parameters", () => {
+  const functionDefault = deriveTailwindSourceResults([
+    "const classes = \"bg-brand-500\";",
+    "function Card(classes = `bg-${color}-600`) {",
+    "  return <div className={classes}>Save</div>;",
+    "}",
+  ].join("\n"));
+  const arrowDefault = deriveTailwindSourceResults([
+    "const classes = \"bg-brand-500\";",
+    "const Card = (classes = `bg-${color}-600`) => <div className={classes}>Save</div>;",
+  ].join("\n"));
+
+  assert.equal(functionDefault["no-dynamic-tailwind-classes"].passed, false);
+  assert.equal(arrowDefault["no-dynamic-tailwind-classes"].passed, false);
+});
+
+test("treats a catch parameter as a lexical class-value shadow", () => {
+  const results = deriveTailwindSourceResults([
+    "const classes = `bg-${color}-600`;",
+    "try { render(); } catch (classes) {",
+    "  render(<div className={classes}>Fallback</div>);",
+    "}",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
+test("treats a simple loop binding as a lexical class-value shadow", () => {
+  const results = deriveTailwindSourceResults([
+    "const classes = `bg-${color}-600`;",
+    "for (const classes of variants) {",
+    "  cards.push(<div className={classes}>Variant</div>);",
+    "}",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
 test("ignores className-like text inside quoted strings", () => {
   const results = deriveTailwindSourceResults([
     "const generated = `bg-${color}-600`;",
@@ -365,6 +486,17 @@ test("ignores className-like text inside comments", () => {
     "const generated = `bg-${color}-600`;",
     "// <div className={generated}>Example</div>",
     "/* className={generated} */",
+    "const card = <div className=\"bg-brand-500\">Save</div>;",
+  ].join("\n"));
+
+  assert.equal(results["no-dynamic-tailwind-classes"].passed, true);
+});
+
+test("ignores className and helper references inside regex literals", () => {
+  const results = deriveTailwindSourceResults([
+    "const generated = `bg-${color}-600`;",
+    "const markupPattern = /<div className={generated}>/;",
+    "const helperPattern = /cn(generated)/;",
     "const card = <div className=\"bg-brand-500\">Save</div>;",
   ].join("\n"));
 
