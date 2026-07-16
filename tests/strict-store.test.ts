@@ -569,12 +569,44 @@ test("strict store reload preserves valid RFC3339 timestamps with UTC offsets", 
   );
   const runPath = path.join(root, ".skillranger", "runs", `${verified.runId}.json`);
   const persisted = JSON.parse(await readFile(runPath, "utf8")) as SkillRunV2;
-  persisted.skillLedgers[0].steps[0].attempts[0].startedAt = "2026-07-16T08:00:00+04:00";
-  persisted.skillLedgers[0].steps[0].attempts[0].completedAt = "2026-07-16T08:00:01+04:00";
-  persisted.skillLedgers[0].verificationReports[0].generatedAt = "2026-07-16T08:00:02+04:00";
+  persisted.skillLedgers[0].steps[0].attempts[0].startedAt = "2026-07-16T08:00:58.125+04:00";
+  persisted.skillLedgers[0].steps[0].attempts[0].completedAt = "2026-07-16T08:00:59.250+04:00";
+  persisted.skillLedgers[0].verificationReports[0].generatedAt = "2026-07-16T08:00:59.500+04:00";
   await writeFile(runPath, `${JSON.stringify(persisted)}\n`);
 
   assert.deepEqual(await store.read(verified.runId), persisted);
+});
+
+test("strict store reload rejects leap seconds outside the runtime date-time subset", async () => {
+  const timestamps = [
+    "2026-07-16T08:00:60Z",
+    "2016-12-31T23:59:60Z",
+  ];
+  const targets = [
+    (run: SkillRunV2, value: string) => { run.skillLedgers[0].steps[0].attempts[0].startedAt = value; },
+    (run: SkillRunV2, value: string) => { run.skillLedgers[0].steps[0].attempts[0].completedAt = value; },
+    (run: SkillRunV2, value: string) => { run.skillLedgers[0].verificationReports[0].generatedAt = value; },
+  ];
+  for (const [timestampIndex, timestamp] of timestamps.entries()) {
+    for (const [targetIndex, mutate] of targets.entries()) {
+      const root = await mkdtemp(path.join(os.tmpdir(), `strict-leap-second-${timestampIndex}-${targetIndex}-`));
+      const store = new StrictSkillRunStore(root);
+      const verified = await store.verifySkill(
+        (await stageCompletedEvidence(root, store)).runId,
+        contract.skillId,
+      );
+      const runPath = path.join(root, ".skillranger", "runs", `${verified.runId}.json`);
+      const forged = JSON.parse(await readFile(runPath, "utf8")) as SkillRunV2;
+      mutate(forged, timestamp);
+      await writeFile(runPath, `${JSON.stringify(forged)}\n`);
+
+      await assert.rejects(
+        store.read(verified.runId),
+        (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+        `${timestamp} target ${targetIndex}`,
+      );
+    }
+  }
 });
 
 test("a findings report produced after completed repair consumes the exhausted budget", async () => {

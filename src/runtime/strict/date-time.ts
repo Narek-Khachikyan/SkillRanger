@@ -21,7 +21,8 @@ export const isRfc3339DateTime = (input: unknown): input is string => {
     && day <= daysInMonth(year, month)
     && Number(hourText) <= 23
     && Number(minuteText) <= 59
-    && Number(secondText) <= 60
+    // Runtime-owned timestamps exclude leap-second :60 because Date.parse cannot order it consistently.
+    && Number(secondText) <= 59
     && (offsetHourText === undefined
       || (Number(offsetHourText) <= 23 && Number(offsetMinuteText) <= 59));
 };
