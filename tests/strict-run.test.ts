@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import {
   addStrictEvidence,
   beginStrictStep,
@@ -12,6 +14,7 @@ import {
   readNextStrictChunk,
   verifyStrictSkill,
   StrictSkillRunError,
+  StrictSkillRunStore,
   assertValidCriticReportV2,
   assertValidStrictSkillRun,
   type ExecutionContractV2,
@@ -464,6 +467,74 @@ test("computes verification, opens one bounded repair, and refuses caller-contro
   });
   assert.equal(run.skillLedgers[0].outcome, "used");
   assert.equal(finalizeStrictRun(run).state, "verified");
+});
+
+test("preserves every repair step evidence across historical and current verification iterations", async () => {
+  const multiRepairContract: ExecutionContractV2 = {
+    ...contract(),
+    steps: [
+      { id: "frontend.test-skill/step/inspect", type: "collect", requiredEvidenceKinds: ["inspection"], ruleIds: ["frontend.test-skill/rule/complete"] },
+      { id: "frontend.test-skill/step/repair-a", type: "repair", requiredEvidenceKinds: ["repair-a"], ruleIds: ["frontend.test-skill/rule/complete"], repairable: true },
+      { id: "frontend.test-skill/step/review", type: "validate", requiredEvidenceKinds: ["review"], ruleIds: ["frontend.test-skill/rule/complete"] },
+      { id: "frontend.test-skill/step/repair-b", type: "repair", requiredEvidenceKinds: ["repair-b"], ruleIds: ["frontend.test-skill/rule/complete"], repairable: true },
+      { id: "frontend.test-skill/step/report", type: "report", requiredEvidenceKinds: ["skill-output"], ruleIds: ["frontend.test-skill/rule/complete"] },
+    ],
+    gates: [
+      { id: "frontend.test-skill/gate/inspection", level: "hard", evaluator: { type: "evidence-present", evidenceKind: "inspection" }, ruleIds: ["frontend.test-skill/rule/complete"] },
+      { id: "frontend.test-skill/gate/repair-a", level: "hard", evaluator: { type: "evidence-present", evidenceKind: "repair-a" }, ruleIds: ["frontend.test-skill/rule/complete"] },
+      { id: "frontend.test-skill/gate/repair-b", level: "hard", evaluator: { type: "evidence-present", evidenceKind: "repair-b" }, ruleIds: ["frontend.test-skill/rule/complete"] },
+      { id: "frontend.test-skill/gate/output", level: "hard", evaluator: { type: "schema-valid", schema: "output" }, ruleIds: ["frontend.test-skill/rule/complete"] },
+      { id: "frontend.test-skill/gate/custom", level: "hard", evaluator: { type: "validator", validatorId: "core/artifact-integrity" }, ruleIds: ["frontend.test-skill/rule/complete"] },
+    ],
+  };
+  let run = createStrictSkillRun({
+    runId: "run_multi_repair", domain: "frontend", targetAgent: "codex", locale: "en",
+    intent: { sha256: sha("multi repair"), normalizedGoal: "verify every repair step" },
+    selectedSkills: [selection({
+      contract: multiRepairContract,
+      contractChecksum: sha(JSON.stringify(multiRepairContract)),
+    })],
+    now: "2026-07-15T10:00:00.000Z",
+  });
+  while (run.state === "reading") run = readNextStrictChunk(run, multiRepairContract.skillId, "2026-07-15T10:00:01.000Z").run;
+  const complete = (stepIndex: number, kind: string, validatedAs?: "output") => {
+    const stepId = multiRepairContract.steps[stepIndex].id;
+    run = beginStrictStep(run, multiRepairContract.skillId, stepId);
+    run = attach(run, kind, stepId, validatedAs);
+    run = completeStrictStep(run, multiRepairContract.skillId, stepId);
+  };
+  const reportKinds = (reportIndex: number) => {
+    const byId = new Map(run.artifacts.map((artifact) => [artifact.artifactId, artifact.kind]));
+    return run.skillLedgers[0].verificationReports[reportIndex].evidenceIds.map((id) => byId.get(id));
+  };
+
+  complete(0, "inspection");
+  complete(2, "review");
+  complete(4, "skill-output", "output");
+  run = verifyStrictSkill(run, multiRepairContract.skillId, {
+    artifactIntegrity: { passed: true },
+    validatorResults: { "core/artifact-integrity": { passed: false } },
+  });
+  assert.deepEqual(reportKinds(0), ["inspection", "review", "skill-output"]);
+
+  complete(1, "repair-a");
+  complete(2, "review");
+  complete(3, "repair-b");
+  complete(4, "skill-output", "output");
+  run = verifyStrictSkill(run, multiRepairContract.skillId, {
+    artifactIntegrity: { passed: true },
+    validatorResults: { "core/artifact-integrity": { passed: true } },
+  });
+
+  assert.equal(run.skillLedgers[0].outcome, "used");
+  assert.deepEqual(reportKinds(0), ["inspection", "review", "skill-output"]);
+  assert.deepEqual(reportKinds(1), ["inspection", "repair-a", "review", "repair-b", "skill-output"]);
+  assert.doesNotThrow(() => assertValidStrictSkillRun(run));
+
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-multi-repair-"));
+  const store = new StrictSkillRunStore(root);
+  await store.create(run);
+  assert.deepEqual(await store.read(run.runId), run);
 });
 
 test("critical critic findings enter bounded repair before a later passing critic gate can be used", () => {

@@ -39,8 +39,14 @@ const assertAttempts = (skillId: string, step: Record<string, unknown>, artifact
       fail(`Invalid attempt ${index + 1} for ${skillId}/${String(step.id)}.`);
     }
     exactKeys(raw, ["attempt", "startedAt", "evidenceIds"], ["completedAt"], `attempt ${index + 1} for ${skillId}/${String(step.id)}`);
+    if (new Set(raw.evidenceIds).size !== raw.evidenceIds.length) {
+      fail(`Attempt ${index + 1} for ${skillId}/${String(step.id)} has duplicate evidence ids.`);
+    }
     if (raw.completedAt !== undefined && !isRfc3339DateTime(raw.completedAt)) {
       fail(`Invalid completion timestamp for ${skillId}/${String(step.id)}.`);
+    }
+    if (typeof raw.completedAt === "string" && Date.parse(raw.completedAt) < Date.parse(raw.startedAt)) {
+      fail(`Completion timestamp precedes start for ${skillId}/${String(step.id)}.`);
     }
   });
   const latest = attempts.at(-1);
@@ -342,6 +348,8 @@ export const assertValidStrictSkillRun: (input: unknown) => asserts input is Ski
   exactKeys(input, ["schemaVersion", "certification", "runId", "domain", "targetAgent", "locale", "state", "revision", "createdAt", "updatedAt", "intent", "recommendations", "excludedRecommendations", "skillLedgers", "artifacts", "sourceControl"], [], "strict run");
   if (input.schemaVersion !== "2.0" || input.certification !== "strict" || typeof input.runId !== "string" || !/^run_[a-z0-9_-]{7,127}$/.test(input.runId)) fail("Strict run identity is invalid.");
   if (!states.has(input.state as string) || !Number.isInteger(input.revision) || (input.revision as number) < 0) fail("Strict run state or revision is invalid.");
+  if (!isRfc3339DateTime(input.createdAt) || !isRfc3339DateTime(input.updatedAt)) fail("Strict run timestamps are invalid.");
+  if (Date.parse(input.updatedAt) < Date.parse(input.createdAt)) fail("Strict run update timestamp precedes creation.");
   if (!record(input.intent) || !checksum.test(input.intent.sha256 as string) || typeof input.intent.normalizedGoal !== "string") fail("Strict run intent is invalid.");
   if (!Array.isArray(input.recommendations) || !Array.isArray(input.excludedRecommendations) || !Array.isArray(input.skillLedgers) || input.skillLedgers.length === 0 || !Array.isArray(input.artifacts)) fail("Strict run recommendations, ledgers, or artifacts are invalid.");
   if (!record(input.sourceControl) || (input.sourceControl.mode !== "git" && input.sourceControl.mode !== "non-git")) fail("Strict run source-control snapshot is invalid.");
@@ -367,7 +375,7 @@ export const assertValidStrictSkillRun: (input: unknown) => asserts input is Ski
     if (rawLedger.readReceipts.length > contentChunks.length) fail(`Too many read receipts for ${skillId}.`);
     rawLedger.readReceipts.forEach((receipt, index) => {
       const chunk = contentChunks[index];
-      if (!record(receipt) || receipt.path !== chunk.path || receipt.ordinal !== chunk.ordinal || receipt.total !== chunk.total || receipt.sha256 !== chunk.sha256 || typeof receipt.deliveredAt !== "string") fail(`Invalid read receipt for ${skillId}.`);
+      if (!record(receipt) || receipt.path !== chunk.path || receipt.ordinal !== chunk.ordinal || receipt.total !== chunk.total || receipt.sha256 !== chunk.sha256 || !isRfc3339DateTime(receipt.deliveredAt)) fail(`Invalid read receipt for ${skillId}.`);
     });
     if (rawLedger.outcome !== undefined && !["used", "no-op", "blocked"].includes(rawLedger.outcome as string)) fail(`Invalid outcome for ${skillId}.`);
   }

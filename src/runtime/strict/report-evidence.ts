@@ -7,10 +7,10 @@ export const deriveVerificationEvidenceIds = (
   const repairIndex = ledger.steps.findIndex(({ type }) => type === "repair");
   return ledger.steps.flatMap((step, stepIndex) => {
     let attemptNumber: number | undefined;
-    if (repairIndex < 0 || stepIndex < repairIndex) {
-      attemptNumber = step.attempts.at(-1)?.attempt;
-    } else if (stepIndex === repairIndex) {
+    if (step.type === "repair") {
       attemptNumber = iteration === 0 ? undefined : iteration;
+    } else if (repairIndex < 0 || stepIndex < repairIndex) {
+      attemptNumber = step.attempts.at(-1)?.attempt;
     } else {
       attemptNumber = iteration + 1;
     }

@@ -644,13 +644,16 @@ test("caller constructor callbacks cannot make a failing Tailwind gate pass", as
     .find(({ gateId }) => gateId.endsWith("/focus-visible"))?.passed, false);
 });
 
-test("strict store reload rejects parseable non-RFC3339 and impossible persisted timestamps", async () => {
+test("strict store reload rejects parseable non-RFC3339 and impossible persisted timestamps", async (t) => {
   const timestamps = [
     "March 1, 2026 12:00:00 GMT",
     "2026-02-30T12:00:00Z",
     "2026-07-16T08:00:59.1234+04:00",
   ];
   const targets = [
+    (run: SkillRunV2, value: string) => { run.createdAt = value; },
+    (run: SkillRunV2, value: string) => { run.updatedAt = value; },
+    (run: SkillRunV2, value: string) => { run.skillLedgers[0].readReceipts[0].deliveredAt = value; },
     (run: SkillRunV2, value: string) => { run.skillLedgers[0].steps[0].attempts[0].startedAt = value; },
     (run: SkillRunV2, value: string) => { run.skillLedgers[0].steps[0].attempts[0].completedAt = value; },
     (run: SkillRunV2, value: string) => { run.skillLedgers[0].verificationReports[0].generatedAt = value; },
@@ -658,22 +661,23 @@ test("strict store reload rejects parseable non-RFC3339 and impossible persisted
   for (const [timestampIndex, timestamp] of timestamps.entries()) {
     assert.ok(Number.isFinite(Date.parse(timestamp)), timestamp);
     for (const [targetIndex, mutate] of targets.entries()) {
-      const root = await mkdtemp(path.join(os.tmpdir(), `strict-timestamp-${timestampIndex}-${targetIndex}-`));
-      const store = new StrictSkillRunStore(root);
-      const verified = await store.verifySkill(
-        (await stageCompletedEvidence(root, store)).runId,
-        contract.skillId,
-      );
-      const runPath = path.join(root, ".skillranger", "runs", `${verified.runId}.json`);
-      const forged = JSON.parse(await readFile(runPath, "utf8")) as SkillRunV2;
-      mutate(forged, timestamp);
-      await writeFile(runPath, `${JSON.stringify(forged)}\n`);
+      await t.test(`${timestamp} target ${targetIndex}`, async () => {
+        const root = await mkdtemp(path.join(os.tmpdir(), `strict-timestamp-${timestampIndex}-${targetIndex}-`));
+        const store = new StrictSkillRunStore(root);
+        const verified = await store.verifySkill(
+          (await stageCompletedEvidence(root, store)).runId,
+          contract.skillId,
+        );
+        const runPath = path.join(root, ".skillranger", "runs", `${verified.runId}.json`);
+        const forged = JSON.parse(await readFile(runPath, "utf8")) as SkillRunV2;
+        mutate(forged, timestamp);
+        await writeFile(runPath, `${JSON.stringify(forged)}\n`);
 
-      await assert.rejects(
-        store.read(verified.runId),
-        (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
-        `${timestamp} target ${targetIndex}`,
-      );
+        await assert.rejects(
+          store.read(verified.runId),
+          (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+        );
+      });
     }
   }
 });
@@ -694,6 +698,9 @@ test("strict store reload preserves no-fraction and 1-3 digit fractional RFC3339
     );
     const runPath = path.join(root, ".skillranger", "runs", `${verified.runId}.json`);
     const persisted = JSON.parse(await readFile(runPath, "utf8")) as SkillRunV2;
+    persisted.createdAt = timestamp;
+    persisted.updatedAt = timestamp;
+    persisted.skillLedgers[0].readReceipts[0].deliveredAt = timestamp;
     persisted.skillLedgers[0].steps[0].attempts[0].startedAt = timestamp;
     persisted.skillLedgers[0].steps[0].attempts[0].completedAt = timestamp;
     persisted.skillLedgers[0].verificationReports[0].generatedAt = timestamp;
@@ -701,6 +708,54 @@ test("strict store reload preserves no-fraction and 1-3 digit fractional RFC3339
 
     assert.deepEqual(await store.read(verified.runId), persisted);
   }
+});
+
+test("strict store reload rejects reversed root and completed-attempt chronology", async (t) => {
+  const mutations = [
+    (run: SkillRunV2) => {
+      run.createdAt = "2026-07-16T08:00:00.001Z";
+      run.updatedAt = "2026-07-16T08:00:00.000Z";
+    },
+    (run: SkillRunV2) => {
+      run.skillLedgers[0].steps[0].attempts[0].startedAt = "2026-07-16T08:00:00.001+04:00";
+      run.skillLedgers[0].steps[0].attempts[0].completedAt = "2026-07-16T08:00:00.000+04:00";
+    },
+  ];
+  for (const [index, mutate] of mutations.entries()) {
+    await t.test(`chronology target ${index}`, async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), `strict-chronology-${index}-`));
+      const store = new StrictSkillRunStore(root);
+      const verified = await store.verifySkill(
+        (await stageCompletedEvidence(root, store)).runId,
+        contract.skillId,
+      );
+      const runPath = path.join(root, ".skillranger", "runs", `${verified.runId}.json`);
+      const forged = JSON.parse(await readFile(runPath, "utf8")) as SkillRunV2;
+      mutate(forged);
+      await writeFile(runPath, `${JSON.stringify(forged)}\n`);
+
+      await assert.rejects(
+        store.read(verified.runId),
+        (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+      );
+    });
+  }
+});
+
+test("strict store reload rejects duplicate evidence ids inside one attempt", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-attempt-duplicate-evidence-"));
+  const store = new StrictSkillRunStore(root);
+  const completed = await stageCompletedEvidence(root, store);
+  const runPath = path.join(root, ".skillranger", "runs", `${completed.runId}.json`);
+  const forged = JSON.parse(await readFile(runPath, "utf8")) as SkillRunV2;
+  const evidenceIds = forged.skillLedgers[0].steps[0].attempts[0].evidenceIds;
+  evidenceIds.push(evidenceIds[0]);
+  await writeFile(runPath, `${JSON.stringify(forged)}\n`);
+
+  await assert.rejects(
+    store.read(completed.runId),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+  );
 });
 
 test("strict store reload rejects leap seconds outside the runtime date-time subset", async () => {
