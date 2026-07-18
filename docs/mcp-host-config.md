@@ -164,8 +164,8 @@ If the current plan differs from the expected paths, installation is rejected. I
 
 Expected tool-level failures return an MCP tool result with `isError: true`, `ok: false`, and a stable `code` in `structuredContent`. Hosts should branch on these codes rather than parsing message text.
 
-- `confirmation-required`: `install_skill` was called without `confirm: true`.
-- `stale-plan`: expected paths do not match the current install plan.
+- `confirmation-required`: either confirmed-write tool (`install_skill` or `capture_ui_evidence`) was called without `confirm: true`. Only `install_skill` uses the install-plan `expectedWrites` and `expectedLockfileUpdates` fields.
+- `stale-plan`: expected paths do not match the current `install_skill` plan.
 - `audit-blocked`: audit risk is `block`; no files were written.
 - `unsupported-target`: no MVP adapter exists for the requested target agent.
 - `skill-not-found`: the requested skill id does not exist in the registry.
