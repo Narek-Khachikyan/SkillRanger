@@ -88,22 +88,27 @@ export const executeUiEvidenceCapture = async (input: {
   commandTemplate: string;
   projectRoot?: string;
   timeoutPerCaptureMs?: number;
+  assertArtifactPath?: (artifactPath: string) => Promise<void>;
 }): Promise<UiEvidenceBundle> => {
   const bundlePath = path.join(input.plan.outputDir, "bundle.json");
   for (const entry of input.plan.entries) {
     if (!isPathWithin(input.plan.outputDir, entry.screenshotPath)) {
       throw new Error(`UI evidence screenshot escapes output directory: ${entry.screenshotPath}`);
     }
+    await input.assertArtifactPath?.(entry.screenshotPath);
     if (await stat(entry.screenshotPath).catch(() => undefined)) {
       throw new Error(`UI evidence screenshot already exists: ${entry.screenshotPath}`);
     }
   }
+  await input.assertArtifactPath?.(bundlePath);
   if (await stat(bundlePath).catch(() => undefined)) throw new Error(`UI evidence bundle already exists: ${bundlePath}`);
 
   const captures: UiEvidenceBundle["captures"] = [];
   try {
     for (const entry of input.plan.entries) {
+      await input.assertArtifactPath?.(entry.screenshotPath);
       await mkdir(path.dirname(entry.screenshotPath), { recursive: true });
+      await input.assertArtifactPath?.(entry.screenshotPath);
       const raw = await executeAdapterJson({
         commandTemplate: input.commandTemplate,
         cwd: input.projectRoot,
@@ -118,6 +123,7 @@ export const executeUiEvidenceCapture = async (input: {
         },
       });
       const parsed = parsePayload(raw);
+      await input.assertArtifactPath?.(entry.screenshotPath);
       const screenshot = await stat(entry.screenshotPath).catch(() => undefined);
       if (!screenshot?.isFile() || screenshot.size === 0) {
         throw new Error(`Browser adapter did not create a non-empty screenshot: ${entry.screenshotPath}`);
@@ -149,9 +155,15 @@ export const executeUiEvidenceCapture = async (input: {
     captures,
     adapterCapabilities: ["browser", "screenshots"],
   };
+  await input.assertArtifactPath?.(bundlePath);
   await mkdir(input.plan.outputDir, { recursive: true });
   const temporaryPath = `${bundlePath}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(temporaryPath, `${JSON.stringify(bundle, null, 2)}\n`, "utf8");
+  await input.assertArtifactPath?.(bundlePath);
+  await input.assertArtifactPath?.(temporaryPath);
+  await writeFile(temporaryPath, `${JSON.stringify(bundle, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+  await input.assertArtifactPath?.(temporaryPath);
+  await input.assertArtifactPath?.(bundlePath);
   await rename(temporaryPath, bundlePath);
+  await input.assertArtifactPath?.(bundlePath);
   return bundle;
 };

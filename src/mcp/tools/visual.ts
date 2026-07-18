@@ -90,7 +90,35 @@ const resolveProjectOutputDir = async (projectRoot: string, value: unknown) => {
       { projectRoot, outputDir },
     );
   }
-  return outputDir;
+  return { outputDir, canonicalProjectRoot };
+};
+
+const assertProjectArtifactPath = async (
+  projectRoot: string,
+  canonicalProjectRoot: string,
+  artifactPath: string,
+) => {
+  const resolvedArtifactPath = path.resolve(artifactPath);
+  let canonicalArtifactPath: string;
+  try {
+    canonicalArtifactPath = await realpathFromExistingAncestor(resolvedArtifactPath);
+  } catch {
+    throw new McpToolError(
+      "invalid-arguments",
+      "capture_ui_evidence artifact paths must have a valid existing component chain within projectRoot.",
+      { projectRoot, artifactPath: resolvedArtifactPath },
+    );
+  }
+  if (
+    isOutside(projectRoot, resolvedArtifactPath)
+    || isOutside(canonicalProjectRoot, canonicalArtifactPath)
+  ) {
+    throw new McpToolError(
+      "invalid-arguments",
+      "capture_ui_evidence artifact paths must stay within projectRoot.",
+      { projectRoot, artifactPath: resolvedArtifactPath },
+    );
+  }
 };
 
 const capture: McpToolHandler = async (args) => {
@@ -101,7 +129,7 @@ const capture: McpToolHandler = async (args) => {
     );
   }
   const projectRoot = path.resolve(typeof args.projectRoot === "string" ? args.projectRoot : ".");
-  const outputDir = await resolveProjectOutputDir(projectRoot, args.outputDir);
+  const { outputDir, canonicalProjectRoot } = await resolveProjectOutputDir(projectRoot, args.outputDir);
   const plan = createUiEvidenceCapturePlan({
     evidenceId: requireString(args.evidenceId, "evidenceId"),
     brief: args.brief as DesignBrief,
@@ -117,6 +145,11 @@ const capture: McpToolHandler = async (args) => {
     commandTemplate: requireString(args.commandTemplate, "commandTemplate"),
     projectRoot,
     timeoutPerCaptureMs: typeof args.timeoutPerCaptureMs === "number" ? args.timeoutPerCaptureMs : undefined,
+    assertArtifactPath: (artifactPath) => assertProjectArtifactPath(
+      projectRoot,
+      canonicalProjectRoot,
+      artifactPath,
+    ),
   });
   return jsonToolResult(bundle);
 };

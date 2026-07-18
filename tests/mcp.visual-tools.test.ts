@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { resolveDesignExecutionPolicy } from "../src/domains/frontend/design/index.ts";
@@ -80,6 +80,49 @@ test("capture rejects an in-project output symlink that resolves outside project
     assert.equal(result.isError, true);
     assert.equal((result.structuredContent as { code?: string }).code, "invalid-arguments");
     assert.deepEqual(await readdir(outsideOutputDir), []);
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+    await rm(outsideOutputDir, { recursive: true, force: true });
+  }
+});
+
+test("capture rejects a nested screenshots directory symlink that resolves outside projectRoot", async () => {
+  const projectRoot = await mkdtemp(path.join(tmpdir(), "skillranger-mcp-capture-nested-symlink-root-"));
+  const outsideOutputDir = await mkdtemp(path.join(tmpdir(), "skillranger-mcp-capture-nested-symlink-outside-"));
+  const outputDir = path.join(projectRoot, "evidence");
+  try {
+    await mkdir(outputDir);
+    await symlink(outsideOutputDir, path.join(outputDir, "screenshots"), "dir");
+    const result = await callMcpTool("capture_ui_evidence", {
+      ...await captureArgs(projectRoot, outputDir),
+      confirm: true,
+    });
+
+    assert.equal(result.isError, true);
+    assert.equal((result.structuredContent as { code?: string }).code, "invalid-arguments");
+    assert.deepEqual(await readdir(outsideOutputDir), []);
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+    await rm(outsideOutputDir, { recursive: true, force: true });
+  }
+});
+
+test("capture rejects a dangling screenshot symlink that points outside projectRoot", async () => {
+  const projectRoot = await mkdtemp(path.join(tmpdir(), "skillranger-mcp-capture-dangling-symlink-root-"));
+  const outsideOutputDir = await mkdtemp(path.join(tmpdir(), "skillranger-mcp-capture-dangling-symlink-outside-"));
+  const outputDir = path.join(projectRoot, "evidence");
+  const outsideScreenshot = path.join(outsideOutputDir, "escaped.png");
+  try {
+    await mkdir(path.join(outputDir, "screenshots"), { recursive: true });
+    await symlink(outsideScreenshot, path.join(outputDir, "screenshots", "390-loading.png"));
+    const result = await callMcpTool("capture_ui_evidence", {
+      ...await captureArgs(projectRoot, outputDir),
+      confirm: true,
+    });
+
+    assert.equal(result.isError, true);
+    assert.equal((result.structuredContent as { code?: string }).code, "invalid-arguments");
+    assert.equal(existsSync(outsideScreenshot), false);
   } finally {
     await rm(projectRoot, { recursive: true, force: true });
     await rm(outsideOutputDir, { recursive: true, force: true });
