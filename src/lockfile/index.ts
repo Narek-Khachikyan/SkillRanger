@@ -1,6 +1,16 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { open, readFile, rename, unlink } from "node:fs/promises";
 import path from "node:path";
-import type { AuditFinding, AuditReport, InstallScope, Lockfile, RegistrySkill, RiskLevel } from "../types.ts";
+import { RunFileLock, type RunFileLockHooks } from "../runtime/run-lock.ts";
+import type {
+  AuditFinding,
+  AuditReport,
+  InstalledSkill,
+  InstallScope,
+  Lockfile,
+  RegistrySkill,
+  RiskLevel,
+} from "../types.ts";
 
 export const lockfilePath = (projectRoot: string) => path.join(projectRoot, "skillranger.lock.json");
 
@@ -12,6 +22,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isMissingFileError = (error: unknown) => isRecord(error) && error.code === "ENOENT";
+
+export type LockfileTransactionHooks = RunFileLockHooks & {
+  afterTransactionLockAcquired?: () => void | Promise<void>;
+  beforeCommit?: (input: { destination: string; temporaryPath: string }) => void | Promise<void>;
+};
 
 const requireString = (value: Record<string, unknown>, key: string, filePath: string, entryPath: string) => {
   if (typeof value[key] !== "string" || value[key].trim() === "") {
@@ -120,9 +135,61 @@ export const readLockfile = async (projectRoot: string): Promise<Lockfile> => {
   }
 };
 
-export const writeLockfile = async (projectRoot: string, lockfile: Lockfile) => {
-  const filePath = lockfilePath(projectRoot);
-  await writeFile(filePath, `${JSON.stringify(assertValidLockfile(lockfile, filePath), null, 2)}\n`);
+const withLockfileTransaction = async <T>(
+  projectRoot: string,
+  apply: (resolvedProjectRoot: string) => Promise<T>,
+  hooks: LockfileTransactionHooks,
+): Promise<T> => {
+  const resolvedProjectRoot = path.resolve(projectRoot);
+  const destination = lockfilePath(resolvedProjectRoot);
+  const lock = new RunFileLock({
+    lockPath: () => `${destination}.update.lock`,
+    error: (message) => new Error(`Could not update lockfile at ${destination}: ${message}`),
+    hooks,
+  });
+  const ownedLock = await lock.acquire("lockfile-update");
+  try {
+    await hooks.afterTransactionLockAcquired?.();
+    return await apply(resolvedProjectRoot);
+  } finally {
+    await lock.release(ownedLock);
+  }
+};
+
+const atomicallyWriteLockfile = async (
+  projectRoot: string,
+  lockfile: Lockfile,
+  hooks: LockfileTransactionHooks,
+): Promise<void> => {
+  const destination = lockfilePath(projectRoot);
+  const validated = assertValidLockfile(lockfile, destination);
+  const temporaryPath = `${destination}.${process.pid}.${randomUUID()}.tmp`;
+  let handle;
+
+  try {
+    handle = await open(temporaryPath, "wx");
+    await handle.writeFile(`${JSON.stringify(validated, null, 2)}\n`, "utf8");
+    await handle.close();
+    handle = undefined;
+    await hooks.beforeCommit?.({ destination, temporaryPath });
+    await rename(temporaryPath, destination);
+  } finally {
+    await handle?.close().catch(() => undefined);
+    await unlink(temporaryPath).catch((error: unknown) => {
+      if (!isMissingFileError(error)) throw error;
+    });
+  }
+};
+
+export const writeLockfile = async (
+  projectRoot: string,
+  lockfile: Lockfile,
+  hooks: LockfileTransactionHooks = {},
+): Promise<void> => {
+  await withLockfileTransaction(projectRoot, async (resolvedProjectRoot) => {
+    await readLockfile(resolvedProjectRoot);
+    await atomicallyWriteLockfile(resolvedProjectRoot, lockfile, hooks);
+  }, hooks);
 };
 
 export const upsertInstalledSkill = async (
@@ -133,25 +200,39 @@ export const upsertInstalledSkill = async (
     scope: InstallScope;
     installedPath: string;
     audit: AuditReport;
-  }
-) => {
-  const lockfile = await readLockfile(projectRoot);
-  lockfile.installed = lockfile.installed.filter(
-    (entry) => !(entry.skillId === skill.manifest.id && entry.targetAgent === input.targetAgent && entry.scope === input.scope)
-  );
-  lockfile.installed.push({
-    skillId: skill.manifest.id,
-    version: skill.manifest.version,
-    checksum: input.audit.checksum,
-    targetAgent: input.targetAgent,
-    scope: input.scope,
-    installedPath: input.installedPath,
-    source: skill.manifest.source,
-    audit: {
-      riskLevel: input.audit.riskLevel,
-      securityScore: input.audit.securityScore,
-      findings: input.audit.findings
-    }
-  });
-  await writeLockfile(projectRoot, lockfile);
+  },
+  hooks: LockfileTransactionHooks = {},
+): Promise<InstalledSkill> => {
+  return withLockfileTransaction(projectRoot, async (resolvedProjectRoot) => {
+    const lockfile = await readLockfile(resolvedProjectRoot);
+    const installed: InstalledSkill = {
+      skillId: skill.manifest.id,
+      version: skill.manifest.version,
+      checksum: input.audit.checksum,
+      targetAgent: input.targetAgent,
+      scope: input.scope,
+      installedPath: input.installedPath,
+      source: skill.manifest.source,
+      audit: {
+        riskLevel: input.audit.riskLevel,
+        securityScore: input.audit.securityScore,
+        findings: input.audit.findings,
+      },
+    };
+    const next: Lockfile = {
+      schemaVersion: "1.0",
+      installed: [
+        ...lockfile.installed.filter(
+          (entry) => !(
+            entry.skillId === skill.manifest.id
+            && entry.targetAgent === input.targetAgent
+            && entry.scope === input.scope
+          ),
+        ),
+        installed,
+      ],
+    };
+    await atomicallyWriteLockfile(resolvedProjectRoot, next, hooks);
+    return installed;
+  }, hooks);
 };

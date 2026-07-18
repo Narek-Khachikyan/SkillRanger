@@ -227,3 +227,5 @@ export type Lockfile = {
     };
   }>;
 };
+
+export type InstalledSkill = Lockfile["installed"][number];

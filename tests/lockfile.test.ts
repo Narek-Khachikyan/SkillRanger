@@ -1,13 +1,51 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFile as execFileCallback } from "node:child_process";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { execFile as execFileCallback, spawn } from "node:child_process";
+import { mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
-import { readLockfile, writeLockfile } from "../src/lockfile/index.ts";
+import { lockfilePath, readLockfile, writeLockfile } from "../src/lockfile/index.ts";
 
 const execFile = promisify(execFileCallback);
+
+const waitForFile = async (filePath: string, timeoutMs = 5_000) => {
+  const startedAt = Date.now();
+  while (true) {
+    try {
+      await stat(filePath);
+      return;
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+    }
+    if (Date.now() - startedAt >= timeoutMs) throw new Error(`Timed out waiting for ${filePath}`);
+    await delay(20);
+  }
+};
+
+const runUpsertChild = (args: string[]) => {
+  const child = spawn(process.execPath, ["tests/helpers/lockfile-upsert-child.ts", ...args], {
+    cwd: process.cwd(),
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => { stdout += chunk; });
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  return {
+    child,
+    completed: new Promise<void>((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", (code, signal) => {
+        if (code === 0) resolve();
+        else reject(new Error(`Lockfile child exited with code ${code} signal ${signal ?? "none"}: ${stderr}${stdout}`));
+      });
+    }),
+  };
+};
 
 const validLockfileEntry = {
   skillId: "frontend.next-app-router-review",
@@ -73,6 +111,71 @@ test("writeLockfile rejects invalid runtime lockfile entries", async () => {
     }),
     /installedPath/
   );
+});
+
+test("upsertInstalledSkill serializes transactions across child processes", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-lockfile-processes-"));
+  const firstAcquired = path.join(projectRoot, "first-acquired");
+  const secondAcquired = path.join(projectRoot, "second-acquired");
+  const releaseFirst = path.join(projectRoot, "release-first");
+
+  const first = runUpsertChild([
+    projectRoot,
+    "frontend.next-app-router-review",
+    firstAcquired,
+    releaseFirst,
+  ]);
+  await waitForFile(firstAcquired);
+  assert.equal((await stat(`${lockfilePath(projectRoot)}.update.lock`)).isFile(), true);
+
+  const second = runUpsertChild([
+    projectRoot,
+    "frontend.performance-review",
+    secondAcquired,
+  ]);
+  await delay(150);
+  await assert.rejects(stat(secondAcquired), /ENOENT/);
+
+  await writeFile(releaseFirst, "release\n");
+  await Promise.all([first.completed, second.completed]);
+
+  const lockfile = await readLockfile(projectRoot);
+  assert.deepEqual(
+    lockfile.installed.map(({ skillId }) => skillId).sort(),
+    ["frontend.next-app-router-review", "frontend.performance-review"],
+  );
+  assert.equal(new Set(lockfile.installed.map(({ skillId }) => skillId)).size, 2);
+});
+
+test("failed atomic replacement preserves the previous lockfile bytes", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-lockfile-atomic-"));
+  const destination = lockfilePath(projectRoot);
+  await writeLockfile(projectRoot, { schemaVersion: "1.0", installed: [validLockfileEntry] });
+  const before = await readFile(destination);
+
+  await assert.rejects(
+    writeLockfile(
+      projectRoot,
+      {
+        schemaVersion: "1.0",
+        installed: [{ ...validLockfileEntry, version: "0.2.0" }],
+      },
+      {
+        beforeCommit: async () => {
+          throw new Error("injected before rename");
+        },
+      },
+    ),
+    /injected before rename/,
+  );
+
+  assert.deepEqual(await readFile(destination), before);
+  assert.deepEqual(await readLockfile(projectRoot), {
+    schemaVersion: "1.0",
+    installed: [validLockfileEntry],
+  });
+  const temporaryPrefix = `${path.basename(destination)}.${process.pid}.`;
+  assert.equal((await readdir(projectRoot)).some((entry) => entry.startsWith(temporaryPrefix) && entry.endsWith(".tmp")), false);
 });
 
 test("installed CLI command prints lockfile entries as JSON", async () => {
