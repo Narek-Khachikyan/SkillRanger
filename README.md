@@ -1,212 +1,303 @@
 # SkillRanger
 
-SkillRanger is a local-first CLI and MCP server for attaching the right AI agent workflows to a repository without blind installs.
+> Find, audit, and install the right AI agent skills for your codebase.
 
-It scans a project, builds a deterministic stack fingerprint, recommends compatible skill packages from a local curated registry, audits packages for basic safety issues, and plans or applies repo-local installs for Codex-compatible and generic agent skill layouts.
+**Public MVP / Beta** · Local-first · CLI + MCP · Zero runtime dependencies
 
-## MVP Scope
+SkillRanger scans your repository, detects its stack and development context, recommends compatible skills, audits them for common risks, and installs only the files you explicitly approve.
 
-This `0.1.0` MVP is intentionally narrow:
+## Why SkillRanger?
 
-- Compiled npm CLI binaries plus explicit TypeScript source-run mode for checkout development.
-- Local bundled JSON/file registry.
-- Frontend-focused curated skill pack.
-- Deterministic scanner for common JavaScript/TypeScript web signals.
-- Lane-aware recommendations for framework, design, implementation, QA, and agent-context workflows.
-- Static skill audit and registry validation.
-- Repo-local Codex/generic skill install planning and confirmed apply.
-- Lockfile tracking in `skillranger.lock.json`.
-- MCP stdio server exposing scan, recommend, audit, list, plan, and gated install tools.
-- Generic domain-pack registration with frontend as the reference domain.
-- Structured design briefs, product recipes, deterministic verification, bounded repair requests, and repeated A/B/C eval slices.
+AI coding agents become more useful when they have focused, task-specific workflows. Finding compatible skills, understanding why they fit, and reviewing what they will write should not require blind installation.
 
-Not in this MVP: public marketplace, remote registry sync, signature infrastructure, generated trusted skills, dashboard UI, user-global installs, or every agent adapter.
-
-## Requirements
-
-- Node.js `>=20.0.0` for npm-installed compiled binaries.
-- Node.js `>=23.6.0` for direct TypeScript source-run mode from a checkout.
-- No runtime npm dependencies are required by the MVP package.
-- npm-installed usage runs compiled JavaScript from `dist/` through the `skillranger` and `skillranger-mcp` binaries.
-- Source-run usage runs TypeScript entrypoints directly with `node src/cli/index.ts ...` and is intended for a source checkout or extracted source tarball.
+SkillRanger turns repository evidence into deterministic, explainable recommendations. Frontend is the first available domain pack; the scanner, recommender, auditor, installer, lockfile, and evaluation pipeline are designed to support more software-engineering domains over time.
 
 ## Quick Start
 
-Use the public package without cloning the repo:
+Run the public package from the repository you want to configure:
 
 ```bash
 npx -y skillranger@latest doctor
+npx -y skillranger@latest setup
+```
+
+`setup` scans the current directory, recommends a set of skills selected by default, lets you deselect any item with Space, and asks for final confirmation before writing.
+
+For the default Codex repo setup, the expected local outputs are:
+
+- skill packages under `.agents/skills/<skill>/`;
+- a managed SkillRanger block in `AGENTS.md`, unless you pass `--no-agent-context`;
+- installed versions, checksums, and paths in `skillranger.lock.json`.
+
+Other supported targets use their target-specific repo layout. Review the proposed selection and final confirmation prompt before applying it.
+
+## Transparent Manual Workflow
+
+Prefer individual, inspectable steps? This sequence keeps the install dry-run-first:
+
+```bash
 npx -y skillranger@latest scan .
-npx -y skillranger@latest recommend . --target codex
+npx -y skillranger@latest recommend . --target codex --intent "Review this Next.js app before release" --explain
+npx -y skillranger@latest audit frontend.next-app-router-review
 npx -y skillranger@latest install frontend.next-app-router-review --project . --target codex --scope repo --dry-run
+npx -y skillranger@latest install frontend.next-app-router-review --project . --target codex --scope repo --yes
+npx -y skillranger@latest installed .
 ```
 
-For repeated use, install the compiled CLI globally:
+Each command answers a separate question:
+
+1. `scan` — What kind of project is this, based on files and configuration already in the repository?
+2. `recommend` — Which compatible skill best fits the stack and stated intent, and why?
+3. `audit` — Does the bundled package contain blocked or suspicious content?
+4. `install --dry-run` — Which repo-local files and lockfile entries are planned?
+5. `install --yes` — Apply the selected skill explicitly. Without `--yes`, direct installs remain dry runs.
+6. `installed` — What does `skillranger.lock.json` say is currently installed?
+
+## How It Works
+
+```text
+Repository evidence
+      ↓
+Deterministic stack fingerprint
+      ↓
+Compatibility- and intent-aware recommendations
+      ↓
+Static skill audit
+      ↓
+Reviewable install plan
+      ↓
+Confirmed repo-local files + skillranger.lock.json
+```
+
+A stack fingerprint is a reproducible summary of signals such as languages, frameworks, styling, tests, infrastructure, and existing agent context. SkillRanger scores compatible skills against that fingerprint and, when supplied, the user's intent.
+
+Recommendations are organized into five lanes: `framework`, `design`, `implementation`, `qa`, and `agent-context`. Lanes keep related workflows visible without turning every recommendation into one overlapping list.
+
+Use intent to request a focused primary skill and compatible companions:
 
 ```bash
-npm install -g skillranger
-skillranger doctor
-skillranger scan .
-skillranger setup
+skillranger recommend . --target codex --intent "Review this Next.js app before release" --explain
 ```
 
-`skillranger setup` is the easiest interactive path from a target project. It scans the current directory, selects all recommended skills by default, lets you deselect skills with Space, then asks for final confirmation before writing repo-local skill files.
-
-From a global install or after `npm run build` in a checkout:
+Or inspect one lane directly:
 
 ```bash
-skillranger scan fixtures/next-react-ts
-skillranger recommend fixtures/next-react-ts --target codex
-skillranger install frontend.next-app-router-review --project fixtures/next-react-ts --target codex --scope repo --dry-run
+skillranger recommend . --target codex --lane design --limit-per-lane 2
 ```
 
-Source-run equivalent from a checkout requires Node.js `>=23.6.0` for direct `.ts` execution:
+Visual workflows can declare the host capabilities needed for verification:
 
 ```bash
-node src/cli/index.ts scan fixtures/next-react-ts
-node src/cli/index.ts recommend fixtures/next-react-ts --target codex
-node src/cli/index.ts install frontend.next-app-router-review --project fixtures/next-react-ts --target codex --scope repo --dry-run
+skillranger recommend . --target codex --capabilities browser,screenshots
 ```
 
-The default skill registry is bundled with the source tree. Use MCP or CLI `registryRoot` options only when testing an alternate local registry.
+Without those capabilities, visual recommendations remain available but are explicitly marked `unverified` rather than presented as verified work.
 
-## 5-Minute Demo
+## What SkillRanger Does Today
 
-Run the full safe path against the included Next.js fixture:
+The current public `0.1.3` package provides:
 
-```bash
-skillranger scan fixtures/next-react-ts
-skillranger recommend fixtures/next-react-ts --target codex
-skillranger recommend fixtures/next-react-ts --target codex --lane design --limit-per-lane 2
-skillranger audit frontend.next-app-router-review
-skillranger install frontend.next-app-router-review --project fixtures/next-react-ts --target codex --scope repo --dry-run
-skillranger installed fixtures/next-react-ts
-```
+- a compiled npm CLI and a stdio MCP server;
+- deterministic scanning for common JavaScript and TypeScript web-project signals;
+- compatibility-, intent-, lane-, and capability-aware recommendations;
+- static package audits and registry validation;
+- dry-run-first, repo-local install planning and confirmed application;
+- installed-state tracking in `skillranger.lock.json`;
+- a bundled local registry with 18 low-risk, instruction-only frontend skills;
+- domain, design, evaluation, and skill-run workflows for maintainers and integrators.
 
-To apply an install after reviewing the dry-run writes, add `--yes`:
+The bundled registry ships with the package, so normal discovery and recommendation do not require registry credentials, network tokens, or remote skill downloads.
 
-```bash
-skillranger install frontend.next-app-router-review --project fixtures/next-react-ts --target codex --scope repo --yes
-```
+## The Frontend Domain
 
-Confirmed installs copy skill files into `.agents/skills/<skill>/` and update `skillranger.lock.json` in the target project.
+Frontend is the single domain pack available today. Its 18 bundled skills are grouped here by purpose.
 
-## CLI Commands
-
-```bash
-skillranger scan [project] [--json]
-skillranger recommend [project] [--target codex] [--intent "..."] [--capabilities browser,screenshots] [--lane <lane>] [--limit-per-lane <n>] [--explain] [--json]
-skillranger setup [project] [--target codex] [--intent "..."] [--scope repo] [--lane <lane>] [--limit-per-lane <n>]
-skillranger audit <skill-id> [--json]
-skillranger validate:registry [--json]
-skillranger lint:skills [--json]
-skillranger audit:registry [--json]
-skillranger publish:check [--json]
-skillranger eval:frontend [--suite <path>] [--json]
-skillranger eval:visual --plan --candidates <path> [--json]
-skillranger eval:visual --run --candidates <path> --command <template> --output <dir> [--resume] [--json]
-skillranger eval:visual --prepare-review|--aggregate|--calibrate [options] [--json]
-skillranger eval:frontend --run-routing --project <path> [--target codex] [--suite <path>] [--json]
-skillranger eval:frontend --verify-task-evidence <path> [--suite <path>] [--json]
-skillranger eval:frontend --verify-pairwise-review <path> [--suite <path>] [--json]
-skillranger domain:list [--json]
-skillranger domain:inspect frontend [--json]
-skillranger design:brief [project] --domain <domain> --user <actor> --task <task> --surface <type> --action <action> [--output .design/brief.json] [--json]
-skillranger design:recommend-recipe --brief .design/brief.json [--json]
-skillranger design:observe --brief .design/brief.json --base-url <url> --command <adapter> [--route </path>] [--output .design/observations.json] [--json]
-skillranger design:validate --brief .design/brief.json [--direction .design/direction.json] [--json]
-skillranger design:validate-source [project] --files <paths> [--semantic-tokens] [--json]
-skillranger design:verify --brief .design/brief.json --direction .design/direction.json --observations observations.json --capabilities browser,screenshots [--json]
-skillranger design:repair --report .design/verification.json [--max-iterations 3] [--json]
-skillranger design:compile --brief .design/brief.json --direction .design/direction.json [--report .design/verification.json] [--output .design/DESIGN.md]
-skillranger install <skill-id> --project <path> [--target codex] [--scope repo] [--dry-run] [--yes]
-skillranger installed [project] [--project <path>] [--json]
-skillranger mcp
-skillranger doctor
-```
-
-For source-run mode, replace `skillranger` with `node src/cli/index.ts` and `skillranger mcp` with `node src/mcp/server.ts`.
-
-Recommendation lanes:
-
-- `framework`
-- `design`
-- `implementation`
-- `qa`
-- `agent-context`
-
-Use `--lane` when the user intent is specific, for example design-only review. With `--intent`, SkillRanger returns one primary skill and up to two compatible companions rather than an overlapping full pack. Use `--capabilities browser,screenshots` to mark visual work as ready for verification; without them, visual recommendations remain available but are explicitly `unverified`. `setup --yes` requires `--intent` for the same reason. Use `--limit-per-lane` to keep catalog output balanced and `--explain` to print score drivers; JSON and MCP recommendation output include `scoreBreakdown` and `verification` for each skill.
-
-## Curated Skills
-
-The bundled frontend registry currently includes 15 low-risk, instruction-only skills, including:
+**Framework and implementation**
 
 - `frontend.next-app-router-review`
 - `frontend.react-app-review`
-- `frontend.accessibility-review`
-- `frontend.tailwind-ui-polish`
-- `frontend.playwright-debug`
 - `frontend.react-component-design`
-- `frontend.performance-review`
-- `frontend.testing-strategy`
-- `frontend.agents-md-bootstrap`
+- `frontend.tailwind-ui-polish`
+- `frontend.design-to-code`
+
+**Design and UX**
+
 - `frontend.visual-design-polish`
 - `frontend.design-system`
-- `frontend.design-to-code`
 - `frontend.ux-critique`
 - `frontend.interaction-polish`
+- `frontend.motion-design`
+- `frontend.motion-audit`
+- `frontend.visual-critic`
+
+**Quality and release**
+
+- `frontend.accessibility-review`
+- `frontend.performance-review`
+- `frontend.testing-strategy`
+- `frontend.playwright-debug`
 - `frontend.audit`
 
-Every curated manifest is validated for package shape, frontmatter consistency, checksums, compatibility metadata, routing metadata, quality rubric drift, and low-risk audit status.
+**Agent context**
+
+- `frontend.agents-md-bootstrap`
+
+## Built for More Than Frontend
+
+Backend/API, mobile, infrastructure and DevOps, security, data and AI, QA, and other software-engineering packs are future directions, not currently available domains.
+
+Those future packs are intended to reuse the domain-agnostic pipeline already in place: project detection, compatibility-aware recommendation, static audit, reviewable install planning, lockfile tracking, and evaluation gates.
+
+## Agent Compatibility
+
+Interactive setup and direct install currently support five native targets:
+
+- Codex (`codex`)
+- Claude Code (`claude-code`)
+- OpenCode (`opencode`)
+- Cursor (`cursor`)
+- Gemini CLI (`gemini-cli`)
+
+SkillRanger also includes generic Agent Skills and universal adapters. These provide a broader compatibility surface, but do not imply that every host has identical native setup behavior or directory conventions.
+
+## Safety and Write Boundaries
+
+SkillRanger keeps installation reviewable and conservative:
+
+- The bundled registry is local and ships inside the package.
+- Skill package scripts are never executed during installation.
+- Direct CLI installs default to dry-run and write only when `--yes` is supplied.
+- Repo-scope planning resolves writes to the target's expected local skill paths and `skillranger.lock.json`; unsupported scopes and escaping paths are rejected.
+- The lockfile records installed versions, checksums, target, scope, source, path, and audit result.
+- A static audit detects blocked and suspicious package content; `block` risk rejects installation.
+- MCP writes require explicit confirmation and exact expected writes from a fresh dry-run plan.
+
+See [Security](docs/SECURITY.md) and the [threat model](docs/threat-model.md) for the detailed controls and current limitations.
 
 ## MCP Server
 
-Start the stdio MCP server through npx:
+Start the stdio MCP server through the public package:
 
 ```bash
 npx -y skillranger@latest mcp
 ```
 
-Global installs can use either CLI entrypoint:
+A generic stdio host configuration looks like this:
 
-```bash
-skillranger mcp
-skillranger-mcp
+```json
+{
+  "mcpServers": {
+    "skillranger": {
+      "command": "npx",
+      "args": ["-y", "skillranger@latest", "mcp"]
+    }
+  }
+}
 ```
 
-MVP tools:
+Read-only tools analyze projects, recommend and audit skills, inspect installed state, and produce dry-run install plans. The write-capable `install_skill` tool requires `confirm: true` plus `expectedWrites` and `expectedLockfileUpdates` that exactly match a fresh `plan_skill_install` result. Stale plans and block-risk audits are rejected.
 
-- `analyze_project`
-- `recommend_skills`
-- `audit_skill`
-- `list_installed_skills`
-- `plan_skill_install`
-- `install_skill`
-- `list_domains`
-- `inspect_domain`
-- `create_frontend_design_brief`
-- `recommend_frontend_recipe`
-- `validate_frontend_result`
-- `compile_frontend_design_spec`
-- `verify_frontend_result`
-- `repair_frontend_result`
-- `run_domain_eval`
+See [MCP host configuration](docs/mcp-host-config.md) for host-specific examples, the full tool list, JSON-RPC smoke tests, and the confirmation protocol.
 
-`install_skill` is write-capable and gated. It requires `confirm: true`, plus exact `expectedWrites` and `expectedLockfileUpdates` copied from a fresh `plan_skill_install` result. See `docs/mcp-host-config.md` for host configuration and JSON-RPC smoke examples.
+## Command Reference
 
-## Safety Model
+Use `skillranger <command> --help` for canonical flags and examples. The main command families are grouped below.
 
-The MVP is local-first and conservative:
+### Everyday workflow
 
-- Registry packages are local files, not remote downloads.
-- Installs default to dry-run unless `--yes` is provided.
-- Skill writes are constrained to repo-local target paths.
-- Lockfiles pin version, checksum, target, scope, installed path, source, and audit result.
-- Audit rejects or flags symlinks, binaries, hidden files, `.env`, `.ssh`, persistence mechanisms, dependency install instructions, prompt-injection references, risky permissions, and dangerous shell patterns.
+```text
+doctor
+scan
+recommend
+setup
+audit
+install
+installed
+```
 
-See `docs/SECURITY.md` and `docs/threat-model.md` for the expanded model.
+### Domains and design
 
-## Development Checks
+```text
+domain:list
+domain:inspect
+design:brief
+design:recommend-recipe
+design:observe
+design:validate
+design:validate-source
+design:verify
+design:repair
+design:compile
+```
+
+### Evaluation and registry
+
+```text
+eval:frontend
+eval:visual
+validate:registry
+lint:skills
+audit:registry
+publish:check
+```
+
+### Lifecycle and integration
+
+```text
+run:start
+run:record-read
+run:resolve-clarifications
+run:begin
+run:complete
+run:verify
+run:inspect
+run:read-next
+run:step:begin
+run:evidence:add
+run:step:complete
+run:skill:verify
+run:finalize
+mcp
+```
+
+## Beta Status
+
+SkillRanger is a public MVP/beta. Its CLI and MCP protocols, local registry validation, installation boundaries, command routing, and frontend recommendation paths have automated coverage. The current bundled pack is low-risk, internally consistent, and installable.
+
+That is not the same as saying every skill is production-proven. Much of the current skill content remains intentionally checklist-like, and broader real-task, repeated-run, and blinded-human evidence is still being collected before stronger quality promotion. Editorial scores should not be treated as benchmark-backed until those evidence gates pass.
+
+Third-party skills are not installed directly by default; they must be staged and explicitly reviewed through audit and evaluation workflows. Early adopters should inspect recommendations and dry-run output, keep changes under version control, and report cases where routing or skill guidance falls short.
+
+## Requirements and Installation
+
+- Node.js `>=20.0.0` for npm-installed compiled binaries.
+- Node.js `>=23.6.0` for direct TypeScript source execution from a checkout.
+- No runtime npm dependencies.
+
+For repeated command-line use:
+
+```bash
+npm install -g skillranger
+skillranger doctor
+skillranger setup
+```
+
+An installed package also exposes `skillranger-mcp` as a convenience binary. The canonical npx MCP command remains `npx -y skillranger@latest mcp`.
+
+From a source checkout:
+
+```bash
+npm install
+npm run build
+node src/cli/index.ts doctor
+node src/cli/index.ts scan fixtures/next-react-ts
+```
+
+Direct `.ts` execution is a development mode; compiled npm usage runs JavaScript from `dist/`.
+
+## Development and Release Checks
+
+Run the focused checks while developing:
 
 ```bash
 npm run build
@@ -216,18 +307,32 @@ npm run validate:registry
 npm run lint:skills
 npm run audit:registry
 npm run publish:check
-npm run eval:frontend
-node src/cli/index.ts eval:frontend --run-routing --project fixtures/next-react-ts --json
+```
+
+Before release, run the complete project gate:
+
+```bash
 npm run release:check
 ```
 
-See `RELEASE.md` for the full MVP release checklist.
+See [RELEASE.md](RELEASE.md) for package and source-run release validation.
 
-## Project Docs
+## Project Documentation
 
-- `docs/ARCHITECTURE.md`: core modules, scanner, recommender, CLI/MCP, installers, lockfile.
-- `docs/REGISTRY.md`: registry and skill package model.
-- `docs/SECURITY.md`: security model and audit controls.
-- `docs/TESTING.md`: fixture, golden, install, and audit testing strategy.
-- `docs/mcp-host-config.md`: MCP host config and smoke tests.
-- `RELEASE.md`: release validation checklist for npm binary and source-run usage.
+- [Architecture](docs/ARCHITECTURE.md) — scanner, recommender, domain, CLI/MCP, installer, and lockfile structure.
+- [Registry](docs/REGISTRY.md) — bundled package shape, manifests, and validation.
+- [Security](docs/SECURITY.md) — audit controls and write boundaries.
+- [Testing](docs/TESTING.md) — fixtures, golden tests, install tests, and audit coverage.
+- [MCP host configuration](docs/mcp-host-config.md) — host setup, tools, and confirmation protocol.
+- [Frontend skill quality](docs/FRONTEND_SKILL_QUALITY.md) — evidence and promotion boundaries for the current pack.
+- [Creating a domain pack](docs/domains/creating-a-domain-pack.md) — extension model for future domains.
+
+## Contributing
+
+Issues and pull requests are welcome, especially for reproducible scanner signals, routing cases, audit findings, agent adapters, domain-pack infrastructure, and evidence-backed skill improvements.
+
+Please include tests or fixtures for behavioral changes, run the relevant development checks above, and avoid raising quality or safety claims without recorded evidence. Registry contributions should follow the package and validation rules in [Registry](docs/REGISTRY.md).
+
+## License
+
+[MIT](LICENSE)
