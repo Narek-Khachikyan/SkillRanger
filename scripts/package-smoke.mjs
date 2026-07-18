@@ -79,11 +79,16 @@ try {
   );
   assert.match(packagedDoctor, /compiled-binary/);
 
-  await exec(process.execPath, ["dist/cli/index.js", "scan", "fixtures/next-react-ts", "--json"], commandOptions);
+  const fixturePath = path.join(repositoryRoot, "fixtures", "next-react-ts");
   await exec(
-    process.execPath,
-    ["dist/cli/index.js", "recommend", "fixtures/next-react-ts", "--target", "codex", "--json"],
-    commandOptions,
+    "npm",
+    ["exec", "--yes", "--package", tarball, "--", "skillranger", "scan", fixturePath, "--json"],
+    { ...commandOptions, cwd: smokeRoot },
+  );
+  await exec(
+    "npm",
+    ["exec", "--yes", "--package", tarball, "--", "skillranger", "recommend", fixturePath, "--target", "codex", "--json"],
+    { ...commandOptions, cwd: smokeRoot },
   );
 
   const extracted = path.join(smokeRoot, "extracted");

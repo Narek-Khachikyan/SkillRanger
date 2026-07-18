@@ -10,9 +10,13 @@ const exec = promisify(execFile);
 
 test("release smoke uses the tarball produced by the current checkout", async () => {
   const release = await readFile(new URL("../RELEASE.md", import.meta.url), "utf8");
+  const smoke = await readFile(new URL("../scripts/package-smoke.mjs", import.meta.url), "utf8");
 
   assert.match(release, /npm run smoke:package/);
   assert.doesNotMatch(release, /skillranger-\d+\.\d+\.\d+\.tgz/);
+  assert.match(smoke, /"skillranger", "scan"/);
+  assert.match(smoke, /"skillranger", "recommend"/);
+  assert.doesNotMatch(smoke, /"dist\/cli\/index\.js", "(?:scan|recommend)"/);
 });
 
 test("published tarball contains shared contracts and supports registry install materialization", async () => {
