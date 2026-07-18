@@ -8,6 +8,13 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 const exec = promisify(execFile);
 
+test("release smoke uses the tarball produced by the current checkout", async () => {
+  const release = await readFile(new URL("../RELEASE.md", import.meta.url), "utf8");
+
+  assert.match(release, /npm run smoke:package/);
+  assert.doesNotMatch(release, /skillranger-\d+\.\d+\.\d+\.tgz/);
+});
+
 test("published tarball contains shared contracts and supports registry install materialization", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "skillranger-pack-"));
   const { stdout } = await exec("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", root], { maxBuffer: 10 * 1024 * 1024 });

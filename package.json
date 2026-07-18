@@ -32,6 +32,7 @@
     "lint:skills": "node src/cli/index.ts lint:skills",
     "audit:registry": "node src/cli/index.ts audit:registry",
     "publish:check": "node src/cli/index.ts publish:check",
+    "smoke:package": "node scripts/package-smoke.mjs",
     "release:check": "npm run build && npm run check && npm test && npm run validate:registry && npm run lint:skills && npm run audit:registry && npm run eval:frontend -- --run-routing --project fixtures/next-react-ts --json && npm run eval:frontend:ru",
     "eval:frontend": "node src/cli/index.ts eval:frontend",
     "eval:frontend:ru": "node src/cli/index.ts eval:frontend --run-routing --project fixtures/next-react-ts --locale ru --json",

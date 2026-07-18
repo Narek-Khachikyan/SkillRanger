@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { handleJsonRpcLine, handleJsonRpcRequest } from "../src/mcp/protocol.ts";
 import { skillLanes } from "../src/types.ts";
 
@@ -21,6 +22,13 @@ test("MCP protocol initializes with tool capability", async () => {
   assert.equal(response?.id, 1);
   assert.equal((response?.result as { protocolVersion?: string })?.protocolVersion, "2025-06-18");
   assert.equal(Boolean((response?.result as { capabilities?: { tools?: unknown } })?.capabilities?.tools), true);
+  const packageJson = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ) as { version: string };
+  assert.equal(
+    (response?.result as { serverInfo?: { version?: string } })?.serverInfo?.version,
+    packageJson.version,
+  );
 });
 
 test("MCP protocol ignores notifications", async () => {

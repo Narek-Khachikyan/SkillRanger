@@ -1,4 +1,5 @@
 import { callMcpTool, mcpTools } from "./tools.ts";
+import { readSkillRangerVersion } from "../version.ts";
 
 const protocolVersion = "2025-06-18";
 
@@ -51,6 +52,7 @@ export const handleJsonRpcRequest = async (request: JsonRpcRequest): Promise<Jso
   }
 
   if (method === "initialize") {
+    const version = await readSkillRangerVersion();
     return success(id, {
       protocolVersion,
       capabilities: {
@@ -61,7 +63,7 @@ export const handleJsonRpcRequest = async (request: JsonRpcRequest): Promise<Jso
       serverInfo: {
         name: "skillranger",
         title: "SkillRanger",
-        version: "0.1.0"
+        version
       },
       instructions:
         "SkillRanger tools for project analysis, skill recommendations, skill audits, installed-skill lockfile inspection, dry-run install planning, and confirmed skill installation."

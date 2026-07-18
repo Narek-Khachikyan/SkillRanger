@@ -106,26 +106,19 @@ Expected tarball contents exclude:
 
 ## npm/npx Tarball Smoke
 
-Before publishing, build a local tarball and run npm-exec checks against the packed package:
+Before publishing, run the package smoke from the repository root:
 
 ```bash
-npm pack
-npm exec --yes --package ./skillranger-0.1.0.tgz -- skillranger doctor
-npm exec --yes --package ./skillranger-0.1.0.tgz -- skillranger scan fixtures/next-react-ts
-npm exec --yes --package ./skillranger-0.1.0.tgz -- skillranger recommend fixtures/next-react-ts --target codex
+npm run smoke:package
 ```
+
+The smoke command creates a fresh temporary directory, consumes the exact filename emitted by `npm pack --json`, and removes only that temporary directory when it finishes. It never relies on a checked-in or previously generated tarball.
 
 Expected result:
 
 - npm installs and runs the packed `skillranger` binary without a source checkout.
 - `doctor` reports run mode `compiled-binary`.
 - Fixture scan and recommendation commands work through the packed package.
-
-For MCP tarball smoke, spawn this command from a JSON-RPC client and send one `initialize` line:
-
-```bash
-npm exec --yes --package ./skillranger-0.1.0.tgz -- skillranger mcp
-```
 
 Expected MCP result:
 
@@ -135,24 +128,13 @@ Expected MCP result:
 
 ## Extracted Tarball Smoke
 
-Before sharing a tarball, test it from an extracted source directory:
-
-```bash
-npm pack
-mkdir -p /tmp/skillranger-smoke
-tar -xzf ./skillranger-0.1.0.tgz -C /tmp/skillranger-smoke
-node /tmp/skillranger-smoke/package/dist/cli/index.js doctor
-node /tmp/skillranger-smoke/package/dist/cli/index.js recommend /path/to/a/frontend/project --target codex --lane design --limit-per-lane 2
-node /tmp/skillranger-smoke/package/dist/cli/index.js install frontend.next-app-router-review --project /path/to/a/frontend/project --target codex --scope repo --dry-run --json
-```
+`npm run smoke:package` also extracts the newly emitted tarball and runs its compiled `doctor` entrypoint before removing the temporary smoke directory.
 
 Expected result:
 
 - Compiled commands run on Node `>=20.0.0` without TypeScript source execution.
 - The bundled registry is found without running from the extracted package root.
 - Dry-run install reports writes inside the target project only.
-
-Remove the generated tarball after the smoke test if it is not the final artifact.
 
 ## MCP Smoke Checks
 
