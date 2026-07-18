@@ -4,7 +4,7 @@
 
 **Public MVP / Beta** · Local-first · CLI + MCP · Zero runtime dependencies
 
-SkillRanger scans your repository, detects its stack and development context, recommends compatible skills, audits them for common risks, and installs only the files you explicitly approve.
+SkillRanger scans your repository, detects its stack and development context, recommends compatible skills, audits them for common risks, and produces reviewable install plans before an explicit apply.
 
 ## Why SkillRanger?
 
@@ -21,15 +21,15 @@ npx -y skillranger@latest doctor
 npx -y skillranger@latest setup
 ```
 
-`setup` scans the current directory, recommends a set of skills selected by default, lets you deselect any item with Space, and asks for final confirmation before writing.
+`setup` scans the current directory, prompts you to choose one or more target agents and repo or user scope, recommends a set of skills selected by default, lets you deselect any item with Space, and asks for final confirmation before writing.
 
-For the default Codex repo setup, the expected local outputs are:
+If you select Codex and repo scope, the expected repo-local outputs are:
 
 - skill packages under `.agents/skills/<skill>/`;
 - a managed SkillRanger block in `AGENTS.md`, unless you pass `--no-agent-context`;
 - installed versions, checksums, and paths in `skillranger.lock.json`.
 
-Other supported targets use their target-specific repo layout. Review the proposed selection and final confirmation prompt before applying it.
+Other target and scope selections can use different layouts and outputs. Review the proposed selection and final confirmation prompt before applying it.
 
 ## Transparent Manual Workflow
 
@@ -49,8 +49,8 @@ Each command answers a separate question:
 1. `scan` — What kind of project is this, based on files and configuration already in the repository?
 2. `recommend` — Which compatible skill best fits the stack and stated intent, and why?
 3. `audit` — Does the bundled package contain blocked or suspicious content?
-4. `install --dry-run` — Which repo-local files and lockfile entries are planned?
-5. `install --yes` — Apply the selected skill explicitly. Without `--yes`, direct installs remain dry runs.
+4. `install --dry-run` — Which repo-local skill files and lockfile update are planned?
+5. `install --yes` — After reviewing the dry-run output, use a separate explicit invocation to apply the selected skill. Without `--yes`, direct installs remain dry runs.
 6. `installed` — What does `skillranger.lock.json` say is currently installed?
 
 ## How It Works
@@ -167,7 +167,7 @@ SkillRanger keeps installation reviewable and conservative:
 - The bundled registry is local and ships inside the package.
 - Skill package scripts are never executed during installation.
 - Direct CLI installs default to dry-run and write only when `--yes` is supplied.
-- Repo-scope planning resolves writes to the target's expected local skill paths and `skillranger.lock.json`; unsupported scopes and escaping paths are rejected.
+- Repo-scope planning resolves writes to the target's expected local skill paths and `skillranger.lock.json`.
 - The lockfile records installed versions, checksums, target, scope, source, path, and audit result.
 - A static audit detects blocked and suspicious package content; `block` risk rejects installation.
 - MCP writes require explicit confirmation and exact expected writes from a fresh dry-run plan.
