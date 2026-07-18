@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { cp, lstat, mkdir, mkdtemp, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { findSkill } from "../src/registry/index.ts";
+import { computeSkillChecksum, findSkill } from "../src/registry/index.ts";
 import { getAdapter } from "../src/installers/codex.ts";
+import { InstallAuditBlockedError } from "../src/installers/types.ts";
 import { readLockfile } from "../src/lockfile/index.ts";
 import type { RegistrySkill, SkillManifest } from "../src/types.ts";
 
@@ -36,13 +37,17 @@ test("codex installer writes repo skill and lockfile", async () => {
   assert.ok(dryRun.writes.some((filePath) => filePath.endsWith(".agents/skills/next-app-router-review/SKILL.md")));
   assert.equal(await exists(path.join(projectRoot, ".agents/skills/next-app-router-review/SKILL.md")), false);
 
-  await adapter.applyInstall(skill, {
+  const result = await adapter.applyInstall(skill, {
     projectRoot,
     targetAgent: "codex",
     scope: "repo",
     dryRun: false
   });
 
+  assert.equal(result.plan.skillId, skill.manifest.id);
+  assert.equal(result.audit.skillId, skill.manifest.id);
+  assert.equal(result.installed.skillId, skill.manifest.id);
+  assert.equal(result.audit.checksum, result.installed.checksum);
   assert.equal(await exists(path.join(projectRoot, ".agents/skills/next-app-router-review/SKILL.md")), true);
   assert.equal(await exists(path.join(projectRoot, "skillranger.lock.json")), true);
 });
@@ -96,7 +101,7 @@ test("codex installer copies skill support files", async () => {
     manifest,
     path: skillRoot,
     skillPath: path.join(skillRoot, "SKILL.md"),
-    checksum: "sha256:fixture"
+    checksum: await computeSkillChecksum(skillRoot)
   };
 
   const adapter = getAdapter("codex");
@@ -276,19 +281,27 @@ test("codex installer blocks risky skill before writing files", async () => {
     manifest,
     path: skillRoot,
     skillPath: path.join(skillRoot, "SKILL.md"),
-    checksum: ""
+    checksum: await computeSkillChecksum(skillRoot)
   };
 
   const adapter = getAdapter("codex");
-  await assert.rejects(
-    adapter.applyInstall(skill, {
+  let blocked: unknown;
+  try {
+    await adapter.applyInstall(skill, {
       projectRoot,
       targetAgent: "codex",
       scope: "repo",
       dryRun: false
-    }),
-    /Blocked install/
-  );
+    });
+  } catch (error) {
+    blocked = error;
+  }
+
+  assert.ok(blocked instanceof InstallAuditBlockedError);
+  assert.equal(blocked.code, "audit-blocked");
+  assert.equal(blocked.plan.skillId, skill.manifest.id);
+  assert.equal(blocked.audit.skillId, skill.manifest.id);
+  assert.equal(blocked.audit.riskLevel, "block");
 
   assert.equal(await exists(path.join(projectRoot, ".agents/skills/malicious-skill/SKILL.md")), false);
   assert.equal(await exists(path.join(projectRoot, "skillranger.lock.json")), false);

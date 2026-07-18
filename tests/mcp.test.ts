@@ -599,16 +599,34 @@ test("MCP install_skill applies install after confirmed matching plan", async ()
   });
   const content = parseStructuredContent<{
     ok: boolean;
-    installed?: {
+    audit: {
       skillId: string;
+      checksum: string;
+      riskLevel: string;
+      securityScore: number;
+      findings: unknown[];
+    };
+    installed: {
+      skillId: string;
+      checksum: string;
       targetAgent: string;
+      audit: {
+        riskLevel: string;
+        securityScore: number;
+        findings: unknown[];
+      };
     };
   }>(result);
 
   assert.equal(result.isError, false);
   assert.equal(content.ok, true);
-  assert.equal(content.installed?.skillId, "frontend.next-app-router-review");
-  assert.equal(content.installed?.targetAgent, "codex");
+  assert.equal(content.installed.skillId, "frontend.next-app-router-review");
+  assert.equal(content.installed.targetAgent, "codex");
+  assert.equal(content.audit.skillId, content.installed.skillId);
+  assert.equal(content.audit.checksum, content.installed.checksum);
+  assert.equal(content.audit.riskLevel, content.installed.audit.riskLevel);
+  assert.equal(content.audit.securityScore, content.installed.audit.securityScore);
+  assert.deepEqual(content.audit.findings, content.installed.audit.findings);
 });
 
 test("MCP install_skill reports audit-blocked skills without writing", async () => {
@@ -690,14 +708,17 @@ test("MCP install_skill reports audit-blocked skills without writing", async () 
     ok: boolean;
     reason: string;
     audit: {
+      skillId: string;
       riskLevel: string;
     };
+    plan: { skillId: string };
   }>(result);
 
   assert.equal(result.isError, true);
   assert.equal(content.ok, false);
   assert.equal(content.reason, "audit-blocked");
   assert.equal((content as { code?: string }).code, "audit-blocked");
+  assert.equal(content.plan.skillId, content.audit.skillId);
   assert.equal(content.audit.riskLevel, "block");
   assert.equal(await exists(path.join(projectRoot, "skillranger.lock.json")), false);
   assert.equal(await exists(path.join(projectRoot, ".agents/skills/malicious-skill/SKILL.md")), false);

@@ -899,8 +899,8 @@ const run = async () => {
       for (const targetAgent of targetAgents) {
         const adapter = getAdapter(targetAgent);
         try {
-          const plan = await adapter.applyInstall(skill, { projectRoot, targetAgent, scope, dryRun: false, mode });
-          appliedPlans.push(plan);
+          const result = await adapter.applyInstall(skill, { projectRoot, targetAgent, scope, dryRun: false, mode });
+          appliedPlans.push(result.plan);
           console.log(`Installed ${skill.manifest.id} for ${targetAgent}`);
         } catch (error) {
           console.error(`Failed to install ${skill.manifest.id} for ${targetAgent}: ${error instanceof Error ? error.message : String(error)}`);
@@ -1199,7 +1199,7 @@ const run = async () => {
     const mode = args.flags.copy ? "copy" : "symlink";
     const plan = dryRun
       ? await adapter.planInstall(skill, { projectRoot, targetAgent, scope, dryRun, mode })
-      : await adapter.applyInstall(skill, { projectRoot, targetAgent, scope, dryRun, mode });
+      : (await adapter.applyInstall(skill, { projectRoot, targetAgent, scope, dryRun: false, mode })).plan;
     if (args.flags.json) {
       printJson({ plan, nextStep: dryRun ? "Re-run with --yes to apply." : "Installed and locked." });
       return;

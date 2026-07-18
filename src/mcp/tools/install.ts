@@ -1,6 +1,6 @@
 import path from "node:path";
-import { auditSkill } from "../../audit/index.ts";
 import { getAdapter } from "../../installers/codex.ts";
+import { InstallAuditBlockedError } from "../../installers/types.ts";
 import { readLockfile } from "../../lockfile/index.ts";
 import { findSkill } from "../../registry/index.ts";
 import type { McpToolDefinition, McpToolHandler } from "./types.ts";
@@ -166,32 +166,31 @@ const installSkill: McpToolHandler = async (args) => {
     });
   }
 
-  const audit = await auditSkill(skill);
-  if (audit.riskLevel === "block") {
-    return codedErrorToolResult("audit-blocked", `Blocked install for ${skill.manifest.id}: audit risk is block.`, {
-      reason: "audit-blocked",
+  try {
+    const applied = await adapter.applyInstall(skill, {
       projectRoot,
-      plan: planned,
-      audit
+      targetAgent,
+      scope,
+      dryRun: false
     });
+    return jsonToolResult({
+      ok: true,
+      projectRoot,
+      plan: applied.plan,
+      audit: applied.audit,
+      installed: applied.installed
+    });
+  } catch (error) {
+    if (error instanceof InstallAuditBlockedError) {
+      return codedErrorToolResult("audit-blocked", error.message, {
+        reason: "audit-blocked",
+        projectRoot,
+        plan: error.plan,
+        audit: error.audit
+      });
+    }
+    throw error;
   }
-
-  const appliedPlan = await adapter.applyInstall(skill, {
-    projectRoot,
-    targetAgent,
-    scope,
-    dryRun: false
-  });
-  const installed = (await readLockfile(projectRoot)).installed.find(
-    (entry) => entry.skillId === skill.manifest.id && entry.targetAgent === targetAgent && entry.scope === scope
-  );
-  return jsonToolResult({
-    ok: true,
-    projectRoot,
-    plan: appliedPlan,
-    audit,
-    installed
-  });
 };
 
 export const installToolHandlers: Record<string, McpToolHandler> = {

@@ -7,7 +7,14 @@ import { assertSkillIntegrity } from "../registry/index.ts";
 import { upsertInstalledSkill } from "../lockfile/index.ts";
 import type { InstallPlan, RegistrySkill } from "../types.ts";
 import { getAgentConfig, isUniversalAgent } from "./agents.ts";
-import type { AgentAdapter, InstallInput, InstallMode } from "./types.ts";
+import {
+  InstallAuditBlockedError,
+  type AgentAdapter,
+  type ApplyInstallInput,
+  type InstallApplyResult,
+  type InstallInput,
+  type InstallMode,
+} from "./types.ts";
 
 const canonicalSkillBase = ".agents/skills";
 const skillManifestFile = "skill.manifest.json";
@@ -232,13 +239,14 @@ const makeAdapter = (id: string): AgentAdapter => ({
       warnings: []
     };
   },
-  async applyInstall(skill: RegistrySkill, input: InstallInput): Promise<InstallPlan> {
+  async applyInstall(skill: RegistrySkill, input: ApplyInstallInput): Promise<InstallApplyResult> {
     const plan = await this.planInstall(skill, input);
-    if (input.dryRun) return plan;
-
     const audit = await auditSkill(skill);
+    if (audit.checksum !== skill.checksum) {
+      throw new Error(`stale skill integrity for ${skill.manifest.id}`);
+    }
     if (audit.riskLevel === "block") {
-      throw new Error(`Blocked install for ${skill.manifest.id}: audit risk is block.`);
+      throw new InstallAuditBlockedError(plan, audit);
     }
 
     const { canonicalDir, agentDir } = skillInstallDirs(skill, input);
@@ -268,13 +276,13 @@ const makeAdapter = (id: string): AgentAdapter => ({
     }
 
     await assertRepoPathSafe(input, path.join(input.projectRoot, "skillranger.lock.json"), "Lockfile path");
-    await upsertInstalledSkill(input.projectRoot, skill, {
+    const installed = await upsertInstalledSkill(input.projectRoot, skill, {
       targetAgent: input.targetAgent,
       scope: input.scope,
       installedPath: storedInstalledPath(input.projectRoot, input.scope, installedPath),
       audit
     });
-    return plan;
+    return { plan, audit, installed };
   }
 });
 
