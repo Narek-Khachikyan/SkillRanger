@@ -22,17 +22,19 @@ import {
 import { createRepairRequest } from "../../runtime/verification.ts";
 import type { VerificationReport } from "../../runtime/types.ts";
 import { scanProject } from "../../scanner/index.ts";
-import { McpToolError, type McpToolDefinition, type McpToolHandler } from "./types.ts";
+import { McpToolError, mcpToolEffects, type McpToolDefinition, type McpToolHandler } from "./types.ts";
 import { asString, jsonToolResult, projectRootProperty, requireString } from "./utils.ts";
 
 export const domainToolDefinitions: McpToolDefinition[] = [
   {
+    ...mcpToolEffects.readOnly,
     name: "list_domains",
     title: "List Domains",
     description: "List registered SkillRanger domain packs and their public capabilities.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
+    ...mcpToolEffects.readOnly,
     name: "inspect_domain",
     title: "Inspect Domain",
     description: "Inspect a registered domain pack, ownership rules, and artifacts.",
@@ -44,6 +46,7 @@ export const domainToolDefinitions: McpToolDefinition[] = [
     },
   },
   {
+    ...mcpToolEffects.readOnly,
     name: "create_frontend_design_brief",
     title: "Create Frontend Design Brief",
     description: "Create a structured design brief scaffold from deterministic project evidence. Unknown product facts remain explicit.",
@@ -61,6 +64,7 @@ export const domainToolDefinitions: McpToolDefinition[] = [
     },
   },
   {
+    ...mcpToolEffects.readOnly,
     name: "recommend_frontend_recipe",
     title: "Recommend Frontend Recipe",
     description: "Rank approved frontend product recipes for a structured design brief.",
@@ -72,6 +76,7 @@ export const domainToolDefinitions: McpToolDefinition[] = [
     },
   },
   {
+    ...mcpToolEffects.readOnly,
     name: "validate_frontend_result",
     title: "Validate Frontend Result",
     description: "Validate design artifacts and optional browser observations, returning normalized findings and a verification outcome.",
@@ -89,6 +94,7 @@ export const domainToolDefinitions: McpToolDefinition[] = [
     },
   },
   {
+    ...mcpToolEffects.readOnly,
     name: "compile_frontend_design_spec",
     title: "Compile Frontend Design Spec",
     description: "Compile canonical frontend design artifacts into deterministic human-readable Markdown without writing files.",
@@ -104,6 +110,7 @@ export const domainToolDefinitions: McpToolDefinition[] = [
     },
   },
   {
+    ...mcpToolEffects.readOnly,
     name: "verify_frontend_result",
     title: "Verify Frontend Result",
     description: "Apply frontend hard gates to canonical design artifacts and browser observations. Alias of deterministic frontend validation.",
@@ -121,6 +128,7 @@ export const domainToolDefinitions: McpToolDefinition[] = [
     },
   },
   {
+    ...mcpToolEffects.readOnly,
     name: "repair_frontend_result",
     title: "Plan Frontend Repair",
     description: "Create a bounded repair request from normalized findings. This tool does not edit project files.",
@@ -135,6 +143,7 @@ export const domainToolDefinitions: McpToolDefinition[] = [
     },
   },
   {
+    ...mcpToolEffects.readOnly,
     name: "run_domain_eval",
     title: "Plan Domain Eval",
     description: "Build a deterministic repeated A/B/C domain eval plan. This read-only tool does not execute model commands.",

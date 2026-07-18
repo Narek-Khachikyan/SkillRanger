@@ -25,7 +25,7 @@ import {
   type SkillRunV2,
   type StrictSkillRunErrorCode,
 } from "../../runtime/strict/index.ts";
-import { McpToolError, type JsonObject, type McpToolDefinition, type McpToolErrorCode, type McpToolHandler } from "./types.ts";
+import { McpToolError, mcpToolEffects, type JsonObject, type McpToolDefinition, type McpToolErrorCode, type McpToolHandler } from "./types.ts";
 import {
   asString,
   projectRootProperty,
@@ -291,6 +291,7 @@ const artifactSchema = {
 
 export const runToolDefinitions: McpToolDefinition[] = [
   {
+    ...mcpToolEffects.runStateWrite,
     name: "start_skill_run",
     title: "Start Skill Run",
     description: "Prepare and persist a skill run from project signals, intent, and domain policy.",
@@ -313,6 +314,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     },
   },
   {
+    ...mcpToolEffects.runStateWrite,
     name: "record_skill_read",
     title: "Record Skill Read",
     description: "Record a selected skill checksum as read for a skill run.",
@@ -328,6 +330,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     },
   },
   {
+    ...mcpToolEffects.runStateWrite,
     name: "resolve_skill_run_clarifications",
     title: "Resolve Skill Run Clarifications",
     description: "Resolve required clarifications with JSON-native answers, declines, and assumptions.",
@@ -352,6 +355,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     },
   },
   {
+    ...mcpToolEffects.runStateWrite,
     name: "begin_skill_run_execution",
     title: "Begin Skill Run Execution",
     description: "Transition a prepared skill run into execution.",
@@ -363,6 +367,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     },
   },
   {
+    ...mcpToolEffects.runStateWrite,
     name: "complete_skill_run",
     title: "Complete Skill Run",
     description: "Complete execution with a lifecycle status and JSON-native artifacts.",
@@ -378,6 +383,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     },
   },
   {
+    ...mcpToolEffects.runStateWrite,
     name: "verify_skill_run",
     title: "Verify Skill Run",
     description: "Record a JSON-native verification report for an implemented skill run.",
@@ -393,6 +399,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     },
   },
   {
+    ...mcpToolEffects.readOnly,
     name: "inspect_skill_run",
     title: "Inspect Skill Run",
     description: "Read the current persisted skill run state.",
@@ -415,6 +422,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     ["verify_skill", "Verify Skill", { skillId: { type: "string" } }, ["skillId"]],
     ["finalize_skill_run", "Finalize Skill Run", {}, []],
   ].map(([name, title, properties, required]) => ({
+    ...mcpToolEffects.runStateWrite,
     name: name as string, title: title as string, description: `${title as string} for a strict v2 run.`,
     inputSchema: { type: "object", properties: { ...runIdProperties, ...(properties as JsonObject) }, required: ["runId", ...(required as string[])], additionalProperties: false },
   })),

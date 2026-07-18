@@ -1,11 +1,51 @@
 export type JsonObject = Record<string, unknown>;
 
-export type McpToolDefinition = {
+export type McpToolAnnotations = {
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+};
+
+export type McpToolEffect =
+  | "read-only"
+  | "exact-install-plan"
+  | "run-state-write"
+  | "command-and-artifact-write";
+
+export type McpToolEffectMetadata = {
+  annotations: McpToolAnnotations;
+  _meta: {
+    "skillranger/effect": McpToolEffect;
+    "skillranger/confirmation": "none" | "host-managed" | "required";
+  };
+};
+
+export type McpToolDefinition = McpToolEffectMetadata & {
   name: string;
   title: string;
   description: string;
   inputSchema: JsonObject;
 };
+
+export const mcpToolEffects = {
+  readOnly: {
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    _meta: { "skillranger/effect": "read-only", "skillranger/confirmation": "none" },
+  },
+  exactInstallPlan: {
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    _meta: { "skillranger/effect": "exact-install-plan", "skillranger/confirmation": "required" },
+  },
+  runStateWrite: {
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    _meta: { "skillranger/effect": "run-state-write", "skillranger/confirmation": "host-managed" },
+  },
+  commandAndArtifactWrite: {
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    _meta: { "skillranger/effect": "command-and-artifact-write", "skillranger/confirmation": "required" },
+  },
+} as const satisfies Record<string, McpToolEffectMetadata>;
 
 export type McpToolResult = {
   content: Array<{

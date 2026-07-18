@@ -3,11 +3,12 @@ import { groupRecommendationsByLane, recommendSkills } from "../../recommender/i
 import { loadLocalRegistry } from "../../registry/index.ts";
 import { scanProject } from "../../scanner/index.ts";
 import { skillLanes, type SkillLane } from "../../types.ts";
-import { McpToolError, type McpToolDefinition, type McpToolHandler } from "./types.ts";
+import { McpToolError, mcpToolEffects, type McpToolDefinition, type McpToolHandler } from "./types.ts";
 import { asString, jsonToolResult, optionalString, projectRootProperty, registryRootProperty, requireStringArray, resolveRegistryRoot } from "./utils.ts";
 
 export const projectToolDefinitions: McpToolDefinition[] = [
   {
+    ...mcpToolEffects.readOnly,
     name: "analyze_project",
     title: "Analyze Project",
     description: "Scan a project and return its deterministic stack fingerprint.",
@@ -20,6 +21,7 @@ export const projectToolDefinitions: McpToolDefinition[] = [
     }
   },
   {
+    ...mcpToolEffects.readOnly,
     name: "recommend_skills",
     title: "Recommend Skills",
     description: "Recommend relevant skills for a project fingerprint and target agent.",

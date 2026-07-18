@@ -89,6 +89,80 @@ test("MCP protocol lists tools", async () => {
   );
 });
 
+test("MCP tools publish complete effect and confirmation metadata", async () => {
+  const response = await handleJsonRpcRequest({
+    jsonrpc: "2.0",
+    id: "effects",
+    method: "tools/list",
+    params: {},
+  });
+  const tools = (response?.result as { tools: Array<{
+    name: string;
+    annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean };
+    _meta?: Record<string, unknown>;
+    inputSchema: { required?: string[]; properties?: Record<string, unknown> };
+  }> }).tools;
+
+  const expectedGroups = {
+    "read-only": [
+      "analyze_project", "recommend_skills", "audit_skill", "list_installed_skills",
+      "plan_skill_install", "list_domains", "inspect_domain", "create_frontend_design_brief",
+      "recommend_frontend_recipe", "validate_frontend_result", "compile_frontend_design_spec",
+      "verify_frontend_result", "repair_frontend_result", "run_domain_eval", "inspect_skill_run",
+      "compare_design_variants", "verify_visual_result",
+    ],
+    "exact-install-plan": ["install_skill"],
+    "run-state-write": [
+      "start_skill_run", "record_skill_read", "resolve_skill_run_clarifications",
+      "begin_skill_run_execution", "complete_skill_run", "verify_skill_run",
+      "read_next_skill_chunk", "begin_skill_step", "add_skill_evidence", "complete_skill_step",
+      "verify_skill", "finalize_skill_run",
+    ],
+    "command-and-artifact-write": ["capture_ui_evidence"],
+  } as const;
+  const expectedPresets = {
+    "read-only": {
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      confirmation: "none",
+    },
+    "exact-install-plan": {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+      confirmation: "required",
+    },
+    "run-state-write": {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      confirmation: "host-managed",
+    },
+    "command-and-artifact-write": {
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+      confirmation: "required",
+    },
+  } as const;
+
+  assert.equal(tools.length, 31);
+  for (const [effect, expectedNames] of Object.entries(expectedGroups)) {
+    const matchingTools = tools.filter((tool) => tool._meta?.["skillranger/effect"] === effect);
+    assert.deepEqual(matchingTools.map(({ name }) => name).sort(), [...expectedNames].sort(), effect);
+    for (const tool of matchingTools) {
+      const preset = expectedPresets[effect as keyof typeof expectedPresets];
+      assert.deepEqual(tool.annotations, preset.annotations, tool.name);
+      assert.equal(tool._meta?.["skillranger/confirmation"], preset.confirmation, tool.name);
+    }
+  }
+
+  const exactPlanFields = ["expectedWrites", "expectedLockfileUpdates"];
+  for (const field of exactPlanFields) {
+    assert.deepEqual(
+      tools.filter((tool) => tool.inputSchema.properties?.[field] !== undefined).map(({ name }) => name),
+      ["install_skill"],
+      field,
+    );
+  }
+  const install = tools.find(({ name }) => name === "install_skill");
+  assert.ok(install?.inputSchema.required?.includes("confirm"));
+  for (const field of exactPlanFields) assert.ok(install?.inputSchema.required?.includes(field), field);
+});
+
 test("MCP protocol returns tool-level error results without JSON-RPC failure", async () => {
   const response = await handleJsonRpcRequest({
     jsonrpc: "2.0",

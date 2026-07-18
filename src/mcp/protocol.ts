@@ -66,7 +66,7 @@ export const handleJsonRpcRequest = async (request: JsonRpcRequest): Promise<Jso
         version
       },
       instructions:
-        "SkillRanger tools for project analysis, skill recommendations, skill audits, installed-skill lockfile inspection, dry-run install planning, and confirmed skill installation."
+        "SkillRanger provides read-only analysis and recommendation tools, exact-plan-confirmed skill installation, persisted skill-run lifecycle tools, and explicitly confirmed UI evidence capture. Capture constrains its declared output directory to the project, while the host-reviewed command remains open-world."
     });
   }
 

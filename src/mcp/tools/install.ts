@@ -4,7 +4,7 @@ import { InstallAuditBlockedError } from "../../installers/types.ts";
 import { readLockfile } from "../../lockfile/index.ts";
 import { findSkill } from "../../registry/index.ts";
 import type { McpToolDefinition, McpToolHandler } from "./types.ts";
-import { McpToolError } from "./types.ts";
+import { McpToolError, mcpToolEffects } from "./types.ts";
 import {
   asInstallScope,
   asString,
@@ -20,6 +20,7 @@ import {
 
 export const installToolDefinitions: McpToolDefinition[] = [
   {
+    ...mcpToolEffects.readOnly,
     name: "list_installed_skills",
     title: "List Installed Skills",
     description: "Read a project's SkillRanger lockfile and return installed skill entries.",
@@ -32,6 +33,7 @@ export const installToolDefinitions: McpToolDefinition[] = [
     }
   },
   {
+    ...mcpToolEffects.readOnly,
     name: "plan_skill_install",
     title: "Plan Skill Install",
     description: "Return a dry-run install plan for a skill without writing files or updating the lockfile.",
@@ -59,6 +61,7 @@ export const installToolDefinitions: McpToolDefinition[] = [
     }
   },
   {
+    ...mcpToolEffects.exactInstallPlan,
     name: "install_skill",
     title: "Install Skill",
     description:

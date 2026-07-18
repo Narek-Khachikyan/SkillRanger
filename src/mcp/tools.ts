@@ -29,7 +29,10 @@ import { codedErrorToolResult, withToolErrors } from "./tools/utils.ts";
 
 export type {
   JsonObject,
+  McpToolAnnotations,
   McpToolDefinition,
+  McpToolEffect,
+  McpToolEffectMetadata,
   McpToolResult,
 } from "./tools/types.ts";
 
