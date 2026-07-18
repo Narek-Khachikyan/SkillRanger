@@ -42,7 +42,7 @@ const hardNonDomainTokens = new Set(["native", "swift"]);
 
 const domainTokens = new Set([
   "accessibility", "browser", "component", "css", "e2e", "frontend", "hydration", "landing",
-  "mobile", "next", "page", "playwright", "react", "responsive", "rsc", "screenshot",
+  "mobile", "next", "next.js", "nextjs", "page", "playwright", "react", "responsive", "rsc", "screenshot",
   "tailwind", "test", "testing", "ui", "visual", "visually", "интерфейс", "страница", "фронтенд",
 ]);
 

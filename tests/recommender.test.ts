@@ -44,6 +44,19 @@ test("recommender ranks Next.js review first for Next.js fixture", async () => {
   );
 });
 
+test("recommender keeps Next.js aliases in the frontend domain before release", async () => {
+  for (const nextAlias of ["Next.js", "NextJS", "Next"]) {
+    const recommendations = await nextFixtureRecommendations({
+      userIntent: `Review this ${nextAlias} app before release`,
+    });
+    assert.equal(
+      recommendations[0]?.skillId,
+      "frontend.next-app-router-review",
+      nextAlias,
+    );
+  }
+});
+
 test("visual critic routing requires rendered evidence and comparison intent", async () => {
   const compare = await nextFixtureRecommendations({
     userIntent: "Compare these two rendered variants using their mobile and desktop screenshots",
@@ -544,11 +557,13 @@ test("recommender suppresses non-frontend routing regression prompts", async () 
 });
 
 test("recommender returns no frontend skills for backend-only intent", async () => {
-  const recommendations = await nextFixtureRecommendations({
-    userIntent: "Optimize backend database migration and API cache invalidation for a Node service",
-  });
-
-  assert.deepEqual(recommendations, []);
+  for (const userIntent of [
+    "Optimize backend database migration and API cache invalidation for a Node service",
+    "Review the backend release process and database migrations before release.",
+  ]) {
+    const recommendations = await nextFixtureRecommendations({ userIntent });
+    assert.deepEqual(recommendations, []);
+  }
 });
 
 test("recommender filters skills incompatible with the requested target agent", async () => {
