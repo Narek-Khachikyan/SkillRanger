@@ -10,7 +10,9 @@ Global installs can use `skillranger mcp`. The `skillranger-mcp` binary remains 
 
 From a source checkout, use `node src/mcp/server.ts`. For direct compiled smoke checks, use `node dist/mcp/server.js` after `npm run build`.
 
-The server is designed for host-managed approval flows. Most tools are read-only. `plan_skill_install` only returns a dry-run plan and does not write files. `install_skill` is write-capable and requires explicit confirmation plus exact expected writes from a current dry-run plan.
+The server is designed for host-managed approval flows. SkillRanger publishes effect metadata for every MCP tool. Read-only tools do not mutate project state. `install_skill` writes only after exact-plan confirmation. Skill-run lifecycle tools persist state under `.skillranger/runs` using host-managed mutation approval. `capture_ui_evidence` executes a host-reviewed command and writes artifacts inside `projectRoot`; it requires `confirm: true` but does not use install-plan fields.
+
+`outputDir` confinement does not sandbox `commandTemplate`; the host must review the full command because its side effects can extend beyond the declared capture destination.
 
 ## Generic stdio entry
 
@@ -51,19 +53,52 @@ If the host supports environment variables, keep this server minimal. It does no
 
 ## Tool Surface
 
-- `analyze_project`: scan a project and return a stack fingerprint.
-- `recommend_skills`: rank registry skills for a project and target agent; accepts optional `lane` and `limitPerLane` filters.
-- `audit_skill`: audit one registry skill package.
-- `list_installed_skills`: read `skillranger.lock.json`.
-- `plan_skill_install`: return a dry-run installer plan with intended writes.
-- `install_skill`: install only when `confirm: true`, `expectedWrites`, and `expectedLockfileUpdates` match the current plan.
-- `start_skill_run`: create a persisted run from project signals, domain policy, target agent, and intent. Raw intent is omitted unless `storeIntent: true`.
-- `record_skill_read`: record a selected skill version/checksum after the host reads its `SKILL.md`.
-- `resolve_skill_run_clarifications`: submit JSON-native answers or allowed declines with bounded assumptions.
-- `begin_skill_run_execution`: mark the point immediately before the host starts implementation.
-- `complete_skill_run`: record `implemented`, `failed`, or `blocked` plus artifacts.
-- `verify_skill_run`: attach an evidence-backed verification report and its canonical SHA-256 digest.
-- `inspect_skill_run`: read the current artifact from `<project>/.skillranger/runs/<run-id>.json`.
+SkillRanger exposes 31 tools in four effect classes, each with a distinct host approval boundary.
+
+### Read-only (17)
+
+- `analyze_project` scans a project and returns a stack fingerprint.
+- `recommend_skills` ranks registry skills for a project and target agent, with optional `lane` and `limitPerLane` filters.
+- `audit_skill` audits one local registry skill package for MVP security findings.
+- `list_installed_skills` reads `skillranger.lock.json`.
+- `plan_skill_install` returns a dry-run installer plan with intended writes and does not modify files.
+- `list_domains` lists the available domain policies.
+- `inspect_domain` reads one domain policy and its supported capabilities.
+- `create_frontend_design_brief` creates a frontend design brief from supplied project context.
+- `recommend_frontend_recipe` recommends a frontend implementation recipe for a design brief.
+- `validate_frontend_result` validates a frontend result against its design requirements.
+- `compile_frontend_design_spec` compiles a frontend design brief into an implementation specification.
+- `verify_frontend_result` verifies a frontend result using the canonical frontend verifier.
+- `repair_frontend_result` prepares a bounded frontend repair request without applying it.
+- `run_domain_eval` evaluates a domain workflow from supplied inputs.
+- `inspect_skill_run` reads the current persisted skill-run state without changing it.
+- `compare_design_variants` prepares an independent critic exchange or validates its returned report.
+- `verify_visual_result` runs the canonical strict final visual verifier.
+
+### Exact-plan install (1)
+
+- `install_skill` installs a skill only when `confirm: true`, `expectedWrites`, and `expectedLockfileUpdates` exactly match the current dry-run plan.
+
+### Persisted run-state transitions (12)
+
+These tools use host-managed mutation approval and update the persisted run JSON under `.skillranger/runs`.
+
+- `start_skill_run` prepares and persists a skill run from project signals, intent, and domain policy.
+- `record_skill_read` records a selected skill checksum as read for a skill run.
+- `resolve_skill_run_clarifications` resolves required clarifications with JSON-native answers, declines, and assumptions.
+- `begin_skill_run_execution` transitions a prepared skill run into execution.
+- `complete_skill_run` records an execution status and JSON-native artifacts.
+- `verify_skill_run` records a JSON-native verification report for an implemented skill run.
+- `read_next_skill_chunk` reads the next strict-skill content chunk and writes persisted read progress, despite its name.
+- `begin_skill_step` starts a strict v2 skill step in the persisted run.
+- `add_skill_evidence` adds attributed evidence to the active strict v2 skill step.
+- `complete_skill_step` completes the active strict v2 skill step.
+- `verify_skill` verifies a strict v2 skill in the persisted run.
+- `finalize_skill_run` finalizes a strict v2 skill run.
+
+### Confirmed command and artifact write (1)
+
+- `capture_ui_evidence` executes the reviewed browser-evidence command and writes its artifacts within `projectRoot` after `confirm: true`.
 
 `recommend_skills` arguments:
 
@@ -85,6 +120,8 @@ The tool returns both flat `recommendations` and grouped `recommendationGroups`;
 
 ## Skill-run example and CLI parity
 
+All lifecycle transition and read-progress tools update the persisted run JSON; `inspect_skill_run` is the only read-only lifecycle tool.
+
 Call the lifecycle tools in this order:
 
 ```jsonl
@@ -104,6 +141,8 @@ The privacy and guarantee boundary is identical on both surfaces: raw prompt sto
 
 ## Install Confirmation Flow
 
+This flow applies only to `install_skill`.
+
 1. Call `plan_skill_install`.
 2. Show the returned `plan.writes` and `plan.lockfileUpdates` to the user.
 3. If approved, call `install_skill` with:
@@ -112,6 +151,14 @@ The privacy and guarantee boundary is identical on both surfaces: raw prompt sto
    - `expectedLockfileUpdates: plan.lockfileUpdates`
 
 If the current plan differs from the expected paths, installation is rejected. If audit risk is `block`, the tool returns `isError: true` with `reason: "audit-blocked"` and does not write files.
+
+## UI Capture Confirmation Flow
+
+1. Show `commandTemplate`, `baseUrl`, resolved `projectRoot`, and requested `outputDir`.
+2. Require user/host approval before sending `confirm: true`.
+3. Expect rejection when `outputDir` escapes `projectRoot`.
+4. Treat the invoked command as open-world and potentially destructive according to MCP annotations.
+5. Do not send install-only `expectedWrites` or `expectedLockfileUpdates` fields.
 
 ## Tool Error Codes
 
