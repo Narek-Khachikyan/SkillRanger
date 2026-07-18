@@ -7,8 +7,8 @@
     "node": ">=20.0.0"
   },
   "bin": {
-    "skillranger": "./dist/cli/index.js",
-    "skillranger-mcp": "./dist/mcp/server.js"
+    "skillranger": "dist/cli/index.js",
+    "skillranger-mcp": "dist/mcp/server.js"
   },
   "files": [
     "dist/",
