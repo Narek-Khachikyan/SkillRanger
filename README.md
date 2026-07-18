@@ -144,7 +144,7 @@ Frontend is the single domain pack available today. Its 18 bundled skills are gr
 
 ## Built for More Than Frontend
 
-Backend/API, mobile, infrastructure and DevOps, security, data and AI, QA, and other software-engineering packs are future directions, not currently available domains.
+Backend/API, mobile, infrastructure/DevOps, security, data/AI, QA, and other software-engineering packs are future directions, not currently available domains.
 
 Those future packs are intended to reuse the domain-agnostic pipeline already in place: project detection, compatibility-aware recommendation, static audit, reviewable install planning, lockfile tracking, and evaluation gates.
 
