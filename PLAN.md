@@ -133,21 +133,21 @@ The default identity provider reads Linux `/proc/<pid>/stat` field 22 after firs
 
 **Produces:** `readSkillRangerVersion(): Promise<string>` and `npm run smoke:package`.
 
-- [ ] **Step 1: Write the failing package-identity tests**
+- [x] **Step 1: Write the failing package-identity tests**
 
   In `tests/mcp.protocol.test.ts`, read `package.json`, initialize MCP, and assert `result.serverInfo.version === packageJson.version`. In `tests/package-publication.test.ts`, assert that `RELEASE.md` contains `npm run smoke:package` and does not match `/skillranger-\d+\.\d+\.\d+\.tgz/`.
 
-- [ ] **Step 2: Run the red tests**
+- [x] **Step 2: Run the red tests**
 
   Run: `node --test tests/mcp.protocol.test.ts tests/package-publication.test.ts`
 
   Expected: FAIL because MCP reports `0.1.0` and `RELEASE.md` contains `skillranger-0.1.0.tgz`.
 
-- [ ] **Step 3: Implement package-derived runtime versioning**
+- [x] **Step 3: Implement package-derived runtime versioning**
 
   Add `readSkillRangerVersion()` in `src/version.ts`. It reads `${packageRoot}/package.json`, requires a non-empty string `version`, and throws `Invalid package version at <path>` for malformed data. Await it when constructing the MCP initialize result; remove the hardcoded version.
 
-- [ ] **Step 4: Implement a dynamic package smoke command**
+- [x] **Step 4: Implement a dynamic package smoke command**
 
   `scripts/package-smoke.mjs` must:
 
@@ -162,7 +162,7 @@ The default identity provider reads Linux `/proc/<pid>/stat` field 22 after firs
 
   Add `"smoke:package": "node scripts/package-smoke.mjs"` to `package.json`. Replace versioned tarball commands in `RELEASE.md` with this single command and describe that it always tests the tarball emitted by the current checkout.
 
-- [ ] **Step 5: Run the focused tests and smoke**
+- [x] **Step 5: Run the focused tests and smoke**
 
   Run: `node --test tests/mcp.protocol.test.ts tests/package-publication.test.ts`
 
@@ -172,7 +172,7 @@ The default identity provider reads Linux `/proc/<pid>/stat` field 22 after firs
 
   Expected: PASS; MCP reports `0.1.2`, and all smoke commands use the newly packed tarball from the temporary directory.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
   ```bash
   git add src/version.ts src/mcp/protocol.ts scripts/package-smoke.mjs package.json RELEASE.md tests/mcp.protocol.test.ts tests/package-publication.test.ts
@@ -197,23 +197,23 @@ The default identity provider reads Linux `/proc/<pid>/stat` field 22 after firs
 
 **Produces:** `upsertInstalledSkill(...): Promise<InstalledSkill>` and atomic `writeLockfile` behavior.
 
-- [ ] **Step 1: Write the failing child-process serialization test**
+- [x] **Step 1: Write the failing child-process serialization test**
 
   Add a helper that loads one registry skill, audits it, and calls `upsertInstalledSkill`. A test-only `afterTransactionLockAcquired` hook writes an acquired marker; the first child waits for a release marker while holding the transaction lock. Start the second child and assert its acquired marker does not exist until the first child is released. After both exit successfully, assert both distinct installed entries exist exactly once.
 
   The lock path must be `${lockfilePath(projectRoot)}.update.lock`. The test must use two `node` child processes, not two promises in one process.
 
-- [ ] **Step 2: Write the failing atomic-replacement test**
+- [x] **Step 2: Write the failing atomic-replacement test**
 
   Seed a valid lockfile and save its exact bytes. Inject `beforeCommit` to throw after the same-directory temporary file is fully written but before rename. Assert rejection, byte-for-byte equality of the destination, successful `readLockfile`, and absence of matching temporary files.
 
-- [ ] **Step 3: Run the red lockfile tests**
+- [x] **Step 3: Run the red lockfile tests**
 
   Run: `node --test tests/lockfile.test.ts`
 
   Expected: FAIL because transaction hooks/cross-process locking do not exist and the destination is overwritten directly.
 
-- [ ] **Step 4: Implement one transaction primitive**
+- [x] **Step 4: Implement one transaction primitive**
 
   In `src/lockfile/index.ts`, add one internal `withLockfileTransaction(projectRoot, apply, hooks)` function. It must resolve the project root, instantiate `RunFileLock` with the exact `.update.lock` path, acquire before any read, call `afterTransactionLockAcquired` only after acquisition, and release in `finally`.
 
@@ -224,13 +224,13 @@ The default identity provider reads Linux `/proc/<pid>/stat` field 22 after firs
 
   The internal atomic writer must use a unique `${destination}.${process.pid}.${randomUUID()}.tmp` path in the destination directory, `open(..., "wx")`, write the validated JSON, close the handle, call `beforeCommit`, rename over the destination, and unlink only its own temporary file in `finally`. Existing malformed destinations remain fail-closed.
 
-- [ ] **Step 5: Run focused persistence and installer tests**
+- [x] **Step 5: Run focused persistence and installer tests**
 
   Run: `node --test tests/lockfile.test.ts tests/installer.codex.test.ts tests/cli.install.test.ts tests/mcp.test.ts`
 
   Expected: PASS; the child process cannot enter while the first holds the lock, both entries remain, and failed commit preserves the previous bytes.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
   ```bash
   git add src/lockfile/index.ts src/types.ts tests/helpers/lockfile-upsert-child.ts tests/lockfile.test.ts tests/installer.codex.test.ts
@@ -256,7 +256,7 @@ The default identity provider reads Linux `/proc/<pid>/stat` field 22 after firs
 
 **Produces:** `InstallApplyResult` and `InstallAuditBlockedError` exactly as defined in Canonical Interfaces.
 
-- [ ] **Step 1: Write the failing success-projection test**
+- [x] **Step 1: Write the failing success-projection test**
 
   For a successful MCP install, assert:
 
@@ -268,17 +268,17 @@ The default identity provider reads Linux `/proc/<pid>/stat` field 22 after firs
 
   Do not assert deep equality between the complete `AuditReport` and `installed.audit`; the lockfile intentionally stores `skillId` and `checksum` at the installed-entry level.
 
-- [ ] **Step 2: Write the failing blocked-result test**
+- [x] **Step 2: Write the failing blocked-result test**
 
   Keep the existing malicious-registry fixture. Assert the MCP response remains `audit-blocked`, contains the one audit carried by `InstallAuditBlockedError`, and writes neither skill files nor a lockfile entry. Add an installer-level assertion that `applyInstall` rejects with `InstallAuditBlockedError` and exposes the same plan/audit fields.
 
-- [ ] **Step 3: Run the red MCP/installer tests**
+- [x] **Step 3: Run the red MCP/installer tests**
 
   Run: `node --test tests/mcp.test.ts tests/installer.codex.test.ts`
 
   Expected: FAIL because `applyInstall` returns only `InstallPlan` and MCP performs its own pre-audit.
 
-- [ ] **Step 4: Implement the canonical apply result**
+- [x] **Step 4: Implement the canonical apply result**
 
   Change `AgentAdapter.applyInstall` to accept `ApplyInstallInput` and return `InstallApplyResult`. Inside `applyInstall`:
 
@@ -292,7 +292,7 @@ The default identity provider reads Linux `/proc/<pid>/stat` field 22 after firs
 
   Remove the MCP pre-audit and post-apply lockfile reread. Map `InstallAuditBlockedError` to the existing structured `audit-blocked` response. Update CLI call sites to consume `.plan`, preserving current CLI output exactly.
 
-- [ ] **Step 5: Run every apply caller and parity test**
+- [x] **Step 5: Run every apply caller and parity test**
 
   Run: `rg -n '\.applyInstall\(' tests src`
 
@@ -302,7 +302,7 @@ The default identity provider reads Linux `/proc/<pid>/stat` field 22 after firs
 
   Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
   ```bash
   git add src/types.ts src/installers/types.ts src/installers/codex.ts src/mcp/tools/install.ts src/cli/index.ts tests
@@ -324,7 +324,7 @@ The default identity provider reads Linux `/proc/<pid>/stat` field 22 after firs
 
 **Produces:** `ProcessIdentityProvider` and versioned lock-owner metadata.
 
-- [ ] **Step 1: Write the failing identity-policy tests**
+- [x] **Step 1: Write the failing identity-policy tests**
 
   Inject a deterministic `ProcessIdentityProvider` and short timeout values. Cover all four cases for both final locks and guard entries:
 
@@ -333,13 +333,13 @@ The default identity provider reads Linux `/proc/<pid>/stat` field 22 after firs
   3. Stale owner with unknown identity: retain through `staleLockMs`, reclaim only after `unknownOwnerMaxAgeMs`.
   4. Legacy `{ token, pid }` metadata: treat as unknown and apply the same bounded fallback.
 
-- [ ] **Step 2: Run the red run-lock tests**
+- [x] **Step 2: Run the red run-lock tests**
 
   Run: `node --test tests/run-lock.test.ts tests/skill-run.test.ts tests/strict-store.test.ts`
 
   Expected: FAIL because metadata has no version/identity and no identity provider exists.
 
-- [ ] **Step 3: Implement versioned owner metadata and Linux identity**
+- [x] **Step 3: Implement versioned owner metadata and Linux identity**
 
   Persist this shape for new final locks and guard entries:
 
@@ -363,13 +363,13 @@ The default identity provider reads Linux `/proc/<pid>/stat` field 22 after firs
 
   Reclamation age continues to come from the final lock file or guard-directory `mtime`; `createdAt` is provenance only and must never extend a stale lock's retention window.
 
-- [ ] **Step 4: Run focused run-state tests**
+- [x] **Step 4: Run focused run-state tests**
 
   Run: `node --test tests/run-lock.test.ts tests/skill-run.test.ts tests/strict-store.test.ts`
 
   Expected: PASS, including existing concurrent updates, stale-guard recovery, release ownership, and long-running live-owner coverage.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
   ```bash
   git add src/runtime/run-lock.ts tests/run-lock.test.ts tests/skill-run.test.ts tests/strict-store.test.ts
@@ -386,31 +386,31 @@ The default identity provider reads Linux `/proc/<pid>/stat` field 22 after firs
 
 - Modify: `PLAN.md` checkboxes only after commands succeed.
 
-- [ ] **Step 1: Run static/build checks**
+- [x] **Step 1: Run static/build checks**
 
   Run: `npm run build && npm run check`
 
   Expected: PASS.
 
-- [ ] **Step 2: Run the complete test and registry gates**
+- [x] **Step 2: Run the complete test and registry gates**
 
   Run: `npm test && npm run validate:registry && npm run lint:skills && npm run audit:registry && npm run publish:check`
 
   Expected: all commands PASS; registry remains 18 valid skills with zero audit failures unless a separately reviewed registry change intentionally updates that count.
 
-- [ ] **Step 3: Run frontend and aggregate release checks**
+- [x] **Step 3: Run frontend and aggregate release checks**
 
   Run: `npm run eval:frontend -- --run-routing --project fixtures/next-react-ts --json && npm run eval:frontend:ru && npm run release:check`
 
   Expected: routing remains 156/156 for the current fixture and the aggregate release check passes.
 
-- [ ] **Step 4: Run the current-package smoke**
+- [x] **Step 4: Run the current-package smoke**
 
   Run: `npm run smoke:package`
 
   Expected: PASS using only the tarball created in the command's fresh temporary directory; MCP version equals `package.json` version.
 
-- [ ] **Step 5: Inspect the working tree**
+- [x] **Step 5: Inspect the working tree**
 
   Run: `git status --short`
 
