@@ -781,14 +781,14 @@ test("does not reclaim an old strict lock owned by a live process", async () => 
   assert.equal(entered, true);
 });
 
-test("reclaims an old strict lock owned by a dead process", async () => {
+test("reclaims legacy strict lock metadata after the unknown-owner bound", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-dead-lock-"));
   const store = new StrictSkillRunStore(root);
   const run = fixtureRun();
   await store.create(run);
   const lockPath = path.join(root, ".skillranger", "runs", `${run.runId}.lock`);
   await writeFile(lockPath, JSON.stringify({ token: "dead-owner", pid: 999_999 }));
-  const old = new Date(Date.now() - 31_000);
+  const old = new Date(Date.now() - 301_000);
   await utimes(lockPath, old, old);
 
   const updated = await store.update(run.runId, (current) => readNextStrictChunk(current, contract.skillId).run);

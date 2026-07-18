@@ -527,7 +527,7 @@ test("stale run locks are reclaimed before updating", async () => {
   await store.create(run);
   const lockPath = path.join(projectRoot, ".skillranger/runs", `${run.runId}.lock`);
   await writeFile(lockPath, "abandoned-owner", "utf8");
-  const stale = new Date(Date.now() - 31_000);
+  const stale = new Date(Date.now() - 301_000);
   await utimes(lockPath, stale, stale);
   const updated = await store.update(run.runId, (current) => reduceSkillRun(current, { type: "select-skills", skills: fixtureSkills }));
   assert.equal(updated.state, "skills-selected");
@@ -546,7 +546,7 @@ test("competing stale-lock reclaimers preserve both updates and recover a crashe
   await writeFile(lockPath, "abandoned-lock-owner", "utf8");
   await mkdir(guardPath);
   await writeFile(guardEntry, JSON.stringify({ token: "abandoned-guard-owner", pid: 999_999 }), "utf8");
-  const stale = new Date(Date.now() - 31_000);
+  const stale = new Date(Date.now() - 301_000);
   await utimes(lockPath, stale, stale);
   await utimes(guardEntry, stale, stale);
   await utimes(guardPath, stale, stale);
@@ -770,14 +770,14 @@ test("fresh dead-owner lock metadata is preserved until the stale threshold", as
   await unlink(lockPath);
 });
 
-test("stale dead-owner lock metadata is recovered", async () => {
+test("stale legacy lock metadata is recovered after the unknown-owner bound", async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
   const store = new SkillRunStore(projectRoot);
   const run = createSkillRun(fixtureInput);
   await store.create(run);
   const lockPath = path.join(projectRoot, ".skillranger/runs", `${run.runId}.lock`);
   await writeFile(lockPath, JSON.stringify({ token: "dead-owner", pid: 999_999 }), "utf8");
-  const stale = new Date(Date.now() - 31_000);
+  const stale = new Date(Date.now() - 301_000);
   await utimes(lockPath, stale, stale);
   const updated = await store.update(run.runId, (current) => current);
   assert.equal(updated.revision, 1);

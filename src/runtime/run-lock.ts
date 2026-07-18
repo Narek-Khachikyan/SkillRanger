@@ -5,6 +5,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 const lockTimeoutMs = 5_000;
 const staleLockMs = 30_000;
+const unknownOwnerMaxAgeMs = 300_000;
 const emptyGuardStaleMs = 250;
 
 const isErrno = (error: unknown, code: string): error is NodeJS.ErrnoException => (
@@ -13,7 +14,56 @@ const isErrno = (error: unknown, code: string): error is NodeJS.ErrnoException =
 
 export type OwnedRunLock = { path: string; token: string };
 type LockGuard = { path: string; entryPath: string };
-type LockOwnerMetadata = { token: string; pid: number };
+
+export type ProcessIdentity = {
+  scheme: "linux-proc-start-ticks";
+  value: string;
+};
+
+export type ProcessIdentityState =
+  | { status: "dead" }
+  | { status: "known"; identity: ProcessIdentity }
+  | { status: "unknown" };
+
+export type ProcessIdentityProvider = {
+  lookup(pid: number): Promise<ProcessIdentityState>;
+};
+
+type LegacyLockOwnerMetadata = { token: string; pid: number; version?: undefined };
+type LockOwnerMetadataV2 = {
+  version: 2;
+  token: string;
+  pid: number;
+  createdAt: string;
+  identity?: ProcessIdentity;
+};
+type LockOwnerMetadata = LegacyLockOwnerMetadata | LockOwnerMetadataV2;
+
+const defaultProcessIdentityProvider: ProcessIdentityProvider = {
+  async lookup(pid) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      return isErrno(error, "ESRCH") ? { status: "dead" } : { status: "unknown" };
+    }
+
+    if (process.platform !== "linux") return { status: "unknown" };
+    try {
+      const source = await readFile(`/proc/${pid}/stat`, "utf8");
+      const commandEnd = source.lastIndexOf(")");
+      if (commandEnd < 0) return { status: "unknown" };
+      const fieldsAfterCommand = source.slice(commandEnd + 1).trim().split(/\s+/);
+      const startTicks = fieldsAfterCommand[19];
+      if (startTicks === undefined || !/^\d+$/.test(startTicks)) return { status: "unknown" };
+      return {
+        status: "known",
+        identity: { scheme: "linux-proc-start-ticks", value: startTicks },
+      };
+    } catch {
+      return { status: "unknown" };
+    }
+  },
+};
 
 export type RunFileLockHooks = {
   beforeGuardPublish?: (input: { guardPath: string; candidatePath: string; token: string }) => void | Promise<void>;
@@ -26,6 +76,10 @@ export class RunFileLock {
     lockPath: (runId: string) => string;
     error: (message: string) => Error;
     hooks?: RunFileLockHooks;
+    identityProvider: ProcessIdentityProvider;
+    lockTimeoutMs: number;
+    staleLockMs: number;
+    unknownOwnerMaxAgeMs: number;
   };
   private readonly ownErrors = new WeakSet<Error>();
 
@@ -33,8 +87,18 @@ export class RunFileLock {
     lockPath: (runId: string) => string;
     error: (message: string) => Error;
     hooks?: RunFileLockHooks;
+    identityProvider?: ProcessIdentityProvider;
+    lockTimeoutMs?: number;
+    staleLockMs?: number;
+    unknownOwnerMaxAgeMs?: number;
   }) {
-    this.input = input;
+    this.input = {
+      ...input,
+      identityProvider: input.identityProvider ?? defaultProcessIdentityProvider,
+      lockTimeoutMs: input.lockTimeoutMs ?? lockTimeoutMs,
+      staleLockMs: input.staleLockMs ?? staleLockMs,
+      unknownOwnerMaxAgeMs: input.unknownOwnerMaxAgeMs ?? unknownOwnerMaxAgeMs,
+    };
   }
 
   private error(message: string): Error {
@@ -43,13 +107,19 @@ export class RunFileLock {
     return error;
   }
 
-  private processIsAlive(pid: number): boolean {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch (error) {
-      return !isErrno(error, "ESRCH");
-    }
+  private async lookupIdentity(pid: number): Promise<ProcessIdentityState> {
+    return this.input.identityProvider.lookup(pid).catch(() => ({ status: "unknown" }));
+  }
+
+  private async createOwnerMetadata(token: string): Promise<LockOwnerMetadataV2> {
+    const state = await this.lookupIdentity(process.pid);
+    return {
+      version: 2,
+      token,
+      pid: process.pid,
+      createdAt: new Date().toISOString(),
+      ...(state.status === "known" ? { identity: state.identity } : {}),
+    };
   }
 
   private parseOwnerMetadata(source: string, expectedToken?: string): LockOwnerMetadata | undefined {
@@ -63,16 +133,51 @@ export class RunFileLock {
         || !Number.isInteger((parsed as { pid?: unknown }).pid)
         || (parsed as { pid: number }).pid <= 0
       ) return undefined;
-      return parsed as LockOwnerMetadata;
+      const record = parsed as Record<string, unknown>;
+      if (record.version === undefined) {
+        return { token: record.token as string, pid: record.pid as number };
+      }
+      if (
+        record.version !== 2
+        || typeof record.createdAt !== "string"
+        || record.createdAt.trim() === ""
+        || (
+          record.identity !== undefined
+          && (
+            typeof record.identity !== "object"
+            || record.identity === null
+            || (record.identity as { scheme?: unknown }).scheme !== "linux-proc-start-ticks"
+            || typeof (record.identity as { value?: unknown }).value !== "string"
+            || (record.identity as { value: string }).value.trim() === ""
+          )
+        )
+      ) return undefined;
+      return record as LockOwnerMetadataV2;
     } catch {
       return undefined;
     }
   }
 
-  private async guardOwnerState(entryPath: string, entryName: string): Promise<boolean | undefined> {
+  private identitiesMatch(left: ProcessIdentity, right: ProcessIdentity): boolean {
+    return left.scheme === right.scheme && left.value === right.value;
+  }
+
+  private async retainOwner(owner: LockOwnerMetadata | undefined, age: number): Promise<boolean> {
+    if (age <= this.input.staleLockMs) return true;
+    if (owner?.version !== 2 || owner.identity === undefined) {
+      return age <= this.input.unknownOwnerMaxAgeMs;
+    }
+
+    const state = await this.lookupIdentity(owner.pid);
+    if (state.status === "dead") return false;
+    if (state.status === "unknown") return age <= this.input.unknownOwnerMaxAgeMs;
+    return this.identitiesMatch(owner.identity, state.identity);
+  }
+
+  private async retainGuardOwner(entryPath: string, entryName: string, age: number): Promise<boolean> {
     try {
       const owner = this.parseOwnerMetadata(await readFile(entryPath, "utf8"), entryName);
-      return owner === undefined ? undefined : this.processIsAlive(owner.pid);
+      return this.retainOwner(owner, age);
     } catch (error) {
       if (isErrno(error, "ENOENT")) return false;
       throw error;
@@ -92,11 +197,10 @@ export class RunFileLock {
     if (entries.length === 0) {
       if (age <= emptyGuardStaleMs) return;
     } else {
-      const ownerStates = await Promise.all(
-        entries.map((entry) => this.guardOwnerState(path.join(guardPath, entry), entry)),
+      const retainedOwners = await Promise.all(
+        entries.map((entry) => this.retainGuardOwner(path.join(guardPath, entry), entry, age)),
       );
-      if (ownerStates.some((alive) => alive === true)) return;
-      if (ownerStates.some((alive) => alive === undefined) && age <= staleLockMs) return;
+      if (retainedOwners.some(Boolean)) return;
     }
 
     for (const entry of entries) {
@@ -119,7 +223,7 @@ export class RunFileLock {
         await mkdir(candidatePath);
         try {
           await this.input.hooks?.beforeGuardPublish?.({ guardPath, candidatePath, token });
-          await writeFile(candidateEntryPath, JSON.stringify({ token, pid: process.pid }), { encoding: "utf8", flag: "wx" });
+          await writeFile(candidateEntryPath, JSON.stringify(await this.createOwnerMetadata(token)), { encoding: "utf8", flag: "wx" });
           const candidateIdentity = await stat(candidatePath);
           let published = false;
           try {
@@ -162,7 +266,7 @@ export class RunFileLock {
         if (isErrno(error, "EEXIST")) continue;
         throw error;
       }
-      if (startedAt !== undefined && Date.now() - startedAt >= lockTimeoutMs) {
+      if (startedAt !== undefined && Date.now() - startedAt >= this.input.lockTimeoutMs) {
         throw this.error("Timed out waiting for run lock");
       }
       await delay(25);
@@ -202,8 +306,7 @@ export class RunFileLock {
         try {
           const [lockStat, source] = await Promise.all([stat(lockPath), readFile(lockPath, "utf8")]);
           const owner = this.parseOwnerMetadata(source);
-          if (Date.now() - lockStat.mtimeMs <= staleLockMs) return undefined;
-          if (owner !== undefined && this.processIsAlive(owner.pid)) return undefined;
+          if (await this.retainOwner(owner, Date.now() - lockStat.mtimeMs)) return undefined;
           await unlink(lockPath);
           continue;
         } catch (statError) {
@@ -213,7 +316,7 @@ export class RunFileLock {
       }
 
       try {
-        await handle.writeFile(JSON.stringify({ token, pid: process.pid }), "utf8");
+        await handle.writeFile(JSON.stringify(await this.createOwnerMetadata(token)), "utf8");
         await handle.close();
         return { path: lockPath, token };
       } catch (error) {
@@ -240,7 +343,7 @@ export class RunFileLock {
         if (error instanceof Error && this.ownErrors.has(error)) throw error;
         throw this.error(`Could not acquire run lock: ${(error as Error).message}`);
       }
-      if (Date.now() - startedAt >= lockTimeoutMs) {
+      if (Date.now() - startedAt >= this.input.lockTimeoutMs) {
         throw this.error("Timed out waiting for run lock");
       }
       await delay(25);
@@ -266,4 +369,4 @@ export class RunFileLock {
   }
 }
 
-export { lockTimeoutMs, staleLockMs };
+export { lockTimeoutMs, staleLockMs, unknownOwnerMaxAgeMs };
