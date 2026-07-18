@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import path from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import * as readline from "node:readline";
 import { fileURLToPath } from "node:url";
 import { scanProject } from "../scanner/index.ts";
@@ -52,41 +52,12 @@ import {
   type BaselineKind,
 } from "../evals/runner.ts";
 import { skillLanes, type InstallPlan, type ProjectFingerprint, type Recommendation, type RegistrySkill, type SkillLane } from "../types.ts";
+import { parseCliInvocation, renderCommandHelp, renderRootHelp } from "./commands.ts";
 import { handleRunCliCommand } from "./runs.ts";
 import { handleVisualEvalCommand } from "./visual-eval.ts";
 
 const supportedSetupTargets = ["claude-code", "codex", "opencode", "cursor", "gemini-cli"] as const;
 type SupportedSetupTarget = (typeof supportedSetupTargets)[number];
-
-type ParsedArgs = {
-  command?: string;
-  positionals: string[];
-  flags: Record<string, string | boolean>;
-};
-
-const parseArgs = (argv: string[]): ParsedArgs => {
-  const [command, ...rest] = argv;
-  const positionals: string[] = [];
-  const flags: Record<string, string | boolean> = {};
-
-  for (let index = 0; index < rest.length; index += 1) {
-    const arg = rest[index];
-    if (arg.startsWith("--")) {
-      const key = arg.slice(2);
-      const next = rest[index + 1];
-      if (!next || next.startsWith("--")) {
-        flags[key] = true;
-      } else {
-        flags[key] = next;
-        index += 1;
-      }
-    } else {
-      positionals.push(arg);
-    }
-  }
-
-  return { command, positionals, flags };
-};
 
 const asString = (value: string | boolean | undefined, fallback: string) => (typeof value === "string" ? value : fallback);
 
@@ -132,58 +103,6 @@ const asCapabilities = (value: string | boolean | undefined) => {
 
 const printJson = (value: unknown) => {
   console.log(JSON.stringify(value, null, 2));
-};
-
-const printHelp = () => {
-  console.log(`skillranger
-
-	Usage:
-	  skillranger scan [project] [--json]
-  skillranger domain:list [--json]
-  skillranger domain:inspect <domain-id> [--json]
-  skillranger design:brief [project] [--domain <name>] [--user <actor>] [--task <task>] [--surface <type>] [--action <action>] [--output <path>] [--json]
-  skillranger design:recommend-recipe --brief <path> [--json]
-  skillranger design:observe --brief <path> --base-url <url> --command <adapter> [--route </path>] [--output observations.json] [--project <path>] [--json]
-  skillranger design:validate --brief <path> [--direction <path>] [--json]
-  skillranger design:validate-source [project] --files <comma-separated-paths> [--semantic-tokens] [--json]
-  skillranger design:verify --brief <path> --direction <path> [--observations <path>] [--capabilities browser,screenshots] [--iteration <n>] [--json]
-  skillranger design:repair --report <path> [--max-iterations <n>] [--json]
-  skillranger design:compile --brief <path> --direction <path> [--report <path>] [--output <path>] [--json]
-  skillranger recommend [project] [--target codex|claude-code|opencode|cursor|gemini-cli] [--intent "..."] [--capabilities browser,screenshots] [--lane <lane>] [--limit-per-lane <n>] [--explain] [--json]
-  skillranger run:start [project] --target <agent> --domain <id> --intent <text> [--strict --inputs <path> --capabilities <list>] [--brief <path>] [--store-intent] [--json]
-  skillranger run:record-read [project] --run <id> --skill <id> [--json]
-  skillranger run:resolve-clarifications [project] --run <id> --answers <json-path> [--json]
-  skillranger run:begin [project] --run <id> [--json]
-  skillranger run:complete [project] --run <id> --status implemented|failed|blocked [--artifacts name=path,...] [--json]
-  skillranger run:verify [project] --run <id> --report <path> [--json]
-  skillranger run:inspect [project] --run <id> [--json]
-  skillranger run:read-next [project] --run <id> --skill <id> [--json]
-  skillranger run:step:begin [project] --run <id> --skill <id> --step <canonical-id> [--json]
-  skillranger run:evidence:add [project] --run <id> --skill <id> --step <id> --kind <kind> --path <path> [--rules <ids>] [--validated-as <schema>] [--json]
-  skillranger run:step:complete [project] --run <id> --skill <id> --step <canonical-id> [--json]
-  skillranger run:skill:verify [project] --run <id> --skill <id> [--json]
-  skillranger run:finalize [project] --run <id> [--json]
-  skillranger setup [project] [--target codex[,claude-code,opencode,cursor,gemini-cli]] [--intent "..."] [--scope repo|user] [--copy] [--yes] [--no-agent-context] [--lane <lane>] [--limit-per-lane <n>]
-	  skillranger audit <skill-id> [--json]
-	  skillranger validate:registry [--json]
-	  skillranger audit:registry [--json]
-  skillranger lint:skills [--json]
-  skillranger publish:check [--json]
-	  skillranger eval:visual --plan|--run|--prepare-review|--aggregate|--calibrate [options] [--json]
-	  skillranger eval:frontend [--suite <path>] [--locale en|ru|all] [--json]
-  skillranger eval:frontend --run-tasks --skill-slice <id> --repetitions <n> [--baselines without-skill,old-skill,current-skill] [--json]
-  skillranger eval:frontend --verify-task-evidence <path> --summarize-variance [--json]
-  skillranger eval:frontend --run-routing --project <path> [--target codex] [--suite <path>] [--locale en|ru|all] [--json]
-  skillranger eval:frontend --verify-task-evidence <path> [--suite <path>] [--json]
-  skillranger eval:frontend --verify-pairwise-review <path> [--suite <path>] [--json]
-  skillranger install <skill-id> --project <path> [--target codex|claude-code|opencode|cursor|gemini-cli] [--scope repo|user] [--copy] [--dry-run] [--yes]
-  skillranger installed [project] [--project <path>] [--json]
-  skillranger mcp
-  skillranger doctor
-
-Source-run equivalent from a checkout:
-  node src/cli/index.ts <command> [...args]
-`);
 };
 
 const runMode = () => {
@@ -525,14 +444,25 @@ const printInstallSummary = (
 };
 
 const run = async () => {
-  const args = parseArgs(process.argv.slice(2));
-  const command = args.command;
-  const registryRoot = defaultRegistryRoot;
-
-  if (!command || command === "help" || command === "--help") {
-    printHelp();
+  const invocation = parseCliInvocation(process.argv.slice(2));
+  if (invocation.kind === "help") {
+    console.log(invocation.command ? renderCommandHelp(invocation.command) : renderRootHelp());
     return;
   }
+  if (invocation.kind === "version") {
+    const packageJson = JSON.parse(
+      await readFile(path.join(packageRoot, "package.json"), "utf8"),
+    ) as { version?: unknown };
+    if (typeof packageJson.version !== "string" || packageJson.version.trim() === "") {
+      throw new Error("Package version is missing from package.json.");
+    }
+    console.log(packageJson.version);
+    return;
+  }
+
+  const args = invocation;
+  const command = args.command;
+  const registryRoot = defaultRegistryRoot;
 
   if (await handleVisualEvalCommand({ command, flags: args.flags })) return;
 
@@ -1208,7 +1138,7 @@ const run = async () => {
     return;
   }
 
-  if (command === "installed" || command === "list-installed") {
+  if (command === "installed") {
     const projectRoot = path.resolve(asString(args.flags.project, args.positionals[0] ?? "."));
     const lockfile = await readLockfile(projectRoot);
     if (args.flags.json) {
