@@ -55,6 +55,7 @@ import {
 import { skillLanes, type InstallPlan, type ProjectFingerprint, type Recommendation, type RegistrySkill, type SkillLane } from "../types.ts";
 import { parseCliInvocation, renderCommandHelp, renderRootHelp } from "./commands.ts";
 import { handleRunCliCommand } from "./runs.ts";
+import { summarizeSetupRecommendations } from "./setup-recommendations.ts";
 import { handleVisualEvalCommand } from "./visual-eval.ts";
 
 const asString = (value: string | boolean | undefined, fallback: string) => (typeof value === "string" ? value : fallback);
@@ -340,19 +341,6 @@ const promptYesNo = async (message: string): Promise<boolean> => {
     if (hadRawMode) stdin.setRawMode(wasRaw);
     if (!wasRaw) stdin.pause();
   }
-};
-
-const mergeRecommendationsBySkillId = (recommendationLists: Recommendation[][]): Recommendation[] => {
-  const merged = new Map<string, Recommendation>();
-  for (const list of recommendationLists) {
-    for (const recommendation of list) {
-      const existing = merged.get(recommendation.skillId);
-      if (!existing || recommendation.score > existing.score) {
-        merged.set(recommendation.skillId, recommendation);
-      }
-    }
-  }
-  return [...merged.values()].sort((left, right) => right.score - left.score || left.skillId.localeCompare(right.skillId));
 };
 
 const formatTargetAgents = (targets: string[]) => targets.join(", ");
@@ -753,20 +741,29 @@ const run = async () => {
     const targetAgents = targetSelection.selected;
     const scope = await chooseSetupScope(args.flags.scope, interactive);
     const mode = await chooseSetupInstallMode(args.flags.copy, interactive);
-    const recommendations = mergeRecommendationsBySkillId(
-      targetAgents.map((targetAgent) => recommendSkills(fingerprint, skills, {
+    const recommendationSummary = summarizeSetupRecommendations(
+      targetAgents.map((targetAgent) => ({
         targetAgent,
-        userIntent,
-        lane,
-        limitPerLane,
-      }))
+        recommendations: recommendSkills(fingerprint, skills, {
+          targetAgent,
+          userIntent,
+          lane,
+          limitPerLane,
+        }),
+      })),
     );
+    const recommendations = recommendationSummary.recommendations;
 
     console.log("SkillRanger setup");
     console.log(`Project: ${projectRoot}`);
     console.log(`Targets: ${formatTargetAgents(targetAgents)}`);
     console.log(`Scope: ${scope}`);
     console.log(`Mode: ${mode}`);
+    if (recommendationSummary.targetsWithoutRecommendations.length > 0) {
+      console.log(
+        `No matching compatible recommendations for: ${formatTargetAgents(recommendationSummary.targetsWithoutRecommendations)}`,
+      );
+    }
     console.log("");
     printSetupDetectedSummary(fingerprint);
     if (!explicitTargets) {
@@ -794,13 +791,14 @@ const run = async () => {
     console.log(`Selected ${selection.selectedSkillIds.length} skills:`);
     for (const skillId of selection.selectedSkillIds) console.log(`- ${skillId}`);
 
-    const selectedSkills: RegistrySkill[] = [];
+    const selectedSkills: Array<{ skill: RegistrySkill; targetAgents: SetupAgentType[] }> = [];
     const plans: InstallPlan[] = [];
     for (const skillId of selection.selectedSkillIds) {
       const skill = await findSkill(skillId, registryRoot);
       if (!skill) throw new Error(`Skill not found: ${skillId}`);
-      selectedSkills.push(skill);
-      for (const targetAgent of targetAgents) {
+      const compatibleTargets = recommendationSummary.targetsBySkillId.get(skillId) ?? [];
+      selectedSkills.push({ skill, targetAgents: compatibleTargets });
+      for (const targetAgent of compatibleTargets) {
         const adapter = getAdapter(targetAgent);
         plans.push(await adapter.planInstall(skill, { projectRoot, targetAgent, scope, dryRun: true, mode }));
       }
@@ -823,8 +821,8 @@ const run = async () => {
 
     console.log(`Installing ${selectedSkills.length} skills...`);
     const appliedPlans: InstallPlan[] = [];
-    for (const skill of selectedSkills) {
-      for (const targetAgent of targetAgents) {
+    for (const { skill, targetAgents: compatibleTargets } of selectedSkills) {
+      for (const targetAgent of compatibleTargets) {
         const adapter = getAdapter(targetAgent);
         try {
           const result = await adapter.applyInstall(skill, { projectRoot, targetAgent, scope, dryRun: false, mode });

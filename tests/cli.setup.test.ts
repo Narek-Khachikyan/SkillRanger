@@ -233,6 +233,13 @@ test("setup CLI supports comma-separated multi-agent targets", async () => {
     assert.match(stdout, /Installed frontend\.next-app-router-review for claude-code/);
     assert.equal(await exists(path.join(projectRoot, ".agents/skills/next-app-router-review/SKILL.md")), true);
     assert.equal(await exists(path.join(projectRoot, ".claude/skills/next-app-router-review")), true);
+    const lockfile = JSON.parse(await readFile(path.join(projectRoot, "skillranger.lock.json"), "utf8")) as {
+      installed: Array<{ skillId: string; targetAgent: string }>;
+    };
+    const targets = lockfile.installed
+      .filter((entry) => entry.skillId === "frontend.next-app-router-review")
+      .map((entry) => entry.targetAgent);
+    assert.deepEqual(targets, ["codex", "claude-code"]);
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
   }
