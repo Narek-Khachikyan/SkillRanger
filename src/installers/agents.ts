@@ -11,6 +11,16 @@ export type AgentType =
   | "opencode"
   | "universal";
 
+export const setupAgentTypes = [
+  "claude-code",
+  "codex",
+  "opencode",
+  "cursor",
+  "gemini-cli",
+] as const satisfies readonly AgentType[];
+
+export type SetupAgentType = (typeof setupAgentTypes)[number];
+
 export type AgentConfig = {
   name: AgentType;
   displayName: string;

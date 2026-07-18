@@ -144,6 +144,23 @@ test("recommender keeps Next.js Server Actions in the frontend lane", async () =
   assert.equal(recommendations[0]?.skillId, "frontend.next-app-router-review");
 });
 
+test("recommender returns the Next.js skill for every advertised setup target", async () => {
+  const targets = ["codex", "claude-code", "opencode", "cursor", "gemini-cli"] as const;
+  for (const targetAgent of targets) {
+    const recommendations = await nextFixtureRecommendations({
+      targetAgent,
+      userIntent:
+        "Review this Next.js App Router's route handlers, Server Actions, and RSC boundaries.",
+    });
+    assert.equal(recommendations[0]?.skillId, "frontend.next-app-router-review", targetAgent);
+    assert.equal(
+      recommendations[0]?.scoreBreakdown.compatibilityScore,
+      targetAgent === "codex" ? 1 : 0.45,
+      targetAgent,
+    );
+  }
+});
+
 test("recommender recognizes visual refresh synonyms", async () => {
   for (const userIntent of [
     "Modernize this app.",

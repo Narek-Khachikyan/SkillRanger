@@ -8,6 +8,7 @@ import { loadLocalRegistry, findSkill, validateLocalRegistry } from "../registry
 import { groupRecommendationsByLane, recommendSkills } from "../recommender/index.ts";
 import { auditSkill } from "../audit/index.ts";
 import { detectInstalledAgents, getAdapter } from "../installers/codex.ts";
+import { setupAgentTypes, type SetupAgentType } from "../installers/agents.ts";
 import { planSkillRangerAgentContext, upsertSkillRangerAgentContext } from "../installers/agent-context.ts";
 import { readLockfile } from "../lockfile/index.ts";
 import {
@@ -55,9 +56,6 @@ import { skillLanes, type InstallPlan, type ProjectFingerprint, type Recommendat
 import { parseCliInvocation, renderCommandHelp, renderRootHelp } from "./commands.ts";
 import { handleRunCliCommand } from "./runs.ts";
 import { handleVisualEvalCommand } from "./visual-eval.ts";
-
-const supportedSetupTargets = ["claude-code", "codex", "opencode", "cursor", "gemini-cli"] as const;
-type SupportedSetupTarget = (typeof supportedSetupTargets)[number];
 
 const asString = (value: string | boolean | undefined, fallback: string) => (typeof value === "string" ? value : fallback);
 
@@ -288,10 +286,10 @@ const promptCheckboxRecommendations = async (recommendations: Recommendation[]):
   };
 };
 
-const promptTargetAgents = async (detectedAgents: SupportedSetupTarget[]) => {
-  const available = [...supportedSetupTargets];
+const promptTargetAgents = async (detectedAgents: SetupAgentType[]) => {
+  const available = [...setupAgentTypes];
   const initialSelected = detectedAgents.length > 0 ? detectedAgents : ["claude-code", "codex", "opencode"].filter(
-    (target): target is SupportedSetupTarget => available.includes(target as SupportedSetupTarget)
+    (target): target is SetupAgentType => available.includes(target as SetupAgentType)
   );
   return promptToggleList({
     helperText: "Use Up/Down to move, Space to toggle, Enter to continue, q/Esc to cancel.",
@@ -373,21 +371,21 @@ const chooseSetupInstallMode = async (copyFlag: string | boolean | undefined, in
   return useSymlink ? "symlink" : "copy";
 };
 
-const asSupportedSetupTarget = (value: string): SupportedSetupTarget | undefined => {
-  return supportedSetupTargets.includes(value as SupportedSetupTarget) ? value as SupportedSetupTarget : undefined;
+const asSupportedSetupTarget = (value: string): SetupAgentType | undefined => {
+  return setupAgentTypes.includes(value as SetupAgentType) ? value as SetupAgentType : undefined;
 };
 
-const parseSetupTargets = (targetFlag: string | boolean | undefined): SupportedSetupTarget[] | undefined => {
+const parseSetupTargets = (targetFlag: string | boolean | undefined): SetupAgentType[] | undefined => {
   if (targetFlag === undefined) return undefined;
   if (typeof targetFlag !== "string" || targetFlag.trim() === "") {
-    throw new Error(`--target must be one of ${supportedSetupTargets.join(", ")}.`);
+    throw new Error(`--target must be one of ${setupAgentTypes.join(", ")}.`);
   }
   const parsedTargets = targetFlag.split(",").map((target) => target.trim()).filter(Boolean);
   const invalidTargets = parsedTargets.filter((target) => !asSupportedSetupTarget(target));
   if (invalidTargets.length > 0) {
-    throw new Error(`--target must be one or more of ${supportedSetupTargets.join(", ")} (invalid: ${invalidTargets.join(", ")}).`);
+    throw new Error(`--target must be one or more of ${setupAgentTypes.join(", ")} (invalid: ${invalidTargets.join(", ")}).`);
   }
-  return [...new Set(parsedTargets)] as SupportedSetupTarget[];
+  return [...new Set(parsedTargets)] as SetupAgentType[];
 };
 
 const printSetupPlanSummary = (plans: InstallPlan[], projectRoot: string, additionalWrites: string[] = []) => {
@@ -735,7 +733,7 @@ const run = async () => {
     const detectedAgents = explicitTargets
       ? explicitTargets
       : (await detectInstalledAgents()).filter(
-          (target): target is SupportedSetupTarget => supportedSetupTargets.includes(target as SupportedSetupTarget)
+          (target): target is SetupAgentType => setupAgentTypes.includes(target as SetupAgentType)
         );
 
     const targetSelection = explicitTargets

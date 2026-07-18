@@ -119,6 +119,30 @@ test("curated skills carry native compatibility metadata for supported agents", 
   }
 });
 
+const convertibleSetupTargets = [
+  "claude-code",
+  "opencode",
+  "cursor",
+  "gemini-cli",
+] as const;
+
+test("bundled skills declare recommendation compatibility for every setup target", async () => {
+  const skills = await loadLocalRegistry("registry");
+  for (const skill of skills) {
+    assert.equal(skill.manifest.compatibility?.codex?.level, "native", skill.manifest.id);
+    assert.ok(skill.manifest.compatibility?.codex?.scopes?.includes("repo"), skill.manifest.id);
+
+    for (const target of convertibleSetupTargets) {
+      const compatibility = skill.manifest.compatibility?.[target];
+      assert.equal(compatibility?.level, "convertible", `${skill.manifest.id}:${target}`);
+      assert.deepEqual(compatibility?.scopes, ["repo"], `${skill.manifest.id}:${target}`);
+      assert.equal(compatibility?.adapter, target, `${skill.manifest.id}:${target}`);
+      assert.equal(compatibility?.requiresAdapter, true, `${skill.manifest.id}:${target}`);
+      assert.equal(skill.manifest.supportedAgents.includes(target), false, `${skill.manifest.id}:${target}`);
+    }
+  }
+});
+
 test("curated skills carry routing lane metadata", async () => {
   const skills = await loadLocalRegistry("registry");
   const allowedLanes = new Set([

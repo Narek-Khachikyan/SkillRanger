@@ -76,6 +76,30 @@
         "repo"
       ],
       "adapter": "generic-agent-skills"
+    },
+    "claude-code": {
+      "level": "convertible",
+      "scopes": ["repo"],
+      "adapter": "claude-code",
+      "requiresAdapter": true
+    },
+    "opencode": {
+      "level": "convertible",
+      "scopes": ["repo"],
+      "adapter": "opencode",
+      "requiresAdapter": true
+    },
+    "cursor": {
+      "level": "convertible",
+      "scopes": ["repo"],
+      "adapter": "cursor",
+      "requiresAdapter": true
+    },
+    "gemini-cli": {
+      "level": "convertible",
+      "scopes": ["repo"],
+      "adapter": "gemini-cli",
+      "requiresAdapter": true
     }
   },
   "conflictsWith": [],
