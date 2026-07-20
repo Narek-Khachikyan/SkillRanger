@@ -15,6 +15,9 @@ const routerResultSchema = JSON.parse(readFileSync(new URL("../../../schemas/rou
 
 const routerToolOutputSchema = (schemaVersion: "router-result/1.0" | "router-read-result/1.0", propertiesForTool: string[]) => {
   const copy = structuredClone(routerResultSchema) as JsonObject;
+  // MCP SDK AJV caches validators by $id. Both tools clone the same source schema, so a shared
+  // $id makes listTools bind read_run_skill_file to prepare_task's validator and reject reads.
+  delete (copy as Record<string, unknown>)["$id"];
   const properties = copy.properties;
   if (properties && typeof properties === "object" && !Array.isArray(properties)) {
     copy.properties = Object.fromEntries(Object.entries(properties as Record<string, unknown>).filter(([key]) => propertiesForTool.includes(key)));

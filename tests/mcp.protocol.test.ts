@@ -207,3 +207,71 @@ test("MCP protocol returns parse error for malformed JSON lines", async () => {
   assert.equal(response?.id, null);
   assert.equal(response?.error?.code, -32700);
 });
+
+test("router tool output schemas avoid MCP SDK AJV $id cache collision", async () => {
+  const response = await handleJsonRpcRequest({
+    jsonrpc: "2.0",
+    id: "router-output-schemas",
+    method: "tools/list",
+    params: {},
+  });
+  const tools = (response?.result as {
+    tools: Array<{ name: string; outputSchema?: Record<string, unknown> }>;
+  }).tools;
+  const prepare = tools.find(({ name }) => name === "prepare_task");
+  const read = tools.find(({ name }) => name === "read_run_skill_file");
+  assert.ok(prepare?.outputSchema);
+  assert.ok(read?.outputSchema);
+
+  const prepareId = prepare.outputSchema.$id;
+  const readId = read.outputSchema.$id;
+  assert.ok(
+    (prepareId === undefined && readId === undefined) || prepareId !== readId,
+    "prepare_task and read_run_skill_file outputSchema $id must be absent or distinct",
+  );
+
+  // MCP SDK AjvJsonSchemaValidator reuses compiled schemas by $id:
+  // getSchema($id) ?? compile(schema). Shared $id would bind read to prepare.
+  const cache = new Map<string, Record<string, unknown>>();
+  const resolveLikeMcpSdk = (schema: Record<string, unknown>) => {
+    const id = schema.$id;
+    if (typeof id === "string") {
+      const cached = cache.get(id);
+      if (cached) return cached;
+      cache.set(id, schema);
+      return schema;
+    }
+    return schema;
+  };
+  const prepareResolved = resolveLikeMcpSdk(prepare.outputSchema);
+  const readResolved = resolveLikeMcpSdk(read.outputSchema);
+  assert.notEqual(prepareResolved, readResolved);
+
+  const { validateJsonSchema } = await import("../src/runtime/strict/json-schema.ts");
+  const sampleRead = {
+    ok: true,
+    schemaVersion: "router-read-result/1.0",
+    routerRunId: "route_abc1234",
+    runtimeRunId: "run_xyz",
+    runtime: "lifecycle-v1",
+    readRequestId: "550e8400-e29b-41d4-a716-446655440000",
+    readRevision: 1,
+    skillId: "frontend.design-to-code",
+    path: "SKILL.md",
+    mimeType: "text/markdown",
+    content: "# skill\n",
+    fileChecksum: `sha256:${"a".repeat(64)}`,
+    chunkChecksum: `sha256:${"b".repeat(64)}`,
+    deliveredOffset: 0,
+    deliveredBytes: 8,
+    totalBytes: 8,
+    complete: true,
+    readStatus: {
+      fileComplete: true,
+      skillMandatoryReadsComplete: true,
+      runMandatoryReadsComplete: false,
+    },
+  };
+  assert.deepEqual(validateJsonSchema(readResolved, sampleRead), []);
+  assert.notEqual(validateJsonSchema(prepareResolved, sampleRead).length, 0);
+});
