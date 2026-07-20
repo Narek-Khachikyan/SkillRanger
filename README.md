@@ -31,6 +31,23 @@ If you select Codex and repo scope, the expected repo-local outputs are:
 
 Other target and scope selections can use different layouts and outputs. Review the proposed selection and final confirmation prompt before applying it.
 
+### Universal Router Quick Start
+
+The Universal Prompt Router turns one complete task into a bounded skill set and a prepared lifecycle run. CLI activation is direct, so no trigger is required:
+
+```bash
+skillranger task . --intent "Review accessibility and fix critical issues" --target codex --json
+skillranger task:read . --router-run <router-run-id> --mandatory-next --expected-read-revision 0 --json
+```
+
+For MCP, activation is explicit. End the complete prompt with `@skillranger`, `skillranger`, or `/sr`, then call `prepare_task`. Continue with `read_run_skill_file` until `readStatus.runMandatoryReadsComplete` is true before beginning the returned runtime run.
+
+Routing may return `clarification_required`, `decomposition_required`, `no_matching_skills`, `strict_requirements_unmet`, or `context_budget_exceeded` instead of preparing a run. Clarification returns an opaque continuation token and creates no partial run. Decomposition returns bounded subtasks. Because frontend is the only shipped production domain pack, backend, mobile, and other absent packs return `no_matching_skills`; synthetic packs exist only in tests and evals.
+
+Production routing uses the bundled audited registry and never installs, downloads, executes, or auto-activates a skill. Non-strict routing can read an integrity-pinned bundled skill without installing it. Strict routing is repo-installed-only and requires matching lockfile, package files, contract v2, inputs, and mandatory reads.
+
+Raw prompts are not persisted by default. CLI raw-intent storage requires both project config permission and the explicit `--store-intent --confirm-store-intent` flags. MCP router tools do not expose raw-intent persistence.
+
 ## Transparent Manual Workflow
 
 Prefer individual, inspectable steps? This sequence keeps the install dry-run-first:
@@ -244,6 +261,8 @@ publish:check
 ### Lifecycle and integration
 
 ```text
+task
+task:read
 run:start
 run:record-read
 run:resolve-clarifications
@@ -306,6 +325,7 @@ npm test
 npm run validate:registry
 npm run lint:skills
 npm run audit:registry
+npm run eval:router
 npm run publish:check
 ```
 

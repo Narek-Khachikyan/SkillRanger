@@ -113,7 +113,18 @@
   "license": "MIT",
   "routing": {
     "lane": "qa",
-    "category": "accessibility-review"
+    "category": "accessibility-review",
+    "roles": ["verification", "companion"],
+    "domains": ["frontend"],
+    "actions": ["review", "verify", "fix"],
+    "artifactTypes": ["web-interface", "component", "form"],
+    "intentTags": ["accessibility", "keyboard", "screen-reader", "contrast"],
+    "technologyTags": ["html", "react", "wai-aria"],
+    "environmentSignals": ["tag:frontend", "framework:react"],
+    "qualityGoals": ["accessibility", "correctness"],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": ["browser", "screenshots"],
+    "complements": ["frontend.audit", "frontend.testing-strategy"]
   },
   "evaluation": {
     "status": "none",

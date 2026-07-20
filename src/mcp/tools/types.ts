@@ -26,6 +26,7 @@ export type McpToolDefinition = McpToolEffectMetadata & {
   title: string;
   description: string;
   inputSchema: JsonObject;
+  outputSchema?: JsonObject;
 };
 
 export const mcpToolEffects = {

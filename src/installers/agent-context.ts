@@ -15,8 +15,16 @@ export type SkillRangerAgentContextPlan = {
 
 export const renderSkillRangerAgentBlock = () => [
   startMarker,
-  "## SkillRanger lifecycle",
-  "Before skill-driven work, run `skillranger run:start`, announce the selected primary and companion skills, and record every required SKILL.md read. Resolve required clarifications, then run `skillranger run:begin` immediately before implementation. Do not claim `verified` unless `skillranger run:verify` returns the verified outcome with recorded evidence.",
+  "## SkillRanger Universal Prompt Router",
+  "When the user's request ends with `@skillranger`, `skillranger`, or `/sr`, use the SkillRanger MCP workflow before implementation.",
+  "1. Call `prepare_task` with the complete user request.",
+  "2. If clarification is required, ask the user and call `prepare_task` again with the original request, continuation token, and answers.",
+  "3. If decomposition or no-match is returned, report that outcome instead of inventing a workflow.",
+  "4. For a prepared task, read every required instruction through `read_run_skill_file` in the returned order.",
+  "5. If runtime clarification is returned, resolve it through `resolve_skill_run_clarifications` after required reads and before execution.",
+  "6. Use the returned runtime run ID with the existing lifecycle or strict tools.",
+  "7. Do not install skills automatically or execute skill package scripts.",
+  "8. Do not claim `verified` unless SkillRanger runtime verification succeeds.",
   endMarker,
 ].join("\n");
 
@@ -37,7 +45,8 @@ const markerOffsets = (source: Buffer, marker: Buffer) => {
 const updatedSource = (source: Buffer) => {
   const starts = markerOffsets(source, startMarkerBytes);
   const ends = markerOffsets(source, endMarkerBytes);
-  const managedBlock = Buffer.from(renderSkillRangerAgentBlock(), "utf8");
+  const newline = source.includes(Buffer.from("\r\n")) ? "\r\n" : "\n";
+  const managedBlock = Buffer.from(renderSkillRangerAgentBlock().replaceAll("\n", newline), "utf8");
   const hasNoMarkers = starts.length === 0 && ends.length === 0;
   if (hasNoMarkers) {
     const needsSeparator = source.length > 0 && source[source.length - 1] !== newlineBytes[0];

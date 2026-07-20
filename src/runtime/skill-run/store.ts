@@ -85,6 +85,19 @@ export class SkillRunStore {
     return this.readUnlocked(runId);
   }
 
+  async replace(runId: string, run: SkillRun): Promise<SkillRun> {
+    if (run.runId !== runId) throw new SkillRunError("run-integrity", "A runtime replacement cannot change the run ID.");
+    const lock = await this.lock.acquire(runId);
+    try {
+      const current = await this.readUnlocked(runId);
+      if (run.revision <= current.revision) throw new SkillRunError("run-integrity", "A runtime replacement must advance the revision.");
+      await this.writeUnlocked(run);
+      return run;
+    } finally {
+      await this.lock.release(lock);
+    }
+  }
+
   async update(runId: string, apply: (run: SkillRun) => SkillRun | Promise<SkillRun>): Promise<SkillRun> {
     const lock = await this.lock.acquire(runId);
     try {

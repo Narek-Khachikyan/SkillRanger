@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import { scanProject } from "../src/scanner/index.ts";
 import { loadLocalRegistry } from "../src/registry/index.ts";
 import {
+  buildSkillFeatureVector,
   groupRecommendationsByLane,
+  orderSkillCandidates,
   recommendSkills,
+  scoreSkillCandidate,
   type RecommendSkillsOptions,
 } from "../src/recommender/index.ts";
 
@@ -42,6 +45,37 @@ test("recommender ranks Next.js review first for Next.js fixture", async () => {
       (item) => item.skillId === "frontend.accessibility-review",
     ),
   );
+});
+
+test("shared scorer uses the injected routing date for freshness", async () => {
+  const fingerprint = await scanProject("fixtures/next-react-ts");
+  const skills = await loadLocalRegistry("registry");
+  const skill = skills.find((candidate) => candidate.manifest.id === "frontend.next-app-router-review");
+  assert.ok(skill);
+
+  const oldRoutingDate = buildSkillFeatureVector({
+    fingerprint,
+    skill,
+    targetAgent: "codex",
+    routingDate: "2026-07-19",
+    lane: "framework",
+  });
+  const currentRoutingDate = buildSkillFeatureVector({
+    fingerprint,
+    skill,
+    targetAgent: "codex",
+    routingDate: "2027-07-19",
+    lane: "framework",
+  });
+
+  assert.notEqual(oldRoutingDate.freshnessScore, currentRoutingDate.freshnessScore);
+  assert.equal(scoreSkillCandidate(currentRoutingDate).scoreBreakdown.finalScore, scoreSkillCandidate(currentRoutingDate).score);
+});
+
+test("shared scorer ordering is stable for equal scores", () => {
+  const left = { skillId: "skill.b", score: 0.5, scoreBreakdown: { qualityScore: 0.8 } } as never;
+  const right = { skillId: "skill.a", score: 0.5, scoreBreakdown: { qualityScore: 0.8 } } as never;
+  assert.deepEqual(orderSkillCandidates([left, right]).map(({ skillId }) => skillId), ["skill.a", "skill.b"]);
 });
 
 test("recommender keeps Next.js aliases in the frontend domain before release", async () => {

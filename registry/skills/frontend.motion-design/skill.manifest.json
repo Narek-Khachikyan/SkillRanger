@@ -118,7 +118,18 @@
   "license": "MIT",
   "routing": {
     "lane": "design",
-    "category": "motion-design"
+    "category": "motion-design",
+    "roles": ["primary", "companion"],
+    "domains": ["frontend"],
+    "actions": ["design", "implement", "modify"],
+    "artifactTypes": ["animation", "motion-system", "web-interface"],
+    "intentTags": ["motion-design", "animation", "transitions", "reduced-motion"],
+    "technologyTags": ["react", "css", "web-animations"],
+    "environmentSignals": ["tag:frontend", "framework:react"],
+    "qualityGoals": ["visual-quality", "accessibility", "performance"],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": ["browser", "screenshots"],
+    "complements": ["frontend.interaction-polish", "frontend.motion-audit"]
   },
   "evaluation": {
     "status": "none",

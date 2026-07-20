@@ -97,7 +97,18 @@
   "license": "MIT",
   "routing": {
     "lane": "qa",
-    "category": "visual-critic"
+    "category": "visual-critic",
+    "roles": ["verification", "companion"],
+    "domains": ["frontend"],
+    "actions": ["review", "verify"],
+    "artifactTypes": ["screenshot", "design-variant", "web-interface"],
+    "intentTags": ["visual-critique", "variant-comparison", "responsive-qa"],
+    "technologyTags": ["html", "css", "react"],
+    "environmentSignals": ["tag:frontend", "framework:react"],
+    "qualityGoals": ["visual-quality", "responsiveness", "correctness"],
+    "requiredCapabilities": ["filesystem", "browser", "screenshots"],
+    "optionalCapabilities": [],
+    "complements": ["frontend.visual-design-polish", "frontend.design-to-code"]
   },
   "evaluation": {
     "status": "none",

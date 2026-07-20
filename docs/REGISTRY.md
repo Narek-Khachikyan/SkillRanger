@@ -54,6 +54,12 @@ Recommended layered shape:
 
 For MVP, keep the existing flat `skill.manifest.json` for simplicity, but treat it as a compatibility-preserving projection of this layered model. Do not add vendor-specific Codex plugin fields directly to the portable core.
 
+### Router trust boundary
+
+Production router flows load only checked-in bundled domain manifests and registry skill packages that pass validation and audit. Public CLI and MCP router inputs cannot supply a registry root, remote URL, direct skill ID, or activation override. Synthetic domain packs under `tests/fixtures/router-packs` are declarative eval data and never become production-eligible.
+
+Non-strict routing may read a bundled package directly without installing it. Every prepared source is snapshotted with package, root, file, and chunk checksums; package scripts are not run. Strict routing is narrower: selected skills must already be installed in repo scope for the target agent, match `skillranger.lock.json` and the audited file set, expose contract v2, accept their input, and complete all contract reads. Missing strict prerequisites produce an installation suggestion, not automatic installation.
+
 Recommended fields:
 
 - `id`

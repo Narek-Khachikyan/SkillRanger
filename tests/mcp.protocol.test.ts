@@ -109,14 +109,14 @@ test("MCP tools publish complete effect and confirmation metadata", async () => 
       "plan_skill_install", "list_domains", "inspect_domain", "create_frontend_design_brief",
       "recommend_frontend_recipe", "validate_frontend_result", "compile_frontend_design_spec",
       "verify_frontend_result", "repair_frontend_result", "run_domain_eval", "inspect_skill_run",
-      "compare_design_variants", "verify_visual_result",
+       "compare_design_variants", "verify_visual_result",
     ],
     "exact-install-plan": ["install_skill"],
     "run-state-write": [
       "start_skill_run", "record_skill_read", "resolve_skill_run_clarifications",
       "begin_skill_run_execution", "complete_skill_run", "verify_skill_run",
       "read_next_skill_chunk", "begin_skill_step", "add_skill_evidence", "complete_skill_step",
-      "verify_skill", "finalize_skill_run",
+       "verify_skill", "finalize_skill_run", "prepare_task", "read_run_skill_file",
     ],
     "command-and-artifact-write": ["capture_ui_evidence"],
   } as const;
@@ -139,7 +139,7 @@ test("MCP tools publish complete effect and confirmation metadata", async () => 
     },
   } as const;
 
-  assert.equal(tools.length, 31);
+  assert.equal(tools.length, 33);
   for (const [effect, expectedNames] of Object.entries(expectedGroups)) {
     const matchingTools = tools.filter((tool) => tool._meta?.["skillranger/effect"] === effect);
     assert.deepEqual(matchingTools.map(({ name }) => name).sort(), [...expectedNames].sort(), effect);

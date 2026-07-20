@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "router-fixture-pack/1.0",
+  "domain": {
+    "id": "frontend",
+    "displayName": "Synthetic Frontend",
+    "targetSurface": "web",
+    "routing": {
+      "aliases": ["frontend-web", "web-app"],
+      "intentTags": ["web-interface", "application-interface"],
+      "artifactTypes": ["web-interface", "application-interface"],
+      "technologyTags": ["react", "typescript"],
+      "projectTags": ["frontend", "web"]
+    }
+  },
+  "skills": [
+    {
+      "id": "frontend.synthetic-interface",
+      "displayName": "Synthetic Web Interface",
+      "version": "1.0.0",
+      "riskLevel": "low",
+      "roles": ["primary"],
+      "domains": ["frontend"],
+      "actions": ["create", "implement"],
+      "artifactTypes": ["web-interface", "application-interface"],
+      "intentTags": ["web-interface", "application-interface"],
+      "technologyTags": ["react", "typescript"],
+      "environmentSignals": ["framework:react"],
+      "qualityGoals": ["usability", "correctness"],
+      "requiredCapabilities": ["filesystem", "terminal"],
+      "optionalCapabilities": [],
+      "complements": [],
+      "dependencies": [],
+      "conflictsWith": [],
+      "supersedes": [],
+      "instructionBytes": 8000,
+      "strictContract": "valid"
+    }
+  ]
+}

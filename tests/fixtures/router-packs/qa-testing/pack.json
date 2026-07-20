@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "router-fixture-pack/1.0",
+  "domain": {
+    "id": "qa-testing",
+    "displayName": "Synthetic QA Testing",
+    "routing": {
+      "aliases": ["quality-assurance", "testing"],
+      "intentTags": ["integration-testing", "test-coverage"],
+      "artifactTypes": ["integration-test", "test-suite"],
+      "technologyTags": ["playwright", "supertest"],
+      "projectTags": ["testing", "qa"]
+    }
+  },
+  "skills": [
+    {
+      "id": "qa.api-integration-testing",
+      "displayName": "Synthetic API Integration Testing",
+      "version": "1.0.0",
+      "riskLevel": "low",
+      "roles": ["verification", "companion"],
+      "domains": ["qa-testing"],
+      "actions": ["test", "verify"],
+      "artifactTypes": ["integration-test", "test-suite"],
+      "intentTags": ["integration-testing", "api-testing"],
+      "technologyTags": ["supertest", "playwright"],
+      "environmentSignals": ["testing:integration"],
+      "qualityGoals": ["correctness", "coverage"],
+      "requiredCapabilities": ["filesystem", "terminal"],
+      "optionalCapabilities": [],
+      "complements": [],
+      "dependencies": [],
+      "conflictsWith": [],
+      "supersedes": [],
+      "instructionBytes": 7000,
+      "strictContract": "valid"
+    }
+  ]
+}

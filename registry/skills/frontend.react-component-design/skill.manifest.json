@@ -109,7 +109,18 @@
   "license": "MIT",
   "routing": {
     "lane": "implementation",
-    "category": "react-component-design"
+    "category": "react-component-design",
+    "roles": ["primary", "companion"],
+    "domains": ["frontend"],
+    "actions": ["design", "implement", "modify", "review"],
+    "artifactTypes": ["component", "component-api", "web-interface"],
+    "intentTags": ["component-design", "composition", "state-ownership"],
+    "technologyTags": ["react", "typescript"],
+    "environmentSignals": ["tag:frontend", "framework:react"],
+    "qualityGoals": ["maintainability", "accessibility", "correctness"],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": ["terminal"],
+    "complements": ["frontend.accessibility-review", "frontend.testing-strategy"]
   },
   "evaluation": {
     "status": "none",

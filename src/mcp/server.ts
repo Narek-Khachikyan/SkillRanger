@@ -4,12 +4,14 @@ import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { handleJsonRpcLine } from "./protocol.ts";
+import { initializeRouterContext } from "./router-context.ts";
 
 const writeMessage = (message: unknown) => {
   process.stdout.write(`${JSON.stringify(message)}\n`);
 };
 
 export const startMcpServer = () => {
+  initializeRouterContext();
   const input = createInterface({
     input: process.stdin,
     crlfDelay: Infinity

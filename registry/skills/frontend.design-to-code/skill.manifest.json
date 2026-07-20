@@ -137,7 +137,18 @@
   "license": "MIT",
   "routing": {
     "lane": "design",
-    "category": "design-to-code"
+    "category": "design-to-code",
+    "roles": ["primary"],
+    "domains": ["frontend"],
+    "actions": ["create", "implement", "design"],
+    "artifactTypes": ["web-interface", "page", "component"],
+    "intentTags": ["design-to-code", "screenshot", "visual-reference", "responsive-design"],
+    "technologyTags": ["react", "tailwind", "typescript"],
+    "environmentSignals": ["tag:frontend", "framework:react"],
+    "qualityGoals": ["visual-fidelity", "responsiveness", "accessibility"],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": ["browser", "screenshots", "terminal"],
+    "complements": ["frontend.tailwind-ui-polish", "frontend.accessibility-review"]
   },
   "evaluation": {
     "status": "none",

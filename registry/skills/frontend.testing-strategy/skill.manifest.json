@@ -113,7 +113,18 @@
   "license": "MIT",
   "routing": {
     "lane": "qa",
-    "category": "testing-strategy"
+    "category": "testing-strategy",
+    "roles": ["primary", "verification", "companion"],
+    "domains": ["frontend"],
+    "actions": ["test", "review", "verify", "design"],
+    "artifactTypes": ["test-suite", "web-interface", "component"],
+    "intentTags": ["testing", "test-strategy", "regression", "coverage"],
+    "technologyTags": ["react", "playwright", "vitest"],
+    "environmentSignals": ["tag:frontend", "testing:playwright"],
+    "qualityGoals": ["correctness", "coverage", "maintainability"],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": ["terminal", "browser"],
+    "complements": ["frontend.accessibility-review", "frontend.playwright-debug"]
   },
   "evaluation": {
     "status": "none",

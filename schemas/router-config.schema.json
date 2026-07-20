@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/schemas/router-config.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "defaultTargetAgent", "router", "privacy"],
+  "properties": {
+    "schemaVersion": { "const": "router-config/1.0" },
+    "defaultTargetAgent": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+    "router": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "strictByDefault", "maxSelectedRisk", "maxEnvironmentSkills", "maxTaskCompanions", "maxVerificationSkills", "maxAgentContextSkills", "maxTotalSelectedSkills", "maxInstructionBytes", "maxAdditionalReadBytes", "maxSingleFileBytes", "maxIntentBytes"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "strictByDefault": { "type": "boolean" },
+        "maxSelectedRisk": { "enum": ["low", "medium"] },
+        "maxEnvironmentSkills": { "type": "integer", "minimum": 0, "maximum": 16 },
+        "maxTaskCompanions": { "type": "integer", "minimum": 0, "maximum": 16 },
+        "maxVerificationSkills": { "type": "integer", "minimum": 0, "maximum": 16 },
+        "maxAgentContextSkills": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "maxTotalSelectedSkills": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "maxInstructionBytes": { "type": "integer", "minimum": 1, "maximum": 10000000 },
+        "maxAdditionalReadBytes": { "type": "integer", "minimum": 0, "maximum": 10000000 },
+        "maxSingleFileBytes": { "type": "integer", "minimum": 1, "maximum": 10000000 },
+        "maxIntentBytes": { "type": "integer", "minimum": 1, "maximum": 1000000 }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowRawIntentPersistence"],
+      "properties": {
+        "allowRawIntentPersistence": { "type": "boolean" }
+      }
+    }
+  }
+}

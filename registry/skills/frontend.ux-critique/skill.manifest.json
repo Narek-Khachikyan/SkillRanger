@@ -117,7 +117,18 @@
   "license": "MIT",
   "routing": {
     "lane": "design",
-    "category": "ux-critique"
+    "category": "ux-critique",
+    "roles": ["primary", "companion"],
+    "domains": ["frontend"],
+    "actions": ["review", "design", "research"],
+    "artifactTypes": ["user-flow", "web-interface", "form"],
+    "intentTags": ["ux", "usability", "information-architecture", "affordance"],
+    "technologyTags": ["html", "react", "css"],
+    "environmentSignals": ["tag:frontend", "framework:react"],
+    "qualityGoals": ["usability", "accessibility", "correctness"],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": ["browser", "screenshots"],
+    "complements": ["frontend.accessibility-review", "frontend.visual-design-polish"]
   },
   "evaluation": {
     "status": "none",

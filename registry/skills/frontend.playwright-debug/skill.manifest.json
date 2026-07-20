@@ -110,7 +110,18 @@
   "license": "MIT",
   "routing": {
     "lane": "qa",
-    "category": "playwright-debug"
+    "category": "playwright-debug",
+    "roles": ["primary", "verification", "companion"],
+    "domains": ["frontend"],
+    "actions": ["debug", "fix", "test", "investigate"],
+    "artifactTypes": ["end-to-end-test", "test-suite", "web-interface"],
+    "intentTags": ["playwright", "e2e-failure", "flaky-test", "trace"],
+    "technologyTags": ["playwright", "react", "typescript"],
+    "environmentSignals": ["tag:frontend", "testing:playwright"],
+    "qualityGoals": ["correctness", "reliability", "test-stability"],
+    "requiredCapabilities": ["filesystem", "terminal"],
+    "optionalCapabilities": ["browser"],
+    "complements": ["frontend.testing-strategy"]
   },
   "evaluation": {
     "status": "real-project-smoke",

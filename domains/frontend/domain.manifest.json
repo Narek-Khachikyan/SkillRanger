@@ -133,5 +133,36 @@
       "primarySkill": "frontend.audit",
       "supportingSkills": []
     }
-  ]
+  ],
+  "routing": {
+    "aliases": [
+      "frontend-web",
+      "web-ui"
+    ],
+    "intentTags": [
+      "website",
+      "web-interface",
+      "landing-page",
+      "component",
+      "responsive-design"
+    ],
+    "artifactTypes": [
+      "web-interface",
+      "component",
+      "page"
+    ],
+    "technologyTags": [
+      "react",
+      "nextjs",
+      "vue",
+      "svelte",
+      "tailwind"
+    ],
+    "projectTags": [
+      "frontend",
+      "react",
+      "nextjs",
+      "web-app"
+    ]
+  }
 }

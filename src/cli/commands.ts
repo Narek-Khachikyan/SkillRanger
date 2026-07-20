@@ -28,6 +28,20 @@ const defineCommand = (definition: CliCommandDefinition): CliCommandDefinition =
 
 export const cliCommandDefinitions = Object.freeze([
   defineCommand({
+    name: "task",
+    description: "Prepare a universal SkillRanger task in direct CLI mode.",
+    usages: ["task [project] --intent <text> [--target <agent>] [--capabilities <list>] [--strict] [--explain] [--json]"],
+    booleanOptions: ["strict", "explain", "json", "store-intent", "confirm-store-intent"],
+    valueOptions: ["intent", "target", "capabilities", "skill-inputs", "continuation-token", "answers"],
+  }),
+  defineCommand({
+    name: "task:read",
+    description: "Read the next mandatory or selected optional router instruction file.",
+    usages: ["task:read [project] --router-run <id> --expected-read-revision <n> [--mandatory-next|--skill <id> --path <path>] [--json]"],
+    booleanOptions: ["mandatory-next", "json"],
+    valueOptions: ["router-run", "read-request-id", "expected-read-revision", "skill", "path"],
+  }),
+  defineCommand({
     name: "scan",
     description: "Inspect a project and print its detected stack and agent context.",
     usages: ["scan [project] [--json]"],

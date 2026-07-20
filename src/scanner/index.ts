@@ -76,13 +76,14 @@ const dependencyMajorVersion = (pkg: PackageJson | undefined, name: string) => {
 
 const scanFiles = async (root: string, maxFiles = 500): Promise<string[]> => {
   const found: string[] = [];
-  const ignored = new Set(["node_modules", ".git", ".next", "dist", "coverage"]);
+  const ignored = new Set(["node_modules", ".git", ".skillranger", ".next", "dist", "coverage"]);
 
   const walk = async (dir: string) => {
     if (found.length >= maxFiles) return;
     let entries: import("node:fs").Dirent[];
     try {
-      entries = await readdir(dir, { withFileTypes: true });
+      entries = (await readdir(dir, { withFileTypes: true }))
+        .sort((left, right) => left.name.localeCompare(right.name));
     } catch {
       return;
     }
@@ -92,6 +93,7 @@ const scanFiles = async (root: string, maxFiles = 500): Promise<string[]> => {
       if (ignored.has(entry.name)) continue;
       const fullPath = path.join(dir, entry.name);
       const relPath = path.relative(root, fullPath);
+      if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) {
         await walk(fullPath);
       } else {
@@ -200,6 +202,10 @@ export const scanProject = async (projectRoot: string): Promise<ProjectFingerpri
     styling,
     testing,
     infrastructure,
+    dependencies: [...new Set([
+      ...Object.keys(pkg?.dependencies ?? {}),
+      ...Object.keys(pkg?.devDependencies ?? {}),
+    ])].sort(),
     agentContext: {
       agentsMd: { present: agentsMd.length > 0, paths: agentsMd },
       codexSkills: { present: codexSkills.length > 0, paths: codexSkills },

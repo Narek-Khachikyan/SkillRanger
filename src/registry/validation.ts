@@ -1,6 +1,13 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { skillLanes, type EvaluationStatus, type RiskLevel, type SkillLane, type SkillManifest } from "../types.ts";
+import {
+  objectDepth,
+  routerMetadataLimits,
+  validateEnvironmentSignal,
+  validateMetadataArray,
+} from "../router/metadata.ts";
+import type { RouterSkillRole, TaskAction } from "../router/types.ts";
 
 export type RegistryValidationIssue = {
   path: string;
@@ -46,6 +53,14 @@ const qualityScoreFields = [
   "portability",
 ];
 const qualityRubricFields = [...qualityScoreFields, "safety"];
+const routerRoles = new Set<RouterSkillRole>(["environment", "primary", "companion", "verification", "agent-context"]);
+const taskActions = new Set<TaskAction>(["create", "implement", "modify", "fix", "debug", "review", "test", "verify", "document", "deploy", "migrate", "optimize", "research", "design", "configure", "investigate"]);
+const routingFields = new Set([
+  "lane", "category", "roles", "domains", "actions", "artifactTypes", "intentTags",
+  "technologyTags", "environmentSignals", "qualityGoals", "requiredCapabilities",
+  "optionalCapabilities", "complements",
+]);
+const routerMetadataFields = [...routingFields].filter((field) => field !== "lane" && field !== "category");
 
 type ValidationContext = {
   folderName?: string;
@@ -211,6 +226,10 @@ export const validateSkillManifest = (
     return [{ path: "$", message: "Manifest must be a JSON object." }];
   }
 
+  if (objectDepth(input) > routerMetadataLimits.maxObjectDepth) {
+    issues.push({ path: "$", message: `Manifest object depth must not exceed ${routerMetadataLimits.maxObjectDepth}.` });
+  }
+
   for (const key of [
     "id",
     "name",
@@ -307,6 +326,9 @@ export const validateSkillManifest = (
       issues.push({ path: "routing", message: "Must be an object when present." });
     } else {
       const routing = input.routing;
+      for (const key of Object.keys(routing)) {
+        if (!routingFields.has(key)) issues.push({ path: `routing.${key}`, message: "Unknown routing property." });
+      }
       if (
         typeof routing.lane !== "string" ||
         !skillLaneSet[routing.lane as SkillLane]
@@ -328,7 +350,55 @@ export const validateSkillManifest = (
           message: "Must be a non-empty safe category slug.",
         });
       }
+      const hasRouterMetadata = routerMetadataFields.some((field) => routing[field] !== undefined);
+      if (hasRouterMetadata) {
+        for (const field of routerMetadataFields) {
+          if (routing[field] === undefined) {
+            issues.push({ path: `routing.${field}`, message: "Required when universal router metadata is declared." });
+          }
+        }
+        issues.push(...validateMetadataArray(routing.roles, "routing.roles", { allowed: routerRoles }));
+        issues.push(...validateMetadataArray(routing.domains, "routing.domains"));
+        issues.push(...validateMetadataArray(routing.actions, "routing.actions", { allowed: taskActions }));
+        for (const field of ["artifactTypes", "intentTags", "technologyTags", "qualityGoals", "requiredCapabilities", "optionalCapabilities", "complements"] as const) {
+          issues.push(...validateMetadataArray(routing[field], `routing.${field}`));
+        }
+        if (Array.isArray(routing.environmentSignals)) {
+          if (routing.environmentSignals.length > routerMetadataLimits.maxArrayItems) {
+            issues.push({ path: "routing.environmentSignals", message: `Must contain at most ${routerMetadataLimits.maxArrayItems} items.` });
+          }
+          const normalizedSignals = new Set<string>();
+          routing.environmentSignals.forEach((signal, index) => {
+            if (typeof signal !== "string") {
+              issues.push({ path: `routing.environmentSignals.${index}`, message: "Must be a string." });
+              return;
+            }
+            const normalized = signal.normalize("NFKC").toLowerCase();
+            if (normalizedSignals.has(normalized)) {
+              issues.push({ path: "routing.environmentSignals", message: "Values must be unique after NFKC lowercase normalization." });
+            }
+            normalizedSignals.add(normalized);
+            issues.push(...validateEnvironmentSignal(signal, `routing.environmentSignals.${index}`));
+          });
+        } else {
+          issues.push({ path: "routing.environmentSignals", message: "Must be an array of strings." });
+        }
+        if (Array.isArray(routing.complements)) {
+          routing.complements.forEach((skillId, index) => {
+            if (skillId === input.id) issues.push({ path: `routing.complements.${index}`, message: "A skill cannot complement itself." });
+            if (Array.isArray(input.conflictsWith) && input.conflictsWith.includes(skillId)) {
+              issues.push({ path: `routing.complements.${index}`, message: "A complement cannot also conflict with this skill." });
+            }
+          });
+        }
+      }
     }
+  }
+
+  if (Array.isArray(input.dependencies) && Array.isArray(input.conflictsWith)) {
+    const conflictsWith = input.conflictsWith;
+    const conflictingDependency = input.dependencies.find((skillId) => conflictsWith.includes(skillId));
+    if (conflictingDependency) issues.push({ path: "dependencies", message: `Dependency also appears in conflictsWith: ${conflictingDependency}.` });
   }
 
   for (const key of ["qualityScore", "securityScore"]) {

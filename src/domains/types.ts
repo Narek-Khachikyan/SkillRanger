@@ -16,6 +16,14 @@ export type DomainOwnershipRule = {
   requiresEvidence?: string[];
 };
 
+export type DomainRoutingMetadata = {
+  aliases: string[];
+  intentTags: string[];
+  artifactTypes: string[];
+  technologyTags: string[];
+  projectTags: string[];
+};
+
 export type DomainPackManifest = {
   schemaVersion: "1.0";
   id: string;
@@ -36,6 +44,7 @@ export type DomainPackManifest = {
     capabilityRecords?: string[];
   };
   ownership: DomainOwnershipRule[];
+  routing?: DomainRoutingMetadata;
 };
 
 export type DomainRoutingPolicy = {

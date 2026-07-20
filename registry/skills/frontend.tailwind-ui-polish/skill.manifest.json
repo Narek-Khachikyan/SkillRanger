@@ -135,7 +135,18 @@
   "license": "MIT",
   "routing": {
     "lane": "design",
-    "category": "tailwind-ui-polish"
+    "category": "tailwind-ui-polish",
+    "roles": ["primary", "companion"],
+    "domains": ["frontend"],
+    "actions": ["modify", "implement", "fix", "design"],
+    "artifactTypes": ["web-interface", "page", "component"],
+    "intentTags": ["tailwind", "ui-polish", "responsive-design", "styling"],
+    "technologyTags": ["tailwind", "react", "typescript"],
+    "environmentSignals": ["framework:tailwind", "dependency:tailwindcss"],
+    "qualityGoals": ["visual-quality", "responsiveness", "accessibility"],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": ["browser", "screenshots", "terminal"],
+    "complements": ["frontend.accessibility-review", "frontend.design-system"]
   },
   "evaluation": {
     "status": "none",

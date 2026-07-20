@@ -118,7 +118,18 @@
   "license": "MIT",
   "routing": {
     "lane": "qa",
-    "category": "motion-audit"
+    "category": "motion-audit",
+    "roles": ["verification", "companion"],
+    "domains": ["frontend"],
+    "actions": ["review", "verify", "investigate"],
+    "artifactTypes": ["web-interface", "animation", "component"],
+    "intentTags": ["motion-audit", "animation", "reduced-motion", "performance"],
+    "technologyTags": ["react", "css", "web-animations"],
+    "environmentSignals": ["tag:frontend", "framework:react"],
+    "qualityGoals": ["accessibility", "performance", "visual-quality"],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": ["browser", "screenshots"],
+    "complements": ["frontend.motion-design", "frontend.performance-review"]
   },
   "evaluation": {
     "status": "none",

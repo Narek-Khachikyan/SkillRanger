@@ -18,6 +18,8 @@
     "domains/",
     "schemas/",
     "evals/",
+    "tests/fixtures/router-cases.json",
+    "tests/fixtures/router-packs/",
     "docs/",
     "README.md",
     "RELEASE.md",
@@ -33,13 +35,14 @@
     "audit:registry": "node src/cli/index.ts audit:registry",
     "publish:check": "node src/cli/index.ts publish:check",
     "smoke:package": "node scripts/package-smoke.mjs",
-    "release:check": "npm run build && npm run check && npm test && npm run validate:registry && npm run lint:skills && npm run audit:registry && npm run eval:frontend -- --run-routing --project fixtures/next-react-ts --json && npm run eval:frontend:ru",
+    "release:check": "npm run build && npm run check && npm test && npm run validate:registry && npm run lint:skills && npm run audit:registry && npm run publish:check && npm run eval:frontend -- --run-routing --project fixtures/next-react-ts --json && npm run eval:frontend:ru && npm run eval:router && npm run smoke:package",
     "eval:frontend": "node src/cli/index.ts eval:frontend",
     "eval:frontend:ru": "node src/cli/index.ts eval:frontend --run-routing --project fixtures/next-react-ts --locale ru --json",
     "mcp": "node src/mcp/server.ts",
     "test": "node --test tests/*.test.ts",
-    "check": "node --check src/cli/index.ts && node --check src/paths.ts && node --check src/evals/frontend.ts && node --check src/mcp/server.ts && node --check src/mcp/protocol.ts && node --check src/mcp/tools.ts && node --check src/mcp/tools/types.ts && node --check src/mcp/tools/utils.ts && node --check src/mcp/tools/project.ts && node --check src/mcp/tools/registry.ts && node --check src/mcp/tools/install.ts && node --check src/mcp/tools/domains.ts && node --check src/mcp/tools/visual.ts && node --check src/cli/visual-eval.ts && node --check src/evals/process.ts && node --check src/evals/visual/types.ts && node --check src/evals/visual/suite.ts && node --check src/evals/visual/runner.ts && node --check src/evals/visual/review.ts && node --check src/evals/visual/metrics.ts && node --check src/evals/visual/calibration.ts",
-    "eval:visual": "node src/cli/index.ts eval:visual"
+    "check": "node --check src/cli/index.ts && node --check src/paths.ts && node --check src/evals/frontend.ts && node --check src/evals/router/index.ts && node --check src/mcp/server.ts && node --check src/mcp/protocol.ts && node --check src/mcp/tools.ts && node --check src/mcp/tools/types.ts && node --check src/mcp/tools/utils.ts && node --check src/mcp/tools/project.ts && node --check src/mcp/tools/registry.ts && node --check src/mcp/tools/install.ts && node --check src/mcp/tools/domains.ts && node --check src/mcp/tools/visual.ts && node --check src/mcp/tools/router.ts && node --check src/mcp/router-context.ts && node --check src/cli/task.ts && node --check src/cli/visual-eval.ts && node --check src/evals/process.ts && node --check src/evals/visual/types.ts && node --check src/evals/visual/suite.ts && node --check src/evals/visual/runner.ts && node --check src/evals/visual/review.ts && node --check src/evals/visual/metrics.ts && node --check src/evals/visual/calibration.ts && for file in src/config/*.ts src/router/*.ts; do node --check \"$file\"; done",
+    "eval:visual": "node src/cli/index.ts eval:visual",
+    "eval:router": "node src/evals/router/index.ts"
   },
   "keywords": [
     "ai",

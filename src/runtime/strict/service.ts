@@ -15,6 +15,7 @@ import { captureSourceControl } from "./git.ts";
 import { createContentChunks, createStrictSkillRun } from "./reducer.ts";
 import { StrictSkillRunStore } from "./store.ts";
 import { StrictSkillRunError, type SkillContentChunk, type SkillRunV2, type StrictSkillSelection } from "./types.ts";
+import type { PreparedSelections, PreparedSkillSelection } from "../../router/types.ts";
 
 export type StartPreparedStrictSkillRunInput = {
   projectRoot: string;
@@ -26,6 +27,22 @@ export type StartPreparedStrictSkillRunInput = {
   skillInputs?: Record<string, Record<string, unknown>>;
   hostCapabilities?: string[];
   now?: string;
+};
+
+export type PreparedStrictSkillInput = {
+  projectRoot: string;
+  targetAgent: string;
+  domain: string;
+  intent: string;
+  rawIntent?: string;
+  normalizedGoal: string;
+  runtimeRunId: string;
+  selections: PreparedSelections;
+  metadata: Array<{ skill: Awaited<ReturnType<typeof loadLocalRegistry>>[number] }>;
+  fingerprint: Awaited<ReturnType<typeof scanProject>>;
+  skillInputs: Record<string, Record<string, unknown>>;
+  capabilities: string[];
+  storeRawIntent?: boolean;
 };
 
 const sha = (value: Uint8Array | string) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
@@ -51,7 +68,7 @@ const walkInstalled = async (root: string): Promise<string[]> => {
   return files;
 };
 
-const assertInstalledMatches = async (
+export const assertInstalledMatches = async (
   skill: Awaited<ReturnType<typeof loadLocalRegistry>>[number],
   installedRoot: string,
   lockChecksum: string,
@@ -170,4 +187,42 @@ export const startPreparedStrictSkillRun = async (input: StartPreparedStrictSkil
   });
   await new StrictSkillRunStore(input.projectRoot).create(run);
   return run;
+};
+
+const flattenedSelections = (selections: PreparedSelections): PreparedSkillSelection[] => [
+  selections.primary,
+  ...selections.environment,
+  ...selections.companions,
+  ...selections.verification,
+  ...selections.agentContext,
+];
+
+export const createPreparedStrictSkillRun = async (input: PreparedStrictSkillInput): Promise<SkillRunV2> => {
+  const byId = new Map(input.metadata.map(({ skill }) => [skill.manifest.id, skill]));
+  const selectedSkills: StrictSkillSelection[] = [];
+  for (const selection of flattenedSelections(input.selections)) {
+    const skill = byId.get(selection.skillId);
+    if (!skill) throw new StrictSkillRunError("strict-contract-missing", `Selected strict skill is unavailable: ${selection.skillId}.`);
+    if (!skill.executionContract) throw new StrictSkillRunError("strict-contract-missing", `Selected strict skill has no contract: ${selection.skillId}.`);
+    selectedSkills.push(await installedSelection({
+      projectRoot: input.projectRoot,
+      targetAgent: input.targetAgent,
+      skill,
+      role: selection.role === "primary" ? "primary" : "companion",
+      fingerprint: input.fingerprint,
+      skillInput: input.skillInputs[selection.skillId] ?? {},
+      hostCapabilities: new Set(input.capabilities),
+    }));
+  }
+  const sourceControl = await captureSourceControl(input.projectRoot);
+  return createStrictSkillRun({
+    runId: input.runtimeRunId,
+    domain: input.domain,
+    targetAgent: input.targetAgent,
+    locale: locale(input.intent),
+    intent: { sha256: sha(input.normalizedGoal), normalizedGoal: input.normalizedGoal, ...(input.storeRawIntent ? { raw: input.rawIntent ?? input.intent } : {}) },
+    selectedSkills,
+    recommendations: selectedSkills.map(({ skillId, role }) => ({ skillId, role, strictCompatible: true })),
+    sourceControl,
+  });
 };

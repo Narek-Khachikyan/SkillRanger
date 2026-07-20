@@ -26,6 +26,7 @@ export type ProjectFingerprint = {
   styling: Signal[];
   testing: Array<Signal & { type?: string }>;
   infrastructure: Signal[];
+  dependencies?: string[];
   agentContext: {
     agentsMd: { present: boolean; paths: string[] };
     codexSkills: { present: boolean; paths: string[] };
@@ -50,6 +51,22 @@ export const skillLanes = [
 ] as const;
 export type SkillLane = (typeof skillLanes)[number];
 
+export type SkillRoutingMetadata = {
+  lane: SkillLane;
+  category: string;
+  roles?: import("./router/types.ts").RouterSkillRole[];
+  domains?: string[];
+  actions?: import("./router/types.ts").TaskAction[];
+  artifactTypes?: string[];
+  intentTags?: string[];
+  technologyTags?: string[];
+  environmentSignals?: string[];
+  qualityGoals?: string[];
+  requiredCapabilities?: string[];
+  optionalCapabilities?: string[];
+  complements?: string[];
+};
+
 export type SkillManifest = {
   id: string;
   name: string;
@@ -58,10 +75,7 @@ export type SkillManifest = {
   stackTags: string[];
   taskTags: string[];
   supportedAgents: string[];
-  routing?: {
-    lane: SkillLane;
-    category: string;
-  };
+  routing?: SkillRoutingMetadata;
   source: {
     type: string;
     registry: string;

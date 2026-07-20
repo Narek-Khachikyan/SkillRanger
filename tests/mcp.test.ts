@@ -72,6 +72,8 @@ test("MCP exposes the project, install, and domain workflow tool set", () => {
       "capture_ui_evidence",
       "compare_design_variants",
       "verify_visual_result",
+      "prepare_task",
+      "read_run_skill_file",
     ]
   );
 });

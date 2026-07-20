@@ -4,6 +4,7 @@ import path from "node:path";
 import type { RegistrySkill, ResolvedSharedContract } from "../types.ts";
 import { assertValidExecutionContract } from "../runtime/strict/contract.ts";
 import type { ExecutionContractV2 } from "../runtime/strict/types.ts";
+import { objectDepth, routerMetadataLimits } from "../router/metadata.ts";
 import {
   assertValidSkillManifest,
   RegistryValidationError,
@@ -279,9 +280,14 @@ export const loadLocalRegistry = async (
     if (!(await fileExists(manifestPath)) || !(await fileExists(skillPath)))
       continue;
 
-    const manifestJson = JSON.parse(
-      await readFile(manifestPath, "utf8"),
-    ) as unknown;
+    const manifestText = await readFile(manifestPath, "utf8");
+    if (Buffer.byteLength(manifestText, "utf8") > routerMetadataLimits.maxManifestBytes) {
+      throw new Error(`Skill manifest exceeds ${routerMetadataLimits.maxManifestBytes} bytes: ${manifestPath}`);
+    }
+    const manifestJson = JSON.parse(manifestText) as unknown;
+    if (objectDepth(manifestJson) > routerMetadataLimits.maxObjectDepth) {
+      throw new Error(`Skill manifest exceeds object depth ${routerMetadataLimits.maxObjectDepth}: ${manifestPath}`);
+    }
     const skillText = await readFile(skillPath, "utf8");
     const manifest = assertValidSkillManifest(manifestJson, manifestPath, {
       folderName: entry.name,

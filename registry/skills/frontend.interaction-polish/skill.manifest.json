@@ -116,7 +116,18 @@
   "license": "MIT",
   "routing": {
     "lane": "design",
-    "category": "interaction-polish"
+    "category": "interaction-polish",
+    "roles": ["primary", "companion"],
+    "domains": ["frontend"],
+    "actions": ["modify", "implement", "fix", "design"],
+    "artifactTypes": ["web-interface", "component", "interaction"],
+    "intentTags": ["interaction-polish", "microinteraction", "loading-state", "focus"],
+    "technologyTags": ["react", "tailwind", "css"],
+    "environmentSignals": ["tag:frontend", "framework:react"],
+    "qualityGoals": ["usability", "accessibility", "responsiveness"],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": ["browser", "screenshots"],
+    "complements": ["frontend.accessibility-review", "frontend.motion-design"]
   },
   "evaluation": {
     "status": "none",

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "router-fixture-pack/1.0",
+  "domain": {
+    "id": "iac-cloud",
+    "displayName": "Synthetic Infrastructure as Code and Cloud",
+    "routing": {
+      "aliases": ["iac", "infrastructure-as-code", "cloud-infrastructure"],
+      "intentTags": ["infrastructure-as-code", "cloud", "provisioning"],
+      "artifactTypes": ["terraform-config", "cloud-resource", "infrastructure-plan"],
+      "technologyTags": ["terraform", "aws", "azure"],
+      "projectTags": ["cloud", "iac"]
+    }
+  },
+  "skills": [
+    {
+      "id": "iac.cloud-provisioning",
+      "displayName": "Synthetic Cloud Provisioning",
+      "version": "1.0.0",
+      "riskLevel": "medium",
+      "roles": ["primary"],
+      "domains": ["iac-cloud"],
+      "actions": ["configure", "implement", "deploy"],
+      "artifactTypes": ["terraform-config", "cloud-resource", "infrastructure-plan"],
+      "intentTags": ["infrastructure-as-code", "cloud", "provisioning"],
+      "technologyTags": ["terraform", "aws", "azure"],
+      "environmentSignals": ["dependency:terraform", "dependency:aws"],
+      "qualityGoals": ["reliability", "correctness"],
+      "requiredCapabilities": ["filesystem", "terminal"],
+      "optionalCapabilities": [],
+      "complements": [],
+      "dependencies": [],
+      "conflictsWith": [],
+      "supersedes": [],
+      "instructionBytes": 9500,
+      "strictContract": "valid"
+    }
+  ]
+}

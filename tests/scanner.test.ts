@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { scanProject } from "../src/scanner/index.ts";
@@ -59,4 +59,19 @@ test("scanner warns when React or Tailwind exceeds maintained frontend skill ran
 
   assert.ok(fingerprint.warnings.includes("React 20 is outside the maintained frontend-skill range (18-19); use conservative fallbacks and do not promote without verification."));
   assert.ok(fingerprint.warnings.includes("Tailwind CSS 5 is outside the maintained frontend-skill range (3-4); use conservative fallbacks and do not promote without verification."));
+});
+
+test("scanner sorts bounded traversal and excludes router-generated state", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "skillranger-scan-order-"));
+  await mkdir(path.join(root, "zeta"));
+  await mkdir(path.join(root, "alpha"));
+  await mkdir(path.join(root, ".skillranger", "runs", "router"), { recursive: true });
+  await writeFile(path.join(root, "zeta", "z.ts"), "export {};\n");
+  await writeFile(path.join(root, "alpha", "a.ts"), "export {};\n");
+  await writeFile(path.join(root, ".skillranger", "runs", "router", "route_secret.json"), "secret");
+  const first = await scanProject(root);
+  const second = await scanProject(root);
+  assert.deepEqual(first.signals, second.signals);
+  assert.deepEqual(first.signals.filter((value) => value.endsWith(".ts")), ["alpha/a.ts", "zeta/z.ts"]);
+  assert.equal(first.signals.some((value) => value.includes(".skillranger")), false);
 });

@@ -124,6 +124,14 @@ Research-backed implementation priorities:
 
 Основная ценность: "Подключи правильные агентные workflows к конкретному repo без ручного поиска и без blind trust".
 
+### Universal Prompt Router
+
+The router adds an explicit one-prompt workflow without changing the product trust model. CLI users call `skillranger task`; MCP users opt in with a terminal `@skillranger`, `skillranger`, or `/sr` trigger. The router analyzes only canonical task signals, resolves primary and supporting domains, composes a limited skill set, and prepares the existing lifecycle-v1 or strict-v2 runtime.
+
+The user-visible alternatives to a prepared run are intentional product outcomes: closed-option clarification with continuation, decomposition into bounded subtasks, no-match when a production pack is absent, strict requirements unmet, and context budget exceeded. These outcomes do not create partial authoritative runs.
+
+The router does not discover remote skills, install packages, execute scripts, invoke models, or claim that host capabilities are evidence. Progressive disclosure begins with mandatory `SKILL.md` instructions and permits inventory-pinned optional reads later. Persistence is privacy-safe by default; raw CLI intent requires a double opt-in and is unavailable from public router MCP tools.
+
 Пользователи:
 
 - Solo developer, который активно использует Codex/Claude/Cursor.

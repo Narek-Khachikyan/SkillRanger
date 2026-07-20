@@ -112,7 +112,18 @@
   "license": "MIT",
   "routing": {
     "lane": "implementation",
-    "category": "react-app-review"
+    "category": "react-app-review",
+    "roles": ["primary", "companion"],
+    "domains": ["frontend"],
+    "actions": ["review", "fix", "investigate"],
+    "artifactTypes": ["web-application", "component", "state-flow"],
+    "intentTags": ["react-review", "state-management", "effects", "data-flow"],
+    "technologyTags": ["react", "typescript"],
+    "environmentSignals": ["framework:react", "dependency:react"],
+    "qualityGoals": ["maintainability", "correctness", "accessibility"],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": ["terminal"],
+    "complements": ["frontend.testing-strategy", "frontend.accessibility-review"]
   },
   "evaluation": {
     "status": "none",

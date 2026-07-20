@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "router-fixture-pack/1.0",
+  "domain": {
+    "id": "observability-sre",
+    "displayName": "Synthetic Observability and SRE",
+    "routing": {
+      "aliases": ["observability", "sre", "reliability"],
+      "intentTags": ["monitoring", "observability", "incident-response"],
+      "artifactTypes": ["alert-rule", "dashboard", "runbook"],
+      "technologyTags": ["prometheus", "grafana", "opentelemetry"],
+      "projectTags": ["observability", "sre"]
+    }
+  },
+  "skills": [
+    {
+      "id": "observability.monitoring",
+      "displayName": "Synthetic Monitoring and Alerting",
+      "version": "1.0.0",
+      "riskLevel": "medium",
+      "roles": ["primary"],
+      "domains": ["observability-sre"],
+      "actions": ["create", "configure", "verify"],
+      "artifactTypes": ["alert-rule", "dashboard", "runbook"],
+      "intentTags": ["monitoring", "observability", "incident-response"],
+      "technologyTags": ["prometheus", "grafana", "opentelemetry"],
+      "environmentSignals": ["dependency:prometheus", "dependency:grafana"],
+      "qualityGoals": ["reliability", "correctness"],
+      "requiredCapabilities": ["filesystem", "terminal"],
+      "optionalCapabilities": [],
+      "complements": [],
+      "dependencies": [],
+      "conflictsWith": [],
+      "supersedes": [],
+      "instructionBytes": 8500,
+      "strictContract": "valid"
+    }
+  ]
+}

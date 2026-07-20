@@ -116,7 +116,18 @@
   "license": "MIT",
   "routing": {
     "lane": "qa",
-    "category": "frontend-audit"
+    "category": "frontend-audit",
+    "roles": ["primary", "verification"],
+    "domains": ["frontend"],
+    "actions": ["review", "verify"],
+    "artifactTypes": ["web-interface", "application", "release"],
+    "intentTags": ["audit", "release-readiness", "responsive-design", "accessibility"],
+    "technologyTags": ["react", "typescript", "css"],
+    "environmentSignals": ["tag:frontend", "framework:react"],
+    "qualityGoals": ["correctness", "accessibility", "performance"],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": ["browser", "screenshots", "terminal"],
+    "complements": ["frontend.accessibility-review", "frontend.performance-review"]
   },
   "evaluation": {
     "status": "none",

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/schemas/router-run.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "routerRunId", "revision", "readRevision", "state", "createdAt", "updatedAt", "projectIdentity", "taskProfile", "routing", "selections", "sourceInventory", "readLedger", "runtime"],
+  "properties": {
+    "schemaVersion": { "const": "router-run/1.0" },
+    "routerRunId": { "type": "string", "pattern": "^route_[a-z0-9_-]{7,127}$" },
+    "revision": { "type": "integer", "minimum": 0 },
+    "readRevision": { "type": "integer", "minimum": 0 },
+    "state": { "enum": ["prepared", "reading", "ready", "failed"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "projectIdentity": { "$ref": "#/$defs/digest" },
+    "taskProfile": { "$ref": "#/$defs/taskProfile" },
+    "routing": { "$ref": "#/$defs/routing" },
+    "selections": { "$ref": "#/$defs/selections" },
+    "sourceInventory": { "type": "array", "items": { "$ref": "#/$defs/source" } },
+    "readLedger": { "type": "array", "items": { "$ref": "#/$defs/receipt" } },
+    "runtime": { "$ref": "#/$defs/runtime" },
+    "failure": { "$ref": "#/$defs/failure" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "strings": { "type": "array", "items": { "type": "string" } },
+    "evidence": { "type": "object", "additionalProperties": false, "required": ["source", "kind", "id"], "properties": { "source": { "enum": ["prompt", "fingerprint", "registry", "config"] }, "kind": { "enum": ["action", "artifact", "technology", "quality", "domain", "constraint", "acceptance"] }, "id": { "type": "string" } } },
+    "domain": { "type": "object", "additionalProperties": false, "required": ["id", "confidence", "role", "available", "reasons", "evidence"], "properties": { "id": { "type": "string" }, "confidence": { "type": "number", "minimum": 0, "maximum": 1 }, "role": { "enum": ["primary", "supporting"] }, "available": { "type": "boolean" }, "reasons": { "$ref": "#/$defs/strings" }, "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } } } },
+    "subtask": { "type": "object", "additionalProperties": false, "required": ["id", "normalizedGoal", "actions", "artifactTypes", "candidateDomainIds"], "properties": { "id": { "type": "string" }, "normalizedGoal": { "type": "string" }, "actions": { "$ref": "#/$defs/strings" }, "artifactTypes": { "$ref": "#/$defs/strings" }, "candidateDomainIds": { "$ref": "#/$defs/strings" } } },
+    "taskProfile": { "type": "object", "additionalProperties": false, "required": ["schemaVersion", "normalizedGoal", "locale", "actions", "artifactTypes", "technologies", "constraints", "qualityGoals", "acceptanceCriteria", "domains", "subtasks", "evidence"], "properties": { "schemaVersion": { "const": "task-profile/1.0" }, "normalizedGoal": { "type": "string" }, "locale": { "enum": ["en", "ru", "mixed", "unknown"] }, "actions": { "$ref": "#/$defs/strings" }, "artifactTypes": { "$ref": "#/$defs/strings" }, "technologies": { "$ref": "#/$defs/strings" }, "constraints": { "$ref": "#/$defs/strings" }, "qualityGoals": { "$ref": "#/$defs/strings" }, "acceptanceCriteria": { "$ref": "#/$defs/strings" }, "domains": { "type": "array", "items": { "$ref": "#/$defs/domain" } }, "subtasks": { "type": "array", "items": { "$ref": "#/$defs/subtask" } }, "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } } } },
+    "routing": { "type": "object", "additionalProperties": false, "required": ["targetAgent", "domains", "deterministicKey", "routerAlgorithmVersion", "routingDate", "fingerprintDigest", "registryDigest", "configDigest"], "properties": { "targetAgent": { "type": "string" }, "domains": { "type": "array", "items": { "$ref": "#/$defs/domain" } }, "deterministicKey": { "$ref": "#/$defs/digest" }, "routerAlgorithmVersion": { "type": "string" }, "routingDate": { "type": "string", "format": "date" }, "fingerprintDigest": { "$ref": "#/$defs/digest" }, "registryDigest": { "$ref": "#/$defs/digest" }, "configDigest": { "$ref": "#/$defs/digest" } } },
+    "selection": { "type": "object", "additionalProperties": false, "required": ["skillId", "displayName", "role", "domains", "version", "packageChecksum", "score", "source", "reasons", "verificationStatus"], "properties": { "skillId": { "type": "string" }, "displayName": { "type": "string" }, "role": { "enum": ["environment", "primary", "companion", "verification", "agent-context"] }, "domains": { "$ref": "#/$defs/strings" }, "version": { "type": "string" }, "packageChecksum": { "$ref": "#/$defs/digest" }, "score": { "type": "number", "minimum": 0, "maximum": 1 }, "source": { "enum": ["installed", "bundled-registry", "test-fixture-registry"] }, "reasons": { "$ref": "#/$defs/strings" }, "verificationStatus": { "enum": ["ready", "guidance-only", "not-required"] } } },
+    "selections": { "type": "object", "additionalProperties": false, "required": ["environment", "primary", "companions", "verification", "agentContext"], "properties": { "environment": { "type": "array", "items": { "$ref": "#/$defs/selection" } }, "primary": { "$ref": "#/$defs/selection" }, "companions": { "type": "array", "items": { "$ref": "#/$defs/selection" } }, "verification": { "type": "array", "items": { "$ref": "#/$defs/selection" } }, "agentContext": { "type": "array", "items": { "$ref": "#/$defs/selection" } } } },
+    "installedLocator": { "type": "object", "additionalProperties": false, "required": ["kind", "targetAgent", "installedPath"], "properties": { "kind": { "const": "installed" }, "targetAgent": { "type": "string" }, "installedPath": { "type": "string" } } },
+    "registryLocator": { "type": "object", "additionalProperties": false, "required": ["kind", "skillId"], "properties": { "kind": { "enum": ["bundled-registry", "test-fixture-registry"] }, "skillId": { "type": "string" } } },
+    "file": { "type": "object", "additionalProperties": false, "required": ["path", "checksum", "bytes", "mimeType", "mandatory"], "properties": { "path": { "type": "string" }, "checksum": { "$ref": "#/$defs/digest" }, "bytes": { "type": "integer", "minimum": 0 }, "mimeType": { "enum": ["text/markdown", "text/plain", "application/json"] }, "mandatory": { "type": "boolean" } } },
+    "source": { "type": "object", "additionalProperties": false, "required": ["skillId", "source", "version", "packageChecksum", "auditDigest", "rootIdentity", "locator", "files"], "properties": { "skillId": { "type": "string" }, "source": { "enum": ["installed", "bundled-registry", "test-fixture-registry"] }, "version": { "type": "string" }, "packageChecksum": { "$ref": "#/$defs/digest" }, "auditDigest": { "$ref": "#/$defs/digest" }, "rootIdentity": { "$ref": "#/$defs/digest" }, "locator": { "oneOf": [{ "$ref": "#/$defs/installedLocator" }, { "$ref": "#/$defs/registryLocator" }] }, "files": { "type": "array", "items": { "$ref": "#/$defs/file" } } } },
+    "receipt": { "type": "object", "additionalProperties": false, "required": ["readRequestId", "expectedReadRevision", "resultingReadRevision", "mode", "skillId", "path", "fileChecksum", "offset", "bytes", "chunkChecksum", "deliveredAt"], "properties": { "readRequestId": { "type": "string" }, "expectedReadRevision": { "type": "integer", "minimum": 0 }, "resultingReadRevision": { "type": "integer", "minimum": 0 }, "mode": { "enum": ["mandatory-next", "optional-file"] }, "skillId": { "type": "string" }, "path": { "type": "string" }, "fileChecksum": { "$ref": "#/$defs/digest" }, "offset": { "type": "integer", "minimum": 0 }, "bytes": { "type": "integer", "minimum": 0 }, "chunkChecksum": { "$ref": "#/$defs/digest" }, "deliveredAt": { "type": "string", "format": "date-time" } } },
+    "runtime": { "type": "object", "additionalProperties": false, "required": ["kind", "runId"], "properties": { "kind": { "enum": ["lifecycle-v1", "strict-v2"] }, "runId": { "type": "string" } } },
+    "failure": { "type": "object", "additionalProperties": false, "required": ["code", "reasonCode"], "properties": { "code": { "enum": ["run-integrity", "source-unavailable", "recovery-required"] }, "reasonCode": { "type": "string" } } }
+  }
+}

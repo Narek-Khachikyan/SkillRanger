@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "router-fixture-pack/1.0",
+  "domain": {
+    "id": "package-library",
+    "displayName": "Synthetic Package and Library Engineering",
+    "routing": {
+      "aliases": ["library", "package", "sdk"],
+      "intentTags": ["library", "package-publishing", "sdk"],
+      "artifactTypes": ["package-api", "release-config", "sdk-interface"],
+      "technologyTags": ["npm", "typescript", "semantic-release"],
+      "projectTags": ["library", "package"]
+    }
+  },
+  "skills": [
+    {
+      "id": "package.library-release",
+      "displayName": "Synthetic Library Release",
+      "version": "1.0.0",
+      "riskLevel": "medium",
+      "roles": ["primary"],
+      "domains": ["package-library"],
+      "actions": ["implement", "configure", "deploy"],
+      "artifactTypes": ["package-api", "release-config", "sdk-interface"],
+      "intentTags": ["library", "package-publishing", "sdk"],
+      "technologyTags": ["npm", "typescript", "semantic-release"],
+      "environmentSignals": ["dependency:npm", "dependency:typescript"],
+      "qualityGoals": ["correctness", "maintainability"],
+      "requiredCapabilities": ["filesystem", "terminal"],
+      "optionalCapabilities": [],
+      "complements": [],
+      "dependencies": [],
+      "conflictsWith": [],
+      "supersedes": [],
+      "instructionBytes": 8000,
+      "strictContract": "valid"
+    }
+  ]
+}

@@ -88,6 +88,17 @@ export class StrictSkillRunStore {
 
   async read(runId: string) { return this.readUnlocked(runId); }
 
+  async replace(runId: string, run: SkillRunV2) {
+    if (run.runId !== runId) throw new StrictSkillRunError("run-integrity", "A strict runtime replacement cannot change the run ID.");
+    const lock = await this.lock.acquire(runId);
+    try {
+      const current = await this.readUnlocked(runId);
+      if (run.revision <= current.revision) throw new StrictSkillRunError("run-integrity", "A strict runtime replacement must advance the revision.");
+      await this.writeUnlocked(run);
+      return run;
+    } finally { await this.lock.release(lock); }
+  }
+
   async update(runId: string, apply: (run: SkillRunV2) => SkillRunV2 | Promise<SkillRunV2>) {
     const lock = await this.lock.acquire(runId);
     try {

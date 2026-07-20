@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "router-fixture-pack/1.0",
+  "domain": {
+    "id": "devops-platform",
+    "displayName": "Synthetic DevOps Platform",
+    "routing": {
+      "aliases": ["devops", "platform-engineering", "deployment"],
+      "intentTags": ["deployment", "ci-cd", "platform-engineering"],
+      "artifactTypes": ["deployment-config", "ci-pipeline", "release-manifest"],
+      "technologyTags": ["kubernetes", "docker", "github-actions"],
+      "projectTags": ["devops", "platform"]
+    }
+  },
+  "skills": [
+    {
+      "id": "devops.platform-deployment",
+      "displayName": "Synthetic Platform Deployment",
+      "version": "1.0.0",
+      "riskLevel": "medium",
+      "roles": ["primary"],
+      "domains": ["devops-platform"],
+      "actions": ["deploy", "configure", "modify"],
+      "artifactTypes": ["deployment-config", "ci-pipeline", "release-manifest"],
+      "intentTags": ["deployment", "ci-cd", "platform-engineering"],
+      "technologyTags": ["kubernetes", "docker", "github-actions"],
+      "environmentSignals": ["dependency:kubernetes", "dependency:docker"],
+      "qualityGoals": ["reliability", "correctness"],
+      "requiredCapabilities": ["filesystem", "terminal"],
+      "optionalCapabilities": [],
+      "complements": [],
+      "dependencies": [],
+      "conflictsWith": [],
+      "supersedes": [],
+      "instructionBytes": 10000,
+      "strictContract": "valid"
+    }
+  ]
+}

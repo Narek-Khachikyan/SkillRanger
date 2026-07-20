@@ -1,6 +1,6 @@
 # Release Checklist
 
-This checklist is for the `0.1.0` MVP. It verifies the npx/npm UX, compiled npm binaries, source-run CLI, MCP server, bundled registry, audit gates, frontend eval suite, and package hygiene before handing the MVP to another user or publishing a tarball.
+This checklist covers the current public beta. It verifies the npx/npm UX, compiled npm binaries, source-run CLI, MCP server, Universal Prompt Router, bundled registry, audit gates, frontend and router eval suites, and package hygiene before handing the beta to another user or publishing a tarball.
 
 This MVP supports npm/npx usage from compiled `dist/` via `skillranger`, MCP launch through `skillranger mcp`, the installed convenience binary `skillranger-mcp`, and source-run development from a checkout via `node src/cli/index.ts` and `node src/mcp/server.ts`.
 
@@ -12,7 +12,7 @@ Run the single local release gate from the repository root:
 npm run release:check
 ```
 
-`release:check` runs the build, source check, test suite, registry validation/lint/audit, and the blocking frontend routing evaluation. Run `npm run publish:check` separately before creating a package.
+`release:check` runs the build, source check, test suite, registry validation/lint/audit, blocking frontend routing evaluations, and the Universal Router golden gate. Run `npm run publish:check` separately before creating a package.
 
 Expected result:
 
@@ -22,6 +22,7 @@ Expected result:
 - Registry audit reports zero failed skills.
 - Frontend eval suite reaches the seeded target counts.
 - Frontend routing eval emits project-rooted routing metrics and failure details when current routing misses expectations.
+- Universal Router shipped and synthetic suites meet the checked-in status, primary, precision/recall, companion, outcome, privacy, and determinism thresholds.
 
 ## CLI Smoke Checks
 
@@ -34,6 +35,7 @@ node dist/cli/index.js recommend fixtures/next-react-ts --target codex --lane de
 node dist/cli/index.js eval:frontend --run-routing --project fixtures/next-react-ts --json
 node dist/cli/index.js install frontend.next-app-router-review --project fixtures/next-react-ts --target codex --scope repo --dry-run --json
 node dist/cli/index.js installed fixtures/next-react-ts
+node dist/cli/index.js task fixtures/next-react-ts --intent "Review accessibility and verify the result" --target codex --json
 ```
 
 Run the interactive setup wizard from a disposable frontend project and decline the final confirmation:
@@ -57,6 +59,7 @@ Expected result:
 - Dry-run install reports expected writes and lockfile updates without writing files.
 - `installed` handles an empty or existing lockfile cleanly.
 - Setup wizard shows recommendations selected by default, Space toggles items, Enter continues, and `n` or Enter at final confirmation writes nothing.
+- Direct router mode prepares a lifecycle run without requiring a terminal trigger and returns ordered mandatory reads.
 
 ## Negative Fixture Checks
 
@@ -89,6 +92,7 @@ Expected tarball contents include:
 - `registry/skills/`
 - `schemas/`
 - `evals/`
+- `tests/fixtures/router-cases.json` and declarative `tests/fixtures/router-packs/` used by `eval:router`
 - `docs/`
 - `README.md`
 - `RELEASE.md`
@@ -99,8 +103,8 @@ Expected tarball contents exclude:
 
 - `.codegraph/`
 - `.pnpm-store/`
-- `tests/`
-- `fixtures/`
+- executable test files and test helpers
+- fixture projects outside the explicitly packaged router eval baseline
 - local temporary files
 - generated install output from smoke tests
 
@@ -150,6 +154,10 @@ Required MCP coverage:
 - `install_skill` rejects missing confirmation.
 - `install_skill` rejects stale expected writes.
 - `install_skill` blocks block-risk audit results without writes.
+- `prepare_task` requires an explicit terminal trigger and uses only the server-fixed project root and bundled registry.
+- `read_run_skill_file` delivers mandatory chunks in order, bridges the runtime read gate, and returns identical content/revision for a bound retry.
+- clarification, decomposition, no-match, strict failure, and budget failure create no partial router or runtime record.
+- strict prepared/read/steps/finalize reaches the strict runtime's evidence-derived terminal state.
 
 See `docs/mcp-host-config.md` for example host config and JSON-RPC messages.
 
@@ -176,6 +184,15 @@ The MVP is ready when all of these are true:
 - Dry-run is the default install behavior.
 - Confirmed repo-local install writes only expected skill files and `skillranger.lock.json`.
 - The package tarball is clean and does not include local indexes, package-manager stores, tests, fixtures, or temporary files.
+
+## Universal Router Release Notes
+
+- Added direct CLI `task` and `task:read` commands and explicit MCP `prepare_task` and `read_run_skill_file` tools.
+- Added fixed-root MCP authorization, bundled-registry trust boundaries, privacy-safe task profiles, source snapshots, idempotent reads, and journal recovery.
+- Added normal clarification continuation, decomposition, production no-match, strict requirements, and context-budget outcomes without partial runs.
+- Added installed-only strict v2 preparation and lifecycle-v1 mandatory-read bridging without changing existing runtime schemas.
+- Migrated the managed `AGENTS.md` block to universal explicit-activation guidance while preserving surrounding content and line endings.
+- Added a 21-case shipped/synthetic router baseline and `tests/router.e2e.test.ts` coverage for lifecycle, strict, continuation, CLI/MCP, integrity, retry, and recovery flows.
 
 ## Scope Freeze
 

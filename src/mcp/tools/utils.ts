@@ -57,7 +57,8 @@ export const codedErrorToolResult = (code: McpToolErrorCode, message: string, de
     ok: false,
     code,
     message,
-    ...details
+    ...details,
+    ...(Object.keys(details).length === 0 ? {} : { details })
   });
 
 export const withToolErrors = async (operation: () => Promise<McpToolResult>): Promise<McpToolResult> => {

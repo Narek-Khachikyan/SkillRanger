@@ -20,6 +20,7 @@
     "frameworks": { "type": "array" },
     "styling": { "type": "array" },
     "testing": { "type": "array" },
+    "dependencies": { "type": "array", "items": { "type": "string" } },
     "agentContext": { "type": "object" },
     "signals": { "type": "array", "items": { "type": "string" } },
     "tags": { "type": "array", "items": { "type": "string" } },

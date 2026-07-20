@@ -21,6 +21,16 @@ scan project
 
 No Core command invokes a model, stores provider credentials, or silently edits application files. This keeps model comparisons portable and makes tool permissions visible in the host.
 
+## Router preparation and reads
+
+The Universal Prompt Router prepares an existing runtime from one complete task. CLI direct mode uses `skillranger task <project> --intent <task>`; MCP explicit mode uses `prepare_task` and requires a terminal SkillRanger trigger. Production routes use the bundled registry and never auto-install or execute selected packages.
+
+Only `prepared` creates records. Clarification continuation, decomposition, no-match for absent production packs, strict prerequisite failure, and context-budget failure return normal typed outcomes without a partial router or runtime record. A prepared result contains both IDs and an ordered `requiredReads` projection.
+
+Use `skillranger task:read` or MCP `read_run_skill_file` to request `mandatory-next` chunks. The caller supplies a UUID request ID and current read revision but cannot choose the next mandatory skill, path, or offset. Identical retries return the same chunk and revision; conflicting retries and stale revisions fail. Optional inventory files are available only after mandatory reads and are charged to a separate byte budget. Completed mandatory files are atomically recorded in the lifecycle or strict ledger before execution can begin.
+
+Task profiles and router sidecars persist canonical vocabulary, checksums, and a keyed project identity rather than the raw prompt, URLs, unknown free text, or absolute root. CLI raw-intent persistence requires project policy plus `--store-intent --confirm-store-intent`; public router MCP tools do not expose it. Host capability declarations affect eligibility and verification availability but never count as execution evidence.
+
 ## Skill-run lifecycle
 
 The CLI lifecycle is explicit and persisted under `<project>/.skillranger/runs/<run-id>.json`:
@@ -101,5 +111,7 @@ The MCP equivalents are `start_skill_run` with `strict: true`, `read_next_skill_
 ## Managed agent context and recovery
 
 Repository-scoped `skillranger setup` creates or updates one bounded `<!-- SKILLRANGER_START -->` / `<!-- SKILLRANGER_END -->` block in `AGENTS.md`. Repeated setup is idempotent and preserves user-authored bytes outside the block. Use `skillranger setup . --no-agent-context --yes` to opt out. Malformed or duplicate markers fail safely instead of rewriting ambiguous user content.
+
+Current setup migrates the managed block to universal router guidance while preserving its marker pair, surrounding bytes, and existing LF or CRLF convention. The block explains explicit activation and mandatory reads; it is guidance rather than a security boundary. Setup is the only flow that writes `AGENTS.md`; task preparation never does.
 
 If a run file is corrupt, `run:inspect` and MCP lifecycle calls return `run-integrity`; they never guess or overwrite it. Preserve the invalid file for diagnosis, correct it from a trusted copy only when its run id and checksums can be established, or move it aside and start a new run. v1 and strict stores share the same live-owner-safe lock: acquisition is atomic and token-owned, PID liveness and file identity guard stale recovery, and release cannot delete another owner's lock. A dead stale owner can be reclaimed, but age alone never permits stealing a lock from a live process.

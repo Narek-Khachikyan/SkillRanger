@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/schemas/task-routing-result.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "schemaVersion", "activation", "taskProfile", "project", "routing", "warnings", "status"],
+  "properties": {
+    "ok": { "const": true },
+    "schemaVersion": { "const": "router-result/1.0" },
+    "activation": { "$ref": "#/$defs/activation" },
+    "taskProfile": { "$ref": "#/$defs/taskProfile" },
+    "project": { "$ref": "#/$defs/project" },
+    "routing": { "$ref": "#/$defs/routing" },
+    "warnings": { "$ref": "#/$defs/strings" },
+    "status": { "enum": ["prepared", "clarification_required", "decomposition_required", "no_matching_skills", "strict_requirements_unmet", "context_budget_exceeded"] },
+    "run": { "$ref": "#/$defs/run" },
+    "selections": { "$ref": "#/$defs/selections" },
+    "requiredReads": { "type": "array", "items": { "$ref": "#/$defs/requiredRead" } },
+    "runtimeClarification": { "$ref": "#/$defs/runtimeClarification" },
+    "verification": { "$ref": "#/$defs/verification" },
+    "clarification": { "$ref": "#/$defs/clarification" },
+    "continuationToken": { "type": "string", "minLength": 1 },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "decomposition": { "$ref": "#/$defs/decomposition" },
+    "suggestedAction": { "type": "string", "minLength": 1 },
+    "missing": { "type": "array", "items": { "$ref": "#/$defs/missing" } },
+    "installationSuggestions": { "type": "array", "items": { "$ref": "#/$defs/installationSuggestion" } },
+    "requiredBytes": { "type": "integer", "minimum": 0 },
+    "allowedBytes": { "type": "integer", "minimum": 0 },
+    "blockingSkillIds": { "$ref": "#/$defs/strings" }
+  },
+  "oneOf": [
+    { "properties": { "status": { "const": "prepared" } }, "required": ["run", "selections", "requiredReads", "verification"] },
+    { "properties": { "status": { "const": "clarification_required" } }, "required": ["clarification", "continuationToken", "expiresAt"], "not": { "$ref": "#/$defs/preparedFields" } },
+    { "properties": { "status": { "const": "decomposition_required" } }, "required": ["decomposition"], "not": { "$ref": "#/$defs/preparedFields" } },
+    { "properties": { "status": { "const": "no_matching_skills" } }, "required": ["suggestedAction"], "not": { "$ref": "#/$defs/preparedFields" } },
+    { "properties": { "status": { "const": "strict_requirements_unmet" } }, "required": ["missing", "installationSuggestions"], "not": { "$ref": "#/$defs/preparedFields" } },
+    { "properties": { "status": { "const": "context_budget_exceeded" } }, "required": ["requiredBytes", "allowedBytes", "blockingSkillIds"], "not": { "$ref": "#/$defs/preparedFields" } }
+  ],
+  "$defs": {
+    "strings": { "type": "array", "items": { "type": "string" } },
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "activation": { "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "enum": ["explicit", "direct"] }, "trigger": { "enum": ["@skillranger", "skillranger", "/sr"] } } },
+    "evidence": { "type": "object", "additionalProperties": false, "required": ["source", "kind", "id"], "properties": { "source": { "enum": ["prompt", "fingerprint", "registry", "config"] }, "kind": { "enum": ["action", "artifact", "technology", "quality", "domain", "constraint", "acceptance"] }, "id": { "type": "string" } } },
+    "domain": { "type": "object", "additionalProperties": false, "required": ["id", "confidence", "role", "available", "reasons", "evidence"], "properties": { "id": { "type": "string" }, "confidence": { "type": "number", "minimum": 0, "maximum": 1 }, "role": { "enum": ["primary", "supporting"] }, "available": { "type": "boolean" }, "reasons": { "$ref": "#/$defs/strings" }, "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } } } },
+    "subtask": { "type": "object", "additionalProperties": false, "required": ["id", "normalizedGoal", "actions", "artifactTypes", "candidateDomainIds"], "properties": { "id": { "type": "string" }, "normalizedGoal": { "type": "string" }, "actions": { "$ref": "#/$defs/strings" }, "artifactTypes": { "$ref": "#/$defs/strings" }, "candidateDomainIds": { "$ref": "#/$defs/strings" } } },
+    "taskProfile": { "type": "object", "additionalProperties": false, "required": ["schemaVersion", "normalizedGoal", "locale", "actions", "artifactTypes", "technologies", "constraints", "qualityGoals", "acceptanceCriteria", "domains", "subtasks", "evidence"], "properties": { "schemaVersion": { "const": "task-profile/1.0" }, "normalizedGoal": { "type": "string" }, "locale": { "enum": ["en", "ru", "mixed", "unknown"] }, "actions": { "$ref": "#/$defs/strings" }, "artifactTypes": { "$ref": "#/$defs/strings" }, "technologies": { "$ref": "#/$defs/strings" }, "constraints": { "$ref": "#/$defs/strings" }, "qualityGoals": { "$ref": "#/$defs/strings" }, "acceptanceCriteria": { "$ref": "#/$defs/strings" }, "domains": { "type": "array", "items": { "$ref": "#/$defs/domain" } }, "subtasks": { "type": "array", "items": { "$ref": "#/$defs/subtask" } }, "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } } } },
+    "project": { "type": "object", "additionalProperties": false, "required": ["displayRoot", "fingerprintDigest", "projectTypes", "languages", "frameworks"], "properties": { "displayRoot": { "type": "string" }, "fingerprintDigest": { "$ref": "#/$defs/digest" }, "projectTypes": { "$ref": "#/$defs/strings" }, "languages": { "$ref": "#/$defs/strings" }, "frameworks": { "$ref": "#/$defs/strings" } } },
+    "routing": { "type": "object", "additionalProperties": false, "required": ["targetAgent", "domains", "deterministicKey", "routerAlgorithmVersion", "routingDate", "registryDigest", "configDigest"], "properties": { "targetAgent": { "type": "string" }, "domains": { "type": "array", "items": { "$ref": "#/$defs/domain" } }, "deterministicKey": { "$ref": "#/$defs/digest" }, "routerAlgorithmVersion": { "type": "string" }, "routingDate": { "type": "string", "format": "date" }, "registryDigest": { "$ref": "#/$defs/digest" }, "configDigest": { "$ref": "#/$defs/digest" } } },
+    "selection": { "type": "object", "additionalProperties": false, "required": ["skillId", "displayName", "role", "domains", "version", "packageChecksum", "score", "source", "reasons", "verificationStatus"], "properties": { "skillId": { "type": "string" }, "displayName": { "type": "string" }, "role": { "enum": ["environment", "primary", "companion", "verification", "agent-context"] }, "domains": { "$ref": "#/$defs/strings" }, "version": { "type": "string" }, "packageChecksum": { "$ref": "#/$defs/digest" }, "score": { "type": "number", "minimum": 0, "maximum": 1 }, "source": { "enum": ["installed", "bundled-registry", "test-fixture-registry"] }, "reasons": { "$ref": "#/$defs/strings" }, "verificationStatus": { "enum": ["ready", "guidance-only", "not-required"] } } },
+    "selections": { "type": "object", "additionalProperties": false, "required": ["environment", "primary", "companions", "verification", "agentContext"], "properties": { "environment": { "type": "array", "items": { "$ref": "#/$defs/selection" } }, "primary": { "$ref": "#/$defs/selection" }, "companions": { "type": "array", "items": { "$ref": "#/$defs/selection" } }, "verification": { "type": "array", "items": { "$ref": "#/$defs/selection" } }, "agentContext": { "type": "array", "items": { "$ref": "#/$defs/selection" } } } },
+    "run": { "type": "object", "additionalProperties": false, "required": ["routerRunId", "runtimeRunId", "runtime", "strict", "readRevision"], "properties": { "routerRunId": { "type": "string" }, "runtimeRunId": { "type": "string" }, "runtime": { "enum": ["lifecycle-v1", "strict-v2"] }, "strict": { "type": "boolean" }, "readRevision": { "type": "integer", "minimum": 0 } } },
+    "requiredRead": { "type": "object", "additionalProperties": false, "required": ["order", "skillId", "path", "checksum", "bytes", "mandatory"], "properties": { "order": { "type": "integer", "minimum": 0 }, "skillId": { "type": "string" }, "path": { "type": "string" }, "checksum": { "$ref": "#/$defs/digest" }, "bytes": { "type": "integer", "minimum": 0 }, "mandatory": { "const": true } } },
+    "runtimeClarification": { "type": "object", "additionalProperties": false, "required": ["questions"], "properties": { "questions": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["id", "fields", "text", "allowDecline"], "properties": { "id": { "type": "string" }, "fields": { "$ref": "#/$defs/strings" }, "text": { "type": "string" }, "allowDecline": { "type": "boolean" } } } } } },
+    "verification": { "type": "object", "additionalProperties": false, "required": ["required", "available", "missingCapabilities", "expectedEvidenceKinds"], "properties": { "required": { "type": "boolean" }, "available": { "type": "boolean" }, "missingCapabilities": { "$ref": "#/$defs/strings" }, "expectedEvidenceKinds": { "$ref": "#/$defs/strings" } } },
+    "clarification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["questions"],
+      "properties": {
+        "questions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "text", "options"],
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["value", "label"],
+                  "properties": {
+                    "value": { "type": "string" },
+                    "label": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "decomposition": { "type": "object", "additionalProperties": false, "required": ["subtasks"], "properties": { "subtasks": { "type": "array", "items": { "$ref": "#/$defs/subtask" } } } },
+    "missing": { "type": "object", "additionalProperties": false, "required": ["requirement"], "properties": { "skillId": { "type": "string" }, "requirement": { "enum": ["installed-skill", "lockfile-match", "strict-contract-v2", "skill-input", "capability"] } } },
+    "installationSuggestion": { "type": "object", "additionalProperties": false, "required": ["skillId", "reason", "nextTool"], "properties": { "skillId": { "type": "string" }, "reason": { "type": "string" }, "nextTool": { "const": "plan_skill_install" } } },
+    "preparedFields": { "anyOf": [{ "required": ["run"] }, { "required": ["selections"] }, { "required": ["requiredReads"] }] }
+  }
+}

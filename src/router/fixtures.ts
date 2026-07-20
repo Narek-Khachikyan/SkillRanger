@@ -1,0 +1,199 @@
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
+import type { RiskLevel, RouterSkillRole, TaskAction } from "./types.ts";
+
+export type RouterGoldenCase = {
+  id: string;
+  prompt: string;
+  fixture: "empty" | "frontend" | "synthetic";
+  registry: "bundled" | "test-fixture";
+  strict: boolean;
+  capabilities: string[];
+  expected: {
+    status: "prepared" | "clarification_required" | "decomposition_required" | "no_matching_skills" | "strict_requirements_unmet" | "context_budget_exceeded";
+    domainIds: string[];
+    reasonCode?: string;
+  };
+};
+
+export type RouterFixturePack = {
+  schemaVersion: "router-fixture-pack/1.0";
+  domain: {
+    id: string;
+    displayName: string;
+    targetSurface?: string;
+    routing: {
+      aliases: string[];
+      intentTags: string[];
+      artifactTypes: string[];
+      technologyTags: string[];
+      projectTags: string[];
+    };
+  };
+  skills: Array<{
+    id: string;
+    displayName: string;
+    version: string;
+    riskLevel: RiskLevel;
+    roles: RouterSkillRole[];
+    domains: string[];
+    actions: TaskAction[];
+    artifactTypes: string[];
+    intentTags: string[];
+    technologyTags: string[];
+    environmentSignals: string[];
+    qualityGoals: string[];
+    requiredCapabilities: string[];
+    optionalCapabilities: string[];
+    complements: string[];
+    dependencies: string[];
+    conflictsWith: string[];
+    supersedes: string[];
+    instructionBytes: number;
+    strictContract: "valid" | "missing" | "input-required";
+  }>;
+};
+
+const goldenStatuses = new Set<RouterGoldenCase["expected"]["status"]>([
+  "prepared",
+  "clarification_required",
+  "decomposition_required",
+  "no_matching_skills",
+  "strict_requirements_unmet",
+  "context_budget_exceeded",
+]);
+const riskLevels = new Set<RiskLevel>(["low", "medium", "high", "block"]);
+const routerRoles = new Set<RouterSkillRole>(["environment", "primary", "companion", "verification", "agent-context"]);
+const taskActions = new Set<TaskAction>(["create", "implement", "modify", "fix", "debug", "review", "test", "verify", "document", "deploy", "migrate", "optimize", "research", "design", "configure", "investigate"]);
+const strictContracts = new Set(["valid", "missing", "input-required"]);
+const canonicalId = /^[a-z0-9][a-z0-9._-]{1,127}$/;
+
+const record = (value: unknown, at: string): Record<string, unknown> => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(`${at} must be an object`);
+  return value as Record<string, unknown>;
+};
+
+const exactKeys = (value: Record<string, unknown>, required: string[], optional: string[], at: string) => {
+  const allowed = new Set([...required, ...optional]);
+  const unknown = Object.keys(value).find((key) => !allowed.has(key));
+  if (unknown) throw new Error(`${at} contains unknown property ${unknown}`);
+  const missing = required.find((key) => !Object.hasOwn(value, key));
+  if (missing) throw new Error(`${at} is missing required property ${missing}`);
+};
+
+const string = (value: unknown, at: string) => {
+  if (typeof value !== "string" || value.length === 0) throw new Error(`${at} must be a non-empty string`);
+  return value;
+};
+
+const id = (value: unknown, at: string) => {
+  const result = string(value, at);
+  if (!canonicalId.test(result)) throw new Error(`${at} must be a canonical ID`);
+  return result;
+};
+
+const stringArray = (value: unknown, at: string, canonical = true) => {
+  if (!Array.isArray(value)) throw new Error(`${at} must be an array`);
+  const result = value.map((item, index) => canonical ? id(item, `${at}[${index}]`) : string(item, `${at}[${index}]`));
+  if (new Set(result).size !== result.length) throw new Error(`${at} must contain unique values`);
+  return result;
+};
+
+const enumArray = <T extends string>(value: unknown, allowed: Set<T>, at: string): T[] => {
+  const result = stringArray(value, at, false);
+  if (result.some((item) => !allowed.has(item as T))) throw new Error(`${at} contains an invalid value`);
+  return result as T[];
+};
+
+const parseJson = async (filePath: string) => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(filePath, "utf8"));
+  } catch (error) {
+    throw new Error(`invalid router fixture JSON at ${filePath}`, { cause: error });
+  }
+  return parsed;
+};
+
+const validateGoldenCase = (input: unknown, index: number): RouterGoldenCase => {
+  const at = `router case ${index}`;
+  const value = record(input, at);
+  exactKeys(value, ["id", "prompt", "fixture", "registry", "strict", "capabilities", "expected"], [], at);
+  id(value.id, `${at}.id`);
+  string(value.prompt, `${at}.prompt`);
+  if (!new Set(["empty", "frontend", "synthetic"]).has(value.fixture as string)) throw new Error(`${at}.fixture is invalid`);
+  if (!new Set(["bundled", "test-fixture"]).has(value.registry as string)) throw new Error(`${at}.registry is invalid`);
+  if (typeof value.strict !== "boolean") throw new Error(`${at}.strict must be a boolean`);
+  stringArray(value.capabilities, `${at}.capabilities`);
+  const expected = record(value.expected, `${at}.expected`);
+  exactKeys(expected, ["status", "domainIds"], ["reasonCode"], `${at}.expected`);
+  if (!goldenStatuses.has(expected.status as RouterGoldenCase["expected"]["status"])) throw new Error(`${at}.expected.status is invalid`);
+  stringArray(expected.domainIds, `${at}.expected.domainIds`);
+  if (Object.hasOwn(expected, "reasonCode")) id(expected.reasonCode, `${at}.expected.reasonCode`);
+  return structuredClone(value) as RouterGoldenCase;
+};
+
+export const loadRouterGoldenCases = async (filePath: string): Promise<RouterGoldenCase[]> => {
+  const parsed = await parseJson(filePath);
+  if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("router golden cases must be a non-empty array");
+  const cases = parsed.map(validateGoldenCase);
+  if (new Set(cases.map(({ id: caseId }) => caseId)).size !== cases.length) throw new Error("router golden case IDs must be unique");
+  return cases;
+};
+
+const validatePack = (input: unknown, filePath: string): RouterFixturePack => {
+  const value = record(input, `fixture pack ${filePath}`);
+  exactKeys(value, ["schemaVersion", "domain", "skills"], [], `fixture pack ${filePath}`);
+  if (value.schemaVersion !== "router-fixture-pack/1.0") throw new Error(`fixture pack ${filePath} has an unsupported schemaVersion`);
+  const domain = record(value.domain, `fixture pack ${filePath}.domain`);
+  exactKeys(domain, ["id", "displayName", "routing"], ["targetSurface"], `fixture pack ${filePath}.domain`);
+  const domainId = id(domain.id, `fixture pack ${filePath}.domain.id`);
+  string(domain.displayName, `fixture pack ${filePath}.domain.displayName`);
+  if (domain.targetSurface !== undefined) id(domain.targetSurface, `fixture pack ${filePath}.domain.targetSurface`);
+  const routing = record(domain.routing, `fixture pack ${filePath}.domain.routing`);
+  const routingKeys = ["aliases", "intentTags", "artifactTypes", "technologyTags", "projectTags"];
+  exactKeys(routing, routingKeys, [], `fixture pack ${filePath}.domain.routing`);
+  routingKeys.forEach((key) => stringArray(routing[key], `fixture pack ${filePath}.domain.routing.${key}`));
+  if (!Array.isArray(value.skills)) throw new Error(`fixture pack ${filePath}.skills must be an array`);
+  const skills = value.skills.map((inputSkill, index) => {
+    const at = `fixture pack ${filePath}.skills[${index}]`;
+    const skill = record(inputSkill, at);
+    const keys = ["id", "displayName", "version", "riskLevel", "roles", "domains", "actions", "artifactTypes", "intentTags", "technologyTags", "environmentSignals", "qualityGoals", "requiredCapabilities", "optionalCapabilities", "complements", "dependencies", "conflictsWith", "supersedes", "instructionBytes", "strictContract"];
+    exactKeys(skill, keys, [], at);
+    id(skill.id, `${at}.id`);
+    string(skill.displayName, `${at}.displayName`);
+    string(skill.version, `${at}.version`);
+    if (!riskLevels.has(skill.riskLevel as RiskLevel)) throw new Error(`${at}.riskLevel is invalid`);
+    enumArray(skill.roles, routerRoles, `${at}.roles`);
+    const domains = stringArray(skill.domains, `${at}.domains`);
+    if (!domains.includes(domainId)) throw new Error(`${at}.domains must include ${domainId}`);
+    enumArray(skill.actions, taskActions, `${at}.actions`);
+    ["artifactTypes", "intentTags", "technologyTags", "qualityGoals", "requiredCapabilities", "optionalCapabilities", "complements", "dependencies", "conflictsWith", "supersedes"].forEach((key) => stringArray(skill[key], `${at}.${key}`));
+    stringArray(skill.environmentSignals, `${at}.environmentSignals`, false);
+    if (!Number.isInteger(skill.instructionBytes) || (skill.instructionBytes as number) < 1 || (skill.instructionBytes as number) > 1_000_000) throw new Error(`${at}.instructionBytes is invalid`);
+    if (!strictContracts.has(skill.strictContract as string)) throw new Error(`${at}.strictContract is invalid`);
+    return skill;
+  });
+  if (new Set(skills.map((skill) => skill.id)).size !== skills.length) throw new Error(`fixture pack ${filePath} has duplicate skill IDs`);
+  return structuredClone(value) as RouterFixturePack;
+};
+
+export const loadRouterFixturePacks = async (root: string): Promise<RouterFixturePack[]> => {
+  const entries = await readdir(root, { withFileTypes: true });
+  const packs: RouterFixturePack[] = [];
+  for (const entry of entries.sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0)) {
+    if (!entry.isDirectory() || !canonicalId.test(entry.name)) throw new Error(`unsupported fixture entry ${entry.name}`);
+    const packRoot = path.join(root, entry.name);
+    const packEntries = await readdir(packRoot, { withFileTypes: true });
+    for (const packEntry of packEntries) {
+      if (packEntry.name !== "pack.json" || !packEntry.isFile()) throw new Error(`unsupported fixture entry ${packEntry.name}`);
+    }
+    if (!packEntries.some(({ name }) => name === "pack.json")) throw new Error(`fixture pack ${entry.name} is missing pack.json`);
+    packs.push(validatePack(await parseJson(path.join(packRoot, "pack.json")), path.join(entry.name, "pack.json")));
+  }
+  const domainIds = packs.map(({ domain }) => domain.id);
+  if (new Set(domainIds).size !== domainIds.length) throw new Error("fixture domain IDs must be unique");
+  const skillIds = packs.flatMap(({ skills }) => skills.map(({ id: skillId }) => skillId));
+  if (new Set(skillIds).size !== skillIds.length) throw new Error("fixture skill IDs must be unique across packs");
+  return packs;
+};

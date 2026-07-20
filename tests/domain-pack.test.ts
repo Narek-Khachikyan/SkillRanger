@@ -6,6 +6,7 @@ import "../src/domains/bundled.ts";
 import {
   getDomainPack,
   listDomainPacks,
+  loadBundledRouterPacks,
   readDomainPackManifest,
   registerDomainPack,
   unregisterDomainPack,
@@ -26,6 +27,52 @@ test("bundled frontend domain registers through the generic domain API", async (
   const diskManifest = await readDomainPackManifest("frontend");
   assert.deepEqual(validateDomainPackManifest(diskManifest), []);
   assert.deepEqual(diskManifest, domain.manifest);
+});
+
+test("bundled router packs are discovered as validated declarative data", async () => {
+  const packs = await loadBundledRouterPacks();
+  assert.deepEqual(packs.map(({ id }) => id), ["frontend"]);
+  assert.equal(packs[0]?.id, "frontend");
+  assert.deepEqual(packs[0]?.routing.aliases, ["frontend-web", "web-ui"]);
+  assert.ok(packs[0]?.routing.projectTags.includes("react"));
+});
+
+test("domain routing metadata validates aliases, bounds, conflicts, and unknown fields", () => {
+  const base = structuredClone(getDomainPack("frontend")?.manifest);
+  assert.ok(base);
+  base.routing = {
+    aliases: ["frontend-web", "FRONTEND-WEB", "frontend"],
+    intentTags: Array.from({ length: 65 }, (_, index) => `intent-${index}`),
+    artifactTypes: ["web-interface"],
+    technologyTags: ["x".repeat(129)],
+    projectTags: ["react"],
+    unexpected: [],
+  } as typeof base.routing;
+
+  const issues = validateDomainPackManifest(base);
+  assert.ok(issues.some((issue) => issue.includes("routing.aliases") && issue.includes("unique")));
+  assert.ok(issues.some((issue) => issue.includes("canonical domain id")));
+  assert.ok(issues.some((issue) => issue.includes("routing.intentTags") && issue.includes("64")));
+  assert.ok(issues.some((issue) => issue.includes("routing.technologyTags.0") && issue.includes("128")));
+  assert.ok(issues.some((issue) => issue.includes("routing.unexpected") && issue.includes("unknown")));
+});
+
+test("bundled router pack loader reads manifests without executing pack code", async () => {
+  const { mkdir, mkdtemp, writeFile } = await import("node:fs/promises");
+  const os = await import("node:os");
+  const root = await mkdtemp(path.join(os.tmpdir(), "skillranger-domain-packs-"));
+  const packRoot = path.join(root, "safe-pack");
+  await mkdir(packRoot);
+  const manifest = structuredClone(getDomainPack("frontend")?.manifest);
+  assert.ok(manifest);
+  manifest.id = "safe-pack";
+  manifest.skillIdPrefix = "safe-pack.";
+  manifest.routing!.aliases = ["safe-pack-alias"];
+  await writeFile(path.join(packRoot, "domain.manifest.json"), JSON.stringify(manifest));
+  await writeFile(path.join(packRoot, "index.js"), "throw new Error('must not execute');\n");
+
+  const packs = await loadBundledRouterPacks(root);
+  assert.equal(packs[0]?.id, "safe-pack");
 });
 
 test("bundled frontend domain resolves its eval suite through the generic registry", async () => {

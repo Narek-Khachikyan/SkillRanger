@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "router-fixture-pack/1.0",
+  "domain": {
+    "id": "docs-techwriting",
+    "displayName": "Synthetic Documentation and Technical Writing",
+    "routing": {
+      "aliases": ["documentation", "technical-writing", "docs"],
+      "intentTags": ["api-documentation", "technical-writing", "runbook"],
+      "artifactTypes": ["technical-documentation", "api-docs", "runbook"],
+      "technologyTags": ["openapi", "markdown"],
+      "projectTags": ["documentation", "docs"]
+    }
+  },
+  "skills": [
+    {
+      "id": "docs.api-documentation",
+      "displayName": "Synthetic API Documentation",
+      "version": "1.0.0",
+      "riskLevel": "low",
+      "roles": ["primary"],
+      "domains": ["docs-techwriting"],
+      "actions": ["document", "review"],
+      "artifactTypes": ["technical-documentation", "api-docs", "runbook"],
+      "intentTags": ["api-documentation", "technical-writing", "runbook"],
+      "technologyTags": ["openapi", "markdown"],
+      "environmentSignals": ["file:docs/*", "file:*.md"],
+      "qualityGoals": ["correctness", "usability"],
+      "requiredCapabilities": ["filesystem"],
+      "optionalCapabilities": [],
+      "complements": [],
+      "dependencies": [],
+      "conflictsWith": [],
+      "supersedes": [],
+      "instructionBytes": 7000,
+      "strictContract": "valid"
+    }
+  ]
+}

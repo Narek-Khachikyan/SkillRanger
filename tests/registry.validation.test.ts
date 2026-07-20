@@ -162,6 +162,84 @@ test("curated skills carry routing lane metadata", async () => {
   }
 });
 
+test("curated skills carry explicit universal router metadata", async () => {
+  const skills = await loadLocalRegistry("registry");
+  for (const skill of skills) {
+    const routing = skill.manifest.routing;
+    assert.ok(routing, skill.manifest.id);
+    assert.ok(routing.roles?.length, skill.manifest.id);
+    assert.ok(routing.domains?.includes("frontend"), skill.manifest.id);
+    assert.ok(routing.actions?.length, skill.manifest.id);
+    assert.ok(routing.artifactTypes?.length, skill.manifest.id);
+    assert.ok(routing.intentTags?.length, skill.manifest.id);
+    assert.ok(routing.technologyTags?.length, skill.manifest.id);
+    assert.ok(routing.environmentSignals?.length, skill.manifest.id);
+    assert.ok(routing.qualityGoals?.length, skill.manifest.id);
+    assert.ok(routing.requiredCapabilities?.length, skill.manifest.id);
+    assert.ok(Array.isArray(routing.optionalCapabilities), skill.manifest.id);
+    assert.ok(Array.isArray(routing.complements), skill.manifest.id);
+  }
+});
+
+test("skill router metadata preserves lane/category and validates declarative fields", () => {
+  const issues = validateSkillManifest({
+    ...validManifest("good.router-metadata", "router-metadata"),
+    routing: {
+      lane: "implementation",
+      category: "authentication",
+      roles: ["primary", "companion"],
+      domains: ["backend-api"],
+      actions: ["implement", "fix"],
+      artifactTypes: ["authentication-flow", "api"],
+      intentTags: ["authentication", "oauth"],
+      technologyTags: ["nestjs", "openid-connect"],
+      environmentSignals: ["dependency:@nestjs/core", "file:src/**/*.controller.ts"],
+      qualityGoals: ["security", "correctness"],
+      requiredCapabilities: ["filesystem", "terminal"],
+      optionalCapabilities: ["network"],
+      complements: ["qa.api-integration-testing"],
+    },
+  });
+
+  assert.deepEqual(issues.filter((issue) => issue.path.startsWith("routing")), []);
+});
+
+test("skill router metadata rejects unknown fields, normalized duplicates, conflicts, bounds, and unsafe DSL", () => {
+  const issues = validateSkillManifest({
+    ...validManifest("bad.router-metadata", "router-metadata"),
+    dependencies: ["shared.skill"],
+    conflictsWith: ["shared.skill"],
+    routing: {
+      lane: "implementation",
+      category: "authentication",
+      roles: ["primary", "primary"],
+      domains: ["backend-api", "BACKEND-API"],
+      actions: ["implement"],
+      artifactTypes: Array.from({ length: 65 }, (_, index) => `artifact-${index}`),
+      intentTags: ["authentication"],
+      technologyTags: ["x".repeat(129)],
+      environmentSignals: ["command:rm -rf /", "file:../secret", "file:{src,test}/**/*"],
+      qualityGoals: ["security"],
+      requiredCapabilities: ["filesystem"],
+      optionalCapabilities: [],
+      complements: ["bad.router-metadata"],
+      unexpected: true,
+    },
+  });
+  const paths = issues.map((issue) => issue.path);
+
+  assert.ok(paths.includes("routing.unexpected"));
+  assert.ok(paths.includes("routing.roles"));
+  assert.ok(paths.includes("routing.domains"));
+  assert.ok(paths.includes("routing.artifactTypes"));
+  assert.ok(paths.includes("routing.technologyTags.0"));
+  assert.ok(paths.includes("routing.environmentSignals.0"));
+  assert.ok(paths.includes("routing.environmentSignals.1"));
+  assert.ok(paths.includes("routing.environmentSignals.2"));
+  assert.ok(paths.includes("routing.complements.0"));
+  assert.ok(paths.includes("dependencies"));
+});
+
 test("manifest validation accepts optional evaluation metadata statuses", () => {
   for (const status of [
     "none",
@@ -232,6 +310,24 @@ test("local registry loader rejects invalid manifests", async () => {
     loadLocalRegistry(registryRoot),
     /Invalid skill manifest/,
   );
+});
+
+test("local registry loader enforces manifest byte and object-depth limits", async () => {
+  const oversizedRoot = path.join(await mkdtemp(path.join(os.tmpdir(), "skillranger-registry-")), "registry");
+  await writeSkillPackage(oversizedRoot, "bad.oversized", {
+    manifest: { ...validManifest("bad.oversized", "oversized"), padding: "x".repeat(256_000) },
+    skillText: "---\nname: oversized\ndescription: Review frontend code for quality, accessibility, and maintainability.\n---\n# Bad\n",
+  });
+  await assert.rejects(loadLocalRegistry(oversizedRoot), /manifest exceeds 256000 bytes/);
+
+  const deepRoot = path.join(await mkdtemp(path.join(os.tmpdir(), "skillranger-registry-")), "registry");
+  let nested: Record<string, unknown> = {};
+  for (let depth = 0; depth < 20; depth += 1) nested = { nested };
+  await writeSkillPackage(deepRoot, "bad.deep", {
+    manifest: { ...validManifest("bad.deep", "deep"), nested },
+    skillText: "---\nname: deep\ndescription: Review frontend code for quality, accessibility, and maintainability.\n---\n# Bad\n",
+  });
+  await assert.rejects(loadLocalRegistry(deepRoot), /manifest exceeds object depth 16/);
 });
 
 test("local registry loader rejects SKILL.md frontmatter name mismatch", async () => {

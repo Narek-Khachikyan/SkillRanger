@@ -23,6 +23,28 @@ SkillRanger Core
    |-- Config / Policy Engine
 ```
 
+### Universal Prompt Router
+
+The opt-in router is an orchestration layer over existing core services, not a second recommender or runtime:
+
+```text
+explicit MCP trigger or direct CLI task
+-> trigger parser and privacy-safe task analyzer
+-> project fingerprint and bundled domain metadata
+-> shared scorer, domain resolver, and bounded composer
+-> clarification / decomposition / no-match, or atomic prepared run
+-> integrity-pinned progressive skill reads
+-> lifecycle v1 or strict v2 runtime
+```
+
+Production CLI and MCP flows use the bundled trusted registry. Synthetic packs are dependency-injected data fixtures for tests and evals only. Routing performs no network calls, package installation, scripts, child processes, or application edits.
+
+MCP fixes one canonical project root at server startup from `SKILLRANGER_PROJECT_ROOT` or `cwd`; router tool inputs cannot override it. CLI `task` uses direct activation and a positional root. MCP `prepare_task` requires an explicit terminal trigger. Both surfaces call the same `prepareTask()` core service.
+
+A successful preparation atomically writes a router sidecar at `.skillranger/runs/router/<router-run-id>.json` and one existing runtime record. A write-ahead journal recovers interrupted cross-store creates and read-ledger bridges. Clarification, decomposition, no-match, strict failure, and budget failure create no partial run.
+
+The source inventory pins package, root, file, and chunk checksums. `mandatory-next` controls order and bridges completed reads into the authoritative runtime ledger; optional files are selected only from the persisted inventory after mandatory reads and within a separate byte budget. Strict routing is installed-only and retains strict v2 evidence and finalization guarantees.
+
 ### CLI
 
 Human-facing interface:
@@ -37,16 +59,7 @@ Human-facing interface:
 
 ### MCP server
 
-Agent-facing interface. Exposes tools:
-
-- `analyze_project`
-- `recommend_skills`
-- `install_skills`
-- `audit_skill`
-- `generate_skill_from_goal`
-- `list_installed_skills`
-- `update_registry`
-- `explain_recommendation`
+Agent-facing interface. Its 33 tools cover project analysis and recommendation, audited install planning and confirmed application, domain/design workflows, lifecycle v1, strict v2, visual evidence, and the Universal Router tools `prepare_task` and `read_run_skill_file`.
 
 MCP tools should call the same core modules as CLI. Do not duplicate logic.
 

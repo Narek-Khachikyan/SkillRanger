@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "router-fixture-pack/1.0",
+  "domain": {
+    "id": "security-appsec",
+    "displayName": "Synthetic Application Security",
+    "routing": {
+      "aliases": ["application-security", "appsec"],
+      "intentTags": ["authentication-review", "authorization-review"],
+      "artifactTypes": ["authentication-flow", "security-review"],
+      "technologyTags": ["jwt", "oauth"],
+      "projectTags": ["security", "authentication"]
+    }
+  },
+  "skills": [
+    {
+      "id": "security.auth-review",
+      "displayName": "Synthetic Authentication Security Review",
+      "version": "1.0.0",
+      "riskLevel": "low",
+      "roles": ["companion", "verification"],
+      "domains": ["security-appsec"],
+      "actions": ["review", "verify"],
+      "artifactTypes": ["authentication-flow", "security-review"],
+      "intentTags": ["authentication-review", "authorization-review"],
+      "technologyTags": ["jwt", "oauth"],
+      "environmentSignals": ["tag:authentication"],
+      "qualityGoals": ["security", "correctness"],
+      "requiredCapabilities": ["filesystem"],
+      "optionalCapabilities": [],
+      "complements": [],
+      "dependencies": [],
+      "conflictsWith": [],
+      "supersedes": [],
+      "instructionBytes": 6000,
+      "strictContract": "valid"
+    }
+  ]
+}

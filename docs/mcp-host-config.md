@@ -49,11 +49,23 @@ Installed-package convenience binary:
 }
 ```
 
-If the host supports environment variables, keep this server minimal. It does not need network tokens or registry credentials for the MVP local registry.
+If the host supports environment variables, set `SKILLRANGER_PROJECT_ROOT` to the authorized project. Router tools canonicalize this root once at startup; when the variable is absent they use startup `cwd`. Startup fails if the root is not a real directory. The server does not need network tokens or registry credentials for the bundled registry.
+
+## Universal Router
+
+Call `prepare_task` with the complete prompt ending in `@skillranger`, `skillranger`, or `/sr`. The model cannot select activation mode, project root, registry root, or raw-intent persistence. The router uses the fixed server root and bundled audited registry.
+
+Normal outcomes are `prepared`, `clarification_required`, `decomposition_required`, `no_matching_skills`, `strict_requirements_unmet`, and `context_budget_exceeded`. Only `prepared` creates a router sidecar and one lifecycle-v1 or strict-v2 runtime record. Clarification provides a short-lived opaque continuation token; resend the same canonical task with `continuationToken` and closed-option `clarificationAnswers`. Decomposition and no-match do not create partial runs.
+
+For a prepared run, call `read_run_skill_file` in `mandatory-next` mode with a new UUID `readRequestId` and the current `expectedReadRevision`. The server chooses the next skill, path, offset, and UTF-8 chunk. Replaying the same bound request ID returns the same content and revision. Do not begin the runtime until `readStatus.runMandatoryReadsComplete` is true.
+
+`hostCapabilities` describe what the host can provide; they are not verification evidence. Missing optional verification capabilities produce guidance-only or unverified outcomes. Strict mode additionally requires every selected skill to be repo-installed with matching lockfile and files, contract v2, accepted inputs, and complete strict reads. The router never auto-installs a missing skill.
+
+The persisted task profile contains canonical routing vocabulary and digests, not raw prompts, URLs, arbitrary free text, or absolute project roots. Optional skill files use progressive disclosure and become readable only after mandatory instructions are complete.
 
 ## Tool Surface
 
-SkillRanger exposes 31 tools in four effect classes, each with a distinct host approval boundary.
+SkillRanger exposes 33 tools in four effect classes, each with a distinct host approval boundary.
 
 ### Read-only (17)
 
@@ -79,10 +91,12 @@ SkillRanger exposes 31 tools in four effect classes, each with a distinct host a
 
 - `install_skill` installs a skill only when `confirm: true`, `expectedWrites`, and `expectedLockfileUpdates` exactly match the current dry-run plan.
 
-### Persisted run-state transitions (12)
+### Persisted run-state transitions (14)
 
 These tools use host-managed mutation approval and update the persisted run JSON under `.skillranger/runs`.
 
+- `prepare_task` routes one explicitly activated prompt and atomically creates a router sidecar plus runtime only for a prepared outcome.
+- `read_run_skill_file` delivers an integrity-pinned prepared skill chunk and atomically bridges completed mandatory reads into the runtime ledger.
 - `start_skill_run` prepares and persists a skill run from project signals, intent, and domain policy.
 - `record_skill_read` records a selected skill checksum as read for a skill run.
 - `resolve_skill_run_clarifications` resolves required clarifications with JSON-native answers, declines, and assumptions.

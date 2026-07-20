@@ -15,6 +15,7 @@ import {
   domainToolHandlers,
 } from "./tools/domains.ts";
 import { visualToolDefinitions, visualToolHandlers } from "./tools/visual.ts";
+import { routerToolDefinitions, routerToolHandlers } from "./tools/router.ts";
 import {
   runToolDefinitions,
   runToolHandlers,
@@ -43,6 +44,7 @@ export const mcpTools: McpToolDefinition[] = [
   ...domainToolDefinitions,
   ...runToolDefinitions,
   ...visualToolDefinitions,
+  ...routerToolDefinitions,
 ];
 
 const mcpToolHandlers: Record<string, McpToolHandler> = {
@@ -52,6 +54,7 @@ const mcpToolHandlers: Record<string, McpToolHandler> = {
   ...domainToolHandlers,
   ...runToolHandlers,
   ...visualToolHandlers,
+  ...routerToolHandlers,
 };
 
 export const callMcpTool = async (

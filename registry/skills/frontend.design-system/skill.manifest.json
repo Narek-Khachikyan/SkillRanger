@@ -120,7 +120,18 @@
   "license": "MIT",
   "routing": {
     "lane": "design",
-    "category": "design-system"
+    "category": "design-system",
+    "roles": ["primary", "companion"],
+    "domains": ["frontend"],
+    "actions": ["design", "implement", "modify", "review"],
+    "artifactTypes": ["design-system", "component", "design-token"],
+    "intentTags": ["design-system", "tokens", "theme", "component-variants"],
+    "technologyTags": ["react", "tailwind", "shadcn"],
+    "environmentSignals": ["tag:frontend", "framework:tailwind"],
+    "qualityGoals": ["consistency", "maintainability", "accessibility"],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": ["browser", "screenshots"],
+    "complements": ["frontend.tailwind-ui-polish", "frontend.accessibility-review"]
   },
   "evaluation": {
     "status": "none",

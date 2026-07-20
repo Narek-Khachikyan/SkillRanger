@@ -26,7 +26,10 @@ test("visual critic is read-only and code-free", async () => {
 
   assert.equal(manifest.id, "frontend.visual-critic");
   assert.equal(manifest.name, "visual-critic");
-  assert.deepEqual(manifest.routing, { lane: "qa", category: "visual-critic" });
+  assert.equal(manifest.routing.lane, "qa");
+  assert.equal(manifest.routing.category, "visual-critic");
+  assert.deepEqual(manifest.routing.roles, ["verification", "companion"]);
+  assert.deepEqual(manifest.routing.domains, ["frontend"]);
   assert.deepEqual(manifest.permissions, {
     filesystem: ["read-project"],
     writes: [],

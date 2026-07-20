@@ -161,6 +161,31 @@ Risks:
 - side effects through MCP become unsafe;
 - tool descriptions overpromise.
 
+### Phase 2.5: Universal Prompt Router v1
+
+Status: implemented and release-gated.
+
+Deliverables:
+
+- direct CLI `task` and `task:read` commands;
+- explicit MCP `prepare_task` and `read_run_skill_file` tools with one fixed server root;
+- privacy-safe task analysis, multi-domain resolution, bounded composition, and continuation tokens;
+- atomic router sidecars bridged to lifecycle v1 and installed-only strict v2;
+- integrity-pinned progressive reads and journal recovery;
+- shipped and synthetic golden eval suites plus end-to-end smoke coverage;
+- universal managed `AGENTS.md` guidance.
+
+Acceptance criteria:
+
+- absent production packs return no-match instead of synthetic or frontend fallback;
+- clarification, decomposition, strict failure, and budget failure create no partial runs;
+- strict preparation requires matching repo installation, lockfile, file set, contract, input, and reads;
+- routing performs no network, install, script, model, or application-write side effects;
+- raw prompts are not persisted by default;
+- router eval thresholds and all release gates pass.
+
+Next expansion is declarative audited production domain packs. Synthetic eval coverage alone never promotes a pack into production.
+
 ### Phase 3: Registry + packs
 
 Goal:

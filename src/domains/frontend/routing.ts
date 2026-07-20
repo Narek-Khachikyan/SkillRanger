@@ -405,6 +405,13 @@ export const frontendDomainManifest: DomainPackManifest = {
     { intent: "motion-review", primarySkill: "frontend.motion-audit", supportingSkills: ["frontend.performance-review"] },
     { intent: "release-review", primarySkill: "frontend.audit", supportingSkills: [] },
   ],
+  routing: {
+    aliases: ["frontend-web", "web-ui"],
+    intentTags: ["website", "web-interface", "landing-page", "component", "responsive-design"],
+    artifactTypes: ["web-interface", "component", "page"],
+    technologyTags: ["react", "nextjs", "vue", "svelte", "tailwind"],
+    projectTags: ["frontend", "react", "nextjs", "web-app"],
+  },
 };
 
 export const registerFrontendDomainPack = () =>

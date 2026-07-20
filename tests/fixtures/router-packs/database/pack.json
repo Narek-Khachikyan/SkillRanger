@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "router-fixture-pack/1.0",
+  "domain": {
+    "id": "database",
+    "displayName": "Synthetic Database",
+    "routing": {
+      "aliases": ["data-store", "relational-database"],
+      "intentTags": ["query-optimization", "schema-migration"],
+      "artifactTypes": ["database-schema", "sql-query"],
+      "technologyTags": ["postgresql", "sql"],
+      "projectTags": ["database", "postgresql"]
+    }
+  },
+  "skills": [
+    {
+      "id": "database.query-optimization",
+      "displayName": "Synthetic Query Optimization",
+      "version": "1.0.0",
+      "riskLevel": "medium",
+      "roles": ["primary"],
+      "domains": ["database"],
+      "actions": ["optimize", "verify"],
+      "artifactTypes": ["sql-query"],
+      "intentTags": ["query-optimization", "performance"],
+      "technologyTags": ["postgresql", "sql"],
+      "environmentSignals": ["dependency:pg", "file:migrations"],
+      "qualityGoals": ["performance", "correctness"],
+      "requiredCapabilities": ["filesystem", "terminal"],
+      "optionalCapabilities": [],
+      "complements": [],
+      "dependencies": [],
+      "conflictsWith": [],
+      "supersedes": [],
+      "instructionBytes": 9000,
+      "strictContract": "valid"
+    }
+  ]
+}

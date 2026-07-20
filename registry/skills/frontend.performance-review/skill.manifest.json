@@ -123,7 +123,18 @@
   "license": "MIT",
   "routing": {
     "lane": "implementation",
-    "category": "performance-review"
+    "category": "performance-review",
+    "roles": ["primary", "verification", "companion"],
+    "domains": ["frontend"],
+    "actions": ["review", "optimize", "investigate", "verify"],
+    "artifactTypes": ["web-application", "bundle", "page"],
+    "intentTags": ["performance", "core-web-vitals", "bundle-size", "rendering"],
+    "technologyTags": ["react", "nextjs", "typescript"],
+    "environmentSignals": ["tag:frontend", "framework:react"],
+    "qualityGoals": ["performance", "responsiveness", "correctness"],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": ["browser", "measurement", "terminal"],
+    "complements": ["frontend.audit", "frontend.motion-audit"]
   },
   "evaluation": {
     "status": "none",

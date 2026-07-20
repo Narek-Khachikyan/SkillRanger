@@ -137,7 +137,18 @@
   "license": "MIT",
   "routing": {
     "lane": "design",
-    "category": "visual-design-polish"
+    "category": "visual-design-polish",
+    "roles": ["primary", "companion"],
+    "domains": ["frontend"],
+    "actions": ["design", "modify", "implement", "review"],
+    "artifactTypes": ["web-interface", "page", "component"],
+    "intentTags": ["visual-design", "hierarchy", "typography", "responsive-design"],
+    "technologyTags": ["react", "tailwind", "css"],
+    "environmentSignals": ["tag:frontend", "framework:react"],
+    "qualityGoals": ["visual-quality", "responsiveness", "accessibility"],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": ["browser", "screenshots"],
+    "complements": ["frontend.ux-critique", "frontend.accessibility-review"]
   },
   "evaluation": {
     "status": "none",

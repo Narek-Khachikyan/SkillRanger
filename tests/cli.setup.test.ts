@@ -90,7 +90,7 @@ test("setup CLI applies recommendations non-interactively with --yes and explici
     assert.equal(await exists(path.join(projectRoot, ".agents/skills/next-app-router-review/SKILL.md")), true);
     assert.equal(await exists(path.join(projectRoot, "skillranger.lock.json")), true);
     assert.match(stdout, /AGENTS\.md/);
-    assert.match(await readFile(path.join(projectRoot, "AGENTS.md"), "utf8"), /skillranger run:begin/);
+    assert.match(await readFile(path.join(projectRoot, "AGENTS.md"), "utf8"), /read_run_skill_file/);
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
   }

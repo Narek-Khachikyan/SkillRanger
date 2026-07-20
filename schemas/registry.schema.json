@@ -75,8 +75,81 @@
         "category": {
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9._-]*$"
+        },
+        "roles": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["environment", "primary", "companion", "verification", "agent-context"]
+          }
+        },
+        "domains": {
+          "$ref": "#/$defs/routerTags"
+        },
+        "actions": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["create", "implement", "modify", "fix", "debug", "review", "test", "verify", "document", "deploy", "migrate", "optimize", "research", "design", "configure", "investigate"]
+          }
+        },
+        "artifactTypes": {
+          "$ref": "#/$defs/routerTags"
+        },
+        "intentTags": {
+          "$ref": "#/$defs/routerTags"
+        },
+        "technologyTags": {
+          "$ref": "#/$defs/routerTags"
+        },
+        "environmentSignals": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "maxLength": 256,
+            "pattern": "^(tag|framework|language|testing|infrastructure|dependency|file):.+$"
+          }
+        },
+        "qualityGoals": {
+          "$ref": "#/$defs/routerTags"
+        },
+        "requiredCapabilities": {
+          "$ref": "#/$defs/routerTags"
+        },
+        "optionalCapabilities": {
+          "$ref": "#/$defs/routerTags"
+        },
+        "complements": {
+          "$ref": "#/$defs/routerTags"
         }
-      }
+      },
+      "anyOf": [
+        {
+          "not": {
+            "anyOf": [
+              { "required": ["roles"] },
+              { "required": ["domains"] },
+              { "required": ["actions"] },
+              { "required": ["artifactTypes"] },
+              { "required": ["intentTags"] },
+              { "required": ["technologyTags"] },
+              { "required": ["environmentSignals"] },
+              { "required": ["qualityGoals"] },
+              { "required": ["requiredCapabilities"] },
+              { "required": ["optionalCapabilities"] },
+              { "required": ["complements"] }
+            ]
+          }
+        },
+        {
+          "required": ["roles", "domains", "actions", "artifactTypes", "intentTags", "technologyTags", "environmentSignals", "qualityGoals", "requiredCapabilities", "optionalCapabilities", "complements"]
+        }
+      ],
+      "additionalProperties": false
     },
     "version": {
       "type": "string"
@@ -289,6 +362,18 @@
             }
           }
         }
+      }
+    }
+  },
+  "$defs": {
+    "routerTags": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "maxLength": 128,
+        "pattern": "^[a-z0-9][a-z0-9._-]*$"
       }
     }
   }

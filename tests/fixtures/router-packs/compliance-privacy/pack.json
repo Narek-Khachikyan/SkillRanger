@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "router-fixture-pack/1.0",
+  "domain": {
+    "id": "compliance-privacy",
+    "displayName": "Synthetic Compliance and Privacy",
+    "routing": {
+      "aliases": ["compliance", "privacy", "data-protection"],
+      "intentTags": ["privacy", "compliance", "data-protection"],
+      "artifactTypes": ["privacy-policy", "data-flow", "compliance-report"],
+      "technologyTags": ["gdpr", "pii"],
+      "projectTags": ["compliance", "privacy"]
+    }
+  },
+  "skills": [
+    {
+      "id": "compliance.privacy-review",
+      "displayName": "Synthetic Privacy Review",
+      "version": "1.0.0",
+      "riskLevel": "medium",
+      "roles": ["primary"],
+      "domains": ["compliance-privacy"],
+      "actions": ["review", "verify"],
+      "artifactTypes": ["privacy-policy", "data-flow", "compliance-report"],
+      "intentTags": ["privacy", "compliance", "data-protection"],
+      "technologyTags": ["gdpr", "pii"],
+      "environmentSignals": ["tag:privacy", "tag:compliance"],
+      "qualityGoals": ["security", "correctness"],
+      "requiredCapabilities": ["filesystem", "terminal"],
+      "optionalCapabilities": [],
+      "complements": [],
+      "dependencies": [],
+      "conflictsWith": [],
+      "supersedes": [],
+      "instructionBytes": 9000,
+      "strictContract": "valid"
+    }
+  ]
+}

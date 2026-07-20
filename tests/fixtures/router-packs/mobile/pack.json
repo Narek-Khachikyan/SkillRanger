@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "router-fixture-pack/1.0",
+  "domain": {
+    "id": "mobile",
+    "displayName": "Synthetic Mobile",
+    "routing": {
+      "aliases": ["mobile-app", "native-app"],
+      "intentTags": ["mobile-interface", "offline-feature"],
+      "artifactTypes": ["mobile-interface", "mobile-screen", "application-interface"],
+      "technologyTags": ["react-native", "swift"],
+      "projectTags": ["mobile", "react-native"]
+    }
+  },
+  "skills": [
+    {
+      "id": "mobile.feature-implementation",
+      "displayName": "Synthetic Mobile Feature Implementation",
+      "version": "1.0.0",
+      "riskLevel": "medium",
+      "roles": ["primary"],
+      "domains": ["mobile"],
+      "actions": ["create", "implement"],
+      "artifactTypes": ["mobile-interface", "mobile-screen", "application-interface"],
+      "intentTags": ["mobile-interface", "offline-feature"],
+      "technologyTags": ["react-native", "swift"],
+      "environmentSignals": ["dependency:react-native", "language:swift"],
+      "qualityGoals": ["correctness", "usability"],
+      "requiredCapabilities": ["filesystem", "terminal"],
+      "optionalCapabilities": [],
+      "complements": [],
+      "dependencies": [],
+      "conflictsWith": [],
+      "supersedes": [],
+      "instructionBytes": 10000,
+      "strictContract": "valid"
+    }
+  ]
+}
