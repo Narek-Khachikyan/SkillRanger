@@ -117,6 +117,24 @@ test("reader serves sequential UTF-8 mandatory chunks and idempotent replay", as
   assert.equal((await store.read("route_12345678")).readLedger.length, revision);
 });
 
+test("reader accepts RFC UUID v7 readRequestId values", async () => {
+  const projectRoot = await temporaryProject();
+  const sourceRoot = path.join(projectRoot, "skill-source");
+  await writeSource(sourceRoot, { "SKILL.md": "mandatory" });
+  const snapshot = await createSkillSourceSnapshot(await createSnapshotInput(projectRoot, sourceRoot));
+  const store = new RouterStore(projectRoot);
+  await store.create(await createRun(projectRoot, snapshot));
+  const reader = new RouterSourceReader(projectRoot, store, { chunkBytes: 32 });
+  const response = await reader.read({
+    routerRunId: "route_12345678",
+    readRequestId: "018f2f3d-8e2a-7a4c-9d2f-123456789abc",
+    expectedReadRevision: 0,
+    mode: "mandatory-next",
+  });
+  assert.equal(response.readRevision, 1);
+  assert.equal(response.readRequestId, "018f2f3d-8e2a-7a4c-9d2f-123456789abc");
+});
+
 test("reader rejects traversal, arbitrary skills, optional reads before mandatory, and conflicting replay", async () => {
   const projectRoot = await temporaryProject();
   const sourceRoot = path.join(projectRoot, "skill-source");

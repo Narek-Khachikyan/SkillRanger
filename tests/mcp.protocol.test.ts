@@ -145,7 +145,10 @@ test("MCP tools publish complete effect and confirmation metadata", async () => 
     assert.deepEqual(matchingTools.map(({ name }) => name).sort(), [...expectedNames].sort(), effect);
     for (const tool of matchingTools) {
       const preset = expectedPresets[effect as keyof typeof expectedPresets];
-      assert.deepEqual(tool.annotations, preset.annotations, tool.name);
+      const annotations = tool.name === "read_run_skill_file"
+        ? { ...preset.annotations, idempotentHint: true }
+        : preset.annotations;
+      assert.deepEqual(tool.annotations, annotations, tool.name);
       assert.equal(tool._meta?.["skillranger/confirmation"], preset.confirmation, tool.name);
     }
   }

@@ -21,17 +21,18 @@ const exists = async (filePath: string) => {
 test("renders the exact SkillRanger universal router block", () => {
   assert.equal(
     renderSkillRangerAgentBlock(),
-    "<!-- SKILLRANGER_START -->\n" +
+      "<!-- SKILLRANGER_START -->\n" +
       "## SkillRanger Universal Prompt Router\n" +
       "When the user's request ends with `@skillranger`, `skillranger`, or `/sr`, use the SkillRanger MCP workflow before implementation.\n" +
-      "1. Call `prepare_task` with the complete user request.\n" +
-      "2. If clarification is required, ask the user and call `prepare_task` again with the original request, continuation token, and answers.\n" +
+      "1. Call `prepare_task` with the complete user request verbatim. Do not remove, move, or rewrite the terminal trigger.\n" +
+      "2. If routing clarification is required, ask only the returned routing question, then call `prepare_task` again with the original complete request, continuation token, and typed answers.\n" +
       "3. If decomposition or no-match is returned, report that outcome instead of inventing a workflow.\n" +
-      "4. For a prepared task, read every required instruction through `read_run_skill_file` in the returned order.\n" +
-      "5. If runtime clarification is returned, resolve it through `resolve_skill_run_clarifications` after required reads and before execution.\n" +
-      "6. Use the returned runtime run ID with the existing lifecycle or strict tools.\n" +
-      "7. Do not install skills automatically or execute skill package scripts.\n" +
-      "8. Do not claim `verified` unless SkillRanger runtime verification succeeds.\n" +
+      "4. For a prepared task, repeatedly call `read_run_skill_file` until `readStatus.runMandatoryReadsComplete` is true. Each new read uses a freshly generated RFC 4122 UUID and the latest returned `readRevision`; retry a transport failure with the identical request.\n" +
+      "5. Do not call lifecycle clarification or execution tools before mandatory reads complete. `runtimeClarification` applies to the returned runtime run ID, never the router run ID.\n" +
+      "6. Resolve runtime clarification from facts in the request. For an allowed decline, continue with one neutral explicit assumption per declined field instead of asking the user; ask only when a non-declinable question cannot be answered from the request.\n" +
+      "7. Begin the returned runtime run only after the reads and any runtime clarification complete, then implement the original request without stopping for a plan or confirmation unless the user asked for one.\n" +
+      "8. Do not install skills automatically or execute skill package scripts.\n" +
+      "9. Do not claim `verified` unless SkillRanger runtime verification succeeds.\n" +
       "<!-- SKILLRANGER_END -->",
   );
 });
@@ -56,6 +57,9 @@ test("creates and idempotently updates the SkillRanger AGENTS block", async () =
   assert.equal(text.match(/<!-- SKILLRANGER_END -->/g)?.length, 1);
   assert.match(text, /prepare_task/);
   assert.match(text, /read_run_skill_file/);
+  assert.match(text, /RFC 4122 UUID/);
+  assert.match(text, /runtime run ID, never the router run ID/);
+  assert.match(text, /neutral explicit assumption/);
   assert.match(text, /Do not claim `verified`/);
   assert.ok(text.endsWith("\n"));
 });

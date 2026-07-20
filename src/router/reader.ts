@@ -402,6 +402,8 @@ const output = (run: RouterRun, input: ReadRunSkillFileInput, receipt: RouterRea
   readStatus: { fileComplete: complete, skillMandatoryReadsComplete, runMandatoryReadsComplete },
 });
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export class RouterSourceReader {
   private readonly projectRoot: string;
   private readonly store: RouterStore;
@@ -450,7 +452,7 @@ export class RouterSourceReader {
   }
 
   async read(input: ReadRunSkillFileInput): Promise<ReadRunSkillFileResult> {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.readRequestId)) fail("run-integrity", "readRequestId must be a UUID.");
+    if (!uuidPattern.test(input.readRequestId)) fail("run-integrity", "readRequestId must be a UUID.");
     const initial = await this.store.read(input.routerRunId);
     validateReadLedger(initial);
     const previous = initial.readLedger.find(({ readRequestId }) => readRequestId === input.readRequestId);

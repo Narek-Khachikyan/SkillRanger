@@ -13,11 +13,11 @@ import { routerContext } from "../router-context.ts";
 
 const routerResultSchema = JSON.parse(readFileSync(new URL("../../../schemas/router-tool-result.schema.json", import.meta.url), "utf8")) as JsonObject;
 
-const schemaFor = (schema: JsonObject, allowedVersions: string[], allowedProperties: string[]) => {
-  const copy = structuredClone(schema) as JsonObject;
+const routerToolOutputSchema = (schemaVersion: "router-result/1.0" | "router-read-result/1.0", propertiesForTool: string[]) => {
+  const copy = structuredClone(routerResultSchema) as JsonObject;
   const properties = copy.properties;
   if (properties && typeof properties === "object" && !Array.isArray(properties)) {
-    copy.properties = Object.fromEntries(Object.entries(properties as Record<string, unknown>).filter(([key]) => allowedProperties.includes(key)));
+    copy.properties = Object.fromEntries(Object.entries(properties as Record<string, unknown>).filter(([key]) => propertiesForTool.includes(key)));
   }
   const oneOf = copy.oneOf;
   if (Array.isArray(oneOf)) {
@@ -30,11 +30,26 @@ const schemaFor = (schema: JsonObject, allowedVersions: string[], allowedPropert
       const constant = version && typeof version === "object" && !Array.isArray(version)
         ? (version as Record<string, unknown>).const
         : undefined;
-      return typeof constant !== "string" || allowedVersions.includes(constant);
+      return typeof constant !== "string" || constant === schemaVersion;
     });
   }
   return copy;
 };
+
+const prepareTaskOutputSchema = routerToolOutputSchema("router-result/1.0", [
+  "ok", "schemaVersion", "status", "activation", "taskProfile", "project", "routing", "warnings",
+  "run", "selections", "requiredReads", "runtimeClarification", "verification", "clarification",
+  "continuationToken", "expiresAt", "decomposition", "suggestedAction", "missing",
+  "installationSuggestions", "requiredBytes", "allowedBytes", "blockingSkillIds", "code", "message",
+  "details", "reasonCode", "argument",
+]);
+
+const readRunSkillFileOutputSchema = routerToolOutputSchema("router-read-result/1.0", [
+  "ok", "schemaVersion", "routerRunId", "runtimeRunId", "runtime", "readRequestId", "readRevision",
+  "skillId", "path", "mimeType", "content", "fileChecksum", "chunkChecksum", "deliveredOffset",
+  "deliveredBytes", "totalBytes", "complete", "readStatus", "code", "message", "details",
+  "reasonCode", "argument",
+]);
 
 const inputSchema = {
   type: "object",
@@ -69,8 +84,8 @@ const readInputSchema = {
 };
 
 export const routerToolDefinitions: McpToolDefinition[] = [
-  { ...mcpToolEffects.runStateWrite, name: "prepare_task", title: "Prepare SkillRanger Task", description: "Prepare an explicit SkillRanger workflow for the complete user request in the MCP server project.", inputSchema, outputSchema: schemaFor(routerResultSchema, ["router-result/1.0"], ["ok", "schemaVersion", "status", "activation", "taskProfile", "project", "routing", "warnings", "run", "selections", "requiredReads", "runtimeClarification", "verification", "clarification", "continuationToken", "expiresAt", "decomposition", "suggestedAction", "missing", "installationSuggestions", "requiredBytes", "allowedBytes", "blockingSkillIds", "code", "message", "details", "reasonCode", "argument"]) },
-  { ...mcpToolEffects.runStateWrite, name: "read_run_skill_file", title: "Read Prepared Skill Instructions", description: "Read the next mandatory chunk or an allowed optional text file from a prepared router run.", inputSchema: readInputSchema, outputSchema: schemaFor(routerResultSchema, ["router-read-result/1.0"], ["ok", "schemaVersion", "routerRunId", "runtimeRunId", "runtime", "readRequestId", "readRevision", "skillId", "path", "mimeType", "content", "fileChecksum", "chunkChecksum", "deliveredOffset", "deliveredBytes", "totalBytes", "complete", "readStatus", "code", "message", "details", "reasonCode", "argument"]) },
+  { ...mcpToolEffects.runStateWrite, name: "prepare_task", title: "Prepare SkillRanger Task", description: "Prepare an explicit SkillRanger workflow from the complete, unmodified user request, including its terminal trigger. Read every required instruction before resolving runtime clarification or beginning the returned runtime run.", inputSchema, outputSchema: prepareTaskOutputSchema },
+  { ...mcpToolEffects.runStateWrite, annotations: { ...mcpToolEffects.runStateWrite.annotations, idempotentHint: true }, name: "read_run_skill_file", title: "Read Prepared Skill Instructions", description: "Read the next mandatory chunk or an allowed optional text file from a prepared router run. Use a new RFC 4122 UUID for each new read; retry a transport failure with the identical request and its current revision.", inputSchema: readInputSchema, outputSchema: readRunSkillFileOutputSchema },
 ];
 
 const routerErrorCode = (code: string) => {

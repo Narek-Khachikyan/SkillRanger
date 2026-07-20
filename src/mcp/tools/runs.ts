@@ -333,7 +333,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.runStateWrite,
     name: "resolve_skill_run_clarifications",
     title: "Resolve Skill Run Clarifications",
-    description: "Resolve required clarifications with JSON-native answers, declines, and assumptions.",
+    description: "Resolve runtime clarifications only after every mandatory router read completes. Use the runtime run ID, not the router run ID; provide an answer or an allowed explicit assumption for every required field.",
     inputSchema: {
       type: "object",
       properties: {
@@ -358,7 +358,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.runStateWrite,
     name: "begin_skill_run_execution",
     title: "Begin Skill Run Execution",
-    description: "Transition a prepared skill run into execution.",
+    description: "Transition a runtime run into execution after every mandatory router read and any runtime clarification have completed.",
     inputSchema: {
       type: "object",
       properties: runIdProperties,

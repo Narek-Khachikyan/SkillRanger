@@ -8,7 +8,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { getAdapter } from "../src/installers/codex.ts";
 import { initializeRouterContext } from "../src/mcp/router-context.ts";
-import { callMcpTool } from "../src/mcp/tools.ts";
+import { callMcpTool, mcpTools } from "../src/mcp/tools.ts";
 import { findSkill } from "../src/registry/index.ts";
 import { createRouterReader, prepareTask } from "../src/router/prepare.ts";
 import { RouterReaderError } from "../src/router/reader.ts";
@@ -23,6 +23,7 @@ import {
   StrictSkillRunStore,
   type SkillRunV2,
 } from "../src/runtime/strict/index.ts";
+import { validateJsonSchema } from "../src/runtime/strict/json-schema.ts";
 
 const execFileAsync = promisify(execFile);
 const registry = path.resolve("registry");
@@ -55,6 +56,11 @@ const prepared = (result: PrepareTaskResult) => {
   return result;
 };
 const content = <T>(result: { structuredContent: unknown }) => result.structuredContent as T;
+const routerOutputSchema = (toolName: "prepare_task" | "read_run_skill_file") => {
+  const schema = mcpTools.find(({ name }) => name === toolName)?.outputSchema;
+  assert.ok(schema, `Missing ${toolName} output schema.`);
+  return schema;
+};
 
 const mcpRoot = await temporaryProject("next-react-ts");
 process.env.SKILLRANGER_PROJECT_ROOT = mcpRoot;
@@ -72,6 +78,7 @@ const readAllThroughMcp = async (result: ReturnType<typeof prepared>) => {
       mode: "mandatory-next" as const,
     };
     const response = content<ReadRunSkillFileResult>(await callMcpTool("read_run_skill_file", request));
+    assert.deepEqual(validateJsonSchema(routerOutputSchema("read_run_skill_file"), response), []);
     firstRequest ??= request;
     firstResponse ??= response;
     revision = response.readRevision;
@@ -85,11 +92,14 @@ const readAllThroughMcp = async (result: ReturnType<typeof prepared>) => {
 };
 
 test("frontend lifecycle prepared/read/begin/complete/verify, unread gate, MCP explicit, and idempotent retry", async () => {
-  const result = prepared(content<PrepareTaskResult>(await callMcpTool("prepare_task", {
+  const preparedResult = await callMcpTool("prepare_task", {
     prompt: "Review and fix accessibility in this web interface, then verify the result. @skillranger",
     targetAgent: "codex",
     hostCapabilities: ["browser", "screenshots"],
-  })));
+  });
+  const preparedContent = content<PrepareTaskResult>(preparedResult);
+  assert.deepEqual(validateJsonSchema(routerOutputSchema("prepare_task"), preparedContent), []);
+  const result = prepared(preparedContent);
   assert.equal(result.activation.mode, "explicit");
 
   const unread = await callMcpTool("begin_skill_run_execution", { projectRoot: mcpRoot, runId: result.run.runtimeRunId });
@@ -126,6 +136,60 @@ test("frontend lifecycle prepared/read/begin/complete/verify, unread gate, MCP e
     report,
   }));
   assert.equal(runtime.state, "verified");
+});
+
+test("frontend MCP read_run_skill_file accepts UUID v7 request IDs", async () => {
+  const preparedResult = await callMcpTool("prepare_task", {
+    prompt: "Review and fix accessibility in this web interface, then verify the result. @skillranger",
+    targetAgent: "codex",
+    hostCapabilities: ["browser", "screenshots"],
+  });
+  const result = prepared(content<PrepareTaskResult>(preparedResult));
+  const response = content<ReadRunSkillFileResult>(await callMcpTool("read_run_skill_file", {
+    routerRunId: result.run.routerRunId,
+    readRequestId: "018f2f3d-8e2a-7a4c-9d2f-123456789abc",
+    expectedReadRevision: 0,
+    mode: "mandatory-next",
+  }));
+  assert.equal(response.readRevision, 1);
+  assert.equal(response.readRequestId, "018f2f3d-8e2a-7a4c-9d2f-123456789abc");
+});
+
+test("frontend landing runtime clarification follows mandatory reads and supports explicit assumptions", async () => {
+  const prompt = "Создай тематический лендинг про Attack on Titan в духе аниме за одну прокрутку. Избегай AI-slop текста и дизайна.\n\n@skillranger";
+  const preparedResult = await callMcpTool("prepare_task", { prompt, targetAgent: "codex" });
+  const preparedContent = content<PrepareTaskResult>(preparedResult);
+  assert.deepEqual(validateJsonSchema(routerOutputSchema("prepare_task"), preparedContent), []);
+  const result = prepared(preparedContent);
+  assert.equal(result.activation.trigger, "@skillranger");
+  assert.ok(result.runtimeClarification?.questions.some(({ id }) => id === "primary-user-or-actor"));
+  assert.ok(result.runtimeClarification?.questions.some(({ id }) => id === "primary-task-and-action"));
+
+  const premature = await callMcpTool("resolve_skill_run_clarifications", {
+    projectRoot: mcpRoot,
+    runId: result.run.runtimeRunId,
+    answers: [],
+    declinedFields: ["primaryUserOrActor", "primaryTask", "primaryAction"],
+    assumptions: ["Use a general audience.", "Use the requested landing page as the primary task.", "Use a neutral exploration action."],
+  });
+  assert.equal(premature.isError, true);
+  assert.equal((premature.structuredContent as { code: string }).code, "invalid-transition");
+
+  await readAllThroughMcp(result);
+  const clarified = content<SkillRun>(await callMcpTool("resolve_skill_run_clarifications", {
+    projectRoot: mcpRoot,
+    runId: result.run.runtimeRunId,
+    answers: [],
+    declinedFields: ["primaryUserOrActor", "primaryTask", "primaryAction"],
+    assumptions: ["Use a general audience.", "Use the requested landing page as the primary task.", "Use a neutral exploration action."],
+  }));
+  assert.equal(clarified.state, "clarified");
+  assert.equal(clarified.clarification.status, "declined");
+  const running = content<SkillRun>(await callMcpTool("begin_skill_run_execution", {
+    projectRoot: mcpRoot,
+    runId: result.run.runtimeRunId,
+  }));
+  assert.equal(running.state, "running");
 });
 
 const prepareStrictPerformance = async () => {

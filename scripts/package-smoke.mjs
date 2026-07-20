@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,7 @@ const exec = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const commandOptions = { cwd: repositoryRoot, maxBuffer: 10 * 1024 * 1024 };
 
-const runPackagedMcpInitialize = async (tarball, version, cwd) => {
+const runPackagedMcp = async (tarball, version, cwd) => {
   const child = spawn(
     "npm",
     ["exec", "--yes", "--package", tarball, "--", "skillranger", "mcp"],
@@ -33,28 +33,34 @@ const runPackagedMcpInitialize = async (tarball, version, cwd) => {
   const timeout = setTimeout(() => child.kill(), 15_000);
 
   try {
-    child.stdin.end(`${JSON.stringify({
+    const request = (id, method, params) => JSON.stringify({
       jsonrpc: "2.0",
-      id: "package-smoke",
-      method: "initialize",
-      params: {
+      id,
+      method,
+      params,
+    });
+    child.stdin.end(`${request("package-smoke-init", "initialize", {
         protocolVersion: "2025-06-18",
         capabilities: {},
         clientInfo: { name: "package-smoke", version: "1.0.0" },
-      },
-    })}\n`);
+      })}\n${request("package-smoke-tools", "tools/list", {})}\n`);
     await completed;
   } finally {
     clearTimeout(timeout);
   }
 
   const lines = stdout.split(/\r?\n/).filter((line) => line.trim() !== "");
-  assert.equal(lines.length, 1, `Expected one MCP response line, received: ${stdout}`);
-  const response = JSON.parse(lines[0]);
-  assert.equal(response.id, "package-smoke");
-  assert.equal(response.result?.serverInfo?.name, "skillranger");
-  assert.equal(response.result?.serverInfo?.title, "SkillRanger");
-  assert.equal(response.result?.serverInfo?.version, version);
+  assert.equal(lines.length, 2, `Expected two MCP response lines, received: ${stdout}`);
+  const responses = lines.map((line) => JSON.parse(line));
+  const initialized = responses.find(({ id }) => id === "package-smoke-init");
+  assert.equal(initialized?.result?.serverInfo?.name, "skillranger");
+  assert.equal(initialized?.result?.serverInfo?.title, "SkillRanger");
+  assert.equal(initialized?.result?.serverInfo?.version, version);
+  const tools = responses.find(({ id }) => id === "package-smoke-tools")?.result?.tools;
+  assert.ok(Array.isArray(tools), "Expected MCP tools/list result.");
+  const read = tools.find(({ name }) => name === "read_run_skill_file");
+  assert.equal(read?.annotations?.idempotentHint, true);
+  assert.deepEqual(read?.outputSchema?.oneOf?.map((entry) => entry.properties?.schemaVersion?.const).filter(Boolean), ["router-read-result/1.0"]);
 };
 
 const smokeRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-package-smoke-"));
@@ -85,6 +91,9 @@ try {
     ["exec", "--yes", "--package", tarball, "--", "skillranger", "scan", fixturePath, "--json"],
     { ...commandOptions, cwd: smokeRoot },
   );
+
+  const mcpProject = path.join(smokeRoot, "mcp-project");
+  await cp(fixturePath, mcpProject, { recursive: true });
   await exec(
     "npm",
     ["exec", "--yes", "--package", tarball, "--", "skillranger", "recommend", fixturePath, "--target", "codex", "--json"],
@@ -101,7 +110,7 @@ try {
   );
   assert.match(extractedDoctor, /compiled-binary/);
 
-  await runPackagedMcpInitialize(tarball, packageJson.version, smokeRoot);
+  await runPackagedMcp(tarball, packageJson.version, mcpProject);
   process.stdout.write(`Package smoke passed for ${packed[0].filename}\n`);
 } finally {
   await rm(smokeRoot, { recursive: true, force: true });
