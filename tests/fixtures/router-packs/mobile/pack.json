@@ -38,7 +38,14 @@
   "vocabulary": {
     "schemaVersion": "routing-vocabulary/1.0",
     "owner": { "kind": "domain", "id": "mobile" },
+    "creatableArtifactIds": ["mobile-interface"],
     "entries": [
+      {
+        "kind": "domain",
+        "id": "mobile",
+        "locale": "mixed",
+        "phrases": ["ios и android", "жесты", "push уведомления", "push notifications"]
+      },
       {
         "kind": "artifact",
         "id": "mobile-interface",
@@ -50,6 +57,12 @@
         "id": "mobile-screen",
         "locale": "mixed",
         "phrases": ["экран приложения", "app screen", "screen"]
+      },
+      {
+        "kind": "intent",
+        "id": "offline-feature",
+        "locale": "mixed",
+        "phrases": ["офлайн режим", "offline mode"]
       }
     ]
   }

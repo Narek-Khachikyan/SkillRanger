@@ -9,7 +9,14 @@
       "artifactTypes": ["api", "authentication-flow"],
       "technologyTags": ["nestjs", "nodejs"],
       "projectTags": ["backend", "nodejs"]
-    }
+    },
+    "ownership": [
+      {
+        "intent": "authentication",
+        "primarySkill": "backend.auth-implementation",
+        "supportingSkills": []
+      }
+    ]
   },
   "skills": [
     {
@@ -192,7 +199,20 @@
   "vocabulary": {
     "schemaVersion": "routing-vocabulary/1.0",
     "owner": { "kind": "domain", "id": "backend-api" },
+    "creatableArtifactIds": ["api"],
     "entries": [
+      {
+        "kind": "domain",
+        "id": "backend-api",
+        "locale": "mixed",
+        "phrases": ["серверная часть", "backend service"]
+      },
+      {
+        "kind": "artifact",
+        "id": "api",
+        "locale": "mixed",
+        "phrases": ["эндпоинт", "endpoint"]
+      },
       {
         "kind": "artifact",
         "id": "authentication-flow",

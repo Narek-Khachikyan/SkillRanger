@@ -4,11 +4,13 @@ import { mkdir, mkdtemp, readFile, symlink, utimes, writeFile } from "node:fs/pr
 import os from "node:os";
 import path from "node:path";
 import type { DomainPackManifest } from "../src/domains/types.ts";
+import { analyzeTask } from "../src/router/analyzer.ts";
 import { buildRoutingContext, RoutingContextError } from "../src/router/context.ts";
-import type { CanonicalSkillRoutingDocument } from "../src/router/metadata.ts";
+import { loadRouterFixturePacks } from "../src/router/fixtures.ts";
+import { canonicalSkillRoutingDocument, type CanonicalSkillRoutingDocument } from "../src/router/metadata.ts";
 import { prepareTask, RouterPrepareError } from "../src/router/prepare.ts";
 import { coreRoutingVocabulary } from "../src/router/vocabulary/core.ts";
-import { loadDomainRoutingVocabulary, type LoadedRouterPack } from "../src/router/vocabulary/load.ts";
+import { adaptFixtureRoutingPacks, loadDomainRoutingVocabulary, type LoadedRouterPack } from "../src/router/vocabulary/load.ts";
 import { routingVocabularyLimits } from "../src/router/vocabulary/validate.ts";
 
 const routing = {
@@ -138,4 +140,53 @@ test("prepare maps fixture vocabulary authoring failures to routing-integrity", 
     prompt: "Create an authentication API @skillranger",
     activation: { mode: "explicit" },
   }), (error: unknown) => error instanceof RouterPrepareError && error.code === "routing-integrity");
+});
+
+test("fixture vocabularies route colloquial claims through the shared routing context", async () => {
+  const packs = await loadRouterFixturePacks("tests/fixtures/router-packs");
+  assert.deepEqual(packs.filter(({ schemaVersion }) => schemaVersion === "router-fixture-pack/1.1").map(({ domain }) => domain.id), [
+    "backend-api", "database", "devops-platform", "mobile", "qa-testing",
+  ]);
+  const skills = packs.flatMap(({ skills: packSkills }) => packSkills);
+  const routingContext = buildRoutingContext({
+    packs: adaptFixtureRoutingPacks(packs),
+    skills: skills.map(canonicalSkillRoutingDocument),
+    coreVocabulary: coreRoutingVocabulary,
+    baseRegistryDigest: "fixture-extensibility",
+  });
+  assert.deepEqual(routingContext.domains.get("backend-api")?.ownership.map(({ intent, primarySkill }) => ({ intent, primarySkill })), [
+    { intent: "authentication", primarySkill: "backend.auth-implementation" },
+  ]);
+  assert.equal([...routingContext.domains.values()].reduce((sum, domain) => sum + domain.ownership.length, 0), 1);
+  for (const id of ["api", "mobile-interface", "ci-pipeline"]) assert.equal(routingContext.creatableArtifactIds.has(id), true, id);
+
+  const domains = packs.map(({ domain }) => domain);
+  const signals = (prompt: string) => new Set(analyzeTask({ prompt, domains, skills, routingContext }).matchedSignals.map(({ kind, id }) => `${kind}:${id}`));
+  const cases: Array<[string, string[]]> = [
+    ["backend service endpoint", ["domain:backend-api", "artifact:api"]],
+    ["ios и android с offline mode", ["domain:mobile", "intent:offline-feature"]],
+    ["деплой pipeline как docker образ", ["intent:deployment", "artifact:ci-pipeline", "technology:docker"]],
+    ["дай мне endpoint", ["action:create", "artifact:api"]],
+    ["дай мне mobile app", ["action:create", "artifact:mobile-interface"]],
+    ["дай мне pipeline", ["action:create", "artifact:ci-pipeline"]],
+  ];
+  for (const [prompt, expected] of cases) {
+    const actual = signals(prompt);
+    for (const signal of expected) assert.ok(actual.has(signal), `${prompt}: ${signal}`);
+  }
+
+  for (const [prompt, expected] of [
+    ["implement api", "artifact:api"],
+    ["create mobile-interface", "artifact:mobile-interface"],
+    ["deploy ci-pipeline", "artifact:ci-pipeline"],
+  ] as const) assert.ok(signals(prompt).has(expected), `${prompt}: ${expected}`);
+  const explicitPhrases = packs.flatMap((pack) => pack.schemaVersion === "router-fixture-pack/1.1"
+    ? pack.vocabulary?.entries.flatMap(({ phrases }) => phrases) ?? []
+    : []);
+  for (const canonicalId of ["api", "mobile-interface", "ci-pipeline"]) assert.equal(explicitPhrases.includes(canonicalId), false, canonicalId);
+});
+
+test("shared router code contains no fixture-domain branches", async () => {
+  const source = (await Promise.all(["analyzer.ts", "resolver.ts", "composer.ts"].map((file) => readFile(path.join("src/router", file), "utf8")))).join("\n");
+  assert.doesNotMatch(source, /backend-api|devops-platform|mobile-interface|ci-pipeline/);
 });
