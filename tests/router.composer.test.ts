@@ -103,7 +103,7 @@ test("composer reports dependency cycles and symmetric conflicts", async () => {
     candidates: input.skills.filter((skill) => ["backend.cycle-a", "backend.cycle-b"].includes(skill.id)).map((skill) => ({
       skill,
       score: 0.9,
-      role: skill.roles?.includes("primary") ? "primary" as const : "companion" as const,
+      eligibleRoles: [skill.roles?.includes("primary") ? "primary" as const : "companion" as const],
       reasons: [],
       missingCapabilities: [],
       missingOptionalCapabilities: [],
@@ -119,7 +119,7 @@ test("composer reports dependency cycles and symmetric conflicts", async () => {
     candidates: input.skills.filter((skill) => ["backend.conflict-a", "backend.conflict-b"].includes(skill.id)).map((skill) => ({
       skill,
       score: 0.9,
-      role: skill.roles?.includes("primary") ? "primary" as const : "companion" as const,
+      eligibleRoles: [skill.roles?.includes("primary") ? "primary" as const : "companion" as const],
       reasons: [],
       missingCapabilities: [],
       missingOptionalCapabilities: [],
@@ -143,7 +143,7 @@ test("composer selects verification for acceptance criteria and limits companion
     ].includes(skill.id)).map((skill) => ({
       skill,
       score: skill.id === "backend.auth-implementation" ? 0.9 : 0.8,
-      role: skill.roles?.includes("primary") ? "primary" as const : skill.roles?.includes("verification") ? "verification" as const : "companion" as const,
+      eligibleRoles: [skill.roles?.includes("primary") ? "primary" as const : skill.roles?.includes("verification") ? "verification" as const : "companion" as const],
       reasons: [],
       missingCapabilities: [],
       missingOptionalCapabilities: [],
@@ -165,7 +165,7 @@ test("composer returns budget overflow for a required oversized primary", async 
     candidates: input.skills.filter((skill) => skill.id === "backend.oversized").map((skill) => ({
       skill,
       score: 0.9,
-      role: "primary" as const,
+      eligibleRoles: ["primary" as const],
       reasons: [],
       missingCapabilities: [],
       missingOptionalCapabilities: [],
@@ -295,4 +295,39 @@ test("composer keeps compatible subtasks together when one primary covers all of
     skills: [primarySkill], selectedDomainIds: ["backend-api"], capabilities: [],
   });
   assert.equal(result.status, "prepared");
+});
+
+test("retrieval preserves every declared eligible role and selection assigns one role once", () => {
+  const skill: RouterSkillMetadata = {
+    id: "backend.multi-role", displayName: "Multi Role", version: "1.0.0", riskLevel: "low",
+    roles: ["primary", "companion", "verification"], domains: ["backend-api"], actions: ["implement"],
+    artifactTypes: ["api"], intentTags: ["api"], technologyTags: [], qualityGoals: ["correctness"],
+    requiredCapabilities: [], optionalCapabilities: [], dependencies: [], conflictsWith: [], supersedes: [], complements: [], score: 0.9,
+  };
+  const retrieved = retrieveSkillCandidates({ profile: profile(), skills: [skill], selectedDomainIds: ["backend-api"] });
+  assert.deepEqual(retrieved.candidates[0]?.eligibleRoles, ["primary", "companion", "verification"]);
+
+  const composed = composeSkillSet({ profile: profile(), skills: [skill], selectedDomainIds: ["backend-api"] });
+  assert.equal(composed.status, "prepared");
+  if (composed.status !== "prepared") return;
+  assert.deepEqual(composed.composed.all.map(({ skill: selected, role }) => ({ id: selected.id, role })), [
+    { id: skill.id, role: "primary" },
+  ]);
+});
+
+test("a primary-only dependency cannot become a second primary", () => {
+  const dependency: RouterSkillMetadata = {
+    id: "backend.primary-dependency", displayName: "Primary Dependency", version: "1.0.0", riskLevel: "low",
+    roles: ["primary"], domains: ["backend-api"], actions: ["implement"], artifactTypes: ["api"], intentTags: ["api"],
+    technologyTags: [], qualityGoals: [], requiredCapabilities: [], optionalCapabilities: [], dependencies: [], conflictsWith: [], supersedes: [], complements: [], score: 0.8,
+  };
+  const root: RouterSkillMetadata = { ...dependency, id: "backend.root", displayName: "Root", dependencies: [dependency.id], score: 0.9 };
+  const candidate = (skill: RouterSkillMetadata) => ({
+    skill, score: skill.score!, eligibleRoles: ["primary" as const], reasons: [], missingCapabilities: [], missingOptionalCapabilities: [], verificationStatus: "not-required" as const,
+  });
+  const result = composeSkillSet({
+    profile: profile(), skills: [root, dependency], selectedDomainIds: ["backend-api"], candidates: [candidate(root), candidate(dependency)],
+  });
+  assert.ok(result.rejections.some(({ skillId, reason }) => skillId === root.id && reason === "dependency-role-unassignable"));
+  if (result.status === "prepared") assert.equal(result.composed.all.filter(({ role }) => role === "primary").length, 1);
 });

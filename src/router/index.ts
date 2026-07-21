@@ -47,6 +47,7 @@ export type {
   RouterDomainResolverInput,
 } from "./resolver.ts";
 export {
+  assignSelectedRole,
   composeSkillSet,
   defaultRouterLimits,
   retrieveSkillCandidates,
@@ -59,6 +60,7 @@ export type {
   RetrieveSkillCandidatesInput,
   RetrieveSkillCandidatesResult,
   RouterCandidate,
+  SelectedRouterCandidate,
   RouterSkillMetadata,
 } from "./composer.ts";
 export type * from "./types.ts";

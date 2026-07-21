@@ -83,12 +83,14 @@ export type RouterSkillMetadata = TaskAnalyzerSkillMetadata & {
 export type RouterCandidate = {
   skill: RouterSkillMetadata;
   score: number;
-  role: RouterSkillRole;
+  eligibleRoles: RouterSkillRole[];
   reasons: string[];
   missingCapabilities: string[];
   missingOptionalCapabilities: string[];
   verificationStatus: "ready" | "guidance-only" | "not-required";
 };
+
+export type SelectedRouterCandidate = RouterCandidate & { role: RouterSkillRole };
 
 export type RetrieveSkillCandidatesInput = {
   profile: TaskProfile;
@@ -129,12 +131,12 @@ export type ComposeSkillSetInput = RetrieveSkillCandidatesInput & {
 };
 
 export type ComposedSkillSet = {
-  primary: RouterCandidate;
-  environment: RouterCandidate[];
-  companions: RouterCandidate[];
-  verification: RouterCandidate[];
-  agentContext: RouterCandidate[];
-  all: RouterCandidate[];
+  primary: SelectedRouterCandidate;
+  environment: SelectedRouterCandidate[];
+  companions: SelectedRouterCandidate[];
+  verification: SelectedRouterCandidate[];
+  agentContext: SelectedRouterCandidate[];
+  all: SelectedRouterCandidate[];
   selections: PreparedSelections;
   warnings: string[];
   instructionBytes: number;
@@ -160,16 +162,8 @@ const sorted = <T extends { skill: RouterSkillMetadata; score: number }>(items: 
   (candidate) => candidate.skill.qualityScore ?? 0,
 );
 
-const roleFor = (skill: RouterSkillMetadata, profile: TaskProfile): RouterSkillRole | undefined => {
-  const roles = skill.roles ?? [];
-  if (roles.includes("primary")) return "primary";
-  if (roles.includes("environment")) return "environment";
-  if (roles.includes("agent-context")) return "agent-context";
-  if (roles.includes("verification") && profile.acceptanceCriteria.length > 0) return "verification";
-  if (roles.includes("companion")) return "companion";
-  if (roles.includes("verification")) return "verification";
-  return undefined;
-};
+const roleOrder: RouterSkillRole[] = ["primary", "environment", "companion", "verification", "agent-context"];
+const rolesFor = (skill: RouterSkillMetadata) => roleOrder.filter((role) => skill.roles?.includes(role));
 
 const environmentSignalMatches = (fingerprint: ProjectFingerprint | undefined, signal: string) => {
   if (!fingerprint) return false;
@@ -268,15 +262,15 @@ export const retrieveSkillCandidates = (input: RetrieveSkillCandidatesInput): Re
   const availableEvidence = collectAvailableEvidence({ matchedSignals: input.matchedSignals ?? [] });
   const rejections: CandidateRejection[] = [];
   const candidates = input.skills.flatMap((skill) => {
-    const role = roleFor(skill, input.profile);
-    if (!role) { rejections.push({ skillId: skill.id, reason: "router-metadata-incomplete" }); return []; }
-    const isPrimary = role === "primary";
+    let eligibleRoles = rolesFor(skill);
+    if (eligibleRoles.length === 0) { rejections.push({ skillId: skill.id, reason: "router-metadata-incomplete" }); return []; }
     const domainMatch = skill.domains.some((domain) => selectedDomains.has(canonical(domain)));
     if (!domainMatch) { rejections.push({ skillId: skill.id, reason: "domain-mismatch" }); return []; }
-    if (primaryDomainId && isPrimary && !skill.domains.some((domain) => canonical(domain) === primaryDomainId)) {
-      rejections.push({ skillId: skill.id, reason: "primary-domain-mismatch" }); return [];
+    if (primaryDomainId && eligibleRoles.includes("primary") && !skill.domains.some((domain) => canonical(domain) === primaryDomainId)) {
+      eligibleRoles = eligibleRoles.filter((role) => role !== "primary");
+      if (eligibleRoles.length === 0) { rejections.push({ skillId: skill.id, reason: "primary-domain-mismatch" }); return []; }
     }
-    if (input.routingContext && (role === "primary" || role === "companion")) {
+    if (input.routingContext && (eligibleRoles.includes("primary") || eligibleRoles.includes("companion"))) {
       const evidence = evaluateRequiredEvidence({
         required: requiredEvidenceForCandidate({
           routingContext: input.routingContext,
@@ -305,18 +299,21 @@ export const retrieveSkillCandidates = (input: RetrieveSkillCandidatesInput): Re
     const missingRouting = (skill.routingRequiredCapabilities ?? requiredCapabilities(skill)).filter((capability) => !capabilities.has(canonical(capability)));
     const missingVerification = (skill.verificationRequiredCapabilities ?? []).filter((capability) => !capabilities.has(canonical(capability)));
     const missingOptional = optionalCapabilities(skill).filter((capability) => !capabilities.has(canonical(capability)));
-    if (missingRouting.length > 0 && role !== "verification" && !input.deferRequiredCapabilities) { rejections.push({ skillId: skill.id, reason: "required-capability-missing" }); return []; }
+    if (missingRouting.length > 0 && eligibleRoles.some((role) => role !== "verification") && !input.deferRequiredCapabilities) { rejections.push({ skillId: skill.id, reason: "required-capability-missing" }); return []; }
     const scored = scoreSkill(input.profile, skill, selectedDomains, input.fingerprint, input.routingDate, input.routingIntentTags);
-    if (isPrimary && scored.score < threshold) { rejections.push({ skillId: skill.id, reason: "primary-score-below-threshold" }); return []; }
+    if (eligibleRoles.includes("primary") && scored.score < threshold) {
+      eligibleRoles = eligibleRoles.filter((role) => role !== "primary");
+      if (eligibleRoles.length === 0) { rejections.push({ skillId: skill.id, reason: "primary-score-below-threshold" }); return []; }
+    }
     const verificationStatus: RouterCandidate["verificationStatus"] = missingVerification.length > 0
       ? "guidance-only"
-      : role === "verification" || (skill.verificationRequiredCapabilities?.length ?? 0) > 0
+      : eligibleRoles.includes("verification") || (skill.verificationRequiredCapabilities?.length ?? 0) > 0
         ? "ready"
         : "not-required";
     return [{
       skill,
       score: Number(scored.score.toFixed(3)),
-      role,
+      eligibleRoles,
       reasons: scored.reasons,
       missingCapabilities: missing,
       missingOptionalCapabilities: missingOptional,
@@ -326,7 +323,7 @@ export const retrieveSkillCandidates = (input: RetrieveSkillCandidatesInput): Re
   const ordered = sorted(candidates);
   return {
     candidates: ordered,
-    primaryCandidates: ordered.filter(({ role }) => role === "primary"),
+    primaryCandidates: ordered.filter(({ eligibleRoles }) => eligibleRoles.includes("primary")),
     rejections,
   };
 };
@@ -371,7 +368,7 @@ const dependencyClosure = (root: RouterCandidate, byId: Map<string, RouterCandid
   return { closure: [...new Map(closure.map((candidate) => [candidate.skill.id, candidate])).values()], missing };
 };
 
-const superseded = (selected: RouterCandidate[], primaryId?: string) => {
+const superseded = <T extends { skill: RouterSkillMetadata }>(selected: T[], primaryId?: string): T[] => {
   const supersededIds = new Set(selected.flatMap(({ skill }) => skill.supersedes ?? []).map(canonical));
   return selected.filter(({ skill }) => {
     if (primaryId && canonical(skill.id) === canonical(primaryId)) return true;
@@ -379,10 +376,10 @@ const superseded = (selected: RouterCandidate[], primaryId?: string) => {
   });
 };
 
-const toSelection = (candidate: RouterCandidate): PreparedSkillSelection => ({
+const toSelection = (candidate: RouterCandidate, role: RouterSkillRole): PreparedSkillSelection => ({
   skillId: candidate.skill.id,
   displayName: candidate.skill.displayName,
-  role: candidate.role,
+  role,
   domains: candidate.skill.domains,
   version: candidate.skill.version,
   packageChecksum: candidate.skill.packageChecksum ?? "",
@@ -395,11 +392,11 @@ const toSelection = (candidate: RouterCandidate): PreparedSkillSelection => ({
 const decomposition = (profile: TaskProfile, candidates: RouterCandidate[], allSkills: RouterSkillMetadata[] = []) => {
   if (profile.subtasks.length < 2) return undefined;
   const primaryCandidates = [
-    ...candidates.filter(({ role }) => role === "primary"),
+    ...candidates.filter(({ eligibleRoles }) => eligibleRoles.includes("primary")),
     ...allSkills.filter((skill) => skill.roles?.includes("primary")).map((skill) => ({
       skill,
       score: 0,
-      role: "primary" as const,
+      eligibleRoles: ["primary" as const],
       reasons: [],
       missingCapabilities: [],
       missingOptionalCapabilities: [],
@@ -440,6 +437,17 @@ const verificationRelevant = (profile: TaskProfile, skill: RouterSkillMetadata) 
   return profile.acceptanceCriteria.some((criterion) => (criteriaSignals[criterion] ?? [criterion]).some((signal) => vocabulary.has(signal)));
 };
 
+export const assignSelectedRole = (input: {
+  candidate: RouterCandidate;
+  requestedRole: Exclude<RouterSkillRole, "primary">;
+  profile: TaskProfile;
+  fingerprint?: ProjectFingerprint;
+}): Exclude<RouterSkillRole, "primary"> | undefined => {
+  if (!input.candidate.eligibleRoles.includes(input.requestedRole)) return undefined;
+  if (input.requestedRole === "verification" && !verificationRelevant(input.profile, input.candidate.skill)) return undefined;
+  return input.requestedRole;
+};
+
 const strictMissing = (selected: RouterCandidate[], input: ComposeSkillSetInput) => {
   if (!input.strict) return [];
   const installed = unique(input.installedSkillIds ?? []);
@@ -459,7 +467,7 @@ const strictMissing = (selected: RouterCandidate[], input: ComposeSkillSetInput)
 export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetResult => {
   const limits = { ...defaultRouterLimits, ...input.limits };
   const retrieved = input.candidates
-    ? { candidates: input.candidates, primaryCandidates: input.candidates.filter(({ role }) => role === "primary"), rejections: [] }
+    ? { candidates: input.candidates, primaryCandidates: input.candidates.filter(({ eligibleRoles }) => eligibleRoles.includes("primary")), rejections: [] }
     : retrieveSkillCandidates(input.strict
       ? { ...input, strict: false, deferRequiredCapabilities: true, maxSelectedRisk: limits.maxSelectedRisk }
       : { ...input, maxSelectedRisk: limits.maxSelectedRisk });
@@ -475,7 +483,7 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
       : { status: "no_matching_skills", reasonCode: "no-primary-candidate", rejections: retrieved.rejections };
   }
 
-  for (const primary of primaryCandidates) {
+  primaryLoop: for (const primary of primaryCandidates) {
     if (hasCycle(primary.skill, registryById)) {
       retrieved.rejections.push({ skillId: primary.skill.id, reason: "dependency-cycle" });
       continue;
@@ -490,7 +498,17 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
       retrieved.rejections.push({ skillId: primary.skill.id, reason: "dependency-blocked" });
       continue;
     }
-    const dedupedRequired = superseded([...new Map(required.map((candidate) => [candidate.skill.id, candidate])).values()], primary.skill.id);
+    const assignedRequired: SelectedRouterCandidate[] = [{ ...primary, role: "primary" }];
+    for (const dependency of closure.closure) {
+      const role = (["environment", "companion", "verification", "agent-context"] as const)
+        .find((requestedRole) => assignSelectedRole({ candidate: dependency, requestedRole, profile: input.profile, fingerprint: input.fingerprint }));
+      if (!role) {
+        retrieved.rejections.push({ skillId: primary.skill.id, reason: "dependency-role-unassignable" });
+        continue primaryLoop;
+      }
+      assignedRequired.push({ ...dependency, role });
+    }
+    const dedupedRequired = superseded([...new Map(assignedRequired.map((candidate) => [candidate.skill.id, candidate])).values()], primary.skill.id);
     if (!dedupedRequired.some(({ role }) => role === "primary")) {
       retrieved.rejections.push({ skillId: primary.skill.id, reason: "primary-superseded" });
       continue;
@@ -502,15 +520,15 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     const selectedIds = new Set(dedupedRequired.map(({ skill }) => skill.id));
     const warnings: string[] = [];
     const optional = (role: RouterSkillRole) => retrieved.candidates
-      .filter(({ role: candidateRole, skill }) => candidateRole === role && !selectedIds.has(skill.id) && (!input.strict || skill.source === "installed"))
+      .filter(({ eligibleRoles, skill }) => eligibleRoles.includes(role) && !selectedIds.has(skill.id) && (!input.strict || skill.source === "installed"))
       .sort((left, right) => right.score - left.score || left.skill.id.localeCompare(right.skill.id));
-    const add = (candidate: RouterCandidate) => {
+    const add = (candidate: RouterCandidate, role: Exclude<RouterSkillRole, "primary">) => {
       if (selectedIds.has(candidate.skill.id)) return;
       if ([...dedupedRequired].some(({ skill }) => symmetricConflict(skill, candidate.skill))) return;
-      dedupedRequired.push(candidate);
+      dedupedRequired.push({ ...candidate, role });
       selectedIds.add(candidate.skill.id);
     };
-    for (const candidate of optional("environment").slice(0, limits.maxEnvironmentSkills)) add(candidate);
+    for (const candidate of optional("environment").slice(0, limits.maxEnvironmentSkills)) add(candidate, "environment");
     const complements = new Set(retrieved.candidates.filter(({ skill }) => (primary.skill.complements ?? []).some((id) => canonical(id) === canonical(skill.id))).map(({ skill }) => skill.id));
     let explicitConflict = false;
     for (const candidate of optional("companion").filter(({ skill }) => complements.has(skill.id))) {
@@ -520,7 +538,7 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
         continue;
       }
       candidate.reasons = [...new Set([...candidate.reasons, `complements:${candidate.skill.id}`])];
-      add(candidate);
+      add(candidate, "companion");
     }
     if (explicitConflict) {
       retrieved.rejections.push({ skillId: primary.skill.id, reason: "skill-conflict" });
@@ -528,9 +546,9 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     }
     for (const candidate of optional("verification")) {
       if (dedupedRequired.filter(({ role }) => role === "verification").length >= limits.maxVerificationSkills) break;
-      if (verificationRelevant(input.profile, candidate.skill)) add(candidate);
+      if (assignSelectedRole({ candidate, requestedRole: "verification", profile: input.profile, fingerprint: input.fingerprint })) add(candidate, "verification");
     }
-    for (const candidate of optional("agent-context").slice(0, limits.maxAgentContextSkills)) add(candidate);
+    for (const candidate of optional("agent-context").slice(0, limits.maxAgentContextSkills)) add(candidate, "agent-context");
     const protectedIds = new Set([primary.skill.id, ...closure.closure.map(({ skill }) => skill.id)]);
     const selected = superseded(dedupedRequired, primary.skill.id);
     const removableRoles: RouterSkillRole[] = ["agent-context", "companion", "environment", "verification"];
@@ -562,19 +580,20 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     if (missing.length > 0) return { status: "strict_requirements_unmet", missing, rejections: retrieved.rejections };
     for (const candidate of selected) for (const capability of candidate.missingOptionalCapabilities) warnings.push(`capability-missing:${capability}`);
     const byRole = (role: RouterSkillRole) => selected.filter((candidate) => candidate.role === role);
+    const selectedPrimary = selected.find(({ role }) => role === "primary")!;
     const composed: ComposedSkillSet = {
-      primary: selected.find(({ role }) => role === "primary") ?? primary,
+      primary: selectedPrimary,
       environment: byRole("environment"),
       companions: byRole("companion"),
       verification: byRole("verification"),
       agentContext: byRole("agent-context"),
       all: selected,
       selections: {
-        primary: toSelection(selected.find(({ role }) => role === "primary") ?? primary),
-        environment: byRole("environment").map(toSelection),
-        companions: byRole("companion").map(toSelection),
-        verification: byRole("verification").map(toSelection),
-        agentContext: byRole("agent-context").map(toSelection),
+        primary: toSelection(selectedPrimary, "primary"),
+        environment: byRole("environment").map((candidate) => toSelection(candidate, "environment")),
+        companions: byRole("companion").map((candidate) => toSelection(candidate, "companion")),
+        verification: byRole("verification").map((candidate) => toSelection(candidate, "verification")),
+        agentContext: byRole("agent-context").map((candidate) => toSelection(candidate, "agent-context")),
       },
       warnings: [...new Set(warnings)],
       instructionBytes: requiredBytes,
