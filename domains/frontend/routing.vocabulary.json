@@ -4,6 +4,24 @@
     "kind": "domain",
     "id": "frontend"
   },
+  "intentMappings": [
+    {
+      "signalId": "visual-design",
+      "skillIntentIds": ["visual-design"]
+    },
+    {
+      "signalId": "motion-design",
+      "skillIntentIds": ["motion-design"]
+    },
+    {
+      "signalId": "responsive-design",
+      "skillIntentIds": ["responsive-design"]
+    },
+    {
+      "signalId": "visual-reference",
+      "skillIntentIds": ["visual-reference"]
+    }
+  ],
   "creatableArtifactIds": [
     "web-interface"
   ],
@@ -15,6 +33,8 @@
       "phrases": [
         "website",
         "web site",
+        "web interface",
+        "landing",
         "сайт",
         "веб сайт",
         "веб интерфейс",
@@ -28,8 +48,121 @@
       "id": "page",
       "locale": "mixed",
       "phrases": [
+        "landing",
         "landing page",
         "лендинг"
+      ]
+    },
+    {
+      "kind": "intent",
+      "id": "visual-design",
+      "locale": "mixed",
+      "phrases": [
+        "красивый дизайн",
+        "красивым дизайном",
+        "стильный дизайн",
+        "современный дизайн",
+        "дорогой вид",
+        "премиальный вид",
+        "сделай красиво",
+        "визуально привлекательно",
+        "не шаблонный дизайн",
+        "beautiful design",
+        "polished design",
+        "premium look",
+        "modern visual style",
+        "make it look great",
+        "visually appealing",
+        "non-generic design"
+      ]
+    },
+    {
+      "kind": "intent",
+      "id": "motion-design",
+      "locale": "mixed",
+      "phrases": [
+        "анимация",
+        "анимации",
+        "анимациями",
+        "плавные анимации",
+        "плавными анимациями",
+        "плавные переходы",
+        "оживить интерфейс",
+        "сделать интерфейс живее",
+        "движение элементов",
+        "animation",
+        "animations",
+        "subtle motion",
+        "smooth transitions",
+        "bring the interface to life",
+        "make the UI feel alive",
+        "animated elements"
+      ]
+    },
+    {
+      "kind": "intent",
+      "id": "responsive-design",
+      "locale": "mixed",
+      "phrases": [
+        "адаптивный дизайн",
+        "мобильная адаптация",
+        "мобильной адаптацией",
+        "мобайл адаптация",
+        "мобайл адаптацией",
+        "под телефон",
+        "на телефоне",
+        "под разные экраны",
+        "не ломается на мобильном",
+        "хорошо выглядит на телефоне",
+        "responsive design",
+        "mobile responsive",
+        "phone support",
+        "works on phones",
+        "different screen sizes",
+        "does not break on mobile",
+        "looks good on mobile"
+      ]
+    },
+    {
+      "kind": "intent",
+      "id": "visual-reference",
+      "locale": "mixed",
+      "phrases": [
+        "по макету",
+        "на основе макета",
+        "макет приложен",
+        "есть готовый макет",
+        "из figma",
+        "файл figma приложен",
+        "по этому скриншоту",
+        "вот скриншот",
+        "используй этот скриншот",
+        "используй приложенный макет",
+        "визуальный референс приложен",
+        "from this mockup",
+        "based on this mockup",
+        "mockup attached",
+        "from this screenshot",
+        "based on this screenshot",
+        "here is the screenshot",
+        "use this screenshot",
+        "use the attached mockup",
+        "from this figma file",
+        "design file attached",
+        "use this visual reference"
+      ],
+      "negativePhrases": [
+        "без скриншота",
+        "без макета",
+        "нет скриншота",
+        "нет макета",
+        "не используй этот скриншот",
+        "не используй приложенный макет",
+        "no screenshot",
+        "without a screenshot",
+        "without a mockup",
+        "do not use this screenshot",
+        "do not use the attached mockup"
       ]
     }
   ]
