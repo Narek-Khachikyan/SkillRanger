@@ -7,6 +7,7 @@ import type {
   RoutingVocabularyFile,
   RoutingVocabularyLocale,
 } from "./types.ts";
+import { normalizeRoutingText } from "./normalize.ts";
 
 export const routingVocabularyLimits = {
   maxFileBytes: 524_288,
@@ -69,7 +70,7 @@ const record = (value: unknown, at: string): Record<string, unknown> => {
 };
 const invalid = (message: string): never => { throw new RoutingVocabularyValidationError("routing-vocabulary-invalid", message); };
 const limit = (message: string): never => { throw new RoutingVocabularyValidationError("routing-vocabulary-limit-exceeded", message); };
-const normalizedPhrase = (value: string) => value.normalize("NFKC").toLocaleLowerCase("und").replaceAll("ё", "е").trim().replace(/\s+/gu, " ");
+const normalizedPhrase = (value: string) => normalizeRoutingText(value).normalized;
 const unsafePhrase = (value: string) => /[`\0]|\$\(|[\[\]{}*?]|\.\*/u.test(value);
 const strings = (value: unknown, at: string, options: { min: number; max: number; canonical?: boolean }) => {
   if (!Array.isArray(value)) invalid(`${at} must be an array`);
