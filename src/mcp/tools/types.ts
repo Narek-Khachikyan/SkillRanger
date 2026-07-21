@@ -83,6 +83,7 @@ export type McpToolErrorCode =
   | "artifact-integrity"
   | "hard-gate-failed"
   | "repair-limit"
+  | "semantic-hint-invalid"
   | "run-not-finalizable";
 
 export class McpToolError extends Error {

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { mcpTools } from "../src/mcp/tools.ts";
 import { loadRouterGoldenCases, loadRouterFixturePacks } from "../src/router/fixtures.ts";
 import { validateJsonSchema } from "../src/runtime/strict/json-schema.ts";
 
@@ -104,6 +105,21 @@ test("public router types are independent from MCP transport types", async () =>
   const source = await readFile("src/router/types.ts", "utf8");
   assert.doesNotMatch(source, /from\s+["'][^"']*mcp/i);
   assert.doesNotMatch(source, /McpTool|McpInput|McpResult/);
+});
+
+test("semantic hints use a permissive MCP envelope and one public Core error code", async () => {
+  const prepare = mcpTools.find(({ name }) => name === "prepare_task");
+  assert.ok(prepare);
+  const properties = (prepare.inputSchema.properties ?? {}) as Record<string, Record<string, unknown>>;
+  assert.deepEqual(properties.semanticHints, { type: "object" });
+
+  const schema = JSON.parse(await readFile("schemas/router-tool-result.schema.json", "utf8")) as {
+    $defs: { errorCode: { enum: string[] } };
+  };
+  assert.ok(schema.$defs.errorCode.enum.includes("semantic-hint-invalid"));
+  for (const file of ["src/router/prepare.ts", "src/mcp/tools/router.ts", "src/mcp/tools/types.ts"]) {
+    assert.match(await readFile(file, "utf8"), /semantic-hint-invalid/, file);
+  }
 });
 
 test("package scripts include router tests through npm test and the router eval release gate", async () => {

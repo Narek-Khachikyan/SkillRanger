@@ -1,5 +1,7 @@
 import type { ProjectFingerprint } from "../types.ts";
 import type { RoutingContext } from "./context.ts";
+import type { SemanticHint } from "./types.ts";
+import type { MatchedRoutingSignal } from "./vocabulary/match.ts";
 import type {
   DomainCandidate,
   TaskProfile,
@@ -30,6 +32,7 @@ export type RouterDomainResolverInput = {
   thresholds?: Partial<typeof defaultRouterThresholds>;
   routingIntentTags?: string[];
   routingContext?: RoutingContext;
+  routingSignals?: MatchedRoutingSignal[];
 };
 
 export type DomainScore = {
@@ -39,6 +42,7 @@ export type DomainScore = {
   artifactMatch: number;
   technologyMatch: number;
   semanticScore: number;
+  domainEligible: boolean;
   available: boolean;
   hasEligiblePrimary: boolean;
   reasons: string[];
@@ -52,6 +56,41 @@ export type DomainResolution = {
   supportingDomainIds: string[];
   ambiguousDomainIds: string[];
   clarificationRequired: boolean;
+  warnings: string[];
+};
+
+export type DomainSemanticScoreInput = {
+  projectMatch: number;
+  directTaskIntentMatch: number;
+  hostTaskIntentMatch: number;
+  directArtifactMatch: number;
+  hostArtifactMatch: number;
+  directTechnologyMatch: number;
+  hostTechnologyMatch: number;
+  directProfileDomainConfidence: number;
+  hostProfileDomainConfidence: number;
+  matchingHostSignalKinds: SemanticHint["kind"][];
+  hasDirectDomainEvidence: boolean;
+  hasFingerprintEvidence: boolean;
+  hostSignalsAgree: boolean;
+  hasDirectConflict: boolean;
+};
+
+const unit = (value: number) => Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
+
+export const combineDomainSemanticScore = (raw: DomainSemanticScoreInput) => {
+  const input = Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, typeof value === "number" ? unit(value) : value])) as unknown as DomainSemanticScoreInput;
+  const hostAllowed = input.hostSignalsAgree && !input.hasDirectConflict;
+  const hostTaskIntentMatch = hostAllowed ? input.hostTaskIntentMatch : 0;
+  const hostProfileDomainConfidence = hostAllowed ? input.hostProfileDomainConfidence : 0;
+  const artifactMatch = Math.max(input.directArtifactMatch, hostAllowed ? input.hostArtifactMatch : 0);
+  const technologyMatch = Math.max(input.directTechnologyMatch, hostAllowed ? input.hostTechnologyMatch : 0);
+  const taskIntentMatch = Math.max(input.directTaskIntentMatch, hostTaskIntentMatch);
+  const weightedScore = 0.45 * input.projectMatch + 0.30 * taskIntentMatch + 0.15 * artifactMatch + 0.10 * technologyMatch;
+  let semanticScore = Math.max(weightedScore, input.directProfileDomainConfidence, hostProfileDomainConfidence);
+  const hostKindCount = new Set(input.matchingHostSignalKinds).size;
+  if (!input.hasDirectDomainEvidence && !input.hasFingerprintEvidence && hostKindCount < 2) semanticScore = Math.min(semanticScore, 0.44);
+  return semanticScore;
 };
 
 const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
@@ -117,13 +156,21 @@ const scoreDomain = (
   const projectMatch = fingerprint && projectSignals.length > 0
     ? weightedMatch(projectSignals, domain.routing.projectTags.map((value) => ({ value, weight: 1 })))
     : 0;
+  const directRoutingSignals = input.routingSignals?.filter(({ source }) => source !== "host-semantic");
+  const signalIds = (kind: MatchedRoutingSignal["kind"]) => directRoutingSignals?.filter((signal) => signal.kind === kind).map(({ id }) => id);
+  const directActions = signalIds("action") ?? profile.actions;
+  const directQualityGoals = signalIds("quality") ?? profile.qualityGoals;
+  const directArtifacts = signalIds("artifact") ?? profile.artifactTypes;
+  const directTechnologies = signalIds("technology") ?? profile.technologies;
+  const directIntents = signalIds("intent") ?? input.routingIntentTags ?? [];
   const taskSignals = [
-    ...profile.actions,
-    ...profile.qualityGoals,
+    ...directActions,
+    ...directQualityGoals,
     ...profile.constraints,
     ...profile.acceptanceCriteria,
-    ...profile.artifactTypes,
-    ...profile.technologies,
+    ...directArtifacts,
+    ...directTechnologies,
+    ...directIntents,
     ...profile.evidence.filter(({ source }) => source === "prompt").map(({ id }) => id),
   ];
   const domainSkills = input.skills
@@ -135,23 +182,63 @@ const scoreDomain = (
       ...qualityGoals,
     ]);
   const qualitySkillSignals = domainSkills.flatMap(({ qualityGoals }) => qualityGoals);
-  const taskIntentMatch = Math.max(
+  const directTaskIntentMatch = Math.max(
     profile.domains.some(({ id, evidence }) => canonical(id) === canonical(domain.id) && evidence.some(({ source }) => source === "prompt")) ? 1 : 0,
     weightedMatch(taskSignals, [
       { value: domain.id, weight: 1 },
       ...domain.routing.intentTags.map((value) => ({ value, weight: 1 })),
       ...domain.routing.aliases.map((value) => ({ value, weight: 0.7 })),
     ]),
-    weightedMatch(input.routingIntentTags ?? [], domain.routing.intentTags.map((value) => ({ value, weight: 1 }))),
-    weightedMatch(profile.qualityGoals, qualitySkillSignals.map((value) => ({ value, weight: 1 }))),
+    weightedMatch(directIntents, domain.routing.intentTags.map((value) => ({ value, weight: 1 }))),
+    weightedMatch(directQualityGoals, qualitySkillSignals.map((value) => ({ value, weight: 1 }))),
   );
-  const artifactMatch = weightedMatch(profile.artifactTypes, domain.routing.artifactTypes.map((value) => ({ value, weight: 1 })));
-  const technologyMatch = weightedMatch(profile.technologies, domain.routing.technologyTags.map((value) => ({ value, weight: 1 })));
-  const profileDomainConfidence = profile.domains.find(({ id }) => canonical(id) === canonical(domain.id))?.confidence ?? 0;
-  const semanticScore = Math.max(
-    0.45 * projectMatch + 0.30 * taskIntentMatch + 0.15 * artifactMatch + 0.10 * technologyMatch,
-    profileDomainConfidence,
-  );
+  const directArtifactMatch = weightedMatch(directArtifacts, domain.routing.artifactTypes.map((value) => ({ value, weight: 1 })));
+  const directTechnologyMatch = weightedMatch(directTechnologies, domain.routing.technologyTags.map((value) => ({ value, weight: 1 })));
+  const profileDomain = profile.domains.find(({ id }) => canonical(id) === canonical(domain.id));
+  const directProfileDomainConfidence = profileDomain?.evidence.some(({ source }) => source === "prompt") ? profileDomain.confidence : 0;
+  const hasDirectDomainEvidence = directProfileDomainConfidence > 0 || (directRoutingSignals ?? []).some((signal) => {
+    if (!["domain", "artifact", "intent", "technology", "quality"].includes(signal.kind)) return false;
+    return (signal.kind === "domain" && canonical(signal.id) === canonical(domain.id)) ||
+      signal.ownerIds.some((id) => canonical(id) === canonical(domain.id));
+  });
+  const hostSignals = (input.routingSignals ?? []).filter((signal) => signal.source === "host-semantic" &&
+    ((signal.kind === "domain" && canonical(signal.id) === canonical(domain.id)) || signal.ownerIds.some((id) => canonical(id) === canonical(domain.id))));
+  const hostLane = (kinds: MatchedRoutingSignal["kind"][]) => Math.max(0, ...hostSignals.filter(({ kind }) => kinds.includes(kind)).map(({ confidence }) => confidence));
+  const allHostSignals = (input.routingSignals ?? []).filter(({ source }) => source === "host-semantic");
+  const hostOwnerSets = allHostSignals.map(({ ownerIds }) => ownerIds.filter((id) => id !== "core"));
+  const agreedHostDomain = hostOwnerSets.length > 0 && hostOwnerSets.every((owners) => owners.length === 1 && owners[0] === hostOwnerSets[0][0]) ? hostOwnerSets[0][0] : undefined;
+  const directConflict = Boolean(agreedHostDomain && directRoutingSignals?.some((signal) => {
+    if (signal.confidence < 0.6 || !["domain", "artifact", "intent", "technology", "quality"].includes(signal.kind)) return false;
+    const owners = signal.ownerIds.filter((id) => id !== "core");
+    return owners.length > 0 && !owners.includes(agreedHostDomain);
+  }));
+  const hostTaskIntentMatch = hostLane(["action", "intent", "quality"]);
+  const hostArtifactMatch = hostLane(["artifact"]);
+  const hostTechnologyMatch = hostLane(["technology"]);
+  const hostProfileDomainConfidence = hostLane(["domain"]);
+  const semanticScore = combineDomainSemanticScore({
+    projectMatch,
+    directTaskIntentMatch,
+    hostTaskIntentMatch,
+    directArtifactMatch,
+    hostArtifactMatch,
+    directTechnologyMatch,
+    hostTechnologyMatch,
+    directProfileDomainConfidence,
+    hostProfileDomainConfidence,
+    matchingHostSignalKinds: hostSignals.map(({ kind }) => kind).filter((kind): kind is SemanticHint["kind"] => kind !== "constraint" && kind !== "acceptance"),
+    hasDirectDomainEvidence,
+    hasFingerprintEvidence: projectMatch > 0,
+    hostSignalsAgree: agreedHostDomain === domain.id,
+    hasDirectConflict: directConflict,
+  });
+  const hostKindCount = new Set(hostSignals.map(({ kind }) => kind)).size;
+  const hasIndependentEvidence = hasDirectDomainEvidence || projectMatch > 0;
+  const taskIntentMatch = Math.max(directTaskIntentMatch, agreedHostDomain === domain.id && !directConflict ? hostTaskIntentMatch : 0);
+  const domainEligible = taskIntentMatch > 0 || (agreedHostDomain === domain.id && !directConflict &&
+    hostSignals.length > 0 && (hostKindCount >= 2 || hasIndependentEvidence));
+  const artifactMatch = Math.max(directArtifactMatch, agreedHostDomain === domain.id && !directConflict ? hostArtifactMatch : 0);
+  const technologyMatch = Math.max(directTechnologyMatch, agreedHostDomain === domain.id && !directConflict ? hostTechnologyMatch : 0);
   const hasEligiblePrimary = eligiblePrimary.has(domain.id);
   const reasons: string[] = [];
   if (taskIntentMatch > 0) reasons.push(`domain-match:${domain.id}`);
@@ -171,6 +258,7 @@ const scoreDomain = (
     artifactMatch,
     technologyMatch,
     semanticScore,
+    domainEligible,
     available: available.has(domain.id),
     hasEligiblePrimary,
     reasons,
@@ -196,10 +284,20 @@ export const resolveDomains = (input: RouterDomainResolverInput): DomainResoluti
   const scores = input.domains
     .map((domain) => scoreDomain(domain, input, available, eligiblePrimary))
     .sort((left, right) => right.semanticScore - left.semanticScore || left.id.localeCompare(right.id));
+  const hostSignals = (input.routingSignals ?? []).filter(({ source }) => source === "host-semantic");
+  const hostOwnerSets = hostSignals.map(({ ownerIds }) => ownerIds.filter((id) => id !== "core"));
+  const agreedHostDomain = hostOwnerSets.length > 0 && hostOwnerSets.every((owners) => owners.length === 1 && owners[0] === hostOwnerSets[0][0]) ? hostOwnerSets[0][0] : undefined;
+  const directConflict = Boolean(agreedHostDomain && input.routingSignals?.some((signal) => {
+    if (signal.source === "host-semantic" || signal.confidence < 0.6 ||
+      !["domain", "artifact", "intent", "technology", "quality"].includes(signal.kind)) return false;
+    const owners = signal.ownerIds.filter((id) => id !== "core");
+    return owners.length > 0 && !owners.includes(agreedHostDomain);
+  }));
+  const warnings = directConflict && agreedHostDomain ? [`host-semantic-conflict:${agreedHostDomain}`] : [];
   const eligible = scores.filter(({ available: isAvailable }) => isAvailable);
-  const primaryPool = eligible.filter(({ semanticScore, hasEligiblePrimary, taskIntentMatch }) =>
+  const primaryPool = eligible.filter(({ semanticScore, hasEligiblePrimary, domainEligible }) =>
     hasEligiblePrimary && semanticScore + Number.EPSILON >= thresholds.primaryDomain &&
-    taskIntentMatch > 0,
+    domainEligible,
   );
   const top = primaryPool[0];
   const second = primaryPool[1];
@@ -228,6 +326,7 @@ export const resolveDomains = (input: RouterDomainResolverInput): DomainResoluti
     supportingDomainIds,
     ambiguousDomainIds,
     clarificationRequired: ambiguousDomainIds.length > 0,
+    warnings,
   };
 };
 

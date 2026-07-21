@@ -18,6 +18,7 @@ import { canonicalSkillRoutingDocument } from "./metadata.ts";
 import { coreRoutingVocabulary } from "./vocabulary/core.ts";
 import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "./vocabulary/load.ts";
 import { RoutingVocabularyValidationError } from "./vocabulary/validate.ts";
+import { validateSemanticHints } from "./semantic-hints.ts";
 import { analyzeTask } from "./analyzer.ts";
 import { composeSkillSet, defaultRouterLimits, type RouterSkillMetadata } from "./composer.ts";
 import { createContinuationToken, validateContinuation, type RouterClarificationQuestion } from "./continuation.ts";
@@ -48,7 +49,7 @@ export const routerAlgorithmVersion = "router/2.0" as const;
 export const deterministicRoutingKey = (projection: DeterministicRoutingProjection) => routerRecordDigest(projection);
 
 export class RouterPrepareError extends Error {
-  readonly code: "trigger-required" | "empty-intent" | "intent-too-large" | "router-disabled" | "target-agent-unresolved" | "project-root-unauthorized" | "continuation-invalid" | "continuation-expired" | "clarification-answer-invalid" | "capability-invalid" | "router-config-invalid" | "routing-integrity" | "raw-intent-confirmation-required";
+  readonly code: "trigger-required" | "empty-intent" | "intent-too-large" | "router-disabled" | "target-agent-unresolved" | "project-root-unauthorized" | "continuation-invalid" | "continuation-expired" | "clarification-answer-invalid" | "capability-invalid" | "router-config-invalid" | "routing-integrity" | "semantic-hint-invalid" | "raw-intent-confirmation-required";
 
   constructor(code: RouterPrepareError["code"], message: string) {
     super(message);
@@ -284,6 +285,7 @@ const common = (input: {
   capabilities: string[];
   signalDigest: string;
   vocabularyDigest: string;
+  semanticHintsDigest: string;
   outcome: DeterministicRoutingOutcome;
 }): PrepareTaskCommon => ({
   ok: true,
@@ -303,7 +305,7 @@ const common = (input: {
       capabilities: [...input.capabilities].sort(),
       taskProfile: input.profile,
       signalDigest: input.signalDigest,
-      semanticHintsDigest: digest([]),
+      semanticHintsDigest: input.semanticHintsDigest,
       fingerprintDigest: routingFingerprintDigest(input.fingerprint),
       vocabularyDigest: input.vocabularyDigest,
       routingRegistryDigest: input.registryDigest,
@@ -392,8 +394,11 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
     throw error;
   }
   const domains = packs.map(domainMetadata);
-  const analysis = analyzeTask({ prompt: parsed.normalizedIntent, domains, skills: allMetadata, routingContext });
+  const semanticHints = validateSemanticHints({ semanticHints: input.semanticHints, prompt: parsed.normalizedIntent, context: routingContext });
+  if (semanticHints.issues.length > 0) throw new RouterPrepareError("semantic-hint-invalid", "Semantic routing hints are invalid.");
+  const analysis = analyzeTask({ prompt: parsed.normalizedIntent, domains, skills: allMetadata, routingContext, semanticSignals: semanticHints.signals });
   const registryDigest = routingContext.routingRegistryDigest;
+  let routingWarnings = analysis.warnings;
   const activation = { mode: input.activation.mode, ...(parsed.trigger === undefined ? {} : { trigger: parsed.trigger }) };
   const resultCommon = (resultDomains: DomainCandidate[], outcome: DeterministicRoutingOutcome) => common({
     activation,
@@ -404,16 +409,18 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
     routingDate,
     registryDigest,
     configDigest: configResult.digest,
-    warnings: analysis.warnings,
+    warnings: routingWarnings,
     strict,
     capabilities,
     signalDigest: analysis.signalDigest,
     vocabularyDigest: routingContext.vocabularyDigest,
+    semanticHintsDigest: semanticHints.digest,
     outcome,
   });
   const projectIdentity = await new RouterStore(input.projectRoot).projectIdentity();
   const promptProjection = { actions: analysis.profile.actions, artifactTypes: analysis.profile.artifactTypes, technologies: analysis.profile.technologies, qualityGoals: analysis.profile.qualityGoals, acceptanceCriteria: analysis.profile.acceptanceCriteria, domains: analysis.profile.domains.map(({ id }) => id), subtasks: analysis.profile.subtasks };
-  const resolution = resolveDomains({ profile: analysis.profile, domains, skills: allMetadata, fingerprint, availableDomainIds: packs.map(({ id }) => id), thresholds: defaultRouterThresholds, routingIntentTags: analysis.routingIntentTags, routingContext });
+  const resolution = resolveDomains({ profile: analysis.profile, domains, skills: allMetadata, fingerprint, availableDomainIds: packs.map(({ id }) => id), thresholds: defaultRouterThresholds, routingIntentTags: analysis.routingIntentTags, routingContext, routingSignals: analysis.matchedSignals });
+  routingWarnings = [...new Set([...routingWarnings, ...resolution.warnings])];
   if (input.continuationToken && !resolution.clarificationRequired) {
     throw new RouterPrepareError("continuation-invalid", "Continuation input does not match a routing clarification.");
   }

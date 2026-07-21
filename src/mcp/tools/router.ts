@@ -63,6 +63,7 @@ const inputSchema = {
     strict: { type: "boolean" },
     continuationToken: { type: "string", minLength: 1, maxLength: 4096 },
     clarificationAnswers: { type: "array", maxItems: 8, items: { type: "object", properties: { questionId: { type: "string", minLength: 1, maxLength: 128 }, value: { type: "string", minLength: 1, maxLength: 128 } }, required: ["questionId", "value"], additionalProperties: false } },
+    semanticHints: { type: "object" },
   },
   required: ["prompt"],
   additionalProperties: false,
@@ -92,7 +93,7 @@ export const routerToolDefinitions: McpToolDefinition[] = [
 ];
 
 const routerErrorCode = (code: string) => {
-  const allowed = new Set(["trigger-required", "empty-intent", "intent-too-large", "router-disabled", "target-agent-unresolved", "project-root-unauthorized", "continuation-invalid", "continuation-expired", "clarification-answer-invalid", "capability-invalid", "router-config-invalid", "raw-intent-confirmation-required", "routing-integrity", "skill-not-selected", "skill-source-unavailable", "skill-file-not-found", "skill-path-blocked", "skill-file-unsupported", "stale-skill-checksum", "read-request-conflict", "read-order-invalid", "context-budget-exceeded", "run-not-found", "run-integrity"]);
+  const allowed = new Set(["trigger-required", "empty-intent", "intent-too-large", "router-disabled", "target-agent-unresolved", "project-root-unauthorized", "continuation-invalid", "continuation-expired", "clarification-answer-invalid", "capability-invalid", "router-config-invalid", "raw-intent-confirmation-required", "routing-integrity", "semantic-hint-invalid", "skill-not-selected", "skill-source-unavailable", "skill-file-not-found", "skill-path-blocked", "skill-file-unsupported", "stale-skill-checksum", "read-request-conflict", "read-order-invalid", "context-budget-exceeded", "run-not-found", "run-integrity"]);
   return allowed.has(code) ? code as never : "run-integrity" as never;
 };
 
@@ -111,7 +112,7 @@ const withRouterErrors = (handler: McpToolHandler): McpToolHandler => async (arg
 
 const prepare: McpToolHandler = async (args) => {
   const context = routerContext();
-  const unknown = Object.keys(args).find((key) => !["prompt", "targetAgent", "hostCapabilities", "strict", "continuationToken", "clarificationAnswers"].includes(key));
+  const unknown = Object.keys(args).find((key) => !["prompt", "targetAgent", "hostCapabilities", "strict", "continuationToken", "clarificationAnswers", "semanticHints"].includes(key));
   if (unknown) throw new McpToolError(unknown === "projectRoot" || unknown === "registryRoot" ? "project-root-unauthorized" as never : "invalid-arguments", `Unknown router argument: ${unknown}.`, { argument: unknown });
   const input: PrepareTaskCoreInput = {
     projectRoot: context.projectRoot,
@@ -123,6 +124,7 @@ const prepare: McpToolHandler = async (args) => {
     ...(typeof args.strict === "boolean" ? { strict: args.strict } : {}),
     ...(typeof args.continuationToken === "string" ? { continuationToken: args.continuationToken } : {}),
     ...(Array.isArray(args.clarificationAnswers) ? { clarificationAnswers: args.clarificationAnswers as Array<{ questionId: string; value: string }> } : {}),
+    ...(args.semanticHints !== undefined ? { semanticHints: args.semanticHints as PrepareTaskCoreInput["semanticHints"] } : {}),
   };
   return jsonToolResult(await prepareTask(input));
 };

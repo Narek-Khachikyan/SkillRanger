@@ -25,6 +25,18 @@ export type TaskLocale = "en" | "ru" | "mixed" | "unknown";
 export type RouterSkillRole = "environment" | "primary" | "companion" | "verification" | "agent-context";
 export type PreparedSkillSource = "installed" | "bundled-registry" | "test-fixture-registry";
 
+export type SemanticHint = {
+  kind: "domain" | "action" | "artifact" | "intent" | "technology" | "quality";
+  id: string;
+  evidenceText: string;
+  confidence: number;
+};
+
+export type SemanticHintsInput = {
+  schemaVersion: "semantic-hints/1.0";
+  signals: SemanticHint[];
+};
+
 export type TaskSignalEvidence = {
   source: "prompt" | "fingerprint" | "registry" | "config";
   kind: "action" | "artifact" | "technology" | "quality" | "domain" | "constraint" | "acceptance";
@@ -222,6 +234,7 @@ export type PrepareTaskCoreInput = {
   }>;
   routingDate?: string;
   rawIntentPersistence?: "disabled" | "explicitly-authorized";
+  semanticHints?: SemanticHintsInput;
 };
 
 export type TriggerParseResult =
@@ -364,6 +377,7 @@ export type RouterToolErrorCode =
   | "router-config-invalid"
   | "raw-intent-confirmation-required"
   | "routing-integrity"
+  | "semantic-hint-invalid"
   | "run-not-found"
   | "run-integrity";
 

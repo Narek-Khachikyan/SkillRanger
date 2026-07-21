@@ -42,6 +42,7 @@ export type AnalyzeTaskInput = {
   skills: TaskAnalyzerSkillMetadata[];
   fingerprint?: ProjectFingerprint;
   routingContext: RoutingContext;
+  semanticSignals?: MatchedRoutingSignal[];
 };
 
 export type TaskAnalysisResult = {
@@ -182,6 +183,7 @@ export const analyzeTask = ({
   domains,
   fingerprint,
   routingContext,
+  semanticSignals = [],
 }: AnalyzeTaskInput): TaskAnalysisResult => {
   const text = normalizeRoutingText(prompt);
   const matched = matchRoutingVocabulary({ text, vocabulary: routingContext.compiledVocabulary });
@@ -191,8 +193,10 @@ export const analyzeTask = ({
     suppressions: matched.suppressions,
     creatableArtifactIds: routingContext.creatableArtifactIds,
   });
-  const matchedSignals = [...matched.signals, ...inferred].sort((left, right) =>
+  const directSignals = [...matched.signals, ...inferred].sort((left, right) =>
     left.start - right.start || left.end - right.end || signalKindOrder.indexOf(left.kind) - signalKindOrder.indexOf(right.kind) || left.id.localeCompare(right.id));
+  const matchedSignals = [...directSignals, ...semanticSignals].sort((left, right) =>
+    left.start - right.start || left.end - right.end || signalKindOrder.indexOf(left.kind) - signalKindOrder.indexOf(right.kind) || left.id.localeCompare(right.id) || left.source.localeCompare(right.source));
   const fingerprintContext = fingerprintSignals(fingerprint, domains, routingContext);
   const internalSignals: InternalRoutingSignal[] = [...matchedSignals, ...fingerprintContext].map((signal) => ({
     kind: signal.kind,
@@ -203,10 +207,16 @@ export const analyzeTask = ({
     confidence: signal.confidence,
   }));
   const requirements = buildCanonicalRequirements(internalSignals);
-  const promptDomains = domainIdsForPrompt(matchedSignals, domains);
+  const promptDomains = domainIdsForPrompt(directSignals, domains);
+  const hostDomains = domains.flatMap((domain) => {
+    const relevant = semanticSignals.filter((signal) => signal.kind !== "action" && (
+      (signal.kind === "domain" && signal.id === domain.id) || signal.ownerIds.includes(domain.id)));
+    return relevant.length ? [{ id: domain.id, confidence: Math.max(...relevant.map(({ confidence }) => confidence)) }] : [];
+  });
   const projectDomains = fingerprintContext.filter(({ kind }) => kind === "domain").map(({ id }) => id);
   const domainIds = unique([
     ...promptDomains.map(({ id }) => id),
+    ...hostDomains.map(({ id }) => id),
     ...projectDomains,
   ], (id) => id);
 
@@ -233,6 +243,7 @@ export const analyzeTask = ({
       ? [{ source: "fingerprint", kind: signal.kind, id: signal.id }]
       : []),
     ...promptDomains.map(({ id }): TaskSignalEvidence => ({ source: "prompt", kind: "domain", id })),
+    ...hostDomains.map(({ id }): TaskSignalEvidence => ({ source: "config", kind: "domain", id })),
   ], (item) => `${item.source}:${item.kind}:${item.id}`);
 
   const profile: TaskProfile = {
@@ -247,17 +258,18 @@ export const analyzeTask = ({
     acceptanceCriteria,
     domains: domainIds.map((id, index) => {
       const promptMatched = promptDomains.some((candidate) => candidate.id === id);
+      const hostMatched = hostDomains.find((candidate) => candidate.id === id);
       const projectMatched = projectDomains.includes(id);
       return {
         id,
-        confidence: promptMatched && projectMatched ? 1 : promptMatched ? 0.7 : 0.45,
+        confidence: promptMatched && projectMatched ? 1 : promptMatched ? 0.7 : hostMatched?.confidence ?? 0.45,
         role: index === 0 ? "primary" as const : "supporting" as const,
         available: domains.some((domain) => domain.id === id),
         reasons: [`domain-match:${id}`, ...(projectMatched ? [`environment-match:${id}`] : [])],
         evidence: profileEvidence.filter((item) => item.kind === "domain" && item.id === id),
       };
     }),
-    subtasks: segmentSubtasks(text, matchedSignals, matched.protectedBoundaryIndexes, domains),
+    subtasks: segmentSubtasks(text, directSignals, matched.protectedBoundaryIndexes, domains),
     evidence: profileEvidence,
   };
   return {

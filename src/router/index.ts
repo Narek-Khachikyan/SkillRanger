@@ -10,6 +10,8 @@ export type {
 } from "./analyzer.ts";
 export { buildCanonicalRequirements, routingSignalDigest } from "./requirements.ts";
 export type { CanonicalRequirement, CanonicalRequirementKind, CanonicalRequirementSource, InternalRoutingSignal } from "./requirements.ts";
+export { validateSemanticHints } from "./semantic-hints.ts";
+export type { SemanticHintProjection, SemanticHintValidationResult } from "./semantic-hints.ts";
 export { parseTrigger } from "./trigger.ts";
 export type { TriggerParseInput } from "./trigger.ts";
 export {
