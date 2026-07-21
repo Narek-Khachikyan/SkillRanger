@@ -2,6 +2,7 @@ import type { ProjectFingerprint } from "../types.ts";
 import type { RoutingContext } from "./context.ts";
 import type { SemanticHint } from "./types.ts";
 import type { MatchedRoutingSignal } from "./vocabulary/match.ts";
+import { taskSegmentId, type InternalTaskSegment } from "./segmentation.ts";
 import type {
   DomainCandidate,
   TaskProfile,
@@ -335,4 +336,72 @@ export const normalizeDomainAlias = (value: string, domains: TaskAnalyzerDomainM
   return domains.find((domain) =>
     [domain.id, ...domain.routing.aliases].some((alias) => canonical(alias) === normalized),
   )?.id;
+};
+
+export const resolveTaskSegments = (input: {
+  segments: InternalTaskSegment[];
+  profile: TaskProfile;
+  domains: TaskAnalyzerDomainMetadata[];
+  skills: TaskAnalyzerSkillMetadata[];
+  fingerprint?: ProjectFingerprint;
+  availableDomainIds: string[];
+}) => {
+  if (input.segments.length < 2) return [];
+  const resolved = input.segments.map((segment): InternalTaskSegment => {
+    const ids = (kind: InternalTaskSegment["requirements"][number]["kind"]) => segment.requirements.filter((requirement) => requirement.kind === kind).map(({ id }) => id);
+    const directDomainIds = new Set([
+      ...segment.explicitDomainIds,
+      ...segment.matchedSignals.flatMap((signal) => {
+        if (!["artifact", "intent", "technology", "quality"].includes(signal.kind)) return [];
+        const owners = signal.ownerIds.filter((id) => id !== "core");
+        return owners.length === 1 ? owners : [];
+      }),
+    ]);
+    const segmentProfile: TaskProfile = {
+      ...input.profile,
+      normalizedGoal: segment.requirements.map(({ kind, id }) => `${kind}:${id}`).join(" "),
+      actions: ids("action") as TaskProfile["actions"],
+      artifactTypes: ids("artifact"),
+      technologies: ids("technology"),
+      qualityGoals: ids("quality"),
+      constraints: [],
+      acceptanceCriteria: [],
+      domains: segment.candidateDomainIds.map((id, index) => ({ id, confidence: directDomainIds.has(id) ? 0.7 : 0.45, role: index === 0 ? "primary" as const : "supporting" as const, available: input.availableDomainIds.includes(id), reasons: [`domain-match:${id}`], evidence: directDomainIds.has(id) ? [{ source: "prompt" as const, kind: "domain" as const, id }] : [] })),
+      subtasks: [],
+      evidence: segment.matchedSignals.flatMap((signal) => signal.kind === "intent" ? [] : [{ source: "prompt" as const, kind: signal.kind, id: signal.id }]),
+    };
+    const resolution = resolveDomains({
+      profile: segmentProfile,
+      domains: input.domains,
+      skills: input.skills,
+      fingerprint: input.fingerprint,
+      availableDomainIds: input.availableDomainIds,
+      eligiblePrimaryDomainIds: input.availableDomainIds,
+      routingIntentTags: ids("intent"),
+      routingSignals: segment.matchedSignals,
+    });
+    const candidateDomainIds = resolution.primaryDomainId
+      ? [resolution.primaryDomainId, ...resolution.candidates.map(({ id }) => id).filter((id) => id !== resolution.primaryDomainId)]
+      : resolution.ambiguousDomainIds;
+    const value = { ...segment, primaryDomainId: resolution.primaryDomainId, candidateDomainIds };
+    return { ...value, id: taskSegmentId(value) };
+  });
+  if (resolved.some(({ primaryDomainId }) => primaryDomainId === undefined)) return [];
+  const grouped = new Map<string, InternalTaskSegment[]>();
+  for (const segment of resolved) grouped.set(segment.primaryDomainId!, [...(grouped.get(segment.primaryDomainId!) ?? []), segment]);
+  if (grouped.size < 2) return [];
+  return [...grouped].map(([primaryDomainId, segments]) => {
+    const requirementKinds = ["action", "artifact", "intent", "technology", "quality"];
+    const requirements = [...new Map(segments.flatMap(({ requirements }) => requirements).map((requirement) => [`${requirement.kind}:${requirement.id}`, requirement])).values()]
+      .sort((left, right) => requirementKinds.indexOf(left.kind) - requirementKinds.indexOf(right.kind) || left.id.localeCompare(right.id));
+    const candidateDomainIds = [primaryDomainId, ...unique(segments.flatMap(({ candidateDomainIds }) => candidateDomainIds).filter((id) => id !== primaryDomainId))];
+    const value = { ...segments[0], requirements, candidateDomainIds, primaryDomainId };
+    return {
+      id: taskSegmentId(value),
+      normalizedGoal: requirements.map(({ kind, id }) => `${kind}:${id}`).join(" "),
+      actions: requirements.filter(({ kind }) => kind === "action").map(({ id }) => id) as TaskProfile["actions"],
+      artifactTypes: requirements.filter(({ kind }) => kind === "artifact").map(({ id }) => id),
+      candidateDomainIds,
+    };
+  });
 };

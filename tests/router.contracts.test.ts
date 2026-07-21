@@ -169,6 +169,10 @@ test("router golden fixture covers every Task 1 scenario", async () => {
     "privacy-canary",
   ]);
   assert.equal(new Set(cases.map(({ id }) => id)).size, cases.length);
+  assert.deepEqual(cases.filter(({ reviewNote }) => reviewNote !== undefined).map(({ id, reviewNote }) => ({ id, reviewNote })), [
+    { id: "backend-auth-synthetic", reviewNote: "router/2.0 decomposition contract" },
+    { id: "mixed-synthetic-domains", reviewNote: "router/2.0 decomposition contract" },
+  ]);
 });
 
 test("natural-language quarantine freezes 60 validated cases and rich selection expectations", async () => {

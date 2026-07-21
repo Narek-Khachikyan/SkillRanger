@@ -446,6 +446,10 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
     const outcome = { status: "no_matching_skills" as const, suggestedAction: "Proceed without a SkillRanger workflow or add an audited domain pack." };
     return { ...resultCommon(resolution.candidates, outcome), ...outcome };
   }
+  if (analysis.profile.subtasks.length >= 2) {
+    const outcome = { status: "decomposition_required" as const, decomposition: { subtasks: analysis.profile.subtasks } };
+    return { ...resultCommon(resolution.candidates, outcome), ...outcome };
+  }
   const composed = composeSkillSet({
     profile: analysis.profile,
     skills: allMetadata,

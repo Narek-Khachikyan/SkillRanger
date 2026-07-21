@@ -355,18 +355,20 @@ test("decomposition and production no-match create no partial router or runtime 
   assert.deepEqual(await runFiles(noMatchRoot), { runtime: [], router: [] });
 });
 
-test("synthetic multi-domain routing preserves primary and supporting domains", async () => {
+test("synthetic multi-domain routing decomposes exact primary domains without partial runs", async () => {
   const root = await temporaryProject();
-  const result = prepared(await prepareTask({
+  const result = await prepareTask({
     projectRoot: root,
     registry: { kind: "test-fixture", root: fixtureRegistry },
     prompt: "Fix the authentication API and add its integration tests. @skillranger",
     activation: { mode: "explicit" },
     capabilities: [{ id: "terminal", source: "host-reported" }],
-  }));
-  assert.equal(result.routing.domains.filter(({ role }) => role === "primary").length, 1);
-  assert.ok(result.routing.domains.some(({ id }) => id === "backend-api"));
-  assert.ok(result.routing.domains.some(({ id }) => id === "qa-testing"));
+  });
+  assert.equal(result.status, "decomposition_required");
+  if (result.status !== "decomposition_required") return;
+  assert.deepEqual(result.decomposition.subtasks.map(({ candidateDomainIds }) => candidateDomainIds[0]), ["backend-api", "qa-testing"]);
+  assert.ok(result.decomposition.subtasks.every(({ normalizedGoal }) => normalizedGoal.length > 0));
+  assert.deepEqual(await runFiles(root), { runtime: [], router: [] });
 });
 
 test("stale checksum blocks a prepared source read without advancing revision", async () => {

@@ -159,15 +159,15 @@ test("analyzer creates canonical subtask candidates for separate action groups",
   assert.deepEqual(result.profile.actions, ["migrate", "design"]);
   assert.deepEqual(result.profile.subtasks, [
     {
-      id: "database-migrate",
-      normalizedGoal: "migrate postgresql",
+      id: "task-d006b1789a8e",
+      normalizedGoal: "action:migrate technology:postgresql",
       actions: ["migrate"],
       artifactTypes: [],
       candidateDomainIds: ["database"],
     },
     {
-      id: "mobile-design",
-      normalizedGoal: "design mobile-interface",
+      id: "task-62210c8dc5e4",
+      normalizedGoal: "action:design artifact:mobile-interface",
       actions: ["design"],
       artifactTypes: ["mobile-interface"],
       candidateDomainIds: ["mobile"],

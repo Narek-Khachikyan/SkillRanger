@@ -4,6 +4,8 @@ export type { ActionCompatibilityMatrix } from "./action-compatibility.ts";
 export { actionRequirementCovered } from "./coverage.ts";
 export { collectAvailableEvidence, evaluateRequiredEvidence, requiredEvidenceForCandidate } from "./evidence.ts";
 export type { AvailableEvidence, RequiredEvidenceDecision } from "./evidence.ts";
+export { segmentAnalyzedTask, taskSegmentId } from "./segmentation.ts";
+export type { InternalTaskSegment } from "./segmentation.ts";
 export type {
   AnalyzeTaskInput,
   TaskAnalysisResult,

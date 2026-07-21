@@ -2,6 +2,8 @@ import type { ProjectFingerprint } from "../types.ts";
 import type { RoutingContext } from "./context.ts";
 import { buildCanonicalRequirements, routingSignalDigest, type CanonicalRequirement, type InternalRoutingSignal } from "./requirements.ts";
 import { inferRequestFrameActions } from "./request-frame.ts";
+import { resolveTaskSegments } from "./resolver.ts";
+import { segmentAnalyzedTask } from "./segmentation.ts";
 import { matchRoutingVocabulary, type MatchedRoutingSignal } from "./vocabulary/match.ts";
 import { normalizeRoutingText, type NormalizedText } from "./vocabulary/normalize.ts";
 import type {
@@ -125,52 +127,6 @@ const domainIdsForPrompt = (
 const normalizedGoal = (input: { actions: string[]; artifacts: string[]; technologies: string[]; quality: string[] }) =>
   [...input.actions, ...input.artifacts, ...input.technologies, ...input.quality].join(" ");
 
-const segmentSubtasks = (
-  text: NormalizedText,
-  signals: MatchedRoutingSignal[],
-  protectedBoundaryIndexes: number[],
-  domains: TaskAnalyzerDomainMetadata[],
-): TaskSubtask[] => {
-  const boundaries = text.boundaries.filter((_, index) => !protectedBoundaryIndexes.includes(index))
-    .map(({ tokenIndex }) => tokenIndex).filter((value, index, all) => index === 0 || value !== all[index - 1]);
-  const ranges = [0, ...boundaries, text.tokens.length]
-    .slice(0, -1).map((start, index) => ({ start, end: [0, ...boundaries, text.tokens.length][index + 1] }))
-    .filter(({ start, end }) => end > start);
-  const candidates = ranges.flatMap((range) => {
-    const normalizedStart = text.tokens[range.start]?.normalizedStart ?? 0;
-    const normalizedEnd = text.tokens[range.end - 1]?.normalizedEnd ?? normalizedStart;
-    const segmentSignals = signals.filter(({ start, end }) => start >= normalizedStart && end <= normalizedEnd);
-    const actions = idsInOrder(segmentSignals, "action") as TaskAction[];
-    const artifactTypes = idsInOrder(segmentSignals, "artifact");
-    if (!actions.length && !artifactTypes.length) return [];
-    const technologies = idsInOrder(segmentSignals, "technology");
-    const quality = idsInOrder(segmentSignals, "quality");
-    const intentIds = idsInOrder(segmentSignals, "intent");
-    const candidateDomainIds = domainIdsForPrompt(segmentSignals, domains).map(({ id }) => id);
-    return [{ actions, artifactTypes, technologies, quality, intentIds, candidateDomainIds }];
-  });
-  if (candidates.length < 2) return [];
-  const used = new Map<string, number>();
-  return candidates.map((candidate) => {
-    const base = `${candidate.candidateDomainIds[0] ?? candidate.artifactTypes[0] ?? "task"}-${candidate.actions[0] ?? "work"}`.slice(0, 128);
-    const occurrence = (used.get(base) ?? 0) + 1;
-    used.set(base, occurrence);
-    return {
-      id: occurrence === 1 ? base : `${base}-${occurrence}`.slice(0, 128),
-      normalizedGoal: [
-        ...candidate.actions,
-        ...candidate.artifactTypes,
-        ...candidate.technologies,
-        ...candidate.quality,
-        ...candidate.intentIds.map((id) => `intent:${id}`),
-      ].join(" "),
-      actions: candidate.actions,
-      artifactTypes: candidate.artifactTypes,
-      candidateDomainIds: candidate.candidateDomainIds,
-    };
-  });
-};
-
 const hasUnknownTechnology = (source: string, signals: MatchedRoutingSignal[]) => {
   const candidate = /(?:\busing\b|\bwith\b|\bна\b|\bиспользуя\b)\s+([\p{L}\p{N}][\p{L}\p{N}._+-]*)/iu.exec(source);
   if (!candidate || /^(?:the|a|an|без|no)$/iu.test(candidate[1])) return false;
@@ -181,6 +137,7 @@ const hasUnknownTechnology = (source: string, signals: MatchedRoutingSignal[]) =
 export const analyzeTask = ({
   prompt,
   domains,
+  skills,
   fingerprint,
   routingContext,
   semanticSignals = [],
@@ -269,9 +226,17 @@ export const analyzeTask = ({
         evidence: profileEvidence.filter((item) => item.kind === "domain" && item.id === id),
       };
     }),
-    subtasks: segmentSubtasks(text, directSignals, matched.protectedBoundaryIndexes, domains),
+    subtasks: [],
     evidence: profileEvidence,
   };
+  profile.subtasks = resolveTaskSegments({
+    segments: segmentAnalyzedTask({ text, signals: directSignals, requirements, context: routingContext }),
+    profile,
+    domains,
+    skills,
+    fingerprint,
+    availableDomainIds: domains.map(({ id }) => id),
+  });
   return {
     profile,
     warnings: hasUnknownTechnology(text.normalized, matchedSignals) ? ["unclassified-technology-signal"] : [],

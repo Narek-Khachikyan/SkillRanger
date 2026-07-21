@@ -148,6 +148,17 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
   const metadata = await buildCaseInput(root, input, fixturePacks);
   const analyzerSkills = metadata.skills satisfies TaskAnalyzerSkillMetadata[];
   const analysis = analyzeTask({ prompt: parsed.normalizedIntent, domains: metadata.domains, skills: analyzerSkills, fingerprint: metadata.fingerprint, routingContext: metadata.routingContext });
+  if (analysis.profile.subtasks.length >= 2) return {
+    status: "decomposition_required",
+    domainIds: analysis.profile.subtasks.map(({ candidateDomainIds }) => candidateDomainIds[0]).filter((id): id is string => id !== undefined),
+    primaryDomainId: undefined,
+    selectedSkillCount: 0,
+    selectedCompanionCount: 0,
+    usefulCompanionCount: 0,
+    instructionBytes: 0,
+    privacyLeakageCount: 0,
+    deterministic: true,
+  };
   const resolution = resolveDomains({ profile: analysis.profile, domains: metadata.domains, skills: analyzerSkills, fingerprint: metadata.fingerprint, routingIntentTags: analysis.routingIntentTags });
   const privacyCanaries = [
     ...(input.prompt.match(/SECRET_[A-Z0-9_]+/g) ?? []),

@@ -24,6 +24,7 @@ export type RouterGoldenCase = {
   strict: boolean;
   capabilities: string[];
   expected: RouterGoldenExpected;
+  reviewNote?: "router/2.0 decomposition contract";
 };
 
 export type RouterFixtureDomain = {
@@ -196,7 +197,7 @@ const validateGoldenExpected = (input: unknown, at: string): RouterGoldenExpecte
 const validateGoldenCase = (input: unknown, index: number): RouterGoldenCase => {
   const at = `router case ${index}`;
   const value = record(input, at);
-  exactKeys(value, ["id", "prompt", "fixture", "registry", "strict", "capabilities", "expected"], [], at);
+  exactKeys(value, ["id", "prompt", "fixture", "registry", "strict", "capabilities", "expected"], ["reviewNote"], at);
   id(value.id, `${at}.id`);
   string(value.prompt, `${at}.prompt`);
   if (!new Set(["empty", "frontend", "synthetic"]).has(value.fixture as string)) throw new Error(`${at}.fixture is invalid`);
@@ -204,6 +205,7 @@ const validateGoldenCase = (input: unknown, index: number): RouterGoldenCase => 
   if (typeof value.strict !== "boolean") throw new Error(`${at}.strict must be a boolean`);
   stringArray(value.capabilities, `${at}.capabilities`);
   validateGoldenExpected(value.expected, `${at}.expected`);
+  if (value.reviewNote !== undefined && value.reviewNote !== "router/2.0 decomposition contract") throw new Error(`${at}.reviewNote is invalid`);
   return structuredClone(value) as RouterGoldenCase;
 };
 

@@ -33,7 +33,8 @@
     "registry": "test-fixture",
     "strict": false,
     "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["backend-api", "security-appsec", "qa-testing"] }
+    "reviewNote": "router/2.0 decomposition contract",
+    "expected": { "status": "decomposition_required", "domainIds": ["backend-api", "qa-testing"] }
   },
   {
     "id": "database-optimization-synthetic",
@@ -123,7 +124,8 @@
     "registry": "test-fixture",
     "strict": false,
     "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["backend-api", "qa-testing", "security-appsec"] }
+    "reviewNote": "router/2.0 decomposition contract",
+    "expected": { "status": "decomposition_required", "domainIds": ["backend-api", "qa-testing"] }
   },
   {
     "id": "unrelated-subtasks",
