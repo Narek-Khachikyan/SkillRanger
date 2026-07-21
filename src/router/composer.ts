@@ -11,6 +11,8 @@ import type {
   TaskSubtask,
 } from "./types.ts";
 import type { TaskAnalyzerSkillMetadata } from "./analyzer.ts";
+import { actionCompatibilityScore, scoreActionCompatibility } from "./action-compatibility.ts";
+import { actionRequirementCovered } from "./coverage.ts";
 
 export type RouterLimits = {
   maxSelectedRisk: RouterSelectableRisk;
@@ -192,7 +194,7 @@ const environmentSignalMatches = (fingerprint: ProjectFingerprint | undefined, s
 
 const scoreSkill = (profile: TaskProfile, skill: RouterSkillMetadata, selectedDomains: Set<string>, fingerprint?: ProjectFingerprint, routingDate = "1970-01-01", routingIntentTags: string[] = []) => {
   const domainMatch = skill.domains.some((domain) => selectedDomains.has(canonical(domain))) ? 1 : 0;
-  const actionMatch = intersectionSize(profile.actions, skill.actions);
+  const actionMatches = profile.actions.filter((requested) => skill.actions.some((supported) => actionCompatibilityScore(requested, supported) > 0));
   const artifactMatch = intersectionSize(profile.artifactTypes, skill.artifactTypes);
   const technologyMatch = intersectionSize(profile.technologies, skill.technologyTags);
   const intentSignals = unique([
@@ -204,7 +206,7 @@ const scoreSkill = (profile: TaskProfile, skill: RouterSkillMetadata, selectedDo
     intentSignals,
     [...skill.intentTags, ...skill.qualityGoals],
   );
-  const actionScore = profile.actions.length === 0 ? 0 : Math.min(1, actionMatch / profile.actions.length);
+  const actionScore = scoreActionCompatibility({ requestedActions: profile.actions, skillActions: skill.actions });
   const artifactScore = profile.artifactTypes.length === 0 ? 0 : Math.min(1, artifactMatch / profile.artifactTypes.length);
   const technologyScore = profile.technologies.length === 0 ? 0 : Math.min(1, technologyMatch / profile.technologies.length);
   const intentScore = intentSignals.size === 0 ? 0 : Math.min(1, intentMatch / intentSignals.size);
@@ -234,7 +236,7 @@ const scoreSkill = (profile: TaskProfile, skill: RouterSkillMetadata, selectedDo
   });
   const reasons = [
     ...(domainMatch ? skill.domains.filter((id) => selectedDomains.has(canonical(id))).map((id) => `domain-match:${id}`) : []),
-    ...(actionMatch ? [...unique(profile.actions)].filter((id) => unique(skill.actions).has(id)).map((id) => `action-match:${id}`) : []),
+    ...[...unique(actionMatches)].map((id) => `action-match:${id}`),
     ...(artifactMatch ? [...unique(profile.artifactTypes)].filter((id) => unique(skill.artifactTypes).has(id)).map((id) => `artifact-match:${id}`) : []),
     ...(technologyMatch ? [...unique(profile.technologies)].filter((id) => unique(skill.technologyTags).has(id)).map((id) => `technology-match:${id}`) : []),
     ...(environmentMatch > 0 ? [`environment-match:${skill.id}`] : []),
@@ -388,7 +390,7 @@ const decomposition = (profile: TaskProfile, candidates: RouterCandidate[], allS
   ];
   const oneWorkflowCoversAll = primaryCandidates.some(({ skill }) => profile.subtasks.every((subtask) => (
     subtask.candidateDomainIds.some((id) => skill.domains.some((domain) => canonical(domain) === canonical(id))) &&
-    subtask.actions.every((action) => skill.actions.includes(action)) &&
+    subtask.actions.every((action) => actionRequirementCovered(action, skill.actions)) &&
     subtask.artifactTypes.every((artifact) => skill.artifactTypes.includes(artifact))
   )));
   if (oneWorkflowCoversAll) return undefined;

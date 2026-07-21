@@ -1,4 +1,7 @@
 export { analyzeTask } from "./analyzer.ts";
+export { actionCompatibility, actionCompatibilityScore, scoreActionCompatibility } from "./action-compatibility.ts";
+export type { ActionCompatibilityMatrix } from "./action-compatibility.ts";
+export { actionRequirementCovered } from "./coverage.ts";
 export type {
   AnalyzeTaskInput,
   TaskAnalysisResult,
