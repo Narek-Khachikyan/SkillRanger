@@ -172,6 +172,7 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
   if (!resolution.primaryDomainId) return { status: "no_matching_skills", domainIds: [], primaryDomainId: undefined, selectedSkillCount: 0, selectedCompanionCount: 0, usefulCompanionCount: 0, instructionBytes: 0, privacyLeakageCount: privacyLeakageCount({ analysis, resolution }), deterministic: true };
   const composed = composeSkillSet({
     profile: analysis.profile,
+    requirements: analysis.requirements,
     skills: metadata.skills,
     fingerprint: metadata.fingerprint,
     selectedDomainIds: resolution.candidates.map(({ id }) => id),
@@ -184,7 +185,7 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
     routingIntentTags: analysis.routingIntentTags,
   });
   const replay = composeSkillSet({
-    profile: analysis.profile, skills: metadata.skills, fingerprint: metadata.fingerprint,
+    profile: analysis.profile, requirements: analysis.requirements, skills: metadata.skills, fingerprint: metadata.fingerprint,
     selectedDomainIds: resolution.candidates.map(({ id }) => id), primaryDomainId: resolution.primaryDomainId,
     targetAgent: "codex", capabilities: input.capabilities, strict: input.strict,
     installedSkillIds: input.id === "strict-installed" ? ["backend.auth-implementation"] : [], routingDate: "2026-07-19", routingIntentTags: analysis.routingIntentTags,

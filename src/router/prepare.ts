@@ -452,6 +452,7 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
   }
   const composed = composeSkillSet({
     profile: analysis.profile,
+    requirements: analysis.requirements,
     skills: allMetadata,
     selectedDomainIds: resolution.candidates.map(({ id }) => id),
     primaryDomainId: selectedPrimary,

@@ -7,13 +7,21 @@ import type {
   PreparedSkillSelection,
   RouterSkillRole,
   RouterSelectableRisk,
+  TaskAction,
   TaskProfile,
   TaskSubtask,
 } from "./types.ts";
 import type { TaskAnalyzerSkillMetadata } from "./analyzer.ts";
 import { actionCompatibilityScore, scoreActionCompatibility } from "./action-compatibility.ts";
-import { actionRequirementCovered } from "./coverage.ts";
+import {
+  actionRequirementCovered,
+  calculateRequirementCoverage,
+  dedupeRequirements,
+  effectiveRequirementWeight,
+  requirementKey,
+} from "./coverage.ts";
 import { collectAvailableEvidence, evaluateRequiredEvidence, requiredEvidenceForCandidate } from "./evidence.ts";
+import type { CanonicalRequirement } from "./requirements.ts";
 import type { MatchedRoutingSignal } from "./vocabulary/match.ts";
 
 export type RouterLimits = {
@@ -94,6 +102,7 @@ export type SelectedRouterCandidate = RouterCandidate & { role: RouterSkillRole 
 
 export type RetrieveSkillCandidatesInput = {
   profile: TaskProfile;
+  requirements?: CanonicalRequirement[];
   skills: RouterSkillMetadata[];
   targetAgent?: string;
   capabilities?: Iterable<string>;
@@ -161,6 +170,12 @@ const sorted = <T extends { skill: RouterSkillMetadata; score: number }>(items: 
   (candidate) => candidate.skill.id,
   (candidate) => candidate.skill.qualityScore ?? 0,
 );
+
+const sortedPrimary = <T extends RouterCandidate>(items: T[], requirements: CanonicalRequirement[] = [], routingContext?: RoutingContext) => [...items].sort((left, right) =>
+  right.score - left.score ||
+  calculateRequirementCoverage({ requirements, skill: right.skill, routingContext }).coveredWeight - calculateRequirementCoverage({ requirements, skill: left.skill, routingContext }).coveredWeight ||
+  (right.skill.qualityScore ?? 0) - (left.skill.qualityScore ?? 0) ||
+  left.skill.id.localeCompare(right.skill.id));
 
 const roleOrder: RouterSkillRole[] = ["primary", "environment", "companion", "verification", "agent-context"];
 const rolesFor = (skill: RouterSkillMetadata) => roleOrder.filter((role) => skill.roles?.includes(role));
@@ -323,7 +338,7 @@ export const retrieveSkillCandidates = (input: RetrieveSkillCandidatesInput): Re
   const ordered = sorted(candidates);
   return {
     candidates: ordered,
-    primaryCandidates: ordered.filter(({ eligibleRoles }) => eligibleRoles.includes("primary")),
+    primaryCandidates: sortedPrimary(ordered.filter(({ eligibleRoles }) => eligibleRoles.includes("primary")), input.requirements, input.routingContext),
     rejections,
   };
 };
@@ -473,7 +488,7 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
       : { ...input, maxSelectedRisk: limits.maxSelectedRisk });
   const byId = new Map(retrieved.candidates.map((candidate) => [canonical(candidate.skill.id), candidate]));
   const registryById = new Map(input.skills.map((skill) => [canonical(skill.id), skill]));
-  const primaryCandidates = sorted(retrieved.primaryCandidates);
+  const primaryCandidates = sortedPrimary(retrieved.primaryCandidates, input.requirements, input.routingContext);
   const requiredDecomposition = decomposition(input.profile, retrieved.candidates, input.skills);
   if (requiredDecomposition) return { status: "decomposition_required", subtasks: requiredDecomposition, rejections: retrieved.rejections };
   if (primaryCandidates.length === 0) {
@@ -529,20 +544,52 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
       selectedIds.add(candidate.skill.id);
     };
     for (const candidate of optional("environment").slice(0, limits.maxEnvironmentSkills)) add(candidate, "environment");
-    const complements = new Set(retrieved.candidates.filter(({ skill }) => (primary.skill.complements ?? []).some((id) => canonical(id) === canonical(skill.id))).map(({ skill }) => skill.id));
-    let explicitConflict = false;
-    for (const candidate of optional("companion").filter(({ skill }) => complements.has(skill.id))) {
-      if (dedupedRequired.filter(({ role }) => role === "companion").length >= limits.maxTaskCompanions) break;
-      if (symmetricConflict(candidate.skill, primary.skill)) {
-        explicitConflict = true;
-        continue;
-      }
-      candidate.reasons = [...new Set([...candidate.reasons, `complements:${candidate.skill.id}`])];
-      add(candidate, "companion");
-    }
-    if (explicitConflict) {
+    const conflictingComplement = optional("companion").some(({ skill }) =>
+      (primary.skill.complements ?? []).some((id) => canonical(id) === canonical(skill.id)) && symmetricConflict(primary.skill, skill));
+    if (conflictingComplement) {
       retrieved.rejections.push({ skillId: primary.skill.id, reason: "skill-conflict" });
       continue;
+    }
+    const explicitRequirements = dedupeRequirements(input.requirements ?? []).filter(({ requirementClass }) => requirementClass === "explicit");
+    const totalExplicitWeight = explicitRequirements.reduce((sum, requirement) => sum + effectiveRequirementWeight(requirement), 0);
+    const requestedActions = dedupeRequirements(input.requirements ?? [])
+      .filter(({ kind, requirementClass }) => kind === "action" && requirementClass !== "context");
+    const primaryDomain = canonical(input.primaryDomainId ?? primary.skill.domains[0] ?? "");
+    const coverageKeys = (selectedCandidates: SelectedRouterCandidate[]) => new Set(selectedCandidates.flatMap((selectedCandidate) =>
+      calculateRequirementCoverage({ requirements: explicitRequirements, skill: selectedCandidate.skill, routingContext: input.routingContext }).covered.map(requirementKey)));
+    while (totalExplicitWeight > 0 && dedupedRequired.filter(({ role }) => role === "companion").length < limits.maxTaskCompanions) {
+      const alreadyCovered = coverageKeys(dedupedRequired);
+      const ranked = optional("companion").flatMap((candidate) => {
+        if (!candidate.skill.domains.some((domain) => canonical(domain) === primaryDomain)) return [];
+        if (requestedActions.length > 0 && !requestedActions.some((requirement) => actionRequirementCovered(requirement.id as TaskAction, candidate.skill.actions))) return [];
+        if (dedupedRequired.some(({ skill }) => symmetricConflict(skill, candidate.skill))) return [];
+        if (dedupedRequired.some(({ skill }) =>
+          (skill.supersedes ?? []).some((id) => canonical(id) === canonical(candidate.skill.id)) ||
+          (candidate.skill.supersedes ?? []).some((id) => canonical(id) === canonical(skill.id)))) return [];
+        const coverage = calculateRequirementCoverage({ requirements: explicitRequirements, skill: candidate.skill, routingContext: input.routingContext });
+        const newlyCovered = coverage.covered.filter((requirement) => !alreadyCovered.has(requirementKey(requirement)));
+        const overlap = coverage.covered.filter((requirement) => alreadyCovered.has(requirementKey(requirement)));
+        const newWeight = newlyCovered.reduce((sum, requirement) => sum + effectiveRequirementWeight(requirement), 0);
+        const marginalCoverage = newWeight / totalExplicitWeight;
+        if (marginalCoverage < 0.15) return [];
+        const overlapPenalty = overlap.reduce((sum, requirement) => sum + effectiveRequirementWeight(requirement), 0) / totalExplicitWeight;
+        const complementBonus = (primary.skill.complements ?? []).some((id) => canonical(id) === canonical(candidate.skill.id))
+          ? 0.08
+          : (candidate.skill.complements ?? []).some((id) => canonical(id) === canonical(primary.skill.id)) ? 0.04 : 0;
+        return [{ candidate, newlyCovered, newWeight, companionScore: 0.65 * candidate.score + 0.27 * marginalCoverage + complementBonus - 0.10 * overlapPenalty }];
+      }).sort((left, right) =>
+        right.companionScore - left.companionScore ||
+        right.newWeight - left.newWeight ||
+        right.candidate.score - left.candidate.score ||
+        (right.candidate.skill.qualityScore ?? 0) - (left.candidate.skill.qualityScore ?? 0) ||
+        left.candidate.skill.id.localeCompare(right.candidate.skill.id));
+      const best = ranked[0];
+      if (!best) break;
+      const selectedCompanion = { ...best.candidate, reasons: [...new Set([
+        ...best.candidate.reasons,
+        ...best.newlyCovered.map((requirement) => `coverage-add:${requirement.id}`),
+      ])] };
+      add(selectedCompanion, "companion");
     }
     for (const candidate of optional("verification")) {
       if (dedupedRequired.filter(({ role }) => role === "verification").length >= limits.maxVerificationSkills) break;
@@ -579,6 +626,10 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     const missing = strictMissing(selected, input);
     if (missing.length > 0) return { status: "strict_requirements_unmet", missing, rejections: retrieved.rejections };
     for (const candidate of selected) for (const capability of candidate.missingOptionalCapabilities) warnings.push(`capability-missing:${capability}`);
+    const finalCovered = coverageKeys(selected);
+    for (const requirement of explicitRequirements) {
+      if (effectiveRequirementWeight(requirement) >= 0.6 && !finalCovered.has(requirementKey(requirement))) warnings.push(`uncovered-requirement:${requirement.kind}:${requirement.id}`);
+    }
     const byRole = (role: RouterSkillRole) => selected.filter((candidate) => candidate.role === role);
     const selectedPrimary = selected.find(({ role }) => role === "primary")!;
     const composed: ComposedSkillSet = {

@@ -1,7 +1,8 @@
 export { analyzeTask } from "./analyzer.ts";
 export { actionCompatibility, actionCompatibilityScore, scoreActionCompatibility } from "./action-compatibility.ts";
 export type { ActionCompatibilityMatrix } from "./action-compatibility.ts";
-export { actionRequirementCovered } from "./coverage.ts";
+export { actionRequirementCovered, calculateRequirementCoverage } from "./coverage.ts";
+export type { RequirementCoverage } from "./coverage.ts";
 export { collectAvailableEvidence, evaluateRequiredEvidence, requiredEvidenceForCandidate } from "./evidence.ts";
 export type { AvailableEvidence, RequiredEvidenceDecision } from "./evidence.ts";
 export { segmentAnalyzedTask, taskSegmentId } from "./segmentation.ts";
