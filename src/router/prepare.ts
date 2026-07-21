@@ -420,6 +420,22 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
   const projectIdentity = await new RouterStore(input.projectRoot).projectIdentity();
   const promptProjection = { actions: analysis.profile.actions, artifactTypes: analysis.profile.artifactTypes, technologies: analysis.profile.technologies, qualityGoals: analysis.profile.qualityGoals, acceptanceCriteria: analysis.profile.acceptanceCriteria, domains: analysis.profile.domains.map(({ id }) => id), subtasks: analysis.profile.subtasks };
   const resolution = resolveDomains({ profile: analysis.profile, domains, skills: allMetadata, fingerprint, availableDomainIds: packs.map(({ id }) => id), thresholds: defaultRouterThresholds, routingIntentTags: analysis.routingIntentTags, routingContext, routingSignals: analysis.matchedSignals });
+  const continuationBinding = {
+    fingerprintDigest: digest(fingerprint),
+    registryDigest,
+    configDigest: configResult.digest,
+    routingDate,
+    targetAgent,
+    strict,
+    capabilities,
+    promptProjection,
+    routingProjection: { domains: resolution.ambiguousDomainIds },
+    projectIdentity,
+    routerAlgorithmVersion,
+    signalDigest: analysis.signalDigest,
+    vocabularyDigest: routingContext.vocabularyDigest,
+    semanticHintsDigest: semanticHints.digest,
+  };
   routingWarnings = [...new Set([...routingWarnings, ...resolution.warnings])];
   if (input.continuationToken && !resolution.clarificationRequired) {
     throw new RouterPrepareError("continuation-invalid", "Continuation input does not match a routing clarification.");
@@ -428,12 +444,12 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
   let selectedPrimary = resolution.primaryDomainId;
   if (resolution.clarificationRequired) {
     if (!input.continuationToken || !input.clarificationAnswers) {
-      const token = createContinuationToken({ fingerprintDigest: digest(fingerprint), registryDigest, configDigest: configResult.digest, routingDate, targetAgent, strict, capabilities, promptProjection, routingProjection: { domains: resolution.ambiguousDomainIds }, projectIdentity }, questions);
+      const token = createContinuationToken(continuationBinding, questions);
       const clarification = { questions };
       return { ...resultCommon(resolution.candidates, { status: "clarification_required", clarification }), status: "clarification_required", clarification, continuationToken: token.token, expiresAt: token.expiresAt };
     }
     try {
-      const validated = validateContinuation({ token: input.continuationToken, answers: input.clarificationAnswers, binding: { fingerprintDigest: digest(fingerprint), registryDigest, configDigest: configResult.digest, routingDate, targetAgent, strict, capabilities, promptProjection, routingProjection: { domains: resolution.ambiguousDomainIds }, projectIdentity }, questions });
+      const validated = validateContinuation({ token: input.continuationToken, answers: input.clarificationAnswers, binding: continuationBinding, questions });
       selectedPrimary = normalizeDomainAlias(validated.answers[0]?.value ?? "", domains);
       if (!selectedPrimary || !resolution.ambiguousDomainIds.includes(selectedPrimary)) throw new RouterPrepareError("clarification-answer-invalid", "Clarification answer does not identify an available primary domain.");
     } catch (error) {

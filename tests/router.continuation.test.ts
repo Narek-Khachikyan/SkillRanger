@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import {
   ContinuationTokenError,
   createContinuationToken,
@@ -37,6 +38,10 @@ const binding = (overrides: Partial<ContinuationBinding> = {}): ContinuationBind
   routingProjection: {
     domains: ["backend-api", "qa-testing"],
   },
+  routerAlgorithmVersion: "router/2.0",
+  signalDigest: "sha256:signals",
+  vocabularyDigest: "sha256:vocabulary",
+  semanticHintsDigest: "sha256:hints",
   ...overrides,
 });
 
@@ -44,13 +49,15 @@ test("continuation tokens are opaque and bind the canonical request", () => {
   const created = createContinuationToken(binding(), questions, { secret, now: 1_000 });
   assert.equal(created.expiresAt, "1970-01-01T00:15:01.000Z");
   assert.equal(created.token.includes("implement authentication"), false);
-  assert.doesNotThrow(() => verifyContinuationToken({
+  const claims = verifyContinuationToken({
     token: created.token,
     binding: binding(),
     questions,
     secret,
     now: 1_001,
-  }));
+  });
+  assert.equal(claims.version, "router-continuation/2.0");
+  assert.equal(claims.routerAlgorithmVersion, "router/2.0");
 });
 
 test("canonical equivalent routing projections replay during the token lifetime", () => {
@@ -100,6 +107,10 @@ test("prompt, question, target, strict, and capability bindings cannot be substi
     { binding: { strict: true } },
     { binding: { capabilities: ["node"] } },
     { binding: { projectIdentity: "sha256:other-project" } },
+    { binding: { routerAlgorithmVersion: "router/1.0" as "router/2.0" } },
+    { binding: { signalDigest: "sha256:other-signals" } },
+    { binding: { vocabularyDigest: "sha256:other-vocabulary" } },
+    { binding: { semanticHintsDigest: "sha256:other-hints" } },
     { questions: [{ ...questions[0], id: "other-workflow" }] },
   ];
   for (const current of cases) {
@@ -111,6 +122,25 @@ test("prompt, question, target, strict, and capability bindings cannot be substi
         secret,
         now: 1_001,
       }),
+      (error) => error instanceof ContinuationTokenError && error.code === "continuation-invalid",
+    );
+  }
+});
+
+test("v1 continuation tokens and changed vocabulary semantics are invalid", () => {
+  const created = createContinuationToken(binding(), questions, { secret, now: 1_000 });
+  const [header, payload] = created.token.split(".");
+  const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<string, unknown>;
+  claims.version = "router-continuation/1.0";
+  const legacyPayload = Buffer.from(JSON.stringify(claims)).toString("base64url");
+  const signature = createHmac("sha256", secret).update(`${header}.${legacyPayload}`, "utf8").digest("hex");
+  const legacyToken = `${header}.${legacyPayload}.${signature}`;
+  for (const input of [
+    { token: legacyToken, binding: binding() },
+    { token: created.token, binding: binding({ vocabularyDigest: "sha256:semantic-change" }) },
+  ]) {
+    assert.throws(
+      () => verifyContinuationToken({ ...input, questions, secret, now: 1_001 }),
       (error) => error instanceof ContinuationTokenError && error.code === "continuation-invalid",
     );
   }

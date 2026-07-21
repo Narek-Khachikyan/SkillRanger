@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-const tokenVersion = "router-continuation/1.0" as const;
+const tokenVersion = "router-continuation/2.0" as const;
+const routerVersion = "router/2.0" as const;
 const algorithm = "HS256" as const;
 const defaultTtlMs = 15 * 60 * 1000;
 const maxTokenBytes = 4096;
@@ -31,6 +32,10 @@ export type ContinuationBinding = {
   promptProjection: unknown;
   routingProjection: unknown;
   projectIdentity: string;
+  routerAlgorithmVersion: typeof routerVersion;
+  signalDigest: string;
+  vocabularyDigest: string;
+  semanticHintsDigest: string;
 };
 
 export type ContinuationTokenClaims = {
@@ -45,6 +50,10 @@ export type ContinuationTokenClaims = {
   strict: boolean;
   capabilities: string[];
   projectIdentity: string;
+  routerAlgorithmVersion: typeof routerVersion;
+  signalDigest: string;
+  vocabularyDigest: string;
+  semanticHintsDigest: string;
   promptDigest: string;
   routingDigest: string;
   questionDigest: string;
@@ -187,6 +196,7 @@ const normalizedQuestions = (questions: readonly RouterClarificationQuestion[]) 
 const normalizedBinding = (binding: ContinuationBinding) => {
   if (!binding || typeof binding !== "object") invalid("Continuation binding is invalid.");
   if (typeof binding.strict !== "boolean") invalid("Continuation strict flag is invalid.");
+  if (binding.routerAlgorithmVersion !== routerVersion) invalid("Continuation router algorithm version is invalid.");
   return {
     fingerprintDigest: normalizeText(binding.fingerprintDigest, "fingerprintDigest"),
     registryDigest: normalizeText(binding.registryDigest, "registryDigest"),
@@ -198,6 +208,10 @@ const normalizedBinding = (binding: ContinuationBinding) => {
     promptProjection: binding.promptProjection,
     routingProjection: binding.routingProjection,
     projectIdentity: normalizeText(binding.projectIdentity, "projectIdentity"),
+    routerAlgorithmVersion: binding.routerAlgorithmVersion,
+    signalDigest: normalizeText(binding.signalDigest, "signalDigest"),
+    vocabularyDigest: normalizeText(binding.vocabularyDigest, "vocabularyDigest"),
+    semanticHintsDigest: normalizeText(binding.semanticHintsDigest, "semanticHintsDigest"),
   };
 };
 
@@ -222,6 +236,10 @@ const claimsFor = (
     strict: normalized.strict,
     capabilities: normalized.capabilities,
     projectIdentity: normalized.projectIdentity,
+    routerAlgorithmVersion: normalized.routerAlgorithmVersion,
+    signalDigest: normalized.signalDigest,
+    vocabularyDigest: normalized.vocabularyDigest,
+    semanticHintsDigest: normalized.semanticHintsDigest,
     promptDigest: digest(secret, normalized.promptProjection),
     routingDigest: digest(secret, {
       targetAgent: normalized.targetAgent,
@@ -264,6 +282,7 @@ const parseClaims = (token: string, secret: Uint8Array): ContinuationTokenClaims
   const allowed = new Set([
     "version", "issuedAt", "expiresAt", "fingerprintDigest", "registryDigest", "configDigest", "routingDate",
     "targetAgent", "strict", "capabilities", "projectIdentity", "promptDigest", "routingDigest", "questionDigest",
+    "routerAlgorithmVersion", "signalDigest", "vocabularyDigest", "semanticHintsDigest",
   ]);
   const unknown = Object.keys(claims).find((key) => !allowed.has(key));
   if (unknown) invalid(`Continuation token contains unknown claim ${unknown}.`);
@@ -273,6 +292,8 @@ const parseClaims = (token: string, secret: Uint8Array): ContinuationTokenClaims
     typeof claims.routingDate !== "string" || typeof claims.targetAgent !== "string" || typeof claims.strict !== "boolean" ||
     !Array.isArray(claims.capabilities) || !claims.capabilities.every((value) => typeof value === "string") ||
     typeof claims.projectIdentity !== "string" ||
+    claims.routerAlgorithmVersion !== routerVersion || typeof claims.signalDigest !== "string" ||
+    typeof claims.vocabularyDigest !== "string" || typeof claims.semanticHintsDigest !== "string" ||
     typeof claims.promptDigest !== "string" || typeof claims.routingDigest !== "string" || typeof claims.questionDigest !== "string") {
     invalid("Continuation token claims have invalid types.");
   }
