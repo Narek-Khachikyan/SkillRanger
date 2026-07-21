@@ -13,6 +13,8 @@ import type {
 import type { TaskAnalyzerSkillMetadata } from "./analyzer.ts";
 import { actionCompatibilityScore, scoreActionCompatibility } from "./action-compatibility.ts";
 import { actionRequirementCovered } from "./coverage.ts";
+import { collectAvailableEvidence, evaluateRequiredEvidence, requiredEvidenceForCandidate } from "./evidence.ts";
+import type { MatchedRoutingSignal } from "./vocabulary/match.ts";
 
 export type RouterLimits = {
   maxSelectedRisk: RouterSelectableRisk;
@@ -102,6 +104,7 @@ export type RetrieveSkillCandidatesInput = {
   skillInputs?: Record<string, Record<string, unknown>>;
   deferRequiredCapabilities?: boolean;
   routingContext?: RoutingContext;
+  matchedSignals?: MatchedRoutingSignal[];
   routingDate?: string;
   routingIntentTags?: string[];
   maxSelectedRisk?: RouterSelectableRisk;
@@ -262,6 +265,7 @@ export const retrieveSkillCandidates = (input: RetrieveSkillCandidatesInput): Re
   const selectedDomains = unique(input.selectedDomainIds ?? input.profile.domains.filter(({ available }) => available).map(({ id }) => id));
   const primaryDomainId = input.primaryDomainId ? canonical(input.primaryDomainId) : undefined;
   const threshold = input.primaryThreshold ?? 0.60;
+  const availableEvidence = collectAvailableEvidence({ matchedSignals: input.matchedSignals ?? [] });
   const rejections: CandidateRejection[] = [];
   const candidates = input.skills.flatMap((skill) => {
     const role = roleFor(skill, input.profile);
@@ -271,6 +275,20 @@ export const retrieveSkillCandidates = (input: RetrieveSkillCandidatesInput): Re
     if (!domainMatch) { rejections.push({ skillId: skill.id, reason: "domain-mismatch" }); return []; }
     if (primaryDomainId && isPrimary && !skill.domains.some((domain) => canonical(domain) === primaryDomainId)) {
       rejections.push({ skillId: skill.id, reason: "primary-domain-mismatch" }); return [];
+    }
+    if (input.routingContext && (role === "primary" || role === "companion")) {
+      const evidence = evaluateRequiredEvidence({
+        required: requiredEvidenceForCandidate({
+          routingContext: input.routingContext,
+          candidateId: skill.id,
+          candidateDomainIds: skill.domains,
+        }),
+        available: availableEvidence,
+      });
+      if (!evidence.allowed) {
+        evidence.reasons.forEach((reason) => rejections.push({ skillId: skill.id, reason }));
+        return [];
+      }
     }
     const maxRisk = input.maxSelectedRisk ?? "medium";
     if (skill.riskLevel === "high" || skill.riskLevel === "block" || (maxRisk === "low" && skill.riskLevel === "medium")) { rejections.push({ skillId: skill.id, reason: "risk-blocked" }); return []; }

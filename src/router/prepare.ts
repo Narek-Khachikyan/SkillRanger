@@ -460,6 +460,7 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
     routingDate,
     routingIntentTags: analysis.routingIntentTags,
     routingContext,
+    matchedSignals: analysis.matchedSignals,
     limits: { ...defaultRouterLimits, maxSelectedRisk: config.router.maxSelectedRisk, maxEnvironmentSkills: config.router.maxEnvironmentSkills, maxTaskCompanions: config.router.maxTaskCompanions, maxVerificationSkills: config.router.maxVerificationSkills, maxAgentContextSkills: config.router.maxAgentContextSkills, maxTotalSelectedSkills: config.router.maxTotalSelectedSkills, maxInstructionBytes: config.router.maxInstructionBytes, maxAdditionalReadBytes: config.router.maxAdditionalReadBytes, maxSingleFileBytes: config.router.maxSingleFileBytes },
   });
   const resultDomains = applyClarification(selectedPrimary, resolution.candidates);
