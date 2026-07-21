@@ -7,7 +7,7 @@ import {
   validateEnvironmentSignal,
   validateMetadataArray,
 } from "../router/metadata.ts";
-import type { RouterSkillRole, TaskAction } from "../router/types.ts";
+import { taskActionIds, type RouterSkillRole, type TaskAction } from "../router/types.ts";
 
 export type RegistryValidationIssue = {
   path: string;
@@ -54,7 +54,7 @@ const qualityScoreFields = [
 ];
 const qualityRubricFields = [...qualityScoreFields, "safety"];
 const routerRoles = new Set<RouterSkillRole>(["environment", "primary", "companion", "verification", "agent-context"]);
-const taskActions = new Set<TaskAction>(["create", "implement", "modify", "fix", "debug", "review", "test", "verify", "document", "deploy", "migrate", "optimize", "research", "design", "configure", "investigate"]);
+const taskActions = new Set<TaskAction>(taskActionIds);
 const routingFields = new Set([
   "lane", "category", "roles", "domains", "actions", "artifactTypes", "intentTags",
   "technologyTags", "environmentSignals", "qualityGoals", "requiredCapabilities",

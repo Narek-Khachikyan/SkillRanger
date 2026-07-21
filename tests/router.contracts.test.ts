@@ -13,6 +13,7 @@ const schemaFiles = [
   "router-run.schema.json",
   "router-config.schema.json",
   "domain-manifest.schema.json",
+  "router-vocabulary.schema.json",
 ] as const;
 
 const resolvePointer = (root: unknown, reference: string) => {

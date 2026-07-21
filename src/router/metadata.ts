@@ -1,4 +1,17 @@
 import path from "node:path";
+import type { TaskAction } from "./types.ts";
+
+export type CanonicalSkillRoutingDocument = {
+  skillId: string;
+  domains: string[];
+  canonical: {
+    actions: TaskAction[];
+    artifactTypes: string[];
+    intentTags: string[];
+    technologyTags: string[];
+    qualityGoals: string[];
+  };
+};
 
 export const routerMetadataLimits = {
   maxArrayItems: 64,

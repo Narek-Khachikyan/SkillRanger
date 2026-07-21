@@ -1,20 +1,23 @@
-export type TaskAction =
-  | "create"
-  | "implement"
-  | "modify"
-  | "fix"
-  | "debug"
-  | "review"
-  | "test"
-  | "verify"
-  | "document"
-  | "deploy"
-  | "migrate"
-  | "optimize"
-  | "research"
-  | "design"
-  | "configure"
-  | "investigate";
+export const taskActionIds = [
+  "configure",
+  "create",
+  "debug",
+  "deploy",
+  "design",
+  "document",
+  "fix",
+  "implement",
+  "investigate",
+  "migrate",
+  "modify",
+  "optimize",
+  "research",
+  "review",
+  "test",
+  "verify",
+] as const;
+
+export type TaskAction = (typeof taskActionIds)[number];
 
 export type RiskLevel = "low" | "medium" | "high" | "block";
 export type RouterSelectableRisk = Extract<RiskLevel, "low" | "medium">;

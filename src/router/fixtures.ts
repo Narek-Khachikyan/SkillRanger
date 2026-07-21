@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import type { RiskLevel, RouterSkillRole, TaskAction } from "./types.ts";
+import { taskActionIds, type RiskLevel, type RouterSkillRole, type TaskAction } from "./types.ts";
 
 export type RouterGoldenExpected = {
   status: "prepared" | "clarification_required" | "decomposition_required" | "no_matching_skills" | "strict_requirements_unmet" | "context_budget_exceeded";
@@ -72,7 +72,7 @@ const goldenStatuses = new Set<RouterGoldenExpected["status"]>([
 ]);
 const riskLevels = new Set<RiskLevel>(["low", "medium", "high", "block"]);
 const routerRoles = new Set<RouterSkillRole>(["environment", "primary", "companion", "verification", "agent-context"]);
-const taskActions = new Set<TaskAction>(["create", "implement", "modify", "fix", "debug", "review", "test", "verify", "document", "deploy", "migrate", "optimize", "research", "design", "configure", "investigate"]);
+const taskActions = new Set<TaskAction>(taskActionIds);
 const strictContracts = new Set(["valid", "missing", "input-required"]);
 const canonicalId = /^[a-z0-9][a-z0-9._-]{1,127}$/;
 

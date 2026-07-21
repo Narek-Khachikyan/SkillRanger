@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/schemas/router-vocabulary.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "owner", "entries"],
+  "properties": {
+    "schemaVersion": { "const": "routing-vocabulary/1.0" },
+    "owner": {
+      "type": "object",
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "enum": ["core", "domain"] },
+        "id": { "$ref": "#/$defs/token" }
+      },
+      "additionalProperties": false
+    },
+    "intentMappings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "required": ["signalId", "skillIntentIds"],
+        "properties": {
+          "signalId": { "$ref": "#/$defs/token" },
+          "skillIntentIds": { "$ref": "#/$defs/nonEmptyTokens" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "creatableArtifactIds": { "$ref": "#/$defs/nonEmptyTokens" },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "required": ["kind", "id", "locale", "phrases"],
+        "properties": {
+          "kind": { "enum": ["domain", "action", "artifact", "intent", "technology", "quality", "constraint", "acceptance"] },
+          "id": { "$ref": "#/$defs/token" },
+          "locale": { "enum": ["en", "ru", "mixed"] },
+          "phrases": { "$ref": "#/$defs/phrases" },
+          "negativePhrases": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/phrase" }
+          },
+          "weight": { "type": "number", "minimum": 0.1, "maximum": 1 },
+          "priority": { "type": "integer", "minimum": 0, "maximum": 100 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "token": { "type": "string", "maxLength": 128, "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "nonEmptyTokens": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/token" }
+    },
+    "phrase": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "phrases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/phrase" }
+    }
+  },
+  "additionalProperties": false
+}
