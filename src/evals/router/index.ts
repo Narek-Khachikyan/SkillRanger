@@ -205,11 +205,18 @@ const summarize = (cases: RouterGoldenCase[], results: Awaited<ReturnType<typeof
   };
 };
 
-export const evaluateRouterFixtures = async (root = process.cwd()) => {
+export const evaluateRouterFixtures = async (
+  root = process.cwd(),
+  options: { includeQuarantine?: boolean } = {},
+) => {
   const cases = await loadRouterGoldenCases(path.join(root, "tests", "fixtures", "router-cases.json"));
   const packs = await loadRouterFixturePacks(path.join(root, "tests", "fixtures", "router-packs"));
   const results = await Promise.all(cases.map((input) => evaluateCase(root, input, packs)));
   const metrics = summarize(cases, results);
+  const quarantineCases = options.includeQuarantine
+    ? await loadRouterGoldenCases(path.join(root, "tests", "fixtures", "router-paraphrase-cases.json"))
+    : [];
+  const quarantineResults = await Promise.all(quarantineCases.map((input) => evaluateCase(root, input, packs)));
   const shippedIndexes = cases.flatMap((input, index) => input.registry === "bundled" ? [index] : []);
   const syntheticIndexes = cases.flatMap((input, index) => input.registry === "test-fixture" ? [index] : []);
   return {
@@ -225,6 +232,19 @@ export const evaluateRouterFixtures = async (root = process.cwd()) => {
     suites: {
       shipped: summarize(shippedIndexes.map((index) => cases[index]), shippedIndexes.map((index) => results[index])),
       synthetic: summarize(syntheticIndexes.map((index) => cases[index]), syntheticIndexes.map((index) => results[index])),
+      ...(options.includeQuarantine ? {
+        naturalLanguage: {
+          gated: false,
+          caseIds: quarantineCases.map(({ id }) => id),
+          metrics: summarize(quarantineCases, quarantineResults),
+          results: quarantineCases.map((input, index) => ({
+            id: input.id,
+            expected: input.expected.status,
+            actual: quarantineResults[index].status,
+            passed: quarantineResults[index].status === input.expected.status && quarantineResults[index].deterministic,
+          })),
+        },
+      } : {}),
     },
     results: cases.map((input, index) => ({ id: input.id, expected: input.expected.status, actual: results[index].status, passed: results[index].status === input.expected.status && results[index].deterministic })),
   };
@@ -232,7 +252,10 @@ export const evaluateRouterFixtures = async (root = process.cwd()) => {
 
 const isMain = process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  const report = await evaluateRouterFixtures();
+  const args = process.argv.slice(2).filter((arg) => arg !== "--");
+  const unknown = args.find((arg) => arg !== "--include-quarantine");
+  if (unknown) throw new Error(`Unknown router eval option: ${unknown}`);
+  const report = await evaluateRouterFixtures(process.cwd(), { includeQuarantine: args.includes("--include-quarantine") });
   console.log(JSON.stringify(report, null, 2));
   if (
     report.metrics.failed > 0 ||

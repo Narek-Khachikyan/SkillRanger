@@ -1,0 +1,1427 @@
+[
+  {
+    "id": "frontend-cupcake-natural-language",
+    "prompt": "дай мне сайт про кексы с красивым дизайном, анимациями и мобайл адаптацией @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:visual-design",
+        "intent:motion-design",
+        "intent:responsive-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish",
+      "requiredPrimaryExclusionReasons": {
+        "frontend.design-to-code": [
+          "missing-required-evidence:intent:visual-reference"
+        ]
+      },
+      "requiredCompanionSkillIds": [
+        "frontend.motion-design"
+      ],
+      "allowedOptionalSkillIds": [
+        "frontend.tailwind-ui-polish",
+        "frontend.accessibility-review"
+      ],
+      "forbiddenSkillIds": [
+        "frontend.design-to-code",
+        "frontend.motion-audit"
+      ]
+    }
+  },
+  {
+    "id": "frontend-ru-portfolio",
+    "prompt": "сделай красивый адаптивный сайт-портфолио @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:visual-design",
+        "intent:responsive-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-ru-landing-motion",
+    "prompt": "собери лендинг с плавными переходами @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:motion-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-ru-dashboard",
+    "prompt": "разработай удобный веб интерфейс для аналитики @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:visual-design",
+        "quality:usability"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-ru-mobile-adaptation",
+    "prompt": "добавь мобайл адаптацию странице продукта @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:page",
+        "intent:responsive-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-ru-redesign",
+    "prompt": "сделай редизайн сайта, чтобы он выглядел современно @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:design",
+        "artifact:web-interface",
+        "intent:visual-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-ru-figma-reference",
+    "prompt": "реализуй интерфейс по макету из Figma @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:implement",
+        "artifact:web-interface",
+        "intent:visual-reference"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-ru-no-screenshot",
+    "prompt": "сделай красивый сайт без скриншота @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:visual-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-ru-accessible-form",
+    "prompt": "добавь доступную форму обратной связи @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:form",
+        "quality:accessibility"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-ru-same-domain-segments",
+    "prompt": "создай сайт, красивый дизайн, потом добавь плавные анимации @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:visual-design",
+        "intent:motion-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-en-cupcakes",
+    "prompt": "build a cupcake website with polished visuals and responsive layout @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:visual-design",
+        "intent:responsive-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-en-motion",
+    "prompt": "create a landing page with smooth animations @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:motion-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-en-dashboard",
+    "prompt": "make a clean analytics web interface @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:visual-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-en-reference",
+    "prompt": "build the page from this screenshot @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:page",
+        "intent:visual-reference"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-en-negated-reference",
+    "prompt": "create a polished website with no screenshot @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:visual-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-en-accessibility",
+    "prompt": "develop an accessible checkout form @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:form",
+        "quality:accessibility"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-en-redesign",
+    "prompt": "redesign the marketing website for mobile @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:design",
+        "artifact:web-interface",
+        "intent:responsive-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-en-component",
+    "prompt": "add a polished responsive pricing component @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:component",
+        "intent:visual-design",
+        "intent:responsive-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-mixed-bakery",
+    "prompt": "сделай bakery website с beautiful design @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:visual-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-mixed-motion",
+    "prompt": "create сайт с плавными animations @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:motion-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-mixed-responsive",
+    "prompt": "собери landing page с responsive design @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:responsive-design"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-mixed-figma",
+    "prompt": "build интерфейс по макету из Figma @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:visual-reference"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-mixed-form",
+    "prompt": "добавь accessible contact form на сайт @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:form",
+        "quality:accessibility"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "frontend-mixed-polish",
+    "prompt": "make веб интерфейс более красивым и usable @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:visual-design",
+        "quality:usability"
+      ],
+      "primarySkillId": "frontend.visual-design-polish"
+    }
+  },
+  {
+    "id": "backend-ru-endpoint",
+    "prompt": "добавь эндпоинт для обновления токена @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend-api"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:backend-api",
+        "artifact:api",
+        "artifact:authentication-flow"
+      ],
+      "primarySkillId": "backend.auth-implementation"
+    }
+  },
+  {
+    "id": "backend-ru-auth",
+    "prompt": "исправь авторизацию в серверной части @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend-api"
+      ],
+      "requiredSignals": [
+        "action:fix",
+        "domain:backend-api",
+        "artifact:authentication-flow"
+      ],
+      "primarySkillId": "backend.auth-implementation"
+    }
+  },
+  {
+    "id": "backend-ru-service",
+    "prompt": "сделай серверную часть для каталога @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend-api"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:backend-api",
+        "artifact:api"
+      ],
+      "primarySkillId": "backend.auth-implementation"
+    }
+  },
+  {
+    "id": "backend-ru-refresh",
+    "prompt": "почини токен обновления в API @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend-api"
+      ],
+      "requiredSignals": [
+        "action:fix",
+        "domain:backend-api",
+        "artifact:authentication-flow"
+      ],
+      "primarySkillId": "backend.auth-implementation"
+    }
+  },
+  {
+    "id": "backend-en-endpoint",
+    "prompt": "add an endpoint for user authentication @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend-api"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:backend-api",
+        "artifact:api",
+        "artifact:authentication-flow"
+      ],
+      "primarySkillId": "backend.auth-implementation"
+    }
+  },
+  {
+    "id": "backend-en-service",
+    "prompt": "build a backend service for orders @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend-api"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:backend-api",
+        "artifact:api"
+      ],
+      "primarySkillId": "backend.auth-implementation"
+    }
+  },
+  {
+    "id": "backend-en-auth",
+    "prompt": "fix the refresh token authorization flow @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend-api"
+      ],
+      "requiredSignals": [
+        "action:fix",
+        "domain:backend-api",
+        "artifact:authentication-flow"
+      ],
+      "primarySkillId": "backend.auth-implementation"
+    }
+  },
+  {
+    "id": "backend-mixed-endpoint",
+    "prompt": "добавь API endpoint для login @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend-api"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:backend-api",
+        "artifact:api",
+        "artifact:authentication-flow"
+      ],
+      "primarySkillId": "backend.auth-implementation"
+    }
+  },
+  {
+    "id": "backend-mixed-service",
+    "prompt": "build серверную часть для payments @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend-api"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:backend-api",
+        "artifact:api"
+      ],
+      "primarySkillId": "backend.auth-implementation"
+    }
+  },
+  {
+    "id": "backend-mixed-refresh",
+    "prompt": "исправь backend refresh token flow @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend-api"
+      ],
+      "requiredSignals": [
+        "action:fix",
+        "domain:backend-api",
+        "artifact:authentication-flow"
+      ],
+      "primarySkillId": "backend.auth-implementation"
+    }
+  },
+  {
+    "id": "mobile-ru-app",
+    "prompt": "сделай мобильное приложение для доставки @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "mobile"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:mobile",
+        "artifact:mobile-interface"
+      ],
+      "primarySkillId": "mobile.feature-implementation"
+    }
+  },
+  {
+    "id": "mobile-ru-screen",
+    "prompt": "добавь экран приложения с профилем @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "mobile"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:mobile",
+        "artifact:mobile-screen"
+      ],
+      "primarySkillId": "mobile.feature-implementation"
+    }
+  },
+  {
+    "id": "mobile-ru-offline",
+    "prompt": "добавь офлайн режим в приложение @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "mobile"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:mobile",
+        "intent:offline-feature"
+      ],
+      "primarySkillId": "mobile.feature-implementation"
+    }
+  },
+  {
+    "id": "mobile-ru-platforms",
+    "prompt": "собери приложение для ios и android @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "mobile"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:mobile",
+        "artifact:mobile-interface"
+      ],
+      "primarySkillId": "mobile.feature-implementation"
+    }
+  },
+  {
+    "id": "mobile-en-app",
+    "prompt": "build a mobile app for field agents @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "mobile"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:mobile",
+        "artifact:mobile-interface"
+      ],
+      "primarySkillId": "mobile.feature-implementation"
+    }
+  },
+  {
+    "id": "mobile-en-screen",
+    "prompt": "create an app screen for notifications @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "mobile"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:mobile",
+        "artifact:mobile-screen"
+      ],
+      "primarySkillId": "mobile.feature-implementation"
+    }
+  },
+  {
+    "id": "mobile-en-offline",
+    "prompt": "add offline mode to the mobile interface @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "mobile"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:mobile",
+        "intent:offline-feature"
+      ],
+      "primarySkillId": "mobile.feature-implementation"
+    }
+  },
+  {
+    "id": "mobile-mixed-app",
+    "prompt": "сделай mobile app для курьеров @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "mobile"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:mobile",
+        "artifact:mobile-interface"
+      ],
+      "primarySkillId": "mobile.feature-implementation"
+    }
+  },
+  {
+    "id": "mobile-mixed-screen",
+    "prompt": "add экран приложения для settings @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "mobile"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:mobile",
+        "artifact:mobile-screen"
+      ],
+      "primarySkillId": "mobile.feature-implementation"
+    }
+  },
+  {
+    "id": "mobile-mixed-push",
+    "prompt": "добавь push notifications и жесты в mobile app @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "mobile"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:mobile",
+        "artifact:mobile-interface"
+      ],
+      "primarySkillId": "mobile.feature-implementation"
+    }
+  },
+  {
+    "id": "devops-ru-deploy",
+    "prompt": "сделай деплой платформы @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "devops-platform"
+      ],
+      "requiredSignals": [
+        "action:deploy",
+        "domain:devops-platform",
+        "intent:deployment"
+      ],
+      "primarySkillId": "devops.platform-deployment"
+    }
+  },
+  {
+    "id": "devops-ru-pipeline",
+    "prompt": "добавь pipeline для сборки @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "devops-platform"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:devops-platform",
+        "artifact:ci-pipeline"
+      ],
+      "primarySkillId": "devops.platform-deployment"
+    }
+  },
+  {
+    "id": "devops-ru-docker",
+    "prompt": "собери docker образ сервиса @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "devops-platform"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:devops-platform",
+        "technology:docker"
+      ],
+      "primarySkillId": "devops.platform-deployment"
+    }
+  },
+  {
+    "id": "devops-ru-ci",
+    "prompt": "настрой пайплайн доставки приложения @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "devops-platform"
+      ],
+      "requiredSignals": [
+        "action:configure",
+        "domain:devops-platform",
+        "artifact:ci-pipeline"
+      ],
+      "primarySkillId": "devops.platform-deployment"
+    }
+  },
+  {
+    "id": "devops-en-deploy",
+    "prompt": "deploy the platform to production @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "devops-platform"
+      ],
+      "requiredSignals": [
+        "action:deploy",
+        "domain:devops-platform",
+        "intent:deployment"
+      ],
+      "primarySkillId": "devops.platform-deployment"
+    }
+  },
+  {
+    "id": "devops-en-pipeline",
+    "prompt": "create a CI pipeline for releases @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "devops-platform"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:devops-platform",
+        "artifact:ci-pipeline"
+      ],
+      "primarySkillId": "devops.platform-deployment"
+    }
+  },
+  {
+    "id": "devops-en-container",
+    "prompt": "build a container image for the service @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "devops-platform"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:devops-platform",
+        "technology:docker"
+      ],
+      "primarySkillId": "devops.platform-deployment"
+    }
+  },
+  {
+    "id": "devops-mixed-deploy",
+    "prompt": "сделай deployment для platform @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "devops-platform"
+      ],
+      "requiredSignals": [
+        "action:deploy",
+        "domain:devops-platform",
+        "intent:deployment"
+      ],
+      "primarySkillId": "devops.platform-deployment"
+    }
+  },
+  {
+    "id": "devops-mixed-pipeline",
+    "prompt": "configure pipeline для релизов @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "devops-platform"
+      ],
+      "requiredSignals": [
+        "action:configure",
+        "domain:devops-platform",
+        "artifact:ci-pipeline"
+      ],
+      "primarySkillId": "devops.platform-deployment"
+    }
+  },
+  {
+    "id": "devops-mixed-docker",
+    "prompt": "собери Docker container image @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "devops-platform"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:devops-platform",
+        "technology:docker"
+      ],
+      "primarySkillId": "devops.platform-deployment"
+    }
+  },
+  {
+    "id": "cross-ru-mobile-backend",
+    "prompt": "сделай мобильное приложение, потом добавь серверную авторизацию @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "decomposition_required",
+      "domainIds": [
+        "mobile",
+        "backend-api"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:mobile",
+        "artifact:mobile-interface",
+        "domain:backend-api",
+        "artifact:authentication-flow"
+      ]
+    }
+  },
+  {
+    "id": "cross-ru-frontend-devops",
+    "prompt": "создай красивый сайт и настрой pipeline для деплоя @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "decomposition_required",
+      "domainIds": [
+        "frontend",
+        "devops-platform"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:visual-design",
+        "domain:devops-platform",
+        "artifact:ci-pipeline"
+      ]
+    }
+  },
+  {
+    "id": "cross-ru-triple",
+    "prompt": "собери приложение для ios и android; добавь API endpoint; потом настрой деплой платформы @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "decomposition_required",
+      "domainIds": [
+        "mobile",
+        "backend-api",
+        "devops-platform"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:mobile",
+        "artifact:mobile-interface",
+        "domain:backend-api",
+        "artifact:api",
+        "domain:devops-platform",
+        "intent:deployment"
+      ]
+    }
+  },
+  {
+    "id": "cross-en-backend-devops",
+    "prompt": "build a backend service and create a CI pipeline @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "decomposition_required",
+      "domainIds": [
+        "backend-api",
+        "devops-platform"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:backend-api",
+        "artifact:api",
+        "domain:devops-platform",
+        "artifact:ci-pipeline"
+      ]
+    }
+  },
+  {
+    "id": "cross-en-frontend-mobile",
+    "prompt": "create a polished website, then build a mobile app @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "decomposition_required",
+      "domainIds": [
+        "frontend",
+        "mobile"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "artifact:web-interface",
+        "intent:visual-design",
+        "domain:mobile",
+        "artifact:mobile-interface"
+      ]
+    }
+  },
+  {
+    "id": "cross-mixed-triple",
+    "prompt": "build mobile app, добавь backend endpoint, потом configure deployment platform @skillranger",
+    "fixture": "synthetic",
+    "registry": "test-fixture",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "decomposition_required",
+      "domainIds": [
+        "mobile",
+        "backend-api",
+        "devops-platform"
+      ],
+      "requiredSignals": [
+        "action:create",
+        "domain:mobile",
+        "artifact:mobile-interface",
+        "domain:backend-api",
+        "artifact:api",
+        "domain:devops-platform",
+        "intent:deployment"
+      ]
+    }
+  }
+]

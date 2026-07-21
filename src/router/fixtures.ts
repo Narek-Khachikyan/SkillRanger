@@ -2,6 +2,18 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { RiskLevel, RouterSkillRole, TaskAction } from "./types.ts";
 
+export type RouterGoldenExpected = {
+  status: "prepared" | "clarification_required" | "decomposition_required" | "no_matching_skills" | "strict_requirements_unmet" | "context_budget_exceeded";
+  domainIds: string[];
+  reasonCode?: string;
+  requiredSignals?: string[];
+  primarySkillId?: string;
+  requiredPrimaryExclusionReasons?: Record<string, string[]>;
+  requiredCompanionSkillIds?: string[];
+  allowedOptionalSkillIds?: string[];
+  forbiddenSkillIds?: string[];
+};
+
 export type RouterGoldenCase = {
   id: string;
   prompt: string;
@@ -9,11 +21,7 @@ export type RouterGoldenCase = {
   registry: "bundled" | "test-fixture";
   strict: boolean;
   capabilities: string[];
-  expected: {
-    status: "prepared" | "clarification_required" | "decomposition_required" | "no_matching_skills" | "strict_requirements_unmet" | "context_budget_exceeded";
-    domainIds: string[];
-    reasonCode?: string;
-  };
+  expected: RouterGoldenExpected;
 };
 
 export type RouterFixturePack = {
@@ -54,7 +62,7 @@ export type RouterFixturePack = {
   }>;
 };
 
-const goldenStatuses = new Set<RouterGoldenCase["expected"]["status"]>([
+const goldenStatuses = new Set<RouterGoldenExpected["status"]>([
   "prepared",
   "clarification_required",
   "decomposition_required",
@@ -115,6 +123,58 @@ const parseJson = async (filePath: string) => {
   return parsed;
 };
 
+const signalId = (value: unknown, at: string) => {
+  const result = string(value, at);
+  if (!/^(action|artifact|intent|technology|quality|domain|constraint|acceptance):[a-z0-9][a-z0-9._-]{0,127}$/.test(result)) {
+    throw new Error(`${at} must be a canonical signal id`);
+  }
+  return result;
+};
+
+const stringArrayLoose = (value: unknown, at: string) => {
+  if (!Array.isArray(value)) throw new Error(`${at} must be an array`);
+  const result = value.map((item, index) => string(item, `${at}[${index}]`));
+  if (new Set(result).size !== result.length) throw new Error(`${at} must contain unique values`);
+  return result;
+};
+
+const validateGoldenExpected = (input: unknown, at: string): RouterGoldenExpected => {
+  const expected = record(input, at);
+  exactKeys(
+    expected,
+    ["status", "domainIds"],
+    [
+      "reasonCode",
+      "requiredSignals",
+      "primarySkillId",
+      "requiredPrimaryExclusionReasons",
+      "requiredCompanionSkillIds",
+      "allowedOptionalSkillIds",
+      "forbiddenSkillIds",
+    ],
+    at,
+  );
+  if (!goldenStatuses.has(expected.status as RouterGoldenExpected["status"])) throw new Error(`${at}.status is invalid`);
+  stringArray(expected.domainIds, `${at}.domainIds`);
+  if (Object.hasOwn(expected, "reasonCode")) id(expected.reasonCode, `${at}.reasonCode`);
+  if (Object.hasOwn(expected, "requiredSignals")) {
+    const signals = stringArrayLoose(expected.requiredSignals, `${at}.requiredSignals`);
+    signals.forEach((signal, index) => signalId(signal, `${at}.requiredSignals[${index}]`));
+  }
+  if (Object.hasOwn(expected, "primarySkillId")) id(expected.primarySkillId, `${at}.primarySkillId`);
+  if (Object.hasOwn(expected, "requiredPrimaryExclusionReasons")) {
+    const reasons = record(expected.requiredPrimaryExclusionReasons, `${at}.requiredPrimaryExclusionReasons`);
+    for (const [skillId, values] of Object.entries(reasons)) {
+      id(skillId, `${at}.requiredPrimaryExclusionReasons.${skillId}`);
+      stringArrayLoose(values, `${at}.requiredPrimaryExclusionReasons.${skillId}`);
+    }
+  }
+  for (const key of ["requiredCompanionSkillIds", "allowedOptionalSkillIds", "forbiddenSkillIds"] as const) {
+    if (Object.hasOwn(expected, key)) stringArray(expected[key], `${at}.${key}`);
+  }
+  return expected as unknown as RouterGoldenExpected;
+};
+
 const validateGoldenCase = (input: unknown, index: number): RouterGoldenCase => {
   const at = `router case ${index}`;
   const value = record(input, at);
@@ -125,11 +185,7 @@ const validateGoldenCase = (input: unknown, index: number): RouterGoldenCase => 
   if (!new Set(["bundled", "test-fixture"]).has(value.registry as string)) throw new Error(`${at}.registry is invalid`);
   if (typeof value.strict !== "boolean") throw new Error(`${at}.strict must be a boolean`);
   stringArray(value.capabilities, `${at}.capabilities`);
-  const expected = record(value.expected, `${at}.expected`);
-  exactKeys(expected, ["status", "domainIds"], ["reasonCode"], `${at}.expected`);
-  if (!goldenStatuses.has(expected.status as RouterGoldenCase["expected"]["status"])) throw new Error(`${at}.expected.status is invalid`);
-  stringArray(expected.domainIds, `${at}.expected.domainIds`);
-  if (Object.hasOwn(expected, "reasonCode")) id(expected.reasonCode, `${at}.expected.reasonCode`);
+  validateGoldenExpected(value.expected, `${at}.expected`);
   return structuredClone(value) as RouterGoldenCase;
 };
 

@@ -129,6 +129,31 @@ test("router golden fixture covers every Task 1 scenario", async () => {
   assert.equal(new Set(cases.map(({ id }) => id)).size, cases.length);
 });
 
+test("natural-language quarantine freezes 60 validated cases and rich selection expectations", async () => {
+  const cases = await loadRouterGoldenCases("tests/fixtures/router-paraphrase-cases.json");
+  assert.equal(cases.length, 60);
+  assert.equal(new Set(cases.map(({ id }) => id)).size, 60);
+  const cupcake = cases.find(({ id }) => id === "frontend-cupcake-natural-language");
+  assert.deepEqual(cupcake?.expected, {
+    status: "prepared",
+    domainIds: ["frontend"],
+    requiredSignals: [
+      "action:create",
+      "artifact:web-interface",
+      "intent:visual-design",
+      "intent:motion-design",
+      "intent:responsive-design",
+    ],
+    primarySkillId: "frontend.visual-design-polish",
+    requiredPrimaryExclusionReasons: {
+      "frontend.design-to-code": ["missing-required-evidence:intent:visual-reference"],
+    },
+    requiredCompanionSkillIds: ["frontend.motion-design"],
+    allowedOptionalSkillIds: ["frontend.tailwind-ui-polish", "frontend.accessibility-review"],
+    forbiddenSkillIds: ["frontend.design-to-code", "frontend.motion-audit"],
+  });
+});
+
 test("synthetic fixture packs load as declarative data in stable order", async () => {
   const packs = await loadRouterFixturePacks("tests/fixtures/router-packs");
    assert.deepEqual(packs.map(({ domain }) => domain.id), [
