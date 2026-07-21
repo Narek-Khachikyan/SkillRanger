@@ -2,10 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import "../src/domains/bundled.ts";
 import {
   getDomainPack,
   listDomainPacks,
+  loadBundledDomainManifestSync,
   loadBundledRouterPacks,
   readDomainPackManifest,
   registerDomainPack,
@@ -27,6 +29,38 @@ test("bundled frontend domain registers through the generic domain API", async (
   const diskManifest = await readDomainPackManifest("frontend");
   assert.deepEqual(validateDomainPackManifest(diskManifest), []);
   assert.deepEqual(diskManifest, domain.manifest);
+});
+
+test("domain manifest v1.1 accepts routing vocabulary and typed required evidence without weakening v1.0", () => {
+  const v10 = structuredClone(getDomainPack("frontend")?.manifest);
+  assert.ok(v10);
+  const v11 = {
+    ...v10,
+    schemaVersion: "1.1",
+    artifacts: { ...v10.artifacts, routingVocabulary: "routing.vocabulary.json" },
+    ownership: v10.ownership.map((rule) => rule.primarySkill === "frontend.design-to-code"
+      ? {
+          ...rule,
+          requiresEvidence: [{ kind: "intent", id: "visual-reference", allowedSources: ["prompt-exact"] }],
+        }
+      : rule),
+  };
+  assert.deepEqual(validateDomainPackManifest(v11), []);
+  assert.ok(validateDomainPackManifest({ ...v10, artifacts: v11.artifacts }).some((issue) => issue.includes("routingVocabulary")));
+  assert.ok(validateDomainPackManifest({ ...v11, ownership: v10.ownership }).some((issue) => issue.includes("requiresEvidence")));
+});
+
+test("source and built frontend adapters load the canonical manifest JSON", async () => {
+  const diskManifest = await readDomainPackManifest("frontend");
+  const source = await import("../src/domains/frontend/routing.ts");
+  assert.deepEqual(source.frontendDomainManifest, diskManifest);
+  for (const modulePath of ["src/domains/frontend/routing.ts", "dist/domains/frontend/routing.js"]) {
+    assert.deepEqual(loadBundledDomainManifestSync({
+      domainId: "frontend",
+      manifestUrl: new URL("../../../domains/frontend/domain.manifest.json", pathToFileURL(path.resolve(modulePath))),
+    }), diskManifest);
+  }
+  assert.doesNotMatch(await readFile("src/domains/frontend/routing.ts", "utf8"), /schemaVersion:\s*["']1\.0["']/);
 });
 
 test("bundled router packs are discovered as validated declarative data", async () => {

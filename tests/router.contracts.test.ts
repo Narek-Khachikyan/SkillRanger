@@ -74,6 +74,25 @@ test("router schemas validate real instances and reject malformed contracts", as
   assert.ok(validateJsonSchema(schema, { ...profile, locale: "secret", rawPrompt: "canary" }).length > 0);
 });
 
+test("domain manifest schema keeps v1.0 and v1.1 fields version-bound", async () => {
+  const schema = JSON.parse(await readFile("schemas/domain-manifest.schema.json", "utf8")) as Record<string, unknown>;
+  const v10 = JSON.parse(await readFile("domains/frontend/domain.manifest.json", "utf8")) as Record<string, unknown>;
+  const artifacts = v10.artifacts as Record<string, unknown>;
+  const ownership = v10.ownership as Array<Record<string, unknown>>;
+  const v11 = {
+    ...v10,
+    schemaVersion: "1.1",
+    artifacts: { ...artifacts, routingVocabulary: "routing.vocabulary.json" },
+    ownership: ownership.map((rule) => rule.primarySkill === "frontend.design-to-code"
+      ? { ...rule, requiresEvidence: [{ kind: "intent", id: "visual-reference", allowedSources: ["prompt-exact"] }] }
+      : rule),
+  };
+  assert.deepEqual(validateJsonSchema(schema, v10), []);
+  assert.deepEqual(validateJsonSchema(schema, v11), []);
+  assert.ok(validateJsonSchema(schema, { ...v10, artifacts: v11.artifacts }).length > 0);
+  assert.ok(validateJsonSchema(schema, { ...v11, ownership }).length > 0);
+});
+
 test("public router types are independent from MCP transport types", async () => {
   const source = await readFile("src/router/types.ts", "utf8");
   assert.doesNotMatch(source, /from\s+["'][^"']*mcp/i);

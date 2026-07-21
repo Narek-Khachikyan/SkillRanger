@@ -1,9 +1,8 @@
 import { phaseRankForSkill } from "./phases.ts";
 import { defaultDomainsRoot } from "../../paths.ts";
 import type { ProjectFingerprint, Recommendation, RegistrySkill, SkillLane } from "../../types.ts";
-import { registerDomainPack } from "../registry.ts";
-import type { DomainPackManifest, DomainRoutingPolicy } from "../types.ts";
-import { frontendRecipeFiles } from "./design/catalog.ts";
+import { loadBundledDomainManifestSync, registerDomainPack } from "../registry.ts";
+import type { DomainRoutingPolicy } from "../types.ts";
 import { analyzeFrontendIntent, type CanonicalFrontendIntent } from "./intents/index.ts";
 import { evaluateFrontendRunPolicy } from "./run-policy.ts";
 
@@ -366,53 +365,10 @@ const routing: DomainRoutingPolicy = {
   },
 };
 
-export const frontendDomainManifest: DomainPackManifest = {
-  schemaVersion: "1.0",
-  id: "frontend",
-  displayName: "Frontend",
-  version: "1.0.0",
-  coreApi: "1.0",
-  skillIdPrefix: "frontend.",
-  capabilities: [
-    "project-signals", "intent-routing", "structured-artifacts", "verification", "repair", "evaluation",
-  ],
-  artifacts: {
-    intents: ["intents/ownership.json", "intents/phases.json"],
-    schemas: [
-      "schemas/design-brief.schema.json", "schemas/design-direction.schema.json",
-      "schemas/design-execution-policy.schema.json", "schemas/bounded-repair-request.schema.json",
-      "schemas/verification-report.schema.json", "schemas/design-rule.schema.json",
-      "schemas/recipe-example.schema.json", "schemas/design-variant.schema.json",
-      "schemas/visual-critic-report.schema.json", "schemas/visual-run.schema.json",
-      "schemas/ui-evidence-bundle.schema.json", "schemas/model-capability-record.schema.json",
-    ],
-    recipes: frontendRecipeFiles.map((file) => `recipes/${file}`),
-    rules: ["rules/index.json"],
-    examples: frontendRecipeFiles.map((file) => `examples/${file.replace(/\.json$/, "")}/example.json`),
-    workflows: ["workflows/design-generation.workflow.json", "workflows/design-to-code.workflow.json"],
-    validators: ["validators/frontend-validation.rules.json"],
-    evalSuite: "evals/frontend/suite.json",
-    capabilityRecords: ["capabilities/default-constrained.json"],
-  },
-  ownership: [
-    { intent: "visual-direction", primarySkill: "frontend.visual-design-polish", supportingSkills: ["frontend.ux-critique", "frontend.design-system"] },
-    { intent: "tailwind-execution", primarySkill: "frontend.tailwind-ui-polish", supportingSkills: ["frontend.accessibility-review"] },
-    { intent: "design-system", primarySkill: "frontend.design-system", supportingSkills: ["frontend.tailwind-ui-polish"] },
-    { intent: "design-to-code", primarySkill: "frontend.design-to-code", supportingSkills: ["frontend.tailwind-ui-polish"], requiresEvidence: ["visual-reference"] },
-    { intent: "ux-review", primarySkill: "frontend.ux-critique", supportingSkills: ["frontend.accessibility-review"] },
-    { intent: "interaction-polish", primarySkill: "frontend.interaction-polish", supportingSkills: ["frontend.accessibility-review"] },
-    { intent: "motion-design", primarySkill: "frontend.motion-design", supportingSkills: ["frontend.interaction-polish"] },
-    { intent: "motion-review", primarySkill: "frontend.motion-audit", supportingSkills: ["frontend.performance-review"] },
-    { intent: "release-review", primarySkill: "frontend.audit", supportingSkills: [] },
-  ],
-  routing: {
-    aliases: ["frontend-web", "web-ui"],
-    intentTags: ["website", "web-interface", "landing-page", "component", "responsive-design"],
-    artifactTypes: ["web-interface", "component", "page"],
-    technologyTags: ["react", "nextjs", "vue", "svelte", "tailwind"],
-    projectTags: ["frontend", "react", "nextjs", "web-app"],
-  },
-};
+export const frontendDomainManifest = loadBundledDomainManifestSync({
+  domainId: "frontend",
+  manifestUrl: new URL("../../../domains/frontend/domain.manifest.json", import.meta.url),
+});
 
 export const registerFrontendDomainPack = () =>
   registerDomainPack({

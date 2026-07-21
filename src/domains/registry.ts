@@ -1,4 +1,5 @@
 import { readdir, readFile, stat } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { defaultDomainsRoot, packageRoot } from "../paths.ts";
 import {
@@ -26,8 +27,11 @@ const capabilities = new Set<DomainCapability>([
 ]);
 const domainFields = new Set(["schemaVersion", "id", "displayName", "version", "coreApi", "skillIdPrefix", "capabilities", "artifacts", "ownership", "routing"]);
 const artifactFields = new Set(["intents", "schemas", "recipes", "rules", "examples", "workflows", "validators", "evalSuite", "capabilityRecords"]);
+const artifactFieldsV11 = new Set([...artifactFields, "routingVocabulary"]);
 const ownershipFields = new Set(["intent", "primarySkill", "supportingSkills", "requiresEvidence"]);
 const routingFields = ["aliases", "intentTags", "artifactTypes", "technologyTags", "projectTags"] as const;
+const evidenceKinds = new Set(["domain", "action", "artifact", "intent", "technology", "quality", "constraint", "acceptance"]);
+const evidenceSources = new Set(["prompt-exact", "prompt-normalized", "prompt-inferred"]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -47,7 +51,8 @@ export const validateDomainPackManifest = (input: unknown): string[] => {
   for (const key of Object.keys(input)) {
     if (!domainFields.has(key)) issues.push(`${key} is an unknown property`);
   }
-  if (input.schemaVersion !== "1.0") issues.push("schemaVersion must be 1.0");
+  const schemaVersion = input.schemaVersion;
+  if (schemaVersion !== "1.0" && schemaVersion !== "1.1") issues.push("schemaVersion must be 1.0 or 1.1");
   for (const key of ["id", "displayName", "version", "coreApi", "skillIdPrefix"] as const) {
     if (typeof input[key] !== "string" || !input[key].trim()) issues.push(`${key} is required`);
   }
@@ -65,8 +70,9 @@ export const validateDomainPackManifest = (input: unknown): string[] => {
   if (!isRecord(input.artifacts)) {
     issues.push("artifacts must be an object");
   } else {
+    const allowedArtifactFields = schemaVersion === "1.1" ? artifactFieldsV11 : artifactFields;
     for (const key of Object.keys(input.artifacts)) {
-      if (!artifactFields.has(key)) issues.push(`artifacts.${key} is an unknown property`);
+      if (!allowedArtifactFields.has(key)) issues.push(`artifacts.${key} is an unknown property`);
     }
     for (const key of ["intents", "schemas", "recipes", "workflows", "validators"] as const) {
       if (!isStringArray(input.artifacts[key])) issues.push(`artifacts.${key} must be a string array`);
@@ -83,6 +89,13 @@ export const validateDomainPackManifest = (input: unknown): string[] => {
       (typeof input.artifacts.evalSuite !== "string" || !safeRelativePath(input.artifacts.evalSuite))
     ) {
       issues.push("artifacts.evalSuite must be a safe relative path");
+    }
+    if (schemaVersion === "1.1" && input.artifacts.routingVocabulary !== undefined && (
+      typeof input.artifacts.routingVocabulary !== "string" ||
+      input.artifacts.routingVocabulary.trim() === "" ||
+      !safeRelativePath(input.artifacts.routingVocabulary)
+    )) {
+      issues.push("artifacts.routingVocabulary must be a safe relative path");
     }
   }
   if (!Array.isArray(input.ownership) || input.ownership.length === 0) {
@@ -104,8 +117,30 @@ export const validateDomainPackManifest = (input: unknown): string[] => {
         issues.push(`ownership[${index}].primarySkill is required`);
       }
       if (!isStringArray(rule.supportingSkills)) issues.push(`ownership[${index}].supportingSkills must be a string array`);
-      if (rule.requiresEvidence !== undefined && !isStringArray(rule.requiresEvidence)) {
-        issues.push(`ownership[${index}].requiresEvidence must be a string array`);
+      if (rule.requiresEvidence !== undefined) {
+        if (schemaVersion === "1.0") {
+          if (!isStringArray(rule.requiresEvidence)) issues.push(`ownership[${index}].requiresEvidence must be a string array`);
+        } else if (!Array.isArray(rule.requiresEvidence)) {
+          issues.push(`ownership[${index}].requiresEvidence must be an array of typed references`);
+        } else {
+          for (const [evidenceIndex, evidence] of rule.requiresEvidence.entries()) {
+            const at = `ownership[${index}].requiresEvidence[${evidenceIndex}]`;
+            if (!isRecord(evidence)) {
+              issues.push(`${at} must be an object`);
+              continue;
+            }
+            for (const key of Object.keys(evidence)) {
+              if (!new Set(["kind", "id", "allowedSources"]).has(key)) issues.push(`${at}.${key} is an unknown property`);
+            }
+            if (!evidenceKinds.has(evidence.kind as string)) issues.push(`${at}.kind is invalid`);
+            if (typeof evidence.id !== "string" || !idPattern.test(evidence.id)) issues.push(`${at}.id must be a safe slug`);
+            if (!isStringArray(evidence.allowedSources) || evidence.allowedSources.length === 0 ||
+              new Set(evidence.allowedSources).size !== evidence.allowedSources.length ||
+              evidence.allowedSources.some((source) => !evidenceSources.has(source))) {
+              issues.push(`${at}.allowedSources is invalid`);
+            }
+          }
+        }
       }
     }
   }
@@ -131,6 +166,23 @@ export const validateDomainPackManifest = (input: unknown): string[] => {
     }
   }
   return issues;
+};
+
+export const loadBundledDomainManifestSync = (input: {
+  domainId: string;
+  manifestUrl: URL;
+}): DomainPackManifest => {
+  const manifestBytes = readFileSync(input.manifestUrl);
+  if (manifestBytes.byteLength > routerMetadataLimits.maxManifestBytes) {
+    throw new Error(`Domain manifest exceeds ${routerMetadataLimits.maxManifestBytes} bytes: ${input.manifestUrl.pathname}`);
+  }
+  const manifest = JSON.parse(manifestBytes.toString("utf8")) as unknown;
+  const issues = validateDomainPackManifest(manifest);
+  if (issues.length > 0) throw new Error(`Invalid domain manifest at ${input.manifestUrl.pathname}: ${issues.join("; ")}`);
+  if ((manifest as DomainPackManifest).id !== input.domainId) {
+    throw new Error(`Domain manifest id must match bundled domain id: ${input.domainId}`);
+  }
+  return manifest as DomainPackManifest;
 };
 
 const registered = new Map<string, DomainPack>();
