@@ -40,6 +40,8 @@ skillranger task . --intent "Review accessibility and fix critical issues" --tar
 skillranger task:read . --router-run <router-run-id> --mandatory-next --expected-read-revision 0 --json
 ```
 
+Prompts may use ordinary Russian, English, or mixed-language task descriptions; callers do not need to know domain or skill IDs. Matching is deterministic and comes from the core and Domain Pack routing vocabularies rather than fuzzy network or model calls.
+
 For MCP, activation is explicit. End the complete prompt with `@skillranger`, `skillranger`, or `/sr`, then call `prepare_task`. Continue with `read_run_skill_file` until `readStatus.runMandatoryReadsComplete` is true before beginning the returned runtime run.
 
 Routing may return `clarification_required`, `decomposition_required`, `no_matching_skills`, `strict_requirements_unmet`, or `context_budget_exceeded` instead of preparing a run. Clarification returns an opaque continuation token and creates no partial run. Decomposition returns bounded subtasks. Because frontend is the only shipped production domain pack, backend, mobile, and other absent packs return `no_matching_skills`; synthetic packs exist only in tests and evals.
@@ -346,6 +348,7 @@ See [RELEASE.md](RELEASE.md) for package and source-run release validation.
 - [MCP host configuration](docs/mcp-host-config.md) — host setup, tools, and confirmation protocol.
 - [Frontend skill quality](docs/FRONTEND_SKILL_QUALITY.md) — evidence and promotion boundaries for the current pack.
 - [Creating a domain pack](docs/domains/creating-a-domain-pack.md) — extension model for future domains.
+- [Routing vocabulary](docs/ROUTING_VOCABULARY.md) — owner-scoped natural-language claims and Domain Pack authoring rules.
 
 ## Contributing
 

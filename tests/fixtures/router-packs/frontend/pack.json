@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "router-fixture-pack/1.0",
+  "schemaVersion": "router-fixture-pack/1.1",
   "domain": {
     "id": "frontend",
     "displayName": "Synthetic Frontend",
@@ -35,5 +35,18 @@
       "instructionBytes": 8000,
       "strictContract": "valid"
     }
-  ]
+  ],
+  "vocabulary": {
+    "schemaVersion": "routing-vocabulary/1.0",
+    "owner": { "kind": "domain", "id": "frontend" },
+    "creatableArtifactIds": ["web-interface"],
+    "entries": [
+      {
+        "kind": "artifact",
+        "id": "web-interface",
+        "locale": "mixed",
+        "phrases": ["сайт", "website"]
+      }
+    ]
+  }
 }

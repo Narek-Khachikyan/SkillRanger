@@ -1,10 +1,12 @@
 # Universal Router Evaluations
 
-`npm run eval:router` executes the checked-in router golden cases through the
+`npm run eval:router` executes both checked-in legacy and natural-language golden cases through the
 trigger parser, analyzer, domain resolver, candidate composer, and deterministic
 replay check.
 
-The report exposes separate `suites.shipped` and `suites.synthetic` summaries.
+The report exposes `suites.shipped`, `suites.synthetic`, and the gated
+`suites.naturalLanguage` summary. The legacy `--include-quarantine` option is
+still accepted, but the natural-language corpus is always loaded exactly once.
 Synthetic packs are data-only fixtures loaded by evaluation and test entry
 points; they are never registered as production skills.
 
@@ -26,7 +28,8 @@ budget/conflict handling, prompt injection, and privacy canaries.
 The synthetic suite contains the 12 domain categories listed in the v1 plan;
 every fixture pack is declarative JSON and has at least one routed golden case.
 
-`tests/fixtures/router-cases.json` is the checked-in baseline. The command exits
+`tests/fixtures/router-cases.json` and
+`tests/fixtures/router-paraphrase-cases.json` are the checked-in full corpus. The command exits
 non-zero when any case fails or these regression thresholds are crossed:
 
 | Metric | Gate |
@@ -41,9 +44,21 @@ non-zero when any case fails or these regression thresholds are crossed:
 | clarification correctness | `1.000` |
 | decomposition correctness | `1.000` |
 | strict eligibility correctness | `1.000` |
+| natural-language signal recall | `>= 0.900` |
+| natural-language primary-skill accuracy | `>= 0.900` |
+| required companion recall | `1.000` |
+| forbidden selection rate | `0.000` |
+| false-positive companion rate | `<= 0.100` |
+| same-domain decomposition errors | `0` |
+| cross-domain decomposition correctness | `1.000` |
 | privacy leakage count | `0` |
 | deterministic replay | `true` |
 
-The precision floor freezes the current 28-case baseline rather than claiming
-perfect domain precision. `npm run release:check` runs this gate after registry
+Required-signal, primary-skill, required-companion, forbidden-selection,
+same-domain, and cross-domain denominators must all be non-zero; a malformed
+activated corpus is an eval error. Determinism replays the same frozen routing
+date, and privacy canaries are checked across the full corpus.
+
+The precision floor preserves the legacy contract rather than claiming perfect
+domain precision. `npm run release:check` runs this full gate after registry
 and frontend evaluation checks.

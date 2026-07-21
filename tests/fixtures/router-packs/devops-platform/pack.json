@@ -43,14 +43,14 @@
       {
         "kind": "intent",
         "id": "deployment",
-        "locale": "ru",
-        "phrases": ["деплой"]
+        "locale": "mixed",
+        "phrases": ["деплой", "deploy the platform"]
       },
       {
         "kind": "artifact",
         "id": "ci-pipeline",
         "locale": "mixed",
-        "phrases": ["pipeline"]
+        "phrases": ["pipeline", "пайплайн"]
       },
       {
         "kind": "technology",

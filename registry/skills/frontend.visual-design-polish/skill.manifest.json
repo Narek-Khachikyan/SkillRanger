@@ -141,7 +141,7 @@
     "roles": ["primary", "companion"],
     "domains": ["frontend"],
     "actions": ["design", "modify", "implement", "review"],
-    "artifactTypes": ["web-interface", "page", "component"],
+    "artifactTypes": ["web-interface", "page", "component", "form"],
     "intentTags": ["visual-design", "hierarchy", "typography", "responsive-design"],
     "technologyTags": ["react", "tailwind", "css"],
     "environmentSignals": ["tag:frontend", "framework:react"],

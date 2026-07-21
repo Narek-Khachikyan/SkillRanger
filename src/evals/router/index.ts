@@ -14,6 +14,7 @@ import { buildRoutingContext } from "../../router/context.ts";
 import { canonicalSkillRoutingDocument } from "../../router/metadata.ts";
 import { coreRoutingVocabulary } from "../../router/vocabulary/core.ts";
 import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "../../router/vocabulary/load.ts";
+import { canonicalizeJson } from "../../router/store.ts";
 
 const digest = (value: string) => `sha256:${value.padEnd(64, "0").slice(0, 64)}`;
 export const routerEvalThresholds = {
@@ -27,6 +28,13 @@ export const routerEvalThresholds = {
   clarificationCorrectness: 1,
   decompositionCorrectness: 1,
   strictEligibilityCorrectness: 1,
+  naturalLanguageSignalRecall: 0.9,
+  naturalLanguagePrimarySkillAccuracy: 0.9,
+  requiredCompanionRecall: 1,
+  forbiddenSelectionRate: 0,
+  falsePositiveCompanionRate: 0.1,
+  sameDomainDecompositionErrors: 0,
+  crossDomainDecompositionCorrectness: 1,
   privacyLeakageCount: 0,
   deterministic: true,
 } as const;
@@ -148,6 +156,13 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
   const metadata = await buildCaseInput(root, input, fixturePacks);
   const analyzerSkills = metadata.skills satisfies TaskAnalyzerSkillMetadata[];
   const analysis = analyzeTask({ prompt: parsed.normalizedIntent, domains: metadata.domains, skills: analyzerSkills, fingerprint: metadata.fingerprint, routingContext: metadata.routingContext });
+  const replayAnalysis = analyzeTask({ prompt: parsed.normalizedIntent, domains: metadata.domains, skills: analyzerSkills, fingerprint: metadata.fingerprint, routingContext: metadata.routingContext });
+  const signalIds = [...new Set([
+    ...analysis.matchedSignals.map(({ kind, id }) => `${kind}:${id}`),
+    ...analysis.profile.evidence.filter(({ source }) => source === "prompt").map(({ kind, id }) => `${kind}:${id}`),
+    ...analysis.routingIntentTags.map((id) => `intent:${id}`),
+  ])];
+  const analysisDeterministic = canonicalizeJson(analysis) === canonicalizeJson(replayAnalysis);
   if (analysis.profile.subtasks.length >= 2) return {
     status: "decomposition_required",
     domainIds: analysis.profile.subtasks.map(({ candidateDomainIds }) => candidateDomainIds[0]).filter((id): id is string => id !== undefined),
@@ -157,9 +172,33 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
     usefulCompanionCount: 0,
     instructionBytes: 0,
     privacyLeakageCount: 0,
-    deterministic: true,
+    deterministic: analysisDeterministic,
+    signalIds,
+    primarySkillId: undefined,
+    selectedCompanionIds: [],
+    selectedSkillIds: [],
+    primaryExclusionReasons: {},
+    decomposedGoals: analysis.profile.subtasks.map(({ normalizedGoal }) => normalizedGoal),
   };
-  const resolution = resolveDomains({ profile: analysis.profile, domains: metadata.domains, skills: analyzerSkills, fingerprint: metadata.fingerprint, routingIntentTags: analysis.routingIntentTags });
+  const resolution = resolveDomains({
+    profile: analysis.profile,
+    domains: metadata.domains,
+    skills: analyzerSkills,
+    fingerprint: metadata.fingerprint,
+    routingIntentTags: analysis.routingIntentTags,
+    routingContext: metadata.routingContext,
+    routingSignals: analysis.matchedSignals,
+  });
+  const replayResolution = resolveDomains({
+    profile: replayAnalysis.profile,
+    domains: metadata.domains,
+    skills: analyzerSkills,
+    fingerprint: metadata.fingerprint,
+    routingIntentTags: replayAnalysis.routingIntentTags,
+    routingContext: metadata.routingContext,
+    routingSignals: replayAnalysis.matchedSignals,
+  });
+  const resolutionDeterministic = analysisDeterministic && canonicalizeJson(resolution) === canonicalizeJson(replayResolution);
   const privacyCanaries = [
     ...(input.prompt.match(/SECRET_[A-Z0-9_]+/g) ?? []),
     ...(input.prompt.match(/https?:\/\/[^\s]+/g) ?? []).map((value) => value.replace(/[.,;!?]+$/, "")),
@@ -168,8 +207,9 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
     const serialized = JSON.stringify(value);
     return privacyCanaries.filter((canary) => serialized.includes(canary)).length;
   };
-  if (resolution.clarificationRequired) return { status: "clarification_required", domainIds: resolution.ambiguousDomainIds, primaryDomainId: undefined, selectedSkillCount: 0, selectedCompanionCount: 0, usefulCompanionCount: 0, instructionBytes: 0, privacyLeakageCount: privacyLeakageCount({ analysis, resolution }), deterministic: true };
-  if (!resolution.primaryDomainId) return { status: "no_matching_skills", domainIds: [], primaryDomainId: undefined, selectedSkillCount: 0, selectedCompanionCount: 0, usefulCompanionCount: 0, instructionBytes: 0, privacyLeakageCount: privacyLeakageCount({ analysis, resolution }), deterministic: true };
+  const emptySelection = { signalIds, primarySkillId: undefined, selectedCompanionIds: [], selectedSkillIds: [], primaryExclusionReasons: {}, decomposedGoals: [] };
+  if (resolution.clarificationRequired) return { status: "clarification_required", domainIds: resolution.ambiguousDomainIds, primaryDomainId: undefined, selectedSkillCount: 0, selectedCompanionCount: 0, usefulCompanionCount: 0, instructionBytes: 0, privacyLeakageCount: privacyLeakageCount({ analysis, resolution }), deterministic: resolutionDeterministic, ...emptySelection };
+  if (!resolution.primaryDomainId) return { status: "no_matching_skills", domainIds: [], primaryDomainId: undefined, selectedSkillCount: 0, selectedCompanionCount: 0, usefulCompanionCount: 0, instructionBytes: 0, privacyLeakageCount: privacyLeakageCount({ analysis, resolution }), deterministic: resolutionDeterministic, ...emptySelection };
   const composed = composeSkillSet({
     profile: analysis.profile,
     requirements: analysis.requirements,
@@ -183,12 +223,15 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
     installedSkillIds: input.id === "strict-installed" ? ["backend.auth-implementation"] : [],
     routingDate: "2026-07-19",
     routingIntentTags: analysis.routingIntentTags,
+    routingContext: metadata.routingContext,
+    matchedSignals: analysis.matchedSignals,
   });
   const replay = composeSkillSet({
     profile: analysis.profile, requirements: analysis.requirements, skills: metadata.skills, fingerprint: metadata.fingerprint,
     selectedDomainIds: resolution.candidates.map(({ id }) => id), primaryDomainId: resolution.primaryDomainId,
     targetAgent: "codex", capabilities: input.capabilities, strict: input.strict,
     installedSkillIds: input.id === "strict-installed" ? ["backend.auth-implementation"] : [], routingDate: "2026-07-19", routingIntentTags: analysis.routingIntentTags,
+    routingContext: metadata.routingContext, matchedSignals: analysis.matchedSignals,
   });
   const selected = composed.status === "prepared" ? composed.composed.all : [];
   const companions = selected.filter(({ role }) => role !== "primary");
@@ -196,6 +239,10 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
   const usefulCompanions = companions.filter(({ skill, reasons }) =>
     skill.domains.some((id) => expectedDomains.has(id)) || reasons.some((reason) => !reason.startsWith("domain-match:"))
   );
+  const primaryExclusionReasons = Object.fromEntries([...new Set(composed.rejections.map(({ skillId }) => skillId))].map((skillId) => [
+    skillId,
+    composed.rejections.filter((rejection) => rejection.skillId === skillId).map(({ reason }) => reason),
+  ]));
   return {
     status: composed.status,
     domainIds: resolution.candidates.map(({ id }) => id),
@@ -205,7 +252,13 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
     usefulCompanionCount: usefulCompanions.length,
     instructionBytes: composed.status === "prepared" ? composed.composed.instructionBytes : 0,
     privacyLeakageCount: privacyLeakageCount({ analysis, resolution, composed }),
-    deterministic: JSON.stringify(composed) === JSON.stringify(replay),
+    deterministic: resolutionDeterministic && canonicalizeJson(composed) === canonicalizeJson(replay),
+    signalIds,
+    primarySkillId: selected.find(({ role }) => role === "primary")?.skill.id,
+    selectedCompanionIds: selected.filter(({ role }) => role === "companion").map(({ skill }) => skill.id),
+    selectedSkillIds: selected.map(({ skill }) => skill.id),
+    primaryExclusionReasons,
+    decomposedGoals: [],
   };
 };
 
@@ -245,6 +298,60 @@ const summarize = (cases: RouterGoldenCase[], results: Awaited<ReturnType<typeof
   };
 };
 
+const sortedEqual = (left: string[], right: string[]) =>
+  canonicalizeJson([...left].sort()) === canonicalizeJson([...right].sort());
+
+const summarizeNaturalLanguage = (cases: RouterGoldenCase[], results: Awaited<ReturnType<typeof evaluateCase>>[]) => {
+  const requiredSignals = cases.flatMap(({ expected }, index) =>
+    (expected.requiredSignals ?? []).map((signalId) => ({ index, signalId })));
+  const primaryCases = cases.flatMap(({ expected }, index) => expected.primarySkillId ? [{ index, skillId: expected.primarySkillId }] : []);
+  const requiredCompanions = cases.flatMap(({ expected }, index) =>
+    (expected.requiredCompanionSkillIds ?? []).map((skillId) => ({ index, skillId })));
+  const forbidden = cases.flatMap(({ expected }, index) =>
+    (expected.forbiddenSkillIds ?? []).map((skillId) => ({ index, skillId })));
+  const sameDomain = cases.flatMap(({ expected }, index) =>
+    expected.status !== "decomposition_required" && expected.domainIds.length === 1 ? [index] : []);
+  const crossDomain = cases.flatMap(({ expected }, index) =>
+    expected.status === "decomposition_required" && expected.domainIds.length >= 2 ? [index] : []);
+  const invalidDenominators = [
+    ["naturalLanguageSignalRecall", requiredSignals.length],
+    ["naturalLanguagePrimarySkillAccuracy", primaryCases.length],
+    ["requiredCompanionRecall", requiredCompanions.length],
+    ["forbiddenSelectionRate", forbidden.length],
+    ["sameDomainDecompositionErrors", sameDomain.length],
+    ["crossDomainDecompositionCorrectness", crossDomain.length],
+  ].filter(([, count]) => count === 0).map(([name]) => name as string);
+  if (invalidDenominators.length > 0) throw new Error(`natural-language corpus invalid: zero denominator for ${invalidDenominators.join(", ")}`);
+
+  const companionExpectationIndexes = new Set(cases.flatMap(({ expected }, index) =>
+    expected.requiredCompanionSkillIds !== undefined || expected.allowedOptionalSkillIds !== undefined ? [index] : []));
+  const allSelectedCompanions = results.flatMap(({ selectedCompanionIds }, index) => companionExpectationIndexes.has(index)
+    ? (selectedCompanionIds ?? []).map((skillId) => ({ index, skillId }))
+    : []);
+  const falsePositiveCompanions = allSelectedCompanions.filter(({ index, skillId }) => {
+    const allowed = new Set([
+      ...(cases[index].expected.requiredCompanionSkillIds ?? []),
+      ...(cases[index].expected.allowedOptionalSkillIds ?? []),
+    ]);
+    return !allowed.has(skillId);
+  });
+  const ratio = (numerator: number, denominator: number) => Number((numerator / denominator).toFixed(3));
+  return {
+    naturalLanguageSignalRecall: ratio(requiredSignals.filter(({ index, signalId }) => ((results[index]?.signalIds ?? []) as string[]).includes(signalId)).length, requiredSignals.length),
+    naturalLanguagePrimarySkillAccuracy: ratio(primaryCases.filter(({ index, skillId }) => results[index].status === "prepared" && results[index].primarySkillId === skillId).length, primaryCases.length),
+    requiredCompanionRecall: ratio(requiredCompanions.filter(({ index, skillId }) => ((results[index]?.selectedCompanionIds ?? []) as string[]).includes(skillId)).length, requiredCompanions.length),
+    forbiddenSelectionRate: ratio(forbidden.filter(({ index, skillId }) => ((results[index]?.selectedSkillIds ?? []) as string[]).includes(skillId)).length, forbidden.length),
+    falsePositiveCompanionRate: allSelectedCompanions.length === 0 ? 0 : ratio(falsePositiveCompanions.length, allSelectedCompanions.length),
+    sameDomainDecompositionErrors: sameDomain.filter((index) => results[index].status === "decomposition_required").length,
+    crossDomainDecompositionCorrectness: ratio(crossDomain.filter((index) =>
+      results[index].status === "decomposition_required" &&
+      sortedEqual(results[index].domainIds, cases[index].expected.domainIds) &&
+      results[index].decomposedGoals.length === cases[index].expected.domainIds.length &&
+      results[index].decomposedGoals.every((goal) => goal.trim().length > 0)
+    ).length, crossDomain.length),
+  };
+};
+
 export const evaluateRouterFixtures = async (
   root = process.cwd(),
   options: { includeQuarantine?: boolean } = {},
@@ -252,19 +359,19 @@ export const evaluateRouterFixtures = async (
   const cases = await loadRouterGoldenCases(path.join(root, "tests", "fixtures", "router-cases.json"));
   const packs = await loadRouterFixturePacks(path.join(root, "tests", "fixtures", "router-packs"));
   const results = await Promise.all(cases.map((input) => evaluateCase(root, input, packs)));
-  const metrics = summarize(cases, results);
-  const quarantineCases = options.includeQuarantine
-    ? await loadRouterGoldenCases(path.join(root, "tests", "fixtures", "router-paraphrase-cases.json"))
-    : [];
+  void options.includeQuarantine;
+  const quarantineCases = await loadRouterGoldenCases(path.join(root, "tests", "fixtures", "router-paraphrase-cases.json"));
   const quarantineResults = await Promise.all(quarantineCases.map((input) => evaluateCase(root, input, packs)));
+  const naturalLanguageMetrics = summarizeNaturalLanguage(quarantineCases, quarantineResults);
+  const metrics = summarize([...cases, ...quarantineCases], [...results, ...quarantineResults]);
   const shippedIndexes = cases.flatMap((input, index) => input.registry === "bundled" ? [index] : []);
   const syntheticIndexes = cases.flatMap((input, index) => input.registry === "test-fixture" ? [index] : []);
   return {
     schemaVersion: "router-eval/1.0" as const,
-    caseCount: cases.length,
+    caseCount: cases.length + quarantineCases.length,
     syntheticPackCount: packs.length,
     syntheticSkillCount: packs.reduce((total, pack) => total + pack.skills.length, 0),
-    caseIds: cases.map(({ id }) => id),
+    caseIds: [...cases, ...quarantineCases].map(({ id }) => id),
     domainIds: packs.map(({ domain }) => domain.id),
     routingDate: "2026-07-19",
     thresholds: routerEvalThresholds,
@@ -272,21 +379,34 @@ export const evaluateRouterFixtures = async (
     suites: {
       shipped: summarize(shippedIndexes.map((index) => cases[index]), shippedIndexes.map((index) => results[index])),
       synthetic: summarize(syntheticIndexes.map((index) => cases[index]), syntheticIndexes.map((index) => results[index])),
-      ...(options.includeQuarantine ? {
-        naturalLanguage: {
-          gated: false,
-          caseIds: quarantineCases.map(({ id }) => id),
-          metrics: summarize(quarantineCases, quarantineResults),
-          results: quarantineCases.map((input, index) => ({
-            id: input.id,
-            expected: input.expected.status,
-            actual: quarantineResults[index].status,
-            passed: quarantineResults[index].status === input.expected.status && quarantineResults[index].deterministic,
-          })),
-        },
-      } : {}),
+      naturalLanguage: {
+        gated: true,
+        caseIds: quarantineCases.map(({ id }) => id),
+        metrics: { ...summarize(quarantineCases, quarantineResults), ...naturalLanguageMetrics },
+        results: quarantineCases.map((input, index) => ({
+          id: input.id,
+          expected: input.expected.status,
+          actual: quarantineResults[index].status,
+          passed: quarantineResults[index].status === input.expected.status && quarantineResults[index].deterministic,
+          signalIds: quarantineResults[index].signalIds,
+          primarySkillId: quarantineResults[index].primarySkillId,
+          selectedCompanionIds: quarantineResults[index].selectedCompanionIds,
+          domainIds: quarantineResults[index].domainIds,
+          decomposedGoals: quarantineResults[index].decomposedGoals,
+          primaryExclusionReasons: Object.fromEntries(Object.keys(input.expected.requiredPrimaryExclusionReasons ?? {}).map((skillId) => [
+            skillId,
+            (quarantineResults[index]?.primaryExclusionReasons as Record<string, string[]> | undefined)?.[skillId] ?? [],
+          ])),
+        })),
+      },
     },
-    results: cases.map((input, index) => ({ id: input.id, expected: input.expected.status, actual: results[index].status, passed: results[index].status === input.expected.status && results[index].deterministic })),
+    results: cases.map((input, index) => ({
+      id: input.id,
+      expected: input.expected.status,
+      actual: results[index].status,
+      passed: results[index].status === input.expected.status && results[index].deterministic,
+      domainIds: results[index].domainIds,
+    })),
   };
 };
 
@@ -309,6 +429,13 @@ if (isMain) {
     report.metrics.clarificationCorrectness < report.thresholds.clarificationCorrectness ||
     report.metrics.decompositionCorrectness < report.thresholds.decompositionCorrectness ||
     report.metrics.strictEligibilityCorrectness < report.thresholds.strictEligibilityCorrectness ||
+    report.suites.naturalLanguage.metrics.naturalLanguageSignalRecall < report.thresholds.naturalLanguageSignalRecall ||
+    report.suites.naturalLanguage.metrics.naturalLanguagePrimarySkillAccuracy < report.thresholds.naturalLanguagePrimarySkillAccuracy ||
+    report.suites.naturalLanguage.metrics.requiredCompanionRecall < report.thresholds.requiredCompanionRecall ||
+    report.suites.naturalLanguage.metrics.forbiddenSelectionRate > report.thresholds.forbiddenSelectionRate ||
+    report.suites.naturalLanguage.metrics.falsePositiveCompanionRate > report.thresholds.falsePositiveCompanionRate ||
+    report.suites.naturalLanguage.metrics.sameDomainDecompositionErrors > report.thresholds.sameDomainDecompositionErrors ||
+    report.suites.naturalLanguage.metrics.crossDomainDecompositionCorrectness < report.thresholds.crossDomainDecompositionCorrectness ||
     report.metrics.privacyLeakageCount > report.thresholds.privacyLeakageCount ||
     report.metrics.deterministic !== report.thresholds.deterministic
   ) {

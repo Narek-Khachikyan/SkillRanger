@@ -145,7 +145,7 @@ test("prepare maps fixture vocabulary authoring failures to routing-integrity", 
 test("fixture vocabularies route colloquial claims through the shared routing context", async () => {
   const packs = await loadRouterFixturePacks("tests/fixtures/router-packs");
   assert.deepEqual(packs.filter(({ schemaVersion }) => schemaVersion === "router-fixture-pack/1.1").map(({ domain }) => domain.id), [
-    "backend-api", "database", "devops-platform", "mobile", "qa-testing",
+    "backend-api", "database", "devops-platform", "frontend", "mobile", "qa-testing",
   ]);
   const skills = packs.flatMap(({ skills: packSkills }) => packSkills);
   const routingContext = buildRoutingContext({

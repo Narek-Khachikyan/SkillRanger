@@ -29,7 +29,8 @@ The opt-in router is an orchestration layer over existing core services, not a s
 
 ```text
 explicit MCP trigger or direct CLI task
--> trigger parser and privacy-safe task analyzer
+-> trigger parser, Unicode normalization, and owner-scoped vocabulary matching
+-> privacy-safe canonical task signals and task-head segmentation
 -> project fingerprint and bundled domain metadata
 -> shared scorer, domain resolver, and bounded composer
 -> clarification / decomposition / no-match, or atomic prepared run
@@ -38,6 +39,8 @@ explicit MCP trigger or direct CLI task
 ```
 
 Production CLI and MCP flows use the bundled trusted registry. Synthetic packs are dependency-injected data fixtures for tests and evals only. Routing performs no network calls, package installation, scripts, child processes, or application edits.
+
+Router v2 compiles one deterministic vocabulary from typed core claims and optional Domain Pack `routingVocabulary` files. Claims are validated against the owner's domain and skill metadata before compilation; cross-owner collisions and undeclared IDs fail loading. Exact normalized matches, explicit request-frame inference, and bounded host semantic hints become canonical signals. Only direct prompt evidence can satisfy an ownership rule's required evidence. The analyzer segments independent task heads, the resolver decomposes only when at least two distinct primary domains remain, and the composer selects one primary plus companions that add explicit requirement coverage.
 
 MCP fixes one canonical project root at server startup from `SKILLRANGER_PROJECT_ROOT` or `cwd`; router tool inputs cannot override it. CLI `task` uses direct activation and a positional root. MCP `prepare_task` requires an explicit terminal trigger. Both surfaces call the same `prepareTask()` core service.
 
