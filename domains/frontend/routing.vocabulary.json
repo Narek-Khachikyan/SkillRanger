@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "routing-vocabulary/1.0",
+  "owner": {
+    "kind": "domain",
+    "id": "frontend"
+  },
+  "creatableArtifactIds": [
+    "web-interface"
+  ],
+  "entries": [
+    {
+      "kind": "artifact",
+      "id": "web-interface",
+      "locale": "mixed",
+      "phrases": [
+        "website",
+        "web site",
+        "сайт",
+        "веб сайт",
+        "веб интерфейс",
+        "интерфейс сайта",
+        "landing page",
+        "лендинг"
+      ]
+    },
+    {
+      "kind": "artifact",
+      "id": "page",
+      "locale": "mixed",
+      "phrases": [
+        "landing page",
+        "лендинг"
+      ]
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "router-fixture-pack/1.0",
+  "schemaVersion": "router-fixture-pack/1.1",
   "domain": {
     "id": "mobile",
     "displayName": "Synthetic Mobile",
@@ -34,5 +34,23 @@
       "instructionBytes": 10000,
       "strictContract": "valid"
     }
-  ]
+  ],
+  "vocabulary": {
+    "schemaVersion": "routing-vocabulary/1.0",
+    "owner": { "kind": "domain", "id": "mobile" },
+    "entries": [
+      {
+        "kind": "artifact",
+        "id": "mobile-interface",
+        "locale": "mixed",
+        "phrases": ["мобильное приложение", "mobile app"]
+      },
+      {
+        "kind": "artifact",
+        "id": "mobile-screen",
+        "locale": "mixed",
+        "phrases": ["экран приложения", "app screen", "screen"]
+      }
+    ]
+  }
 }

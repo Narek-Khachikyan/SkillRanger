@@ -1,4 +1,5 @@
 import type { ProjectFingerprint, RegistrySkill } from "../types.ts";
+import type { RoutingContext } from "./context.ts";
 import { orderScoredCandidates, scoreFreshness, scoreSharedFeatures } from "../recommender/scoring.ts";
 import type {
   DomainCandidate,
@@ -98,6 +99,7 @@ export type RetrieveSkillCandidatesInput = {
   fingerprint?: ProjectFingerprint;
   skillInputs?: Record<string, Record<string, unknown>>;
   deferRequiredCapabilities?: boolean;
+  routingContext?: RoutingContext;
   routingDate?: string;
   routingIntentTags?: string[];
   maxSelectedRisk?: RouterSelectableRisk;

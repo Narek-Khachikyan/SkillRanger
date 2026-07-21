@@ -1,4 +1,5 @@
 import type { ProjectFingerprint } from "../types.ts";
+import type { RoutingContext } from "./context.ts";
 import type {
   DomainCandidate,
   TaskProfile,
@@ -28,6 +29,7 @@ export type RouterDomainResolverInput = {
   eligiblePrimaryDomainIds?: Iterable<string>;
   thresholds?: Partial<typeof defaultRouterThresholds>;
   routingIntentTags?: string[];
+  routingContext?: RoutingContext;
 };
 
 export type DomainScore = {

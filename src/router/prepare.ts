@@ -13,6 +13,11 @@ import { loadLocalRegistry } from "../registry/index.ts";
 import type { ProjectFingerprint, Recommendation, RegistrySkill } from "../types.ts";
 import { scanProject } from "../scanner/index.ts";
 import { loadRouterFixturePacks } from "./fixtures.ts";
+import { buildRoutingContext, RoutingContextError } from "./context.ts";
+import { canonicalSkillRoutingDocument } from "./metadata.ts";
+import { coreRoutingVocabulary } from "./vocabulary/core.ts";
+import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "./vocabulary/load.ts";
+import { RoutingVocabularyValidationError } from "./vocabulary/validate.ts";
 import { analyzeTask } from "./analyzer.ts";
 import { composeSkillSet, defaultRouterLimits, type RouterSkillMetadata } from "./composer.ts";
 import { createContinuationToken, validateContinuation, type RouterClarificationQuestion } from "./continuation.ts";
@@ -322,12 +327,31 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
   const metadata = (await Promise.all(skills.map((skill) => skillMetadata(input.projectRoot, targetAgent, skill, strict, input.skillInputs ?? {}, capabilities))))
     .filter((skill): skill is PreparedMetadata => skill !== undefined);
   const allMetadata = [...metadata, ...fixtureMetadata] as RouterSkillMetadata[];
+  const canonicalSkills = allMetadata.map(canonicalSkillRoutingDocument);
+  let routingContext;
+  try {
+    const routingPacks = input.registry.kind === "test-fixture"
+      ? adaptFixtureRoutingPacks(fixturePacks)
+      : await loadBundledRoutingPacks(packs as BundledRouterPack[]);
+    routingContext = buildRoutingContext({
+      packs: routingPacks,
+      skills: canonicalSkills,
+      coreVocabulary: coreRoutingVocabulary,
+      baseRegistryDigest: digest(allMetadata),
+    });
+  } catch (error) {
+    if (error instanceof RoutingContextError || error instanceof RoutingVocabularyValidationError ||
+      (error instanceof Error && error.message.startsWith("routing-vocabulary-"))) {
+      throw new RouterPrepareError("routing-integrity", "Routing vocabulary or ownership metadata is invalid.");
+    }
+    throw error;
+  }
   const domains = packs.map(domainMetadata);
-  const analysis = analyzeTask({ prompt: parsed.normalizedIntent, domains, skills: allMetadata });
-  const registryDigest = digest(allMetadata);
+  const analysis = analyzeTask({ prompt: parsed.normalizedIntent, domains, skills: allMetadata, routingContext });
+  const registryDigest = routingContext.routingRegistryDigest;
   const projectIdentity = await new RouterStore(input.projectRoot).projectIdentity();
   const promptProjection = { actions: analysis.profile.actions, artifactTypes: analysis.profile.artifactTypes, technologies: analysis.profile.technologies, qualityGoals: analysis.profile.qualityGoals, acceptanceCriteria: analysis.profile.acceptanceCriteria, domains: analysis.profile.domains.map(({ id }) => id), subtasks: analysis.profile.subtasks };
-  const resolution = resolveDomains({ profile: analysis.profile, domains, skills: allMetadata, fingerprint, availableDomainIds: packs.map(({ id }) => id), thresholds: defaultRouterThresholds, routingIntentTags: analysis.routingIntentTags });
+  const resolution = resolveDomains({ profile: analysis.profile, domains, skills: allMetadata, fingerprint, availableDomainIds: packs.map(({ id }) => id), thresholds: defaultRouterThresholds, routingIntentTags: analysis.routingIntentTags, routingContext });
   if (input.continuationToken && !resolution.clarificationRequired) {
     throw new RouterPrepareError("continuation-invalid", "Continuation input does not match a routing clarification.");
   }
@@ -365,6 +389,7 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
     fingerprint,
     routingDate,
     routingIntentTags: analysis.routingIntentTags,
+    routingContext,
     limits: { ...defaultRouterLimits, maxSelectedRisk: config.router.maxSelectedRisk, maxEnvironmentSkills: config.router.maxEnvironmentSkills, maxTaskCompanions: config.router.maxTaskCompanions, maxVerificationSkills: config.router.maxVerificationSkills, maxAgentContextSkills: config.router.maxAgentContextSkills, maxTotalSelectedSkills: config.router.maxTotalSelectedSkills, maxInstructionBytes: config.router.maxInstructionBytes, maxAdditionalReadBytes: config.router.maxAdditionalReadBytes, maxSingleFileBytes: config.router.maxSingleFileBytes },
   });
   const base = common({ activation: { mode: input.activation.mode, ...(parsed.trigger === undefined ? {} : { trigger: parsed.trigger }) }, profile: analysis.profile, fingerprint, targetAgent, domains: applyClarification(selectedPrimary, resolution.candidates), routingDate, registryDigest, configDigest: configResult.digest, warnings: analysis.warnings });

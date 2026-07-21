@@ -1,6 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { taskActionIds, type RiskLevel, type RouterSkillRole, type TaskAction } from "./types.ts";
+import type { RequiredEvidenceRef } from "../domains/types.ts";
+import type { RoutingVocabularyFile } from "./vocabulary/types.ts";
 
 export type RouterGoldenExpected = {
   status: "prepared" | "clarification_required" | "decomposition_required" | "no_matching_skills" | "strict_requirements_unmet" | "context_budget_exceeded";
@@ -24,20 +26,21 @@ export type RouterGoldenCase = {
   expected: RouterGoldenExpected;
 };
 
-export type RouterFixturePack = {
-  schemaVersion: "router-fixture-pack/1.0";
-  domain: {
-    id: string;
-    displayName: string;
-    targetSurface?: string;
-    routing: {
-      aliases: string[];
-      intentTags: string[];
-      artifactTypes: string[];
-      technologyTags: string[];
-      projectTags: string[];
-    };
+export type RouterFixtureDomain = {
+  id: string;
+  displayName: string;
+  targetSurface?: string;
+  routing: {
+    aliases: string[];
+    intentTags: string[];
+    artifactTypes: string[];
+    technologyTags: string[];
+    projectTags: string[];
   };
+};
+
+export type RouterFixturePackBase = {
+  domain: RouterFixtureDomain;
   skills: Array<{
     id: string;
     displayName: string;
@@ -61,6 +64,21 @@ export type RouterFixturePack = {
     strictContract: "valid" | "missing" | "input-required";
   }>;
 };
+
+export type RouterFixturePack =
+  | (RouterFixturePackBase & { schemaVersion: "router-fixture-pack/1.0" })
+  | (Omit<RouterFixturePackBase, "domain"> & {
+      schemaVersion: "router-fixture-pack/1.1";
+      domain: RouterFixtureDomain & {
+        ownership?: Array<{
+          intent: string;
+          primarySkill: string;
+          supportingSkills: string[];
+          requiresEvidence?: RequiredEvidenceRef[];
+        }>;
+      };
+      vocabulary?: RoutingVocabularyFile;
+    });
 
 const goldenStatuses = new Set<RouterGoldenExpected["status"]>([
   "prepared",
@@ -199,10 +217,11 @@ export const loadRouterGoldenCases = async (filePath: string): Promise<RouterGol
 
 const validatePack = (input: unknown, filePath: string): RouterFixturePack => {
   const value = record(input, `fixture pack ${filePath}`);
-  exactKeys(value, ["schemaVersion", "domain", "skills"], [], `fixture pack ${filePath}`);
-  if (value.schemaVersion !== "router-fixture-pack/1.0") throw new Error(`fixture pack ${filePath} has an unsupported schemaVersion`);
+  const v11 = value.schemaVersion === "router-fixture-pack/1.1";
+  exactKeys(value, ["schemaVersion", "domain", "skills"], v11 ? ["vocabulary"] : [], `fixture pack ${filePath}`);
+  if (value.schemaVersion !== "router-fixture-pack/1.0" && !v11) throw new Error(`fixture pack ${filePath} has an unsupported schemaVersion`);
   const domain = record(value.domain, `fixture pack ${filePath}.domain`);
-  exactKeys(domain, ["id", "displayName", "routing"], ["targetSurface"], `fixture pack ${filePath}.domain`);
+  exactKeys(domain, ["id", "displayName", "routing"], v11 ? ["targetSurface", "ownership"] : ["targetSurface"], `fixture pack ${filePath}.domain`);
   const domainId = id(domain.id, `fixture pack ${filePath}.domain.id`);
   string(domain.displayName, `fixture pack ${filePath}.domain.displayName`);
   if (domain.targetSurface !== undefined) id(domain.targetSurface, `fixture pack ${filePath}.domain.targetSurface`);
@@ -231,6 +250,20 @@ const validatePack = (input: unknown, filePath: string): RouterFixturePack => {
     return skill;
   });
   if (new Set(skills.map((skill) => skill.id)).size !== skills.length) throw new Error(`fixture pack ${filePath} has duplicate skill IDs`);
+  if (v11 && domain.ownership !== undefined) {
+    if (!Array.isArray(domain.ownership)) throw new Error(`fixture pack ${filePath}.domain.ownership must be an array`);
+    for (const [index, rawRule] of domain.ownership.entries()) {
+      const at = `fixture pack ${filePath}.domain.ownership[${index}]`;
+      const rule = record(rawRule, at);
+      exactKeys(rule, ["intent", "primarySkill", "supportingSkills"], ["requiresEvidence"], at);
+      id(rule.intent, `${at}.intent`);
+      const primarySkill = id(rule.primarySkill, `${at}.primarySkill`);
+      const supportingSkills = stringArray(rule.supportingSkills, `${at}.supportingSkills`);
+      const skillIds = new Set(skills.map((skill) => skill.id));
+      if (!skillIds.has(primarySkill) || supportingSkills.some((skillId) => !skillIds.has(skillId))) throw new Error(`${at} references an unknown fixture skill`);
+      if (rule.requiresEvidence !== undefined && !Array.isArray(rule.requiresEvidence)) throw new Error(`${at}.requiresEvidence must be an array`);
+    }
+  }
   return structuredClone(value) as RouterFixturePack;
 };
 

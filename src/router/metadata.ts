@@ -13,6 +13,26 @@ export type CanonicalSkillRoutingDocument = {
   };
 };
 
+export const canonicalSkillRoutingDocument = (skill: {
+  id: string;
+  domains: string[];
+  actions: TaskAction[];
+  artifactTypes: string[];
+  intentTags: string[];
+  technologyTags: string[];
+  qualityGoals: string[];
+}): CanonicalSkillRoutingDocument => ({
+  skillId: skill.id,
+  domains: [...skill.domains],
+  canonical: {
+    actions: [...skill.actions],
+    artifactTypes: [...skill.artifactTypes],
+    intentTags: [...skill.intentTags],
+    technologyTags: [...skill.technologyTags],
+    qualityGoals: [...skill.qualityGoals],
+  },
+});
+
 export const routerMetadataLimits = {
   maxArrayItems: 64,
   maxTokenBytes: 128,

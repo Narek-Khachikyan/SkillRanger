@@ -1,4 +1,5 @@
 import type { ProjectFingerprint } from "../types.ts";
+import type { RoutingContext } from "./context.ts";
 import type {
   TaskAction,
   TaskLocale,
@@ -36,6 +37,7 @@ export type AnalyzeTaskInput = {
   domains: TaskAnalyzerDomainMetadata[];
   skills: TaskAnalyzerSkillMetadata[];
   fingerprint?: ProjectFingerprint;
+  routingContext?: RoutingContext;
 };
 
 export type TaskAnalysisResult = {

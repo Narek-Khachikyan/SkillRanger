@@ -233,12 +233,14 @@ export const buildCanonicalBaselineEntries = (input: {
   claims: Array<{ kind: RoutingSignalKind; id: string }>;
   domainAliases?: string[];
 }): OwnedRoutingVocabularyEntry[] => {
+  const uniquePhrases = (phrases: string[]) => phrases.filter((phrase, index, all) =>
+    all.findIndex((candidate) => normalizeRoutingText(candidate).normalized === normalizeRoutingText(phrase).normalized) === index);
   const result: OwnedRoutingVocabularyEntry[] = input.claims.map(({ kind, id }) => {
     const spaced = id.replace(/[-_]+/gu, " ");
     return {
       kind,
       id,
-      phrases: spaced === id ? [id] : [id, spaced],
+      phrases: uniquePhrases([id, spaced]),
       locales: ["mixed"],
       ownerIds: [input.ownerId],
       localeMultiplier: 1,
@@ -253,10 +255,10 @@ export const buildCanonicalBaselineEntries = (input: {
     if (domain) result.push({
       kind: "domain",
       id: domain.id,
-      phrases: [...new Set(input.domainAliases.flatMap((alias) => {
+      phrases: uniquePhrases(input.domainAliases.flatMap((alias) => {
         const spaced = alias.replace(/[-_]+/gu, " ");
-        return spaced === alias ? [alias] : [alias, spaced];
-      }))],
+        return [alias, spaced];
+      })),
       locales: ["mixed"],
       ownerIds: [input.ownerId],
       localeMultiplier: 1,

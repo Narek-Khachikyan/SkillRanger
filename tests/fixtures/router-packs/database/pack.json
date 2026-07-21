@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "router-fixture-pack/1.0",
+  "schemaVersion": "router-fixture-pack/1.1",
   "domain": {
     "id": "database",
     "displayName": "Synthetic Database",
@@ -34,5 +34,23 @@
       "instructionBytes": 9000,
       "strictContract": "valid"
     }
-  ]
+  ],
+  "vocabulary": {
+    "schemaVersion": "routing-vocabulary/1.0",
+    "owner": { "kind": "domain", "id": "database" },
+    "entries": [
+      {
+        "kind": "artifact",
+        "id": "sql-query",
+        "locale": "mixed",
+        "phrases": ["queries", "database queries", "sql queries", "запросы к базе"]
+      },
+      {
+        "kind": "artifact",
+        "id": "database-schema",
+        "locale": "mixed",
+        "phrases": ["схема базы"]
+      }
+    ]
+  }
 }

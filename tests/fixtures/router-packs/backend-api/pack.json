@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "router-fixture-pack/1.0",
+  "schemaVersion": "router-fixture-pack/1.1",
   "domain": {
     "id": "backend-api",
     "displayName": "Synthetic Backend API",
@@ -188,5 +188,25 @@
       "instructionBytes": 1000,
       "strictContract": "input-required"
     }
-  ]
+  ],
+  "vocabulary": {
+    "schemaVersion": "routing-vocabulary/1.0",
+    "owner": { "kind": "domain", "id": "backend-api" },
+    "entries": [
+      {
+        "kind": "artifact",
+        "id": "authentication-flow",
+        "locale": "mixed",
+        "phrases": [
+          "authentication",
+          "authorization",
+          "auth",
+          "refresh token",
+          "аутентификация",
+          "авторизация",
+          "токен обновления"
+        ]
+      }
+    ]
+  }
 }

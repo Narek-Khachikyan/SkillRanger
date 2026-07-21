@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "router-fixture-pack/1.0",
+  "schemaVersion": "router-fixture-pack/1.1",
   "domain": {
     "id": "qa-testing",
     "displayName": "Synthetic QA Testing",
@@ -34,5 +34,23 @@
       "instructionBytes": 7000,
       "strictContract": "valid"
     }
-  ]
+  ],
+  "vocabulary": {
+    "schemaVersion": "routing-vocabulary/1.0",
+    "owner": { "kind": "domain", "id": "qa-testing" },
+    "entries": [
+      {
+        "kind": "artifact",
+        "id": "integration-test",
+        "locale": "mixed",
+        "phrases": ["integration test", "integration tests", "интеграционный тест", "интеграционные тесты"]
+      },
+      {
+        "kind": "artifact",
+        "id": "test-suite",
+        "locale": "mixed",
+        "phrases": ["integration test", "integration tests", "интеграционный тест", "интеграционные тесты"]
+      }
+    ]
+  }
 }

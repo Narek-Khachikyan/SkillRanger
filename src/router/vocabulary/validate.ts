@@ -35,6 +35,7 @@ export class RoutingVocabularyValidationError extends Error {
 
 export type ValidatedRoutingClaim = {
   normalizedPhrase: string;
+  exactPhrases: string[];
   kind: RoutingSignalKind;
   id: string;
   ownerIds: string[];
@@ -154,6 +155,7 @@ export const validateRoutingVocabulary = (input: {
       normalizedPositive.add(normalized);
       claims.push({
         normalizedPhrase: normalized,
+        exactPhrases: [phrase.normalize("NFKC").toLocaleLowerCase("und")],
         kind,
         id: entryId,
         ownerIds: [owner.id as string],
@@ -227,6 +229,7 @@ export const validateRoutingVocabularyRegistry = (
     merged.push({
       ...first,
       ownerIds: [...new Set(selected.flatMap(({ ownerIds }) => ownerIds))].sort(),
+      exactPhrases: [...new Set(selected.flatMap(({ exactPhrases }) => exactPhrases))].sort(),
       locales: [...new Set(selected.flatMap(({ locales }) => locales))].sort() as RoutingVocabularyLocale[],
       negativePhrases: [...new Set(selected.flatMap(({ negativePhrases }) => negativePhrases))].sort(),
       weight: Math.max(...selected.map(({ weight }) => weight)),

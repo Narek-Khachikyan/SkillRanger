@@ -32,13 +32,23 @@ test("bundled frontend domain registers through the generic domain API", async (
 });
 
 test("domain manifest v1.1 accepts routing vocabulary and typed required evidence without weakening v1.0", () => {
-  const v10 = structuredClone(getDomainPack("frontend")?.manifest);
-  assert.ok(v10);
+  const bundled = structuredClone(getDomainPack("frontend")?.manifest);
+  assert.ok(bundled);
+  const { routingVocabulary: _routingVocabulary, ...v10Artifacts } = bundled.artifacts;
+  const v10 = {
+    ...bundled,
+    schemaVersion: "1.0",
+    artifacts: v10Artifacts,
+    ownership: bundled.ownership.map((rule) => ({
+      ...rule,
+      ...(rule.requiresEvidence ? { requiresEvidence: rule.requiresEvidence.map((evidence) => typeof evidence === "string" ? evidence : evidence.id) } : {}),
+    })),
+  };
   const v11 = {
-    ...v10,
+    ...bundled,
     schemaVersion: "1.1",
-    artifacts: { ...v10.artifacts, routingVocabulary: "routing.vocabulary.json" },
-    ownership: v10.ownership.map((rule) => rule.primarySkill === "frontend.design-to-code"
+    artifacts: { ...bundled.artifacts, routingVocabulary: "routing.vocabulary.json" },
+    ownership: bundled.ownership.map((rule) => rule.primarySkill === "frontend.design-to-code"
       ? {
           ...rule,
           requiresEvidence: [{ kind: "intent", id: "visual-reference", allowedSources: ["prompt-exact"] }],

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "1.1",
   "id": "frontend",
   "displayName": "Frontend",
   "version": "1.0.0",
@@ -65,7 +65,8 @@
     "evalSuite": "evals/frontend/suite.json",
     "capabilityRecords": [
       "capabilities/default-constrained.json"
-    ]
+    ],
+    "routingVocabulary": "routing.vocabulary.json"
   },
   "ownership": [
     {
@@ -97,7 +98,14 @@
         "frontend.tailwind-ui-polish"
       ],
       "requiresEvidence": [
-        "visual-reference"
+        {
+          "kind": "intent",
+          "id": "visual-reference",
+          "allowedSources": [
+            "prompt-exact",
+            "prompt-normalized"
+          ]
+        }
       ]
     },
     {
