@@ -1,5 +1,9 @@
 import type { ProjectFingerprint } from "../types.ts";
 import type { RoutingContext } from "./context.ts";
+import { buildCanonicalRequirements, routingSignalDigest, type CanonicalRequirement, type InternalRoutingSignal } from "./requirements.ts";
+import { inferRequestFrameActions } from "./request-frame.ts";
+import { matchRoutingVocabulary, type MatchedRoutingSignal } from "./vocabulary/match.ts";
+import { normalizeRoutingText, type NormalizedText } from "./vocabulary/normalize.ts";
 import type {
   TaskAction,
   TaskLocale,
@@ -37,188 +41,29 @@ export type AnalyzeTaskInput = {
   domains: TaskAnalyzerDomainMetadata[];
   skills: TaskAnalyzerSkillMetadata[];
   fingerprint?: ProjectFingerprint;
-  routingContext?: RoutingContext;
+  routingContext: RoutingContext;
 };
 
 export type TaskAnalysisResult = {
   profile: TaskProfile;
   warnings: string[];
   routingIntentTags: string[];
+  requirements: CanonicalRequirement[];
+  matchedSignals: MatchedRoutingSignal[];
+  signalDigest: string;
 };
 
-type Match = { id: string; index: number };
-type Alias = { phrase: string; ids: string[] };
-
-const actionAliases: Record<TaskAction, string[]> = {
-  create: ["create", "build", "add", "создай", "создать", "добавь", "добавить"],
-  implement: ["implement", "implementation", "реализуй", "реализовать", "внедри", "внедрить"],
-  modify: ["modify", "change", "update", "измени", "изменить", "обнови", "обновить"],
-  fix: ["fix", "repair", "исправь", "исправить", "почини", "починить"],
-  debug: ["debug", "diagnose", "отладь", "отладить", "диагностируй", "диагностировать"],
-  review: ["review", "audit", "ревью", "проведи ревью", "проанализируй"],
-  test: ["test", "tests", "testing", "тест", "тесты", "тестирование", "протестируй"],
-  verify: ["verify", "validate", "check", "проверь", "проверить", "валидация"],
-  document: ["document", "documentation", "документируй", "документация"],
-  deploy: ["deploy", "deployment", "разверни", "развернуть", "деплой"],
-  migrate: ["migrate", "migration", "мигрируй", "миграция", "перенеси"],
-  optimize: ["optimize", "optimization", "оптимизируй", "оптимизация", "ускорь"],
-  research: ["research", "исследуй", "исследование", "изучи"],
-  design: ["design", "redesign", "спроектируй", "дизайн", "редизайн", "переработай дизайн"],
-  configure: ["configure", "configuration", "настрой", "настроить", "конфигурация"],
-  investigate: ["investigate", "investigation", "расследуй", "расследование", "разберись"],
+const signalKindOrder = ["domain", "action", "artifact", "intent", "technology", "quality", "constraint", "acceptance"] as const;
+const canonical = (value: string) => value.normalize("NFKC").toLocaleLowerCase("und").replaceAll("ё", "е");
+const unique = <T>(items: T[], key: (item: T) => string) => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const value = key(item);
+    if (seen.has(value)) return false;
+    seen.add(value);
+    return true;
+  });
 };
-
-const vocabularyAliases: Alias[] = [
-  { phrase: "web interface", ids: ["web-interface"] },
-  { phrase: "website", ids: ["web-interface"] },
-  { phrase: "web site", ids: ["web-interface"] },
-  { phrase: "сайт", ids: ["web-interface"] },
-  { phrase: "веб сайт", ids: ["web-interface"] },
-  { phrase: "веб интерфейс", ids: ["web-interface"] },
-  { phrase: "интерфейс сайта", ids: ["web-interface"] },
-  { phrase: "mobile application", ids: ["mobile-interface"] },
-  { phrase: "mobile app", ids: ["mobile-interface"] },
-  { phrase: "mobile interface", ids: ["mobile-interface"] },
-  { phrase: "мобильное приложение", ids: ["mobile-interface"] },
-  { phrase: "мобильный интерфейс", ids: ["mobile-interface"] },
-  { phrase: "mobile screen", ids: ["mobile-screen"] },
-  { phrase: "screen", ids: ["mobile-screen"] },
-  { phrase: "экран приложения", ids: ["mobile-screen"] },
-  { phrase: "integration tests", ids: ["integration-test", "test-suite"] },
-  { phrase: "integration test", ids: ["integration-test", "test-suite"] },
-  { phrase: "интеграционные тесты", ids: ["integration-test", "test-suite"] },
-  { phrase: "интеграционный тест", ids: ["integration-test", "test-suite"] },
-  { phrase: "authentication", ids: ["authentication-flow"] },
-  { phrase: "authorization", ids: ["authentication-flow"] },
-  { phrase: "auth", ids: ["authentication-flow"] },
-  { phrase: "refresh token", ids: ["authentication-flow"] },
-  { phrase: "токен обновления", ids: ["authentication-flow"] },
-  { phrase: "авторизация", ids: ["authentication-flow"] },
-  { phrase: "аутентификация", ids: ["authentication-flow"] },
-  { phrase: "sql queries", ids: ["sql-query"] },
-  { phrase: "queries", ids: ["sql-query"] },
-  { phrase: "database queries", ids: ["sql-query"] },
-  { phrase: "запросы к базе", ids: ["sql-query"] },
-  { phrase: "database schema", ids: ["database-schema"] },
-  { phrase: "схема базы", ids: ["database-schema"] },
-  { phrase: "security review", ids: ["security-review"] },
-  { phrase: "аудит безопасности", ids: ["security-review"] },
-  { phrase: "landing page", ids: ["page", "web-interface"] },
-  { phrase: "лендинг", ids: ["page", "web-interface"] },
-  { phrase: "компонент", ids: ["component"] },
-  { phrase: "страница", ids: ["page"] },
-  { phrase: "форма", ids: ["form"] },
-];
-
-const qualityAliases: Alias[] = [
-  { phrase: "accessibility", ids: ["accessibility"] },
-  { phrase: "доступность", ids: ["accessibility"] },
-  { phrase: "performance", ids: ["performance"] },
-  { phrase: "производительность", ids: ["performance"] },
-  { phrase: "security", ids: ["security"] },
-  { phrase: "безопасность", ids: ["security"] },
-  { phrase: "correctness", ids: ["correctness"] },
-  { phrase: "корректность", ids: ["correctness"] },
-  { phrase: "coverage", ids: ["coverage"] },
-  { phrase: "покрытие", ids: ["coverage"] },
-  { phrase: "usability", ids: ["usability"] },
-  { phrase: "удобство использования", ids: ["usability"] },
-];
-
-const constraintAliases: Alias[] = [
-  { phrase: "without network", ids: ["no-network"] },
-  { phrase: "no network", ids: ["no-network"] },
-  { phrase: "offline only", ids: ["no-network"] },
-  { phrase: "без сети", ids: ["no-network"] },
-  { phrase: "без интернета", ids: ["no-network"] },
-  { phrase: "do not install", ids: ["no-installation"] },
-  { phrase: "without installation", ids: ["no-installation"] },
-  { phrase: "не устанавливай", ids: ["no-installation"] },
-  { phrase: "без установки", ids: ["no-installation"] },
-  { phrase: "read only", ids: ["read-only"] },
-  { phrase: "только чтение", ids: ["read-only"] },
-];
-
-const acceptanceAliases: Alias[] = [
-  { phrase: "tests pass", ids: ["tests-pass"] },
-  { phrase: "tests passing", ids: ["tests-pass"] },
-  { phrase: "тесты проходят", ids: ["tests-pass"] },
-  { phrase: "тесты должны пройти", ids: ["tests-pass"] },
-  { phrase: "static analysis passes", ids: ["static-analysis-pass"] },
-  { phrase: "линтер проходит", ids: ["static-analysis-pass"] },
-  { phrase: "security gates pass", ids: ["security-gates-pass"] },
-  { phrase: "проверки безопасности проходят", ids: ["security-gates-pass"] },
-  { phrase: "accessibility gates pass", ids: ["accessibility-gates-pass"] },
-  { phrase: "проверки доступности проходят", ids: ["accessibility-gates-pass"] },
-  { phrase: "measure performance", ids: ["performance-measured"] },
-  { phrase: "performance measured", ids: ["performance-measured"] },
-  { phrase: "измерь производительность", ids: ["performance-measured"] },
-  { phrase: "schema is valid", ids: ["schema-valid"] },
-  { phrase: "схема валидна", ids: ["schema-valid"] },
-  { phrase: "deployment smoke passes", ids: ["deployment-smoke-pass"] },
-  { phrase: "smoke test passes", ids: ["deployment-smoke-pass"] },
-];
-
-const normalize = (value: string) => value
-  .normalize("NFKC")
-  .toLocaleLowerCase("und")
-  .replaceAll("ё", "е");
-
-const phrasePattern = (phrase: string) => {
-  const escaped = normalize(phrase)
-    .split(/[-\s]+/u)
-    .filter(Boolean)
-    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join("[-\\s]+");
-  return new RegExp(`(^|[^\\p{L}\\p{N}_])(${escaped})(?=$|[^\\p{L}\\p{N}_])`, "gu");
-};
-
-const positions = (source: string, phrase: string) => {
-  const result: Array<{ index: number; end: number }> = [];
-  for (const match of source.matchAll(phrasePattern(phrase))) {
-    const index = (match.index ?? 0) + match[1].length;
-    result.push({ index, end: index + match[2].length });
-  }
-  return result;
-};
-
-const orderedUniqueMatches = (matches: Match[]) => {
-  const firstById = new Map<string, number>();
-  for (const match of matches) {
-    const previous = firstById.get(match.id);
-    if (previous === undefined || match.index < previous) firstById.set(match.id, match.index);
-  }
-  return [...firstById]
-    .sort(([leftId, leftIndex], [rightId, rightIndex]) => leftIndex - rightIndex || leftId.localeCompare(rightId))
-    .map(([id, index]) => ({ id, index }));
-};
-
-const matchAliases = (source: string, aliases: Alias[], allowed?: ReadonlySet<string>) => {
-  const candidates = aliases.flatMap(({ phrase, ids }) => positions(source, phrase).map(({ index, end }) => ({
-    index,
-    end,
-    phrase: normalize(phrase),
-    ids: ids.filter((id) => !allowed || allowed.has(id)),
-  }))).filter(({ ids }) => ids.length > 0).sort((left, right) =>
-    (right.end - right.index) - (left.end - left.index) || left.index - right.index || left.phrase.localeCompare(right.phrase),
-  );
-  const claimed: Array<{ index: number; end: number }> = [];
-  const matches: Match[] = [];
-  for (const candidate of candidates) {
-    const exact = claimed.some(({ index, end }) => index === candidate.index && end === candidate.end);
-    const overlapsLonger = claimed.some(({ index, end }) => candidate.index < end && candidate.end > index);
-    if (overlapsLonger && !exact) continue;
-    if (!exact) claimed.push({ index: candidate.index, end: candidate.end });
-    matches.push(...candidate.ids.map((id) => ({ id, index: candidate.index })));
-  }
-  return orderedUniqueMatches(matches);
-};
-
-const canonicalAliases = (ids: Iterable<string>): Alias[] => [...new Set(ids)].flatMap((id) => {
-  const phrase = id.replaceAll("-", " ").replaceAll("_", " ");
-  return phrase === id ? [{ phrase: id, ids: [id] }] : [{ phrase: id, ids: [id] }, { phrase, ids: [id] }];
-});
-
 const detectLocale = (source: string): TaskLocale => {
   const hasEnglish = /\p{Script=Latin}/u.test(source);
   const hasRussian = /\p{Script=Cyrillic}/u.test(source);
@@ -228,257 +73,199 @@ const detectLocale = (source: string): TaskLocale => {
   return "unknown";
 };
 
-const evidence = (
-  source: TaskSignalEvidence["source"],
-  kind: TaskSignalEvidence["kind"],
-  matches: Match[],
-): TaskSignalEvidence[] => matches.map(({ id }) => ({ source, kind, id }));
+const fingerprintSignalNames = (fingerprint: ProjectFingerprint | undefined) => fingerprint ? [
+  ...fingerprint.languages.map(({ name, confidence }) => ({ name, confidence })),
+  ...fingerprint.frameworks.map(({ name, confidence }) => ({ name, confidence })),
+  ...fingerprint.testing.map(({ name, confidence }) => ({ name, confidence })),
+  ...fingerprint.infrastructure.map(({ name, confidence }) => ({ name, confidence })),
+  ...fingerprint.tags.map((name) => ({ name, confidence: 0.5 })),
+] : [];
 
-const uniqueEvidence = (items: TaskSignalEvidence[]) => {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    const key = `${item.source}:${item.kind}:${item.id}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-};
-
-const domainMatches = (
-  source: string,
-  domains: TaskAnalyzerDomainMetadata[],
-  artifacts: Match[],
-  technologies: Match[],
-) => {
-  const matches: Match[] = [];
-  for (const domain of domains) {
-    const direct = matchAliases(source, canonicalAliases([
-      domain.id,
-      ...domain.routing.aliases,
-      ...domain.routing.intentTags,
-    ]));
-    const artifactIndex = artifacts.find(({ id }) => domain.routing.artifactTypes.includes(id))?.index;
-    const technologyIndex = technologies.find(({ id }) => domain.routing.technologyTags.includes(id))?.index;
-    const projectIndex = direct[0]?.index;
-    if (projectIndex !== undefined || artifactIndex !== undefined || technologyIndex !== undefined) {
-      matches.push({
-        id: domain.id,
-        index: Math.min(projectIndex ?? Infinity, artifactIndex ?? Infinity, technologyIndex ?? Infinity),
-      });
-    }
-  }
-  return orderedUniqueMatches(matches);
-};
-
-const fingerprintMatches = (
+const fingerprintSignals = (
   fingerprint: ProjectFingerprint | undefined,
-  technologyVocabulary: ReadonlySet<string>,
   domains: TaskAnalyzerDomainMetadata[],
-) => {
-  if (!fingerprint) return { technologies: [] as Match[], domains: [] as Match[] };
-  const signalNames = [
-    ...fingerprint.languages.map(({ name }) => name),
-    ...fingerprint.frameworks.map(({ name }) => name),
-    ...fingerprint.testing.map(({ name }) => name),
-    ...fingerprint.infrastructure.map(({ name }) => name),
-    ...fingerprint.tags,
-  ].map(normalize);
-  const technologies = orderedUniqueMatches(signalNames.flatMap((name, index) => {
-    const canonical = [...technologyVocabulary].find((id) => normalize(id) === name);
-    return canonical ? [{ id: canonical, index }] : [];
-  }));
-  const domainsFound: Match[] = [];
-  domains.forEach((domain) => {
-    const projectTags = new Set(domain.routing.projectTags.map(normalize));
-    const index = signalNames.findIndex((name) => projectTags.has(name));
-    if (index >= 0) domainsFound.push({ id: domain.id, index });
+  context: RoutingContext,
+): InternalRoutingSignal[] => {
+  const names = fingerprintSignalNames(fingerprint).map(({ name, confidence }) => ({ name: canonical(name), confidence }));
+  const technologyOwners = new Map<string, string[]>();
+  for (const [ownerKey, allowlists] of context.ownerAllowlists) {
+    if (!ownerKey.startsWith("domain:")) continue;
+    const owner = ownerKey.slice("domain:".length);
+    for (const id of allowlists.technologyIds) technologyOwners.set(id, [...(technologyOwners.get(id) ?? []), owner]);
+  }
+  const technologies = [...technologyOwners].flatMap(([id, ownerIds]) => {
+    const matches = names.filter(({ name }) => name === canonical(id));
+    if (!matches.length) return [];
+    return [{ kind: "technology" as const, id, source: "fingerprint" as const, evidenceEligible: false, ownerIds: [...new Set(ownerIds)].sort(), confidence: Math.max(...matches.map(({ confidence }) => confidence)) }];
   });
-  return { technologies, domains: orderedUniqueMatches(domainsFound) };
+  const domainSignals = domains.flatMap((domain) => {
+    const matches = names.filter(({ name }) => domain.routing.projectTags.some((tag) => canonical(tag) === name));
+    if (!matches.length) return [];
+    return [{ kind: "domain" as const, id: domain.id, source: "fingerprint" as const, evidenceEligible: false, ownerIds: [domain.id], confidence: Math.max(...matches.map(({ confidence }) => confidence)) }];
+  });
+  return [...technologies, ...domainSignals];
 };
 
-const normalizedGoal = (actions: Match[], artifacts: Match[], technologies: Match[] = [], qualityGoals: Match[] = []) => [
-  ...actions.map(({ id }) => id),
-  ...artifacts.map(({ id }) => id),
-  ...technologies.map(({ id }) => id),
-  ...qualityGoals.map(({ id }) => id),
-].join(" ");
+const idsInOrder = (signals: Array<Pick<MatchedRoutingSignal, "kind" | "id" | "start">>, kind: MatchedRoutingSignal["kind"]) =>
+  unique(signals.filter((signal) => signal.kind === kind).sort((left, right) => left.start - right.start || left.id.localeCompare(right.id)), ({ id }) => id).map(({ id }) => id);
 
-const analyzeSegment = (
-  source: string,
+const domainIdsForPrompt = (
+  signals: MatchedRoutingSignal[],
   domains: TaskAnalyzerDomainMetadata[],
-  actionVocabulary: ReadonlySet<TaskAction>,
-  artifactAliases: Alias[],
-  artifactVocabulary: ReadonlySet<string>,
-  technologyAliases: Alias[],
-  technologyVocabulary: ReadonlySet<string>,
-) => {
-  const actionAliasesForVocabulary: Alias[] = [...actionVocabulary].flatMap((id) => [
-    { phrase: id, ids: [id] },
-    ...actionAliases[id].map((phrase) => ({ phrase, ids: [id] })),
-  ]);
-  const actions = matchAliases(source, actionAliasesForVocabulary) as Match[];
-  const artifacts = matchAliases(source, artifactAliases, artifactVocabulary);
-  const technologies = matchAliases(source, technologyAliases, technologyVocabulary);
-  const matchedDomains = domainMatches(source, domains, artifacts, technologies);
-  return { actions, artifacts, technologies, domains: matchedDomains };
-};
+) => domains.flatMap((domain) => {
+  const relevant = signals.filter((signal) =>
+    (signal.kind === "domain" && signal.id === domain.id) ||
+    (signal.kind === "artifact" && domain.routing.artifactTypes.includes(signal.id)) ||
+    (signal.kind === "technology" && domain.routing.technologyTags.includes(signal.id)) ||
+    (signal.kind === "intent" && domain.routing.intentTags.includes(signal.id)));
+  return relevant.length ? [{ id: domain.id, index: Math.min(...relevant.map(({ start }) => start)) }] : [];
+}).sort((left, right) => left.index - right.index || left.id.localeCompare(right.id));
 
-const buildSubtasks = (
-  source: string,
+const normalizedGoal = (input: { actions: string[]; artifacts: string[]; technologies: string[]; quality: string[] }) =>
+  [...input.actions, ...input.artifacts, ...input.technologies, ...input.quality].join(" ");
+
+const segmentSubtasks = (
+  text: NormalizedText,
+  signals: MatchedRoutingSignal[],
+  protectedBoundaryIndexes: number[],
   domains: TaskAnalyzerDomainMetadata[],
-  actionVocabulary: ReadonlySet<TaskAction>,
-  artifactAliases: Alias[],
-  artifactVocabulary: ReadonlySet<string>,
-  technologyAliases: Alias[],
-  technologyVocabulary: ReadonlySet<string>,
 ): TaskSubtask[] => {
-  const segments = source.split(/\s*(?:,|;|\band\b|\bи\b)\s*/iu).filter(Boolean);
-  const candidates = segments.map((segment) => analyzeSegment(
-    segment,
-    domains,
-    actionVocabulary,
-    artifactAliases,
-    artifactVocabulary,
-    technologyAliases,
-    technologyVocabulary,
-  )).filter(({ actions, artifacts }) => actions.length > 0 || artifacts.length > 0);
+  const boundaries = text.boundaries.filter((_, index) => !protectedBoundaryIndexes.includes(index))
+    .map(({ tokenIndex }) => tokenIndex).filter((value, index, all) => index === 0 || value !== all[index - 1]);
+  const ranges = [0, ...boundaries, text.tokens.length]
+    .slice(0, -1).map((start, index) => ({ start, end: [0, ...boundaries, text.tokens.length][index + 1] }))
+    .filter(({ start, end }) => end > start);
+  const candidates = ranges.flatMap((range) => {
+    const normalizedStart = text.tokens[range.start]?.normalizedStart ?? 0;
+    const normalizedEnd = text.tokens[range.end - 1]?.normalizedEnd ?? normalizedStart;
+    const segmentSignals = signals.filter(({ start, end }) => start >= normalizedStart && end <= normalizedEnd);
+    const actions = idsInOrder(segmentSignals, "action") as TaskAction[];
+    const artifactTypes = idsInOrder(segmentSignals, "artifact");
+    if (!actions.length && !artifactTypes.length) return [];
+    const technologies = idsInOrder(segmentSignals, "technology");
+    const quality = idsInOrder(segmentSignals, "quality");
+    const intentIds = idsInOrder(segmentSignals, "intent");
+    const candidateDomainIds = domainIdsForPrompt(segmentSignals, domains).map(({ id }) => id);
+    return [{ actions, artifactTypes, technologies, quality, intentIds, candidateDomainIds }];
+  });
   if (candidates.length < 2) return [];
-
-  const usedIds = new Map<string, number>();
+  const used = new Map<string, number>();
   return candidates.map((candidate) => {
-    const goal = normalizedGoal(candidate.actions, candidate.artifacts, candidate.technologies)
-      || candidate.domains.map(({ id }) => id).join(" ");
-    const baseId = [
-      candidate.domains[0]?.id ?? candidate.artifacts[0]?.id ?? "task",
-      candidate.actions[0]?.id ?? "work",
-    ].join("-").slice(0, 128);
-    const occurrence = (usedIds.get(baseId) ?? 0) + 1;
-    usedIds.set(baseId, occurrence);
+    const base = `${candidate.candidateDomainIds[0] ?? candidate.artifactTypes[0] ?? "task"}-${candidate.actions[0] ?? "work"}`.slice(0, 128);
+    const occurrence = (used.get(base) ?? 0) + 1;
+    used.set(base, occurrence);
     return {
-      id: occurrence === 1 ? baseId : `${baseId}-${occurrence}`.slice(0, 128),
-      normalizedGoal: goal,
-      actions: candidate.actions.map(({ id }) => id as TaskAction),
-      artifactTypes: candidate.artifacts.map(({ id }) => id),
-      candidateDomainIds: candidate.domains.map(({ id }) => id),
+      id: occurrence === 1 ? base : `${base}-${occurrence}`.slice(0, 128),
+      normalizedGoal: [
+        ...candidate.actions,
+        ...candidate.artifactTypes,
+        ...candidate.technologies,
+        ...candidate.quality,
+        ...candidate.intentIds.map((id) => `intent:${id}`),
+      ].join(" "),
+      actions: candidate.actions,
+      artifactTypes: candidate.artifactTypes,
+      candidateDomainIds: candidate.candidateDomainIds,
     };
   });
 };
 
-const hasUnknownTechnology = (source: string, knownTechnologyMatches: Match[]) => {
-  const candidate = /(?:\busing\b|\bwith\b|\bна\b|\bиспользуя\b)\s+([\p{L}\p{N}][\p{L}\p{N}._+-]*)/giu.exec(source);
+const hasUnknownTechnology = (source: string, signals: MatchedRoutingSignal[]) => {
+  const candidate = /(?:\busing\b|\bwith\b|\bна\b|\bиспользуя\b)\s+([\p{L}\p{N}][\p{L}\p{N}._+-]*)/iu.exec(source);
   if (!candidate || /^(?:the|a|an|без|no)$/iu.test(candidate[1])) return false;
-  const start = candidate.index + candidate[0].lastIndexOf(candidate[1]);
-  return !knownTechnologyMatches.some(({ index }) => index === start);
+  const normalized = canonical(candidate[1]);
+  return !signals.some(({ kind, id }) => kind === "technology" && canonical(id) === normalized);
 };
 
 export const analyzeTask = ({
   prompt,
   domains,
-  skills,
   fingerprint,
+  routingContext,
 }: AnalyzeTaskInput): TaskAnalysisResult => {
-  const source = normalize(prompt);
-  const actionVocabulary = new Set<TaskAction>(Object.keys(actionAliases) as TaskAction[]);
-  const artifactVocabulary = new Set([
-    ...domains.flatMap(({ routing }) => routing.artifactTypes),
-    ...skills.flatMap(({ artifactTypes }) => artifactTypes),
-  ]);
-  const technologyVocabulary = new Set([
-    ...domains.flatMap(({ routing }) => routing.technologyTags),
-    ...skills.flatMap(({ technologyTags }) => technologyTags),
-  ]);
-  const qualityVocabulary = new Set(skills.flatMap(({ qualityGoals }) => qualityGoals));
-  const intentVocabulary = new Set(skills.flatMap(({ intentTags }) => intentTags));
-  const artifactAliases = [...vocabularyAliases, ...canonicalAliases(artifactVocabulary)];
-  const technologyAliases = canonicalAliases(technologyVocabulary);
-  const intentAliases = [...canonicalAliases(intentVocabulary), ...[...intentVocabulary].flatMap((id) => {
-    const token = id.split(/[-_]/u)[0];
-    return token.length >= 5 && token !== "workflow" ? [{ phrase: token, ids: [id] }] : [];
-  })];
-  const allActionAliases = [...actionVocabulary].flatMap((id) => [
-    { phrase: id, ids: [id] },
-    ...actionAliases[id].map((phrase) => ({ phrase, ids: [id] })),
-  ]);
-
-  const actions = matchAliases(source, allActionAliases) as Array<Match & { id: TaskAction }>;
-  const artifacts = matchAliases(source, artifactAliases, artifactVocabulary);
-  const promptTechnologies = matchAliases(source, technologyAliases, technologyVocabulary);
-  const routingIntentTags = matchAliases(source, intentAliases, intentVocabulary).map(({ id }) => id);
-  const project = fingerprintMatches(fingerprint, technologyVocabulary, domains);
-  const technologies = orderedUniqueMatches([...promptTechnologies, ...project.technologies]);
-  const qualityGoals = matchAliases(
-    source,
-    [...qualityAliases, ...canonicalAliases(qualityVocabulary)],
-    qualityVocabulary,
-  );
-  const constraints = matchAliases(source, constraintAliases);
-  const acceptanceCriteria = matchAliases(source, acceptanceAliases);
-  const promptDomains = domainMatches(source, domains, artifacts, promptTechnologies);
-  const matchedDomainIds = orderedUniqueMatches([...promptDomains, ...project.domains]);
-  const promptIntentEvidence = uniqueEvidence(domains.flatMap((domain) => {
-    const aliases = [domain.id, ...domain.routing.aliases, ...domain.routing.intentTags];
-    return matchAliases(source, canonicalAliases(domain.routing.intentTags), new Set(domain.routing.intentTags))
-      .filter(({ id }) => aliases.some((alias) => normalize(alias) === normalize(id)))
-      .map(({ id }) => ({ source: "prompt" as const, kind: "domain" as const, id }));
+  const text = normalizeRoutingText(prompt);
+  const matched = matchRoutingVocabulary({ text, vocabulary: routingContext.compiledVocabulary });
+  const inferred = inferRequestFrameActions({
+    text,
+    matchedSignals: matched.signals,
+    suppressions: matched.suppressions,
+    creatableArtifactIds: routingContext.creatableArtifactIds,
+  });
+  const matchedSignals = [...matched.signals, ...inferred].sort((left, right) =>
+    left.start - right.start || left.end - right.end || signalKindOrder.indexOf(left.kind) - signalKindOrder.indexOf(right.kind) || left.id.localeCompare(right.id));
+  const fingerprintContext = fingerprintSignals(fingerprint, domains, routingContext);
+  const internalSignals: InternalRoutingSignal[] = [...matchedSignals, ...fingerprintContext].map((signal) => ({
+    kind: signal.kind,
+    id: signal.id,
+    source: signal.source,
+    evidenceEligible: signal.evidenceEligible,
+    ownerIds: [...signal.ownerIds],
+    confidence: signal.confidence,
   }));
+  const requirements = buildCanonicalRequirements(internalSignals);
+  const promptDomains = domainIdsForPrompt(matchedSignals, domains);
+  const projectDomains = fingerprintContext.filter(({ kind }) => kind === "domain").map(({ id }) => id);
+  const domainIds = unique([
+    ...promptDomains.map(({ id }) => id),
+    ...projectDomains,
+  ], (id) => id);
 
-  const profileEvidence = uniqueEvidence([
-    ...evidence("prompt", "action", actions),
-    ...evidence("prompt", "artifact", artifacts),
-    ...evidence("prompt", "technology", promptTechnologies),
-    ...evidence("fingerprint", "technology", project.technologies),
-    ...evidence("prompt", "quality", qualityGoals),
-    ...evidence("prompt", "constraint", constraints),
-    ...evidence("prompt", "acceptance", acceptanceCriteria),
-    ...evidence("prompt", "domain", promptDomains),
-    ...promptIntentEvidence,
-    ...evidence("fingerprint", "domain", project.domains),
-  ]);
+  const promptTechnologies = idsInOrder(matchedSignals, "technology");
+  const fingerprintTechnologies = fingerprintContext.filter(({ kind }) => kind === "technology").map(({ id }) => id);
+  const actions = idsInOrder(matchedSignals, "action") as TaskAction[];
+  const artifacts = idsInOrder(matchedSignals, "artifact");
+  const technologies = unique([...promptTechnologies, ...fingerprintTechnologies], (id) => id);
+  const qualityGoals = idsInOrder(matchedSignals, "quality");
+  const constraints = idsInOrder(matchedSignals, "constraint");
+  const acceptanceCriteria = idsInOrder(matchedSignals, "acceptance");
+  const routingIntentTags = unique(matchedSignals.filter(({ kind }) => kind === "intent").flatMap((signal) => {
+    const mapped = signal.ownerIds.flatMap((ownerId) => routingContext.domains.get(ownerId)?.intentMappings.get(signal.id)?.skillIntentIds ?? []);
+    return [signal.id, ...mapped];
+  }), (id) => id).sort();
+
+  const profileEvidence = unique<TaskSignalEvidence>([
+    ...matchedSignals.flatMap((signal): TaskSignalEvidence[] => signal.kind === "intent" ? [] : [{
+      source: signal.source === "host-semantic" ? "config" : "prompt",
+      kind: signal.kind,
+      id: signal.id,
+    }]),
+    ...fingerprintContext.flatMap((signal): TaskSignalEvidence[] => signal.kind === "technology" || signal.kind === "domain"
+      ? [{ source: "fingerprint", kind: signal.kind, id: signal.id }]
+      : []),
+    ...promptDomains.map(({ id }): TaskSignalEvidence => ({ source: "prompt", kind: "domain", id })),
+  ], (item) => `${item.source}:${item.kind}:${item.id}`);
 
   const profile: TaskProfile = {
     schemaVersion: "task-profile/1.0",
-    normalizedGoal: normalizedGoal(actions, artifacts, technologies, qualityGoals),
-    locale: detectLocale(source),
-    actions: actions.map(({ id }) => id),
-    artifactTypes: artifacts.map(({ id }) => id),
-    technologies: technologies.map(({ id }) => id),
-    constraints: constraints.map(({ id }) => id),
-    qualityGoals: qualityGoals.map(({ id }) => id),
-    acceptanceCriteria: acceptanceCriteria.map(({ id }) => id),
-    domains: matchedDomainIds.map(({ id }, index) => {
-      const domain = domains.find((candidate) => candidate.id === id);
-      const evidenceItems = profileEvidence.filter((item) => item.kind === "domain" && item.id === id);
+    normalizedGoal: normalizedGoal({ actions, artifacts, technologies, quality: qualityGoals }),
+    locale: detectLocale(prompt),
+    actions,
+    artifactTypes: artifacts,
+    technologies,
+    constraints,
+    qualityGoals,
+    acceptanceCriteria,
+    domains: domainIds.map((id, index) => {
       const promptMatched = promptDomains.some((candidate) => candidate.id === id);
-      const projectMatched = project.domains.some((candidate) => candidate.id === id);
+      const projectMatched = projectDomains.includes(id);
       return {
         id,
         confidence: promptMatched && projectMatched ? 1 : promptMatched ? 0.7 : 0.45,
         role: index === 0 ? "primary" as const : "supporting" as const,
-        available: Boolean(domain),
-        reasons: [
-          `domain-match:${id}`,
-          ...(projectMatched ? [`environment-match:${id}`] : []),
-        ],
-        evidence: evidenceItems,
+        available: domains.some((domain) => domain.id === id),
+        reasons: [`domain-match:${id}`, ...(projectMatched ? [`environment-match:${id}`] : [])],
+        evidence: profileEvidence.filter((item) => item.kind === "domain" && item.id === id),
       };
     }),
-    subtasks: buildSubtasks(
-      source,
-      domains,
-      actionVocabulary,
-      artifactAliases,
-      artifactVocabulary,
-      technologyAliases,
-      technologyVocabulary,
-    ),
+    subtasks: segmentSubtasks(text, matchedSignals, matched.protectedBoundaryIndexes, domains),
     evidence: profileEvidence,
   };
-
   return {
     profile,
-    warnings: hasUnknownTechnology(source, promptTechnologies)
-      ? ["unclassified-technology-signal"]
-      : [],
+    warnings: hasUnknownTechnology(text.normalized, matchedSignals) ? ["unclassified-technology-signal"] : [],
     routingIntentTags,
+    requirements,
+    matchedSignals,
+    signalDigest: routingSignalDigest(internalSignals),
   };
 };

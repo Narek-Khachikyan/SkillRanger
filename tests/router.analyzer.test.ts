@@ -4,12 +4,16 @@ import path from "node:path";
 import { analyzeTask } from "../src/router/analyzer.ts";
 import { loadRouterFixturePacks, type RouterFixturePack } from "../src/router/fixtures.ts";
 import type { ProjectFingerprint } from "../src/types.ts";
+import { buildRoutingContext } from "../src/router/context.ts";
+import { canonicalSkillRoutingDocument } from "../src/router/metadata.ts";
+import { coreRoutingVocabulary } from "../src/router/vocabulary/core.ts";
+import { adaptFixtureRoutingPacks } from "../src/router/vocabulary/load.ts";
+import { buildCanonicalRequirements } from "../src/router/requirements.ts";
 
 const fixtureRoot = path.resolve("tests/fixtures/router-packs");
 
-const analyzerMetadata = (packs: RouterFixturePack[]) => ({
-  domains: packs.map(({ domain }) => domain),
-  skills: packs.flatMap(({ skills }) => skills.map((skill) => ({
+const analyzerMetadata = (packs: RouterFixturePack[]) => {
+  const skills = packs.flatMap(({ skills }) => skills.map((skill) => ({
     domains: skill.domains,
     actions: skill.actions,
     artifactTypes: skill.artifactTypes,
@@ -17,28 +21,56 @@ const analyzerMetadata = (packs: RouterFixturePack[]) => ({
     technologyTags: skill.technologyTags,
     qualityGoals: skill.qualityGoals,
     environmentSignals: skill.environmentSignals,
-  }))),
-});
+  })));
+  return {
+    domains: packs.map(({ domain }) => domain),
+    skills,
+    routingContext: buildRoutingContext({
+      packs: adaptFixtureRoutingPacks(packs),
+      skills: packs.flatMap(({ skills: packSkills }) => packSkills.map(canonicalSkillRoutingDocument)),
+      coreVocabulary: coreRoutingVocabulary,
+      baseRegistryDigest: "analyzer-test",
+    }),
+  };
+};
 
-const frontendMetadata = {
-  domains: [{
-    id: "frontend",
-    routing: {
-      aliases: ["frontend-web"],
-      intentTags: ["website"],
-      artifactTypes: ["web-interface"],
-      technologyTags: ["react"],
-      projectTags: ["frontend"],
-    },
-  }],
-  skills: [{
-    domains: ["frontend"],
-    actions: ["create" as const],
-    artifactTypes: ["web-interface"],
+const frontendSkills = [{
+  id: "frontend.primary",
+  domains: ["frontend"],
+  actions: ["create" as const],
+  artifactTypes: ["web-interface"],
+  intentTags: ["website"],
+  technologyTags: ["react"],
+  qualityGoals: [],
+}];
+const frontendDomains = [{
+  id: "frontend",
+  routing: {
+    aliases: ["frontend-web"],
     intentTags: ["website"],
+    artifactTypes: ["web-interface"],
     technologyTags: ["react"],
-    qualityGoals: [],
-  }],
+    projectTags: ["frontend"],
+  },
+}];
+const frontendMetadata = {
+  domains: frontendDomains,
+  skills: frontendSkills,
+  routingContext: buildRoutingContext({
+    packs: [{
+      domainId: "frontend",
+      routing: frontendDomains[0].routing,
+      ownership: [],
+      vocabulary: {
+        schemaVersion: "routing-vocabulary/1.0",
+        owner: { kind: "domain", id: "frontend" },
+        entries: [{ kind: "artifact", id: "web-interface", locale: "ru", phrases: ["сайт"] }],
+      },
+    }],
+    skills: frontendSkills.map(canonicalSkillRoutingDocument),
+    coreVocabulary: coreRoutingVocabulary,
+    baseRegistryDigest: "frontend-test",
+  }),
 };
 
 const fingerprint = (overrides: Partial<ProjectFingerprint> = {}): ProjectFingerprint => ({
@@ -119,7 +151,7 @@ test("analyzer has no frontend fallback when frontend vocabulary is unavailable"
 test("analyzer creates canonical subtask candidates for separate action groups", async () => {
   const packs = await loadRouterFixturePacks(fixtureRoot);
   const result = analyzeTask({
-    prompt: "Migrate PostgreSQL and redesign the mobile application.",
+    prompt: "Migrate PostgreSQL and redesign the mobile app.",
     ...analyzerMetadata(packs),
   });
 
@@ -152,4 +184,38 @@ test("analyzer reports an unknown technology signal without persisting its value
 
   assert.deepEqual(result.warnings, ["unclassified-technology-signal"]);
   assert.doesNotMatch(JSON.stringify(result), /SecretDBCanary/i);
+});
+
+test("requirements dedupe provenance and keep the winning requirement class confidence", () => {
+  const requirements = buildCanonicalRequirements([
+    { kind: "technology", id: "react", source: "fingerprint", evidenceEligible: false, ownerIds: ["frontend"], confidence: 1 },
+    { kind: "technology", id: "react", source: "prompt-normalized", evidenceEligible: false, ownerIds: ["frontend"], confidence: 0.8 },
+    { kind: "technology", id: "react", source: "prompt-exact", evidenceEligible: true, ownerIds: ["frontend"], confidence: 0.9 },
+    { kind: "action", id: "create", source: "prompt-inferred", evidenceEligible: true, ownerIds: ["core"], confidence: 0.75 },
+  ]);
+  assert.deepEqual(requirements, [
+    { kind: "action", id: "create", confidence: 0.75, baseWeight: 1, sources: ["prompt-inferred"], requirementClass: "inferred" },
+    { kind: "technology", id: "react", confidence: 0.9, baseWeight: 1, sources: ["prompt-exact", "prompt-normalized", "fingerprint"], requirementClass: "explicit" },
+  ]);
+});
+
+test("analyzer keeps intents internal, infers guarded create, and produces a stable signal digest", async () => {
+  const packs = await loadRouterFixturePacks(fixtureRoot);
+  const metadata = analyzerMetadata(packs);
+  const intent = analyzeTask({ prompt: "Fix refresh token authentication.", ...metadata });
+  assert.ok(intent.requirements.some(({ kind, id }) => kind === "intent" && id === "refresh-token"));
+  assert.ok(intent.routingIntentTags.includes("refresh-token"));
+  assert.equal(intent.profile.evidence.some(({ kind }) => (kind as string) === "intent"), false);
+
+  const inferred = analyzeTask({ prompt: "I need a page.", ...metadata });
+  assert.ok(inferred.requirements.some(({ kind, id, requirementClass, confidence }) =>
+    kind === "action" && id === "create" && requirementClass === "inferred" && confidence === 0.75));
+  assert.equal(inferred.signalDigest, analyzeTask({ prompt: "I need a page.", ...metadata }).signalDigest);
+});
+
+test("noun-only design does not become an action", async () => {
+  const packs = await loadRouterFixturePacks(fixtureRoot);
+  const metadata = analyzerMetadata(packs);
+  assert.equal(analyzeTask({ prompt: "Красивый дизайн страницы.", ...metadata }).profile.actions.includes("design"), false);
+  assert.equal(analyzeTask({ prompt: "Design the page.", ...metadata }).profile.actions.includes("design"), true);
 });

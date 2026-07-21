@@ -306,6 +306,40 @@ export type PrepareTaskResult =
       blockingSkillIds: string[];
     });
 
+export type DeterministicRoutingOutcome =
+  | { status: "prepared"; selections: PreparedSelections }
+  | { status: "clarification_required"; clarification: RouterClarification }
+  | { status: "decomposition_required"; decomposition: { subtasks: TaskSubtask[] } }
+  | { status: "no_matching_skills"; suggestedAction: string }
+  | {
+      status: "strict_requirements_unmet";
+      missing: Array<{
+        skillId?: string;
+        requirement: "installed-skill" | "lockfile-match" | "strict-contract-v2" | "skill-input" | "capability";
+      }>;
+      installationSuggestions: InstallationSuggestion[];
+    }
+  | { status: "context_budget_exceeded"; requiredBytes: number; allowedBytes: number; blockingSkillIds: string[] };
+
+export type DeterministicRoutingProjection = {
+  routerAlgorithmVersion: "router/2.0";
+  routingDate: string;
+  activation: PrepareTaskCommon["activation"];
+  targetAgent: string;
+  strict: boolean;
+  capabilities: string[];
+  taskProfile: TaskProfile;
+  signalDigest: string;
+  semanticHintsDigest: string;
+  fingerprintDigest: string;
+  vocabularyDigest: string;
+  routingRegistryDigest: string;
+  configDigest: string;
+  domains: DomainCandidate[];
+  outcome: DeterministicRoutingOutcome;
+  warnings: string[];
+};
+
 export type RouterToolErrorCode =
   | "invalid-arguments"
   | "trigger-required"

@@ -72,7 +72,7 @@ export const normalizeRoutingText = (input: string): NormalizedText => {
     const next = source[index + 1]?.text;
     const technologyPunctuation = (character === "+" || character === "#") &&
       (isWord(previous) || isWord(next) || previous === character || next === character);
-    const technologyDot = character === "." && (isWord(previous) || isWord(next));
+    const technologyDot = character === "." && isWord(next) && (isWord(previous) || isWhitespace(previous));
     const compactSlash = character === "/" && !isWhitespace(previous) && !isWhitespace(next);
     transformed.push({ ...part, text: technologyPunctuation || technologyDot || compactSlash ? character : " " });
   }

@@ -27,6 +27,8 @@ import { computeSourcePackageChecksum, createSkillSourceSnapshots, RouterSourceR
 import { RouterStore, routerRecordDigest } from "./store.ts";
 import type {
   DomainCandidate,
+  DeterministicRoutingOutcome,
+  DeterministicRoutingProjection,
   PrepareTaskCommon,
   PrepareTaskCoreInput,
   PrepareTaskResult,
@@ -42,7 +44,8 @@ import { createPreparedStrictSkillRun } from "../runtime/strict/service.ts";
 import { StrictSkillRunStore, type SkillRunV2 } from "../runtime/strict/index.ts";
 import { assertInstalledMatches } from "../runtime/strict/service.ts";
 
-export const routerAlgorithmVersion = "router/1.0";
+export const routerAlgorithmVersion = "router/2.0" as const;
+export const deterministicRoutingKey = (projection: DeterministicRoutingProjection) => routerRecordDigest(projection);
 
 export class RouterPrepareError extends Error {
   readonly code: "trigger-required" | "empty-intent" | "intent-too-large" | "router-disabled" | "target-agent-unresolved" | "project-root-unauthorized" | "continuation-invalid" | "continuation-expired" | "clarification-answer-invalid" | "capability-invalid" | "router-config-invalid" | "routing-integrity" | "raw-intent-confirmation-required";
@@ -168,9 +171,29 @@ const skillMetadata = async (
 
 type PreparedMetadata = RouterSkillMetadata & { skill: RegistrySkill; installedRoot?: string; entry?: Awaited<ReturnType<typeof installedEntryFor>> };
 
+const routingFingerprintDigest = (fingerprint: ProjectFingerprint) => digest({
+  schemaVersion: fingerprint.schemaVersion,
+  ...(fingerprint.packageManager ? { packageManager: { name: fingerprint.packageManager.name, confidence: fingerprint.packageManager.confidence } } : {}),
+  projectTypes: fingerprint.projectTypes.map(({ type, confidence }) => ({ type, confidence })),
+  languages: fingerprint.languages.map(({ name, confidence }) => ({ name, confidence })),
+  frameworks: fingerprint.frameworks.map(({ name, confidence }) => ({ name, confidence })),
+  styling: fingerprint.styling.map(({ name, confidence }) => ({ name, confidence })),
+  testing: fingerprint.testing.map(({ name, confidence, type }) => ({ name, confidence, ...(type ? { type } : {}) })),
+  infrastructure: fingerprint.infrastructure.map(({ name, confidence }) => ({ name, confidence })),
+  dependencies: [...(fingerprint.dependencies ?? [])].sort(),
+  agentContext: {
+    agentsMd: fingerprint.agentContext.agentsMd.present,
+    codexSkills: fingerprint.agentContext.codexSkills.present,
+    claudeSkills: fingerprint.agentContext.claudeSkills.present,
+  },
+  signals: [...fingerprint.signals].sort(),
+  tags: [...fingerprint.tags].sort(),
+  warnings: [...fingerprint.warnings].sort(),
+});
+
 const displayProject = (fingerprint: ProjectFingerprint) => ({
   displayRoot: ".",
-  fingerprintDigest: digest(fingerprint),
+  fingerprintDigest: routingFingerprintDigest(fingerprint),
   projectTypes: fingerprint.projectTypes.map(({ type }) => type),
   languages: fingerprint.languages.map(({ name }) => name),
   frameworks: fingerprint.frameworks.map(({ name }) => name),
@@ -257,6 +280,11 @@ const common = (input: {
   registryDigest: string;
   configDigest: string;
   warnings: string[];
+  strict: boolean;
+  capabilities: string[];
+  signalDigest: string;
+  vocabularyDigest: string;
+  outcome: DeterministicRoutingOutcome;
 }): PrepareTaskCommon => ({
   ok: true,
   schemaVersion: "router-result/1.0",
@@ -266,7 +294,24 @@ const common = (input: {
   routing: {
     targetAgent: input.targetAgent,
     domains: input.domains,
-    deterministicKey: digest({ routerAlgorithmVersion, routingDate: input.routingDate, profile: input.profile, fingerprintDigest: digest(input.fingerprint), registryDigest: input.registryDigest, configDigest: input.configDigest, targetAgent: input.targetAgent }),
+    deterministicKey: deterministicRoutingKey({
+      routerAlgorithmVersion,
+      routingDate: input.routingDate,
+      activation: input.activation,
+      targetAgent: input.targetAgent,
+      strict: input.strict,
+      capabilities: [...input.capabilities].sort(),
+      taskProfile: input.profile,
+      signalDigest: input.signalDigest,
+      semanticHintsDigest: digest([]),
+      fingerprintDigest: routingFingerprintDigest(input.fingerprint),
+      vocabularyDigest: input.vocabularyDigest,
+      routingRegistryDigest: input.registryDigest,
+      configDigest: input.configDigest,
+      domains: input.domains,
+      outcome: input.outcome,
+      warnings: [...new Set(input.warnings)],
+    }),
     routerAlgorithmVersion,
     routingDate: input.routingDate,
     registryDigest: input.registryDigest,
@@ -349,6 +394,23 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
   const domains = packs.map(domainMetadata);
   const analysis = analyzeTask({ prompt: parsed.normalizedIntent, domains, skills: allMetadata, routingContext });
   const registryDigest = routingContext.routingRegistryDigest;
+  const activation = { mode: input.activation.mode, ...(parsed.trigger === undefined ? {} : { trigger: parsed.trigger }) };
+  const resultCommon = (resultDomains: DomainCandidate[], outcome: DeterministicRoutingOutcome) => common({
+    activation,
+    profile: analysis.profile,
+    fingerprint,
+    targetAgent,
+    domains: resultDomains,
+    routingDate,
+    registryDigest,
+    configDigest: configResult.digest,
+    warnings: analysis.warnings,
+    strict,
+    capabilities,
+    signalDigest: analysis.signalDigest,
+    vocabularyDigest: routingContext.vocabularyDigest,
+    outcome,
+  });
   const projectIdentity = await new RouterStore(input.projectRoot).projectIdentity();
   const promptProjection = { actions: analysis.profile.actions, artifactTypes: analysis.profile.artifactTypes, technologies: analysis.profile.technologies, qualityGoals: analysis.profile.qualityGoals, acceptanceCriteria: analysis.profile.acceptanceCriteria, domains: analysis.profile.domains.map(({ id }) => id), subtasks: analysis.profile.subtasks };
   const resolution = resolveDomains({ profile: analysis.profile, domains, skills: allMetadata, fingerprint, availableDomainIds: packs.map(({ id }) => id), thresholds: defaultRouterThresholds, routingIntentTags: analysis.routingIntentTags, routingContext });
@@ -360,7 +422,8 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
   if (resolution.clarificationRequired) {
     if (!input.continuationToken || !input.clarificationAnswers) {
       const token = createContinuationToken({ fingerprintDigest: digest(fingerprint), registryDigest, configDigest: configResult.digest, routingDate, targetAgent, strict, capabilities, promptProjection, routingProjection: { domains: resolution.ambiguousDomainIds }, projectIdentity }, questions);
-      return { ...common({ activation: { mode: input.activation.mode, ...(parsed.trigger === undefined ? {} : { trigger: parsed.trigger }) }, profile: analysis.profile, fingerprint, targetAgent, domains: resolution.candidates, routingDate, registryDigest, configDigest: configResult.digest, warnings: analysis.warnings }), status: "clarification_required", clarification: { questions }, continuationToken: token.token, expiresAt: token.expiresAt };
+      const clarification = { questions };
+      return { ...resultCommon(resolution.candidates, { status: "clarification_required", clarification }), status: "clarification_required", clarification, continuationToken: token.token, expiresAt: token.expiresAt };
     }
     try {
       const validated = validateContinuation({ token: input.continuationToken, answers: input.clarificationAnswers, binding: { fingerprintDigest: digest(fingerprint), registryDigest, configDigest: configResult.digest, routingDate, targetAgent, strict, capabilities, promptProjection, routingProjection: { domains: resolution.ambiguousDomainIds }, projectIdentity }, questions });
@@ -373,8 +436,8 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
     }
   }
   if (!selectedPrimary) {
-    const base = common({ activation: { mode: input.activation.mode, ...(parsed.trigger === undefined ? {} : { trigger: parsed.trigger }) }, profile: analysis.profile, fingerprint, targetAgent, domains: resolution.candidates, routingDate, registryDigest, configDigest: configResult.digest, warnings: analysis.warnings });
-    return { ...base, status: "no_matching_skills", suggestedAction: "Proceed without a SkillRanger workflow or add an audited domain pack." };
+    const outcome = { status: "no_matching_skills" as const, suggestedAction: "Proceed without a SkillRanger workflow or add an audited domain pack." };
+    return { ...resultCommon(resolution.candidates, outcome), ...outcome };
   }
   const composed = composeSkillSet({
     profile: analysis.profile,
@@ -392,17 +455,28 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
     routingContext,
     limits: { ...defaultRouterLimits, maxSelectedRisk: config.router.maxSelectedRisk, maxEnvironmentSkills: config.router.maxEnvironmentSkills, maxTaskCompanions: config.router.maxTaskCompanions, maxVerificationSkills: config.router.maxVerificationSkills, maxAgentContextSkills: config.router.maxAgentContextSkills, maxTotalSelectedSkills: config.router.maxTotalSelectedSkills, maxInstructionBytes: config.router.maxInstructionBytes, maxAdditionalReadBytes: config.router.maxAdditionalReadBytes, maxSingleFileBytes: config.router.maxSingleFileBytes },
   });
-  const base = common({ activation: { mode: input.activation.mode, ...(parsed.trigger === undefined ? {} : { trigger: parsed.trigger }) }, profile: analysis.profile, fingerprint, targetAgent, domains: applyClarification(selectedPrimary, resolution.candidates), routingDate, registryDigest, configDigest: configResult.digest, warnings: analysis.warnings });
+  const resultDomains = applyClarification(selectedPrimary, resolution.candidates);
   if (composed.status !== "prepared") {
-    if (composed.status === "decomposition_required") return { ...base, status: composed.status, decomposition: { subtasks: composed.subtasks } };
-    if (composed.status === "strict_requirements_unmet") return { ...base, status: composed.status, missing: composed.missing, installationSuggestions: composed.missing.filter(({ requirement }) => requirement === "installed-skill").map(({ skillId }) => ({ skillId, reason: "The selected strict workflow is not installed for this target agent.", nextTool: "plan_skill_install" as const })) };
-    if (composed.status === "context_budget_exceeded") return { ...base, status: composed.status, requiredBytes: composed.requiredBytes, allowedBytes: composed.allowedBytes, blockingSkillIds: composed.blockingSkillIds };
-    return { ...base, status: "no_matching_skills", suggestedAction: "Proceed without a SkillRanger workflow or add an audited domain pack." };
+    if (composed.status === "decomposition_required") {
+      const outcome = { status: composed.status, decomposition: { subtasks: composed.subtasks } };
+      return { ...resultCommon(resultDomains, outcome), ...outcome };
+    }
+    if (composed.status === "strict_requirements_unmet") {
+      const outcome = { status: composed.status, missing: composed.missing, installationSuggestions: composed.missing.filter(({ requirement }) => requirement === "installed-skill").map(({ skillId }) => ({ skillId, reason: "The selected strict workflow is not installed for this target agent.", nextTool: "plan_skill_install" as const })) };
+      return { ...resultCommon(resultDomains, outcome), ...outcome };
+    }
+    if (composed.status === "context_budget_exceeded") {
+      const outcome = { status: composed.status, requiredBytes: composed.requiredBytes, allowedBytes: composed.allowedBytes, blockingSkillIds: composed.blockingSkillIds };
+      return { ...resultCommon(resultDomains, outcome), ...outcome };
+    }
+    const outcome = { status: "no_matching_skills" as const, suggestedAction: "Proceed without a SkillRanger workflow or add an audited domain pack." };
+    return { ...resultCommon(resultDomains, outcome), ...outcome };
   }
   const selectedSkillIds = new Set(composed.composed.all.map(({ skill }) => skill.id));
   const unselectedInput = Object.keys(input.skillInputs ?? {}).find((skillId) => !selectedSkillIds.has(skillId));
   if (unselectedInput) throw new RouterPrepareError("routing-integrity", `Skill input was supplied for an unselected skill: ${unselectedInput}.`);
   const selections = composed.composed.selections;
+  const base = resultCommon(resultDomains, { status: "prepared", selections });
   const selectedMetadata = composed.composed.all.map(({ skill }) => metadata.find(({ id }) => id === skill.id)!).filter(Boolean);
   const mandatoryPaths = (item: PreparedMetadata) => strict ? (item.contractMustRead?.length ? item.contractMustRead : ["SKILL.md"]) : ["SKILL.md"];
   const sourceInputs = await Promise.all(selectedMetadata.map(async (item) => {
@@ -436,15 +510,15 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
     runtimePayload = await createPreparedStrictSkillRun({ projectRoot: input.projectRoot, targetAgent, domain: selectedPrimary, intent: parsed.normalizedIntent, rawIntent: input.prompt, normalizedGoal: analysis.profile.normalizedGoal, runtimeRunId, selections, metadata: selectedMetadata, fingerprint, skillInputs: input.skillInputs ?? {}, capabilities, storeRawIntent: input.rawIntentPersistence === "explicitly-authorized" });
     const blocked = runtimePayload.skillLedgers.filter(({ outcome }) => outcome === "blocked");
     if (blocked.length > 0) {
-      return {
-        ...base,
-        status: "strict_requirements_unmet",
+      const outcome = {
+        status: "strict_requirements_unmet" as const,
         missing: blocked.flatMap(({ skillId, applicability, contract }) => applicability.unmetPrerequisites.map((id) => ({
           skillId,
           requirement: contract.prerequisites.find((prerequisite) => prerequisite.id === id)?.kind === "input" ? "skill-input" as const : "capability" as const,
         }))),
         installationSuggestions: [],
       };
+      return { ...resultCommon(resultDomains, outcome), ...outcome };
     }
   } else {
     const lifecycle = await createLifecyclePayload({ runtimeRunId, domain: selectedPrimary, targetAgent, prompt: analysis.profile.normalizedGoal, rawPrompt: input.prompt, policyIntent: parsed.normalizedIntent, profile: analysis.profile, selections: provisionalBase, rawIntentPersistence: input.rawIntentPersistence === "explicitly-authorized" });

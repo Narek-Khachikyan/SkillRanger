@@ -4,12 +4,15 @@ import { loadRouterFixturePacks, type RouterFixturePack } from "../src/router/fi
 import { analyzeTask } from "../src/router/analyzer.ts";
 import { normalizeDomainAlias, resolveDomains } from "../src/router/resolver.ts";
 import type { ProjectFingerprint } from "../src/types.ts";
+import { buildRoutingContext } from "../src/router/context.ts";
+import { canonicalSkillRoutingDocument } from "../src/router/metadata.ts";
+import { coreRoutingVocabulary } from "../src/router/vocabulary/core.ts";
+import { adaptFixtureRoutingPacks } from "../src/router/vocabulary/load.ts";
 
 const packsPath = "tests/fixtures/router-packs";
 
-const metadata = (packs: RouterFixturePack[]) => ({
-  domains: packs.map(({ domain }) => domain),
-  skills: packs.flatMap(({ skills }) => skills.map((skill) => ({
+const metadata = (packs: RouterFixturePack[]) => {
+  const skills = packs.flatMap(({ skills }) => skills.map((skill) => ({
     domains: skill.domains,
     roles: skill.roles,
     actions: skill.actions,
@@ -18,8 +21,18 @@ const metadata = (packs: RouterFixturePack[]) => ({
     technologyTags: skill.technologyTags,
     qualityGoals: skill.qualityGoals,
     environmentSignals: skill.environmentSignals,
-  }))),
-});
+  })));
+  return {
+    domains: packs.map(({ domain }) => domain),
+    skills,
+    routingContext: buildRoutingContext({
+      packs: adaptFixtureRoutingPacks(packs),
+      skills: packs.flatMap(({ skills: packSkills }) => packSkills.map(canonicalSkillRoutingDocument)),
+      coreVocabulary: coreRoutingVocabulary,
+      baseRegistryDigest: "resolver-test",
+    }),
+  };
+};
 
 const fingerprint = (overrides: Partial<ProjectFingerprint> = {}): ProjectFingerprint => ({
   schemaVersion: "1.0",
@@ -136,6 +149,15 @@ test("resolver applies the exact ambiguity rule without project evidence", async
     intentTags: ["web-interface", "application-interface"],
     technologyTags: ["react"],
     qualityGoals: [],
+  });
+  input.routingContext = buildRoutingContext({
+    packs: [
+      ...adaptFixtureRoutingPacks(packs.filter(({ domain }) => domain.id !== "frontend")),
+      { domainId: "frontend", routing: input.domains.at(-1)!.routing, ownership: [] },
+    ],
+    skills: input.skills.map((skill, index) => canonicalSkillRoutingDocument({ id: `test.skill-${index}`, ...skill })),
+    coreVocabulary: coreRoutingVocabulary,
+    baseRegistryDigest: "resolver-ambiguity-test",
   });
   const profile = analyzeTask({
     prompt: "Create a new application interface.",

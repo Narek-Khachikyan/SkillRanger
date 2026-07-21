@@ -5,6 +5,8 @@ export type {
   TaskAnalyzerDomainMetadata,
   TaskAnalyzerSkillMetadata,
 } from "./analyzer.ts";
+export { buildCanonicalRequirements, routingSignalDigest } from "./requirements.ts";
+export type { CanonicalRequirement, CanonicalRequirementKind, CanonicalRequirementSource, InternalRoutingSignal } from "./requirements.ts";
 export { parseTrigger } from "./trigger.ts";
 export type { TriggerParseInput } from "./trigger.ts";
 export {
@@ -58,7 +60,7 @@ export {
   RouterStoreError,
   routerRecordDigest,
 } from "./store.ts";
-export { prepareTask, createRouterReader, createRouterRuntimeStore, RouterPrepareError, routerAlgorithmVersion } from "./prepare.ts";
+export { prepareTask, createRouterReader, createRouterRuntimeStore, deterministicRoutingKey, RouterPrepareError, routerAlgorithmVersion } from "./prepare.ts";
 export {
   createSkillSourceSnapshot,
   createSkillSourceSnapshots,
