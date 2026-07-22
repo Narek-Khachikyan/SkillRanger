@@ -5,7 +5,7 @@ import path from "node:path";
 import { auditSkill } from "../audit/index.ts";
 import { assertSkillIntegrity } from "../registry/index.ts";
 import { upsertInstalledSkill } from "../lockfile/index.ts";
-import type { InstallPlan, RegistrySkill } from "../types.ts";
+import type { InstallPlan, InstallScope, RegistrySkill } from "../types.ts";
 import { getAgentConfig, isUniversalAgent } from "./agents.ts";
 import {
   InstallAuditBlockedError,
@@ -94,18 +94,18 @@ const assertRepoPathSafe = async (
   if (!isPathSafe(canonicalRoot, canonicalExisting)) throw new Error(`${label} escaped canonical repository root.`);
 };
 
-export const getCanonicalSkillsDir = (input: Pick<InstallInput, "projectRoot" | "scope">) => {
-  const base = input.scope === "user" ? os.homedir() : input.projectRoot;
+export const getCanonicalSkillsDir = (input: { scope: InstallScope; projectRoot?: string }) => {
+  const base = input.scope === "user" ? os.homedir() : (input.projectRoot ?? "");
   return path.resolve(base, canonicalSkillBase);
 };
 
-export const getAgentSkillsDir = (targetAgent: string, input: Pick<InstallInput, "projectRoot" | "scope">) => {
+export const getAgentSkillsDir = (targetAgent: string, input: { scope: InstallScope; projectRoot?: string }) => {
   const agent = getAgentConfig(targetAgent);
   if (input.scope === "user") {
     if (!agent.globalSkillsDir) throw new Error(`${agent.displayName} does not support user-scope skill installation.`);
     return path.resolve(agent.globalSkillsDir);
   }
-  return path.resolve(input.projectRoot, agent.skillsDir);
+  return path.resolve(input.projectRoot ?? "", agent.skillsDir);
 };
 
 const skillInstallDirs = (skill: RegistrySkill, input: InstallInput) => {

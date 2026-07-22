@@ -466,12 +466,40 @@ test("Copy install + unrelated canonical directory -> uninstall preserves unrela
   assert.equal(unrelatedData, "important data");
 });
 
-test("User-scope install -> verify returns verified and options --skill / --target work", async () => {
-  const tmpHome = await mkdtemp(path.join(os.tmpdir(), "skillranger-user-home-"));
-  const oldHome = process.env.HOME;
-  process.env.HOME = tmpHome;
+const withIsolatedUserEnv = async (
+  options: { tmpHome: string; claudeConfigDir?: string },
+  fn: () => Promise<void>
+) => {
+  const envKeys = ["HOME", "USERPROFILE", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "XDG_CONFIG_HOME"] as const;
+  const initialEnv: Partial<Record<(typeof envKeys)[number], string | undefined>> = {};
+
+  for (const key of envKeys) {
+    initialEnv[key] = process.env[key];
+  }
+
+  process.env.HOME = options.tmpHome;
+  process.env.USERPROFILE = options.tmpHome;
+  process.env.CLAUDE_CONFIG_DIR = options.claudeConfigDir ?? path.join(options.tmpHome, ".claude");
+  process.env.CODEX_HOME = path.join(options.tmpHome, ".codex");
+  process.env.XDG_CONFIG_HOME = path.join(options.tmpHome, ".config");
 
   try {
+    await fn();
+  } finally {
+    for (const key of envKeys) {
+      if (initialEnv[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = initialEnv[key];
+      }
+    }
+  }
+};
+
+test("User-scope install -> verify returns verified and options --skill / --target work", async () => {
+  const tmpHome = await mkdtemp(path.join(os.tmpdir(), "skillranger-user-home-"));
+
+  await withIsolatedUserEnv({ tmpHome }, async () => {
     const projectRoot = path.join(tmpHome, "project");
     await mkdir(projectRoot, { recursive: true });
 
@@ -495,7 +523,48 @@ test("User-scope install -> verify returns verified and options --skill / --targ
     assert.equal(verification.verified, true);
     assert.equal(verification.entries[0].status, "verified");
     assert.equal(verification.entries[0].scope, "user");
-  } finally {
-    process.env.HOME = oldHome;
-  }
+  });
+});
+
+test("Custom CLAUDE_CONFIG_DIR outside home -> user install, verify, and uninstall succeed", async () => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-custom-claude-"));
+  const fakeHome = path.join(tmpRoot, "home");
+  const customClaudeConfig = path.join(tmpRoot, "custom-claude-config");
+  const projectRoot = path.join(tmpRoot, "project");
+
+  await mkdir(fakeHome, { recursive: true });
+  await mkdir(customClaudeConfig, { recursive: true });
+  await mkdir(projectRoot, { recursive: true });
+
+  await withIsolatedUserEnv({ tmpHome: fakeHome, claudeConfigDir: customClaudeConfig }, async () => {
+    const skill = await findSkill("frontend.next-app-router-review", "registry");
+    assert.ok(skill);
+
+    const adapter = getAdapter("claude-code");
+    await adapter.applyInstall(skill, {
+      projectRoot,
+      targetAgent: "claude-code",
+      scope: "user",
+      dryRun: false,
+    });
+
+    const verification = await verifyInstalledSkills({
+      projectRoot,
+      skillId: skill.manifest.id,
+      targetAgent: "claude-code",
+    });
+
+    assert.equal(verification.verified, true);
+    assert.equal(verification.entries[0].status, "verified");
+
+    const uninstallRes = await applyUninstall({
+      projectRoot,
+      skillId: skill.manifest.id,
+      targetAgent: "claude-code",
+      scope: "user",
+      dryRun: false,
+    });
+
+    assert.equal(uninstallRes.applied, true);
+  });
 });

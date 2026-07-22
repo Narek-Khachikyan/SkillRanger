@@ -163,7 +163,7 @@ export const readLockfile = async (projectRoot: string): Promise<Lockfile> => {
 const withLockfileTransaction = async <T>(
   projectRoot: string,
   apply: (resolvedProjectRoot: string) => Promise<T>,
-  hooks: LockfileTransactionHooks,
+  hooks: LockfileTransactionHooks = {},
 ): Promise<T> => {
   const resolvedProjectRoot = path.resolve(projectRoot);
   const destination = lockfilePath(resolvedProjectRoot);
@@ -259,5 +259,29 @@ export const upsertInstalledSkill = async (
     };
     await atomicallyWriteLockfile(resolvedProjectRoot, next, hooks);
     return installed;
+  }, hooks);
+};
+
+export const removeInstalledSkillEntries = async (
+  projectRoot: string,
+  criteria: { skillId: string; targetAgent?: string; scope?: InstallScope },
+  hooks: LockfileTransactionHooks = {},
+): Promise<Lockfile> => {
+  const scope = criteria.scope ?? "repo";
+  return withLockfileTransaction(projectRoot, async (resolvedProjectRoot) => {
+    const lockfile = await readLockfile(resolvedProjectRoot);
+    const nextInstalled = lockfile.installed.filter((entry) => {
+      if (entry.skillId !== criteria.skillId) return true;
+      if (criteria.targetAgent && entry.targetAgent !== criteria.targetAgent) return true;
+      if (entry.scope !== scope) return true;
+      return false;
+    });
+
+    const next: Lockfile = {
+      schemaVersion: "1.0",
+      installed: nextInstalled,
+    };
+    await atomicallyWriteLockfile(resolvedProjectRoot, next, hooks);
+    return next;
   }, hooks);
 };

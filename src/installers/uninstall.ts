@@ -1,7 +1,7 @@
 import { lstat, realpath, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { lockfilePath, readLockfile, writeLockfile } from "../lockfile/index.ts";
+import { lockfilePath, readLockfile, removeInstalledSkillEntries } from "../lockfile/index.ts";
 import { loadLocalRegistry } from "../registry/index.ts";
 import { assertInstalledMatches } from "../runtime/strict/service.ts";
 import type { InstallScope, Lockfile } from "../types.ts";
@@ -77,7 +77,7 @@ export const planUninstall = async (options: UninstallOptions): Promise<Uninstal
   const warnings: string[] = [];
 
   const remainingMatchingEntries = lockfile.installed.filter(
-    (e) => e.skillId === options.skillId && !matching.includes(e)
+    (e) => e.skillId === options.skillId && e.scope === scope && !matching.includes(e)
   );
 
   let canonicalVerified = false;
@@ -151,7 +151,6 @@ export const applyUninstall = async (options: UninstallOptions): Promise<Uninsta
   }
 
   const projectRoot = path.resolve(options.projectRoot);
-  const scope = options.scope ?? "repo";
 
   for (const fileOrDir of plan.wouldRemove) {
     const info = await lstat(fileOrDir).catch(() => undefined);
@@ -160,20 +159,11 @@ export const applyUninstall = async (options: UninstallOptions): Promise<Uninsta
     }
   }
 
-  const lockfile = await readLockfile(projectRoot);
-  const updatedInstalled = lockfile.installed.filter((entry) => {
-    if (entry.skillId !== options.skillId) return true;
-    if (options.targetAgent && entry.targetAgent !== options.targetAgent) return true;
-    if (entry.scope !== scope) return true;
-    return false;
+  await removeInstalledSkillEntries(projectRoot, {
+    skillId: options.skillId,
+    targetAgent: options.targetAgent,
+    scope: options.scope,
   });
-
-  const nextLockfile: Lockfile = {
-    schemaVersion: "1.0",
-    installed: updatedInstalled,
-  };
-
-  await writeLockfile(projectRoot, nextLockfile);
 
   return {
     plan: { ...plan, dryRun: false },

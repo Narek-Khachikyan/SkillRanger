@@ -27,6 +27,8 @@ export class InvalidInstalledPathError extends Error {
  * 5. Replaces ad-hoc checks without mutating the filesystem.
  */
 import os from "node:os";
+import { setupAgentTypes } from "./agents.ts";
+import { getAgentSkillsDir, getCanonicalSkillsDir } from "./codex.ts";
 
 export const resolveInstalledSkillRoot = async (
   projectRoot: string,
@@ -34,30 +36,42 @@ export const resolveInstalledSkillRoot = async (
   scope: "repo" | "user" = "repo",
 ): Promise<string> => {
   if (scope === "user") {
+    const canonicalUserBase = path.resolve(getCanonicalSkillsDir({ scope: "user" }));
+    const allowedBases: string[] = [canonicalUserBase];
+    for (const agent of setupAgentTypes) {
+      try {
+        const agentBase = path.resolve(getAgentSkillsDir(agent, { scope: "user" }));
+        allowedBases.push(agentBase);
+      } catch {
+        // Agent does not support user scope
+      }
+    }
+
     const home = path.resolve(os.homedir());
     const fullInstalledPath = installedPath.startsWith("~")
       ? path.resolve(home, installedPath.slice(1).replace(/^[/\\]+/, ""))
-      : path.resolve(home, installedPath);
+      : path.resolve(installedPath);
 
-    if (!isPathSafe(home, fullInstalledPath)) {
-      throw new InvalidInstalledPathError(`User-scoped installed path escaped home directory: ${installedPath}`);
+    const matchingBase = allowedBases.find((base) => isPathSafe(base, fullInstalledPath));
+    if (!matchingBase) {
+      throw new InvalidInstalledPathError(`User-scoped installed path is not within an allowed managed user skill directory: ${installedPath}`);
     }
 
-    const relative = path.relative(home, fullInstalledPath);
+    const relative = path.relative(matchingBase, fullInstalledPath);
     if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
       throw new InvalidInstalledPathError(`Invalid user-scoped installed path location: ${installedPath}`);
     }
 
     const parts = relative.split(path.sep).filter(Boolean);
-    let current = home;
+    let current = matchingBase;
     for (let i = 0; i < parts.length - 1; i++) {
       current = path.join(current, parts[i]);
       const info = await lstat(current).catch(() => undefined);
       if (!info) {
-        throw new InvalidInstalledPathError(`Parent path component does not exist: ${path.relative(home, current)}`);
+        throw new InvalidInstalledPathError(`Parent path component does not exist: ${path.relative(matchingBase, current)}`);
       }
       if (info.isSymbolicLink()) {
-        throw new InvalidInstalledPathError(`Parent path component contains a symlink: ${path.relative(home, current)}`);
+        throw new InvalidInstalledPathError(`Parent path component contains a symlink: ${path.relative(matchingBase, current)}`);
       }
     }
 
@@ -74,16 +88,16 @@ export const resolveInstalledSkillRoot = async (
       if (!realTarget) {
         throw new InvalidInstalledPathError(`Symlink target does not exist for: ${installedPath}`);
       }
-      const canonicalBase = path.resolve(home, ".agents", "skills");
-      const canonicalBaseReal = await realpath(canonicalBase).catch(() => canonicalBase);
-      if (!isPathSafe(canonicalBaseReal, realTarget) && !isPathSafe(canonicalBase, realTarget)) {
+      const canonicalBaseReal = await realpath(canonicalUserBase).catch(() => canonicalUserBase);
+      if (!isPathSafe(canonicalBaseReal, realTarget) && !isPathSafe(canonicalUserBase, realTarget)) {
         throw new InvalidInstalledPathError(`Symlink target is not within canonical user skill directory: ${installedPath}`);
       }
       canonicalTargetDir = realTarget;
     } else if (leafInfo.isDirectory()) {
       const realTarget = await realpath(fullInstalledPath);
-      if (!isPathSafe(home, realTarget)) {
-        throw new InvalidInstalledPathError(`Installed skill directory escaped home directory: ${installedPath}`);
+      const isTargetSafe = allowedBases.some((base) => isPathSafe(base, realTarget));
+      if (!isTargetSafe) {
+        throw new InvalidInstalledPathError(`Installed skill directory target escaped allowed user skill directories: ${installedPath}`);
       }
       canonicalTargetDir = realTarget;
     } else {
