@@ -26,10 +26,73 @@ export class InvalidInstalledPathError extends Error {
  * 4. Returns the absolute canonical real path of the skill directory.
  * 5. Replaces ad-hoc checks without mutating the filesystem.
  */
+import os from "node:os";
+
 export const resolveInstalledSkillRoot = async (
   projectRoot: string,
   installedPath: string,
+  scope: "repo" | "user" = "repo",
 ): Promise<string> => {
+  if (scope === "user") {
+    const home = path.resolve(os.homedir());
+    const fullInstalledPath = installedPath.startsWith("~")
+      ? path.resolve(home, installedPath.slice(1).replace(/^[/\\]+/, ""))
+      : path.resolve(home, installedPath);
+
+    if (!isPathSafe(home, fullInstalledPath)) {
+      throw new InvalidInstalledPathError(`User-scoped installed path escaped home directory: ${installedPath}`);
+    }
+
+    const relative = path.relative(home, fullInstalledPath);
+    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new InvalidInstalledPathError(`Invalid user-scoped installed path location: ${installedPath}`);
+    }
+
+    const parts = relative.split(path.sep).filter(Boolean);
+    let current = home;
+    for (let i = 0; i < parts.length - 1; i++) {
+      current = path.join(current, parts[i]);
+      const info = await lstat(current).catch(() => undefined);
+      if (!info) {
+        throw new InvalidInstalledPathError(`Parent path component does not exist: ${path.relative(home, current)}`);
+      }
+      if (info.isSymbolicLink()) {
+        throw new InvalidInstalledPathError(`Parent path component contains a symlink: ${path.relative(home, current)}`);
+      }
+    }
+
+    const leafInfo = await lstat(fullInstalledPath).catch(() => undefined);
+    if (!leafInfo) {
+      throw new InvalidInstalledPathError(`Installed skill path does not exist: ${installedPath}`);
+    }
+
+    let canonicalTargetDir: string;
+    if (leafInfo.isSymbolicLink()) {
+      const rawTarget = await readlink(fullInstalledPath);
+      const resolvedLinkTarget = path.resolve(path.dirname(fullInstalledPath), rawTarget);
+      const realTarget = await realpath(resolvedLinkTarget).catch(() => undefined);
+      if (!realTarget) {
+        throw new InvalidInstalledPathError(`Symlink target does not exist for: ${installedPath}`);
+      }
+      const canonicalBase = path.resolve(home, ".agents", "skills");
+      const canonicalBaseReal = await realpath(canonicalBase).catch(() => canonicalBase);
+      if (!isPathSafe(canonicalBaseReal, realTarget) && !isPathSafe(home, realTarget)) {
+        throw new InvalidInstalledPathError(`Symlink target is not within user home directory: ${installedPath}`);
+      }
+      canonicalTargetDir = realTarget;
+    } else if (leafInfo.isDirectory()) {
+      const realTarget = await realpath(fullInstalledPath);
+      if (!isPathSafe(home, realTarget)) {
+        throw new InvalidInstalledPathError(`Installed skill directory escaped home directory: ${installedPath}`);
+      }
+      canonicalTargetDir = realTarget;
+    } else {
+      throw new InvalidInstalledPathError(`Installed skill path is neither a directory nor a valid symlink: ${installedPath}`);
+    }
+
+    return canonicalTargetDir;
+  }
+
   const resolvedProjectRoot = path.resolve(projectRoot);
   const rootInfo = await lstat(resolvedProjectRoot).catch(() => undefined);
   if (!rootInfo?.isDirectory() || rootInfo.isSymbolicLink()) {

@@ -33,7 +33,7 @@ const walkSkillFiles = async (root: string, dir = root): Promise<string[]> => {
   return files.sort();
 };
 
-const slugFromSkill = (skill: RegistrySkill) => {
+export const slugFromSkill = (skill: RegistrySkill) => {
   const slug = skill.manifest.name.replace(/[^a-z0-9._-]+/gi, "-").toLowerCase();
   if (!/^[a-z0-9][a-z0-9._-]*$/.test(slug) || slug === "." || slug === ".." || slug.includes("..")) {
     throw new Error(`Invalid install slug for ${skill.manifest.id}: ${skill.manifest.name}`);

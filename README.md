@@ -68,10 +68,10 @@ skillranger task:read . --router-run <router-run-id> --mandatory-next --expected
 After setup, open Codex, Claude Code, Cursor, OpenCode, or Gemini CLI in the same repository and write your task as usual:
 
 ```text
-Review this Next.js app for accessibility and fix critical keyboard-navigation issues.
+Review this Next.js app for accessibility and fix critical keyboard-navigation issues. @skillranger
 ```
 
-SkillRanger's managed agent context tells the agent when SkillRanger applies and which installed skill instructions must be read before implementation.
+SkillRanger's managed agent context activates when your task prompt ends with `@skillranger`, `skillranger`, or `/sr`, guiding the agent on which installed skill instructions must be read before implementation.
 
 You do **not** need to manually run the advanced lifecycle commands for normal interactive use.
 

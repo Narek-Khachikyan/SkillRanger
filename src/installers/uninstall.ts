@@ -1,10 +1,12 @@
-import { lstat, readlink, rm } from "node:fs/promises";
+import { lstat, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { lockfilePath, readLockfile, writeLockfile } from "../lockfile/index.ts";
 import { loadLocalRegistry } from "../registry/index.ts";
 import { assertInstalledMatches } from "../runtime/strict/service.ts";
 import type { InstallScope, Lockfile } from "../types.ts";
-import { resolveInstalledSkillRoot } from "./installed-path.ts";
+import { getAgentSkillsDir, getCanonicalSkillsDir, slugFromSkill } from "./codex.ts";
+import { resolveInstalledSkillRoot, InvalidInstalledPathError } from "./installed-path.ts";
 
 export type UninstallOptions = {
   projectRoot: string;
@@ -28,6 +30,16 @@ export type UninstallPlan = {
 export type UninstallResult = {
   plan: UninstallPlan;
   applied: boolean;
+};
+
+const resolvePathForScope = (projectRoot: string, scope: InstallScope, targetPath: string) => {
+  if (scope === "user") {
+    const home = os.homedir();
+    return targetPath.startsWith("~")
+      ? path.resolve(home, targetPath.slice(1).replace(/^[/\\]+/, ""))
+      : path.resolve(home, targetPath);
+  }
+  return path.resolve(projectRoot, targetPath);
 };
 
 export const planUninstall = async (options: UninstallOptions): Promise<UninstallPlan> => {
@@ -56,7 +68,11 @@ export const planUninstall = async (options: UninstallOptions): Promise<Uninstal
 
   const registry = await loadLocalRegistry(options.registryRoot);
   const registrySkill = registry.find((s) => s.manifest.id === options.skillId);
+  if (!registrySkill) {
+    throw new Error(`Cannot uninstall skill ${options.skillId}: skill package is missing from local registry.`);
+  }
 
+  const slug = slugFromSkill(registrySkill);
   const wouldRemove: string[] = [];
   const warnings: string[] = [];
 
@@ -65,32 +81,42 @@ export const planUninstall = async (options: UninstallOptions): Promise<Uninstal
   );
 
   for (const entry of matching) {
-    const fullInstalledPath = path.resolve(projectRoot, entry.installedPath);
+    if (entry.checksum !== registrySkill.checksum) {
+      throw new Error(`Cannot uninstall skill ${entry.skillId}: lockfile checksum does not match local registry.`);
+    }
+
+    const expectedAgentDir = path.resolve(getAgentSkillsDir(entry.targetAgent, { projectRoot, scope: entry.scope }), slug);
+    const expectedCanonicalDir = path.resolve(getCanonicalSkillsDir({ projectRoot, scope: entry.scope }), slug);
+    const resolvedInstalledPath = resolvePathForScope(projectRoot, entry.scope, entry.installedPath);
+
+    if (resolvedInstalledPath !== expectedAgentDir && resolvedInstalledPath !== expectedCanonicalDir) {
+      throw new Error(`Cannot uninstall skill ${entry.skillId}: lockfile installedPath "${entry.installedPath}" does not match expected managed installation directory.`);
+    }
+
     let resolvedRoot: string | undefined;
     try {
-      resolvedRoot = await resolveInstalledSkillRoot(projectRoot, entry.installedPath);
-    } catch {
-      warnings.push(`Installed path for ${entry.skillId} (${entry.installedPath}) does not exist or is invalid; stale lockfile entry will be removed.`);
-      continue;
-    }
-
-    if (registrySkill && entry.checksum === registrySkill.checksum) {
-      const matchError = await assertInstalledMatches(registrySkill, resolvedRoot, entry.checksum).catch((err) => err);
-      if (matchError) {
-        throw new Error(`Cannot uninstall modified skill ${entry.skillId}: ${matchError.message}`);
+      resolvedRoot = await resolveInstalledSkillRoot(projectRoot, entry.installedPath, entry.scope);
+    } catch (error) {
+      if (error instanceof InvalidInstalledPathError && error.message.includes("does not exist")) {
+        warnings.push(`Installed path for ${entry.skillId} (${entry.installedPath}) does not exist; stale lockfile entry will be removed.`);
+        continue;
       }
+      throw new Error(`Cannot uninstall skill ${entry.skillId}: invalid installed path "${entry.installedPath}": ${(error as Error).message}`);
     }
 
-    wouldRemove.push(fullInstalledPath);
+    const matchError = await assertInstalledMatches(registrySkill, resolvedRoot, entry.checksum).catch((err) => err);
+    if (matchError) {
+      throw new Error(`Cannot uninstall modified skill ${entry.skillId}: ${matchError.message}`);
+    }
+
+    wouldRemove.push(resolvedInstalledPath);
   }
 
   if (remainingMatchingEntries.length === 0) {
-    const canonicalDir = path.resolve(projectRoot, ".agents", "skills", options.skillId.replace(/[^a-z0-9._-]+/gi, "-").toLowerCase());
-    const canonicalInfo = await lstat(canonicalDir).catch(() => undefined);
+    const expectedCanonicalDir = path.resolve(getCanonicalSkillsDir({ projectRoot, scope }), slug);
+    const canonicalInfo = await lstat(expectedCanonicalDir).catch(() => undefined);
     if (canonicalInfo) {
-      if (!wouldRemove.includes(canonicalDir)) {
-        wouldRemove.push(canonicalDir);
-      }
+      wouldRemove.push(expectedCanonicalDir);
     }
   }
 

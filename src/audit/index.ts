@@ -43,8 +43,8 @@ const suspiciousPatterns: Array<[RegExp, RiskLevel, string]> = [
   [/\bbase64\b.+\b(-d|--decode)\b.+\b(sh|bash|eval)\b/i, "block", "obfuscated-execution"],
   [/\b(launchctl|crontab|systemctl)\b|~\/\.(bashrc|zshrc|profile|bash_profile)/i, "high", "persistence-mechanism"],
   [/\b(npm|pnpm|pip|pip3|uv)\s+install\b/i, "medium", "dependency-install"],
-  [/(ignore|disregard)\s+(all\s+)?(previous|prior|above)\s+(instructions|rules)|(игнорируй|не\s+следуй)\s+.*(предыдущ|прошл|выше|правил|указан)/i, "high", "prompt-injection"],
-  [/(?:\b(reveal|exfiltrate|print|send|cat)\b|(?:^|[^a-zA-Z0-9_а-яА-ЯёЁ])(отправь|покажи|выведи|прочитай|извлеки)).*?(?:\.env|\b(credentials|private[\s_-]?key|secrets?|tokens?|api[\s_-]?keys?)\b|секреты|токены|api[\s_-]?ключи|учётные\s+данные)/i, "block", "secret-exfiltration-instruction"]
+  [/(ignore|disregard)\s+(all\s+)?(previous|prior|above)\s+(instructions|rules)|(игнорируй|не\s+следуй)[\s\S]{0,200}(предыдущ|прошл|выше|правил|указан)/i, "high", "prompt-injection"],
+  [/(?:\b(reveal|exfiltrate|print|send|cat)\b|(?:^|[^a-zA-Z0-9_а-яА-ЯёЁ])(отправь|покажи|выведи|прочитай|извлеки))[\s\S]{0,200}(?:\.env|\b(credentials|private[\s_-]?key|secrets?|tokens?|api[\s_-]?keys?)\b|секреты|токены|api[\s_-]?ключи|учётные\s+данные)/i, "block", "secret-exfiltration-instruction"]
 ];
 
 const maxRisk = (findings: AuditFinding[], fallback: RiskLevel): RiskLevel => {

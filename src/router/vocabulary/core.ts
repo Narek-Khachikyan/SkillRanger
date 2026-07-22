@@ -14,7 +14,7 @@ export const coreRoutingVocabulary = {
   creatableArtifactIds: ["application", "component", "form", "page", "service"],
   entries: [
     entry("action", "create", "en", ["create", "build", "make", "develop", "add"], ["do not create", "don't create", "do not build", "don't build"]),
-    entry("action", "create", "ru", ["создай", "создать", "собери", "разработай", "добавь", "добавить", "сделай"], ["не создавай", "не делай", "сделай ревью"]),
+    entry("action", "create", "ru", ["создай", "создать", "собери", "разработай", "добавь", "добавить"], ["не создавай", "не делай"]),
     entry("action", "implement", "en", ["implement", "implementation"]),
     entry("action", "implement", "ru", ["реализуй", "реализовать", "внедри", "внедрить"]),
     entry("action", "modify", "en", ["modify", "change", "update"]),

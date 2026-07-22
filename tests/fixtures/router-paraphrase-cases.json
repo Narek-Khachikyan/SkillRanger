@@ -624,7 +624,7 @@
   },
   {
     "id": "backend-ru-service",
-    "prompt": "сделай серверную часть для каталога @skillranger",
+    "prompt": "создай серверную часть для каталога @skillranger",
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,

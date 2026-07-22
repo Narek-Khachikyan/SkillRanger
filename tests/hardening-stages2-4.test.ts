@@ -255,3 +255,104 @@ test("Stage 4 - lockfile unsupported schema version", async () => {
     /Unsupported lockfile schema/
   );
 });
+
+test("Stage 3 - corrupted lockfile installedPath 'src' blocks uninstall and preserves src", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-corrupt-"));
+  const projectRoot = path.join(tmpRoot, "project");
+  await mkdir(path.join(projectRoot, "src"), { recursive: true });
+  await writeFile(path.join(projectRoot, "src", "index.ts"), "console.log('important code');\n");
+  await writeFile(
+    path.join(projectRoot, "skillranger.lock.json"),
+    JSON.stringify({
+      schemaVersion: "1.0",
+      installed: [
+        {
+          skillId: "frontend.next-app-router-review",
+          version: "1.0.0",
+          checksum: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          source: { type: "local", registry: "default", path: "registry/skills/frontend.next-app-router-review" },
+          audit: { riskLevel: "low", securityScore: 1, findings: [] },
+          installedAt: "2026-07-22T00:00:00.000Z",
+          installedPath: "src",
+          targetAgent: "codex",
+          scope: "repo"
+        }
+      ]
+    })
+  );
+
+  await assert.rejects(
+    applyUninstall({
+      projectRoot,
+      skillId: "frontend.next-app-router-review",
+      targetAgent: "codex",
+      scope: "repo",
+      dryRun: false,
+    }),
+    /does not match expected managed installation directory|checksum does not match/
+  );
+
+  const srcContent = await readFile(path.join(projectRoot, "src", "index.ts"), "utf8");
+  assert.equal(srcContent, "console.log('important code');\n");
+});
+
+test("Stage 3 - Claude install -> uninstall removes canonical directory", async () => {
+  const { lstat } = await import("node:fs/promises");
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-claude-"));
+  const projectRoot = path.join(tmpRoot, "project");
+  await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
+
+  const skill = await findSkill("frontend.next-app-router-review", "registry");
+  assert.ok(skill);
+
+  const adapter = getAdapter("claude-code");
+  await adapter.applyInstall(skill, {
+    projectRoot,
+    targetAgent: "claude-code",
+    scope: "repo",
+    dryRun: false,
+  });
+
+  const canonicalDir = path.join(projectRoot, ".agents", "skills", "next-app-router-review");
+  const agentSymlink = path.join(projectRoot, ".claude", "skills", "next-app-router-review");
+
+  assert.ok(await lstat(canonicalDir).catch(() => undefined));
+  assert.ok(await lstat(agentSymlink).catch(() => undefined));
+
+  await applyUninstall({
+    projectRoot,
+    skillId: skill.manifest.id,
+    targetAgent: "claude-code",
+    scope: "repo",
+    dryRun: false,
+  });
+
+  assert.equal(await lstat(canonicalDir).catch(() => undefined), undefined);
+  assert.equal(await lstat(agentSymlink).catch(() => undefined), undefined);
+});
+
+test("CLI command parser resolves verify, uninstall, and installed --verify", async () => {
+  const { parseCliInvocation } = await import("../src/cli/commands.ts");
+
+  const verifyResult = parseCliInvocation(["verify", "my-project"]);
+  assert.equal(verifyResult.kind, "command");
+  if (verifyResult.kind === "command") {
+    assert.equal(verifyResult.command, "verify");
+    assert.deepEqual(verifyResult.positionals, ["my-project"]);
+  }
+
+  const uninstallResult = parseCliInvocation(["uninstall", "frontend.next-app-router-review", "--yes"]);
+  assert.equal(uninstallResult.kind, "command");
+  if (uninstallResult.kind === "command") {
+    assert.equal(uninstallResult.command, "uninstall");
+    assert.equal(uninstallResult.flags.yes, true);
+  }
+
+  const installedResult = parseCliInvocation(["installed", "--verify"]);
+  assert.equal(installedResult.kind, "command");
+  if (installedResult.kind === "command") {
+    assert.equal(installedResult.command, "installed");
+    assert.equal(installedResult.flags.verify, true);
+  }
+});

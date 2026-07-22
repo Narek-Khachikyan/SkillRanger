@@ -367,9 +367,25 @@ export const cliCommandDefinitions = Object.freeze([
     name: "installed",
     aliases: ["list-installed"],
     description: "List skills installed for a project.",
-    usages: ["installed [project] [--project <path>] [--json]"],
+    usages: ["installed [project] [--project <path>] [--verify] [--json]"],
+    booleanOptions: ["json", "verify"],
+    valueOptions: ["project"],
+  }),
+  defineCommand({
+    name: "verify",
+    description: "Verify lockfile and file integrity for installed skills.",
+    usages: ["verify [project] [--project <path>] [--json]"],
     booleanOptions: ["json"],
     valueOptions: ["project"],
+  }),
+  defineCommand({
+    name: "uninstall",
+    description: "Safely remove an installed skill package and update the lockfile.",
+    usages: [
+      "uninstall <skill-id> [--project <path>] [--target codex|claude-code|opencode|cursor|gemini-cli] [--scope repo|user] [--yes] [--json]",
+    ],
+    booleanOptions: ["yes", "json"],
+    valueOptions: ["project", "target", "scope"],
   }),
   defineCommand({
     name: "mcp",
