@@ -9,164 +9,146 @@
   <a href="https://github.com/Narek-Khachikyan/SkillRanger/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen?style=flat-square" alt="Node version"></a>
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-Supported-purple?style=flat-square" alt="MCP Server"></a>
-  <a href="https://github.com/Narek-Khachikyan/SkillRanger/actions"><img src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" alt="Build Status"></a>
+  <a href="https://github.com/Narek-Khachikyan/SkillRanger/actions/workflows/ci.yml"><img src="https://github.com/Narek-Khachikyan/SkillRanger/actions/workflows/ci.yml/badge.svg" alt="CI Status"></a>
 </p>
 
 ---
 
-**Public MVP / Beta** · Local-First · Universal Prompt Router · CLI + MCP · Zero Runtime Dependencies
+**Public MVP / Beta** · Local-First · CLI + MCP · Zero Runtime Dependencies
 
-SkillRanger scans your repository, detects its stack and development context, recommends compatible skills, audits them for safety risks, and produces reviewable, deterministic install plans before any changes are applied.
+SkillRanger scans your repository, detects its stack and development context, recommends compatible skills, audits them for safety risks, and creates a reviewable install plan before writing anything.
 
----
+For example, when you ask an AI agent to review a Next.js application, SkillRanger can select the relevant Next.js, accessibility, performance, and testing instructions instead of making the agent work from a generic prompt.
 
-## 🚀 Key Features
+## Quick Start
 
-| Feature | Description |
-| :--- | :--- |
-| 🎯 **Universal Prompt Router** | Converts natural-language tasks (English, Russian, or mixed) into precise, bounded skill sets without fuzzy external LLM calls. |
-| 🛡️ **Zero Blind Installs** | Dry-run-first workflow. Audit skill packages for risk, review proposed file changes, and confirm before writing. |
-| 🔒 **Lockfile Integrity** | Tracks installed skill versions, checksums, target agent configurations, and audit scores in `skillranger.lock.json`. |
-| ⚡ **Local-First & Offline** | Bundles 18 pre-audited frontend skills. Discovery and recommendation require no network tokens or API keys. |
-| 🔌 **Multi-Agent Compatibility** | Native support for Codex, Claude Code, Cursor, OpenCode, Gemini CLI, plus a stdio Model Context Protocol (MCP) server. |
+### 1. Run setup inside your project
 
----
-
-## 💡 How It Works
-
-```text
-┌──────────────────────────┐
-│   Repository Evidence    │  (Languages, Frameworks, Testing, Styling, Signals)
-└────────────┬─────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│ Stack & Intent Fingerprint│  (Deterministic multi-lane scoring)
-└────────────┬─────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│ Universal Prompt Router  │  (Natural-language matching via Domain Vocabulary)
-└────────────┬─────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│   Static Package Audit   │  (Security scanning & risk verification)
-└────────────┬─────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│ Reviewable Install Plan   │  (Dry-run diffs & skillranger.lock.json)
-└──────────────────────────┘
-```
-
----
-
-## ⚡ Quick Start
-
-### 1. Interactive Setup
-
-Run SkillRanger directly in any repository you want to configure:
+SkillRanger requires Node.js 20 or newer.
 
 ```bash
-npx -y skillranger@latest doctor
+cd your-project
 npx -y skillranger@latest setup
 ```
 
-`setup` scans the current repository, helps you select target agents (e.g. Codex, Claude Code, Cursor), presents top compatible skill recommendations, and asks for confirmation before applying changes.
+The interactive setup will:
 
-When configured for Codex in repo scope, SkillRanger creates:
-- 📂 `.agents/skills/<skill>/` — Repo-local skill packages.
-- 📝 `AGENTS.md` — Managed SkillRanger context block (optional).
-- 🔒 `skillranger.lock.json` — Lockfile tracking versions, checksums, and audit hashes.
+1. scan the current repository;
+2. ask which AI agents you use;
+3. recommend compatible skills;
+4. show what will be installed;
+5. ask for confirmation before writing files.
 
----
-
-### 2. Universal Task Router
-
-Route any task prompt into an optimal, bounded skill set and lifecycle run:
+You can run diagnostics first when troubleshooting:
 
 ```bash
-# Execute CLI routing for a natural-language task
-skillranger task . --intent "Review accessibility and fix critical focus traps" --target codex --json
-
-# Read mandatory lifecycle instructions before execution
-skillranger task:read . --router-run <router-run-id> --mandatory-next --expected-read-revision 0 --json
+npx -y skillranger@latest doctor
 ```
 
-> 🌐 **Bilingual Natural Language**: Prompts can be written in English, Russian, or mixed terminology (e.g. *"Создай современный сайт по Bleach с плавной анимацией"*). Matching is 100% deterministic using owner-scoped Domain Pack routing vocabularies.
+### 2. Open your AI agent and describe the task normally
 
----
+After setup, open Codex, Claude Code, Cursor, OpenCode, or Gemini CLI in the same repository and write your task as usual:
 
-### 3. Transparent Step-by-Step Workflow
-
-If you prefer inspectable, manual steps:
-
-```bash
-# 1. Scan repository stack
-npx -y skillranger@latest scan .
-
-# 2. Get recommendations tailored to your stack and intent
-npx -y skillranger@latest recommend . --target codex --intent "Review this Next.js app before release" --explain
-
-# 3. Audit skill package for security risks
-npx -y skillranger@latest audit frontend.next-app-router-review
-
-# 4. Preview install plan (Dry-Run)
-npx -y skillranger@latest install frontend.next-app-router-review --project . --target codex --scope repo --dry-run
-
-# 5. Apply install plan after review
-npx -y skillranger@latest install frontend.next-app-router-review --project . --target codex --scope repo --yes
-
-# 6. Verify lockfile status
-npx -y skillranger@latest installed .
+```text
+Review this Next.js app for accessibility and fix critical keyboard-navigation issues.
 ```
 
----
+SkillRanger's managed agent context tells the agent when SkillRanger applies and which installed skill instructions must be read before implementation.
 
-## 📦 Bundled Frontend Domain Pack
+You do **not** need to manually run the advanced lifecycle commands for normal interactive use.
 
-SkillRanger ships with 18 pre-audited, instruction-only skills for modern web development:
+### What setup creates
 
-| Category | Skill ID | Description |
+For a repo-scoped Codex setup, SkillRanger can create or update:
+
+- `.agents/skills/<skill>/` — repository-local skill packages;
+- `AGENTS.md` — a bounded SkillRanger-managed context block;
+- `skillranger.lock.json` — installed versions, checksums, targets, and audit metadata.
+
+SkillRanger installs static instructions. It does not invoke a model or silently modify your application code.
+
+## Why SkillRanger?
+
+| Feature | What it means |
+| :--- | :--- |
+| **Context-aware recommendations** | Skills are selected from repository evidence and the user's task instead of a fixed global list. |
+| **No blind installs** | Review recommendations, audit results, and planned file changes before applying them. |
+| **Deterministic routing** | English, Russian, and mixed-language tasks are matched without external LLM routing calls. |
+| **Lockfile integrity** | Installed versions, checksums, target agents, and audit data are tracked in `skillranger.lock.json`. |
+| **Local-first operation** | Bundled discovery and recommendation require no API keys or network tokens. |
+| **Multiple agent targets** | One project can be prepared for Codex, Claude Code, Cursor, OpenCode, Gemini CLI, or MCP hosts. |
+
+## How It Works
+
+```text
+Repository + task
+       │
+       ▼
+Detect stack and project context
+       │
+       ▼
+Select a small compatible skill set
+       │
+       ▼
+Audit and preview installation
+       │
+       ▼
+Install reviewed instructions and lockfile metadata
+       │
+       ▼
+Your agent reads the selected instructions and performs the task
+```
+
+## Supported Agents
+
+SkillRanger supports repo-local setup for:
+
+- **Codex** (`codex`)
+- **Claude Code** (`claude-code`)
+- **Cursor** (`cursor`)
+- **OpenCode** (`opencode`)
+- **Gemini CLI** (`gemini-cli`)
+- **Model Context Protocol** hosts through the stdio MCP server
+
+## Bundled Frontend Skills
+
+SkillRanger currently ships with 18 pre-audited, instruction-only frontend skills covering:
+
+- React and Next.js architecture;
+- component design and Tailwind UI polish;
+- visual design, UX, interaction, and motion;
+- accessibility, performance, testing, and Playwright debugging;
+- release audits and AI-agent project context.
+
+<details>
+<summary><strong>View all 18 bundled skill IDs</strong></summary>
+
+| Category | Skill ID | Purpose |
 | :--- | :--- | :--- |
-| **Framework & Core** | `frontend.next-app-router-review` | Next.js App Router architecture, Server Components, & data fetching. |
-| | `frontend.react-app-review` | React application state ownership, providers, and render performance. |
-| | `frontend.react-component-design` | Clean component API boundaries, prop sprawl reduction, & composition. |
-| | `frontend.tailwind-ui-polish` | Responsive layout fixes, Tailwind class cleanup, & mobile edge cases. |
-| | `frontend.design-to-code` | Implementing pixel-matched responsive UIs from designs and mockups. |
-| **Design & Motion** | `frontend.visual-design-polish` | Art direction, visual hierarchy, typography, & modern aesthetics. |
-| | `frontend.design-system` | Design tokens, theme migrations, & component primitive consistency. |
-| | `frontend.ux-critique` | Information architecture, cognitive load, usability, & user flows. |
-| | `frontend.interaction-polish` | Micro-interactions, modal dialogs, drawers, & focus management. |
-| | `frontend.motion-design` | Page transitions, CSS/Framer motion choreography, & reduced-motion. |
-| | `frontend.motion-audit` | Frame-drop diagnostics, animation performance, & reduced-motion audits. |
-| | `frontend.visual-critic` | Independent visual comparison & critique of rendered UI variants. |
-| **Quality & Release** | `frontend.accessibility-review` | WCAG compliance, ARIA roles, keyboard navigation, & focus traps. |
-| | `frontend.performance-review` | Core Web Vitals (LCP, INP), bundle analysis, & render bottlenecks. |
-| | `frontend.testing-strategy` | Testing portfolio planning across Unit, Integration, & E2E layers. |
-| | `frontend.playwright-debug` | Playwright test flakiness, wait strategies, & trace artifact analysis. |
-| | `frontend.audit` | Comprehensive preflight audit & release-readiness scorecard. |
-| **Agent Context** | `frontend.agents-md-bootstrap` | Bootstrapping project commands & architecture guidance for AI agents. |
+| Framework & Core | `frontend.next-app-router-review` | Next.js App Router architecture and data-flow review. |
+| | `frontend.react-app-review` | React state ownership, providers, and render performance. |
+| | `frontend.react-component-design` | Component APIs, composition, and prop boundaries. |
+| | `frontend.tailwind-ui-polish` | Responsive layout and Tailwind UI cleanup. |
+| | `frontend.design-to-code` | Responsive implementation from designs and mockups. |
+| Design & Motion | `frontend.visual-design-polish` | Art direction, hierarchy, typography, and aesthetics. |
+| | `frontend.design-system` | Tokens, themes, primitives, and consistency. |
+| | `frontend.ux-critique` | Information architecture, usability, and user flows. |
+| | `frontend.interaction-polish` | Dialogs, drawers, focus, and micro-interactions. |
+| | `frontend.motion-design` | Motion choreography and reduced-motion behavior. |
+| | `frontend.motion-audit` | Animation performance and frame-drop diagnostics. |
+| | `frontend.visual-critic` | Independent visual comparison and critique. |
+| Quality & Release | `frontend.accessibility-review` | WCAG, ARIA, keyboard navigation, and focus behavior. |
+| | `frontend.performance-review` | Core Web Vitals, bundles, and render bottlenecks. |
+| | `frontend.testing-strategy` | Focused unit, integration, and E2E planning. |
+| | `frontend.playwright-debug` | Playwright flakiness, waits, and traces. |
+| | `frontend.audit` | Broad frontend release-readiness audit. |
+| Agent Context | `frontend.agents-md-bootstrap` | Project commands and architecture guidance for agents. |
 
----
+</details>
 
-## 🤖 Agent Compatibility Matrix
+## MCP Integration
 
-SkillRanger supports direct interactive setup and repo-local skill layouts for:
-
-- 🟢 **Codex** (`codex`)
-- 🟣 **Claude Code** (`claude-code`)
-- 🔵 **Cursor** (`cursor`)
-- 🟠 **OpenCode** (`opencode`)
-- 🔷 **Gemini CLI** (`gemini-cli`)
-- 🌐 **Model Context Protocol** (stdio MCP Server)
-
----
-
-## 🔌 Model Context Protocol (MCP) Integration
-
-SkillRanger includes a stdio MCP server for seamless IDE and agent integration:
+Add SkillRanger as a stdio MCP server:
 
 ```json
 {
@@ -179,51 +161,102 @@ SkillRanger includes a stdio MCP server for seamless IDE and agent integration:
 }
 ```
 
-### Available MCP Tools
+The MCP surface can analyze projects, recommend and audit skills, preview or confirm installations, prepare routed tasks, and serve mandatory skill instructions to an agent host.
 
-- 🔍 `analyze_project` — Detect stack signals & project context.
-- 💡 `recommend_skills` — Query compatibility-aware skill recommendations.
-- 🛡️ `audit_skill` — Inspect static package security & risk levels.
-- 📋 `plan_skill_install` — Generate reviewable dry-run install plans.
-- ⚙️ `install_skill` — Confirmed repo-local installation (requires explicit user confirmation).
-- 🎯 `prepare_task` — Universal prompt routing & task lifecycle initialization.
-- 📖 `read_run_skill_file` — Mandatory read-flow for prepared lifecycle runs.
+<details>
+<summary><strong>Available MCP tools</strong></summary>
 
----
+- `analyze_project`
+- `recommend_skills`
+- `audit_skill`
+- `plan_skill_install`
+- `install_skill`
+- `prepare_task`
+- `read_run_skill_file`
 
-## 🛡️ Security & Safety Guarantees
+</details>
 
-SkillRanger operates under a strict security policy:
-- **Local Registry**: Bundled packages ship inside the distribution; no external network fetches.
-- **No Code Execution**: Skill scripts are static instructions and are never executed during install.
-- **Explicit Confirmation**: CLI defaults to `--dry-run`; MCP write operations require explicit `confirm: true` and exact write hash matching.
-- **Lockfile Verification**: All installed files are hashed and validated against `skillranger.lock.json`.
+## Advanced CLI Usage
 
----
+The commands below are optional. They are useful for inspecting individual stages, scripting SkillRanger, or integrating it into an agent host.
 
-## 🛠️ Development & Testing
+### Manual recommendation and installation
 
 ```bash
-# Clone and install dependencies
-git clone https://github.com/Narek-Khachikyan/SkillRanger.git
-cd SkillRanger
-npm install
+# Detect repository context
+npx -y skillranger@latest scan .
 
-# Run build and full verification suite
-npm run build
-npm run check
-npm test
+# Explain recommendations for a task
+npx -y skillranger@latest recommend . \
+  --target codex \
+  --intent "Review this Next.js app before release" \
+  --explain
 
-# Run evaluation matrices
-npm run eval:frontend:ru
-npm run eval:router
+# Audit one package
+npx -y skillranger@latest audit frontend.next-app-router-review
 
-# Pre-release verification gate
-npm run release:check
+# Preview installation
+npx -y skillranger@latest install frontend.next-app-router-review \
+  --project . \
+  --target codex \
+  --scope repo \
+  --dry-run
+
+# Apply the reviewed plan
+npx -y skillranger@latest install frontend.next-app-router-review \
+  --project . \
+  --target codex \
+  --scope repo \
+  --yes
+
+# Inspect installed skills
+npx -y skillranger@latest installed .
 ```
 
----
+### Direct task router
 
-## 📄 License
+Use this mode when an integration needs a structured routed result rather than the normal interactive setup flow:
+
+```bash
+npx -y skillranger@latest task . \
+  --intent "Review accessibility and fix critical focus traps" \
+  --target codex \
+  --json
+```
+
+An agent host or manual integration can then read required instruction chunks:
+
+```bash
+npx -y skillranger@latest task:read . \
+  --router-run <router-run-id> \
+  --mandatory-next \
+  --expected-read-revision 0 \
+  --json
+```
+
+For persisted and strict lifecycle commands, evidence handling, verification states, and recovery behavior, see [`docs/workflow-runtime.md`](docs/workflow-runtime.md).
+
+## Security Model
+
+- **Bundled local registry** — bundled packages ship with the distribution; normal recommendation does not fetch arbitrary remote skills.
+- **Static instructions** — installed skill packages are instructions, not scripts executed during installation.
+- **Explicit writes** — CLI installation can be previewed with `--dry-run`; MCP writes require explicit confirmation.
+- **Integrity tracking** — installed files are hashed and recorded in `skillranger.lock.json`.
+- **Host-managed execution** — your selected AI agent owns model calls, tools, and application-code changes.
+
+## Development
+
+```bash
+git clone https://github.com/Narek-Khachikyan/SkillRanger.git
+cd SkillRanger
+pnpm install
+
+pnpm build
+pnpm check
+pnpm test
+pnpm release:check
+```
+
+## License
 
 Distributed under the [MIT License](LICENSE).
