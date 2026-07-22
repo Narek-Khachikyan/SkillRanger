@@ -568,3 +568,38 @@ test("Custom CLAUDE_CONFIG_DIR outside home -> user install, verify, and uninsta
     assert.equal(uninstallRes.applied, true);
   });
 });
+
+test("Claude install -> remove symlink and change lockfile installedPath to canonical path -> verify returns invalid-path", async () => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-tampered-lock-path-"));
+  const projectRoot = path.join(tmpRoot, "project");
+  await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
+
+  const skill = await findSkill("frontend.next-app-router-review", "registry");
+  assert.ok(skill);
+
+  const adapter = getAdapter("claude-code");
+  await adapter.applyInstall(skill, {
+    projectRoot,
+    targetAgent: "claude-code",
+    scope: "repo",
+    dryRun: false,
+  });
+
+  // Remove Claude symlink
+  const claudeSymlink = path.join(projectRoot, ".claude", "skills", "next-app-router-review");
+  await rm(claudeSymlink, { recursive: true, force: true });
+
+  // Tamper lockfile to point to canonical path instead of agent path
+  const lockfile = await readLockfile(projectRoot);
+  lockfile.installed[0].installedPath = ".agents/skills/next-app-router-review";
+  await writeLockfile(projectRoot, lockfile);
+
+  const verification = await verifyInstalledSkills({
+    projectRoot,
+    targetAgent: "claude-code",
+  });
+
+  assert.equal(verification.verified, false);
+  assert.equal(verification.entries[0].status, "invalid-path");
+  assert.ok(verification.entries[0].reason?.includes("does not match expected managed installation directory"));
+});

@@ -91,8 +91,8 @@ export const planUninstall = async (options: UninstallOptions): Promise<Uninstal
     const expectedCanonicalDir = path.resolve(getCanonicalSkillsDir({ projectRoot, scope: entry.scope }), slug);
     const resolvedInstalledPath = resolvePathForScope(projectRoot, entry.scope, entry.installedPath);
 
-    if (resolvedInstalledPath !== expectedAgentDir && resolvedInstalledPath !== expectedCanonicalDir) {
-      throw new Error(`Cannot uninstall skill ${entry.skillId}: lockfile installedPath "${entry.installedPath}" does not match expected managed installation directory.`);
+    if (resolvedInstalledPath !== expectedAgentDir) {
+      throw new Error(`Cannot uninstall skill ${entry.skillId}: lockfile installedPath "${entry.installedPath}" does not match expected managed installation directory for ${entry.targetAgent}.`);
     }
 
     let resolvedRoot: string | undefined;

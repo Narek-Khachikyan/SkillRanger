@@ -1,8 +1,11 @@
+import os from "node:os";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { readLockfile } from "../lockfile/index.ts";
 import { loadLocalRegistry } from "../registry/index.ts";
 import { assertInstalledMatches } from "../runtime/strict/service.ts";
+import type { InstallScope } from "../types.ts";
+import { getAgentSkillsDir, slugFromSkill } from "./codex.ts";
 import { resolveInstalledSkillRoot, InvalidInstalledPathError } from "./installed-path.ts";
 
 export type VerificationStatus = "verified" | "missing" | "modified" | "invalid-path";
@@ -20,6 +23,16 @@ export type ProjectVerificationResult = {
   projectRoot: string;
   verified: boolean;
   entries: SkillVerificationResult[];
+};
+
+const resolvePathForScope = (projectRoot: string, scope: string, targetPath: string) => {
+  if (scope === "user") {
+    const home = os.homedir();
+    return targetPath.startsWith("~")
+      ? path.resolve(home, targetPath.slice(1).replace(/^[/\\]+/, ""))
+      : path.resolve(home, targetPath);
+  }
+  return path.resolve(projectRoot, targetPath);
 };
 
 export const verifyInstalledSkills = async (options: {
@@ -50,9 +63,31 @@ export const verifyInstalledSkills = async (options: {
       installedPath: entry.installedPath,
     };
 
+    const registrySkill = registry.find((s) => s.manifest.id === entry.skillId);
+    if (!registrySkill) {
+      results.push({ ...baseResult, status: "modified", reason: `Skill ${entry.skillId} not found in local registry.` });
+      continue;
+    }
+
+    const slug = slugFromSkill(registrySkill);
+    const expectedAgentDir = path.resolve(
+      getAgentSkillsDir(entry.targetAgent, { projectRoot, scope: entry.scope as InstallScope }),
+      slug
+    );
+    const resolvedInstalledPath = resolvePathForScope(projectRoot, entry.scope, entry.installedPath);
+
+    if (resolvedInstalledPath !== expectedAgentDir) {
+      results.push({
+        ...baseResult,
+        status: "invalid-path",
+        reason: `Lockfile installedPath does not match expected managed installation directory for ${entry.targetAgent}.`,
+      });
+      continue;
+    }
+
     let installedRoot: string;
     try {
-      installedRoot = await resolveInstalledSkillRoot(projectRoot, entry.installedPath, entry.scope as "repo" | "user");
+      installedRoot = await resolveInstalledSkillRoot(projectRoot, entry.installedPath, entry.scope as InstallScope);
     } catch (error) {
       if (error instanceof InvalidInstalledPathError) {
         if (error.message.includes("does not exist")) {
@@ -63,12 +98,6 @@ export const verifyInstalledSkills = async (options: {
       } else {
         results.push({ ...baseResult, status: "invalid-path", reason: String(error) });
       }
-      continue;
-    }
-
-    const registrySkill = registry.find((s) => s.manifest.id === entry.skillId);
-    if (!registrySkill) {
-      results.push({ ...baseResult, status: "modified", reason: `Skill ${entry.skillId} not found in local registry.` });
       continue;
     }
 
