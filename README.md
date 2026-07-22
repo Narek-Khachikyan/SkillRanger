@@ -1,10 +1,6 @@
 # SkillRanger
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Narek-Khachikyan/SkillRanger/main/docs/assets/banner.png" alt="SkillRanger Banner" width="100%" onError="this.style.display='none'" />
-</p>
-
-<p align="center">
   <strong>Find, audit, and install the right AI agent skills for your codebase.</strong>
 </p>
 
