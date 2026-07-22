@@ -1,28 +1,56 @@
+# Dependencies & Package Managers
 node_modules/
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+
+# Build & Compilation Outputs
 dist/
+build/
+out/
+*.tgz
+*.tar.gz
+*.tsbuildinfo
+.eslintcache
+
+# SkillRanger & Tooling Caches / Local Runtime State
+.skillranger/
+.codegraph/
+skillranger.lock.json
+.agents/skills/
+.claude/skills/
+
+# Git Worktrees
+.worktree/
+.worktrees/
+
+# Testing & Coverage
 coverage/
 .nyc_output/
 
-.env
-.env.*
-!.env.example
-
-.DS_Store
-Thumbs.db
-
-skillranger.lock.json
-
-.agents/skills/
-.claude/skills/
-.worktrees/
-
+# Logs
 *.log
 npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+logs/
 
+# Environment Files & Secrets
+.env
+.env.*
+!.env.example
+!.env.template
+
+# IDE & Editor Configs
 .vscode/
 .idea/
-/Users/narek_khachikyan/Desktop/PersonalProjects/SkillRanger/TASKS.md
-/Users/narek_khachikyan/Desktop/PersonalProjects/SkillRanger/RELEASE.md
+*.swp
+*.swo
+*~
+
+# Operating System Files
+.DS_Store
+._*
+Thumbs.db
