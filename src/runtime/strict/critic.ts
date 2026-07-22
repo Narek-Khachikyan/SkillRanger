@@ -19,7 +19,7 @@ export const assertValidCriticReportV2: (input: unknown, contract: ExecutionCont
     const fields = ["id", "ruleId", "severity", "message", "evidenceArtifactIds", "remediation"];
     if (Object.keys(finding).some((key) => !fields.includes(key)) || fields.some((key) => !Object.hasOwn(finding, key))) throw new Error(`Critic finding ${index} must use the closed shape.`);
     if (!nonEmpty(finding.id) || !nonEmpty(finding.message) || !nonEmpty(finding.remediation) || typeof finding.ruleId !== "string" || !ruleIds.has(finding.ruleId)) throw new Error(`Critic finding ${index} references an unknown rule or empty field.`);
-    if (!["critical", "high", "medium", "low"].includes(finding.severity as string) || !Array.isArray(finding.evidenceArtifactIds) || !finding.evidenceArtifactIds.every(nonEmpty)) throw new Error(`Critic finding ${index} is invalid.`);
+    if (!["critical", "high", "medium", "low"].includes(finding.severity as string) || !Array.isArray(finding.evidenceArtifactIds) || finding.evidenceArtifactIds.length === 0 || !finding.evidenceArtifactIds.every(nonEmpty)) throw new Error(`Critic finding ${index} is invalid.`);
     for (const artifactId of finding.evidenceArtifactIds as string[]) {
       if (!(input.evidenceArtifactIds as string[]).includes(artifactId)) throw new Error(`Critic finding ${index} references evidence artifact ${artifactId} not included in top-level evidenceArtifactIds.`);
     }

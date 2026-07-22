@@ -128,13 +128,26 @@ const deriveCriticSystemGate = (
       };
     }
     const expected = getExpectedScreenshotsForCritic(ledger, artifacts, artifact);
-    if (expected.length > 0 && !expected.every(({ artifactId }) => report.evidenceArtifactIds.includes(artifactId))) {
-      return {
-        gateId: criticSystemGateId,
-        passed: false,
-        level: "hard",
-        message: "Critic report does not cover all required screenshot artifacts.",
-      };
+    if (expected.length > 0) {
+      if (!expected.every(({ artifactId }) => report.evidenceArtifactIds.includes(artifactId))) {
+        return {
+          gateId: criticSystemGateId,
+          passed: false,
+          level: "hard",
+          message: "Critic report does not cover all required screenshot artifacts.",
+        };
+      }
+      const expectedIds = new Set(expected.map(({ artifactId }) => artifactId));
+      for (const finding of report.findings) {
+        if (!finding.evidenceArtifactIds.some((id) => expectedIds.has(id))) {
+          return {
+            gateId: criticSystemGateId,
+            passed: false,
+            level: "hard",
+            message: `Critic finding ${finding.id} does not reference a required screenshot artifact.`,
+          };
+        }
+      }
     }
   }
 

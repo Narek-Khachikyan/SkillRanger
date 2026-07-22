@@ -694,3 +694,166 @@ test("Visual design strict run blocks verification if fresh screenshots are not 
   assert.equal(run.state, "repair-required");
   assert.notEqual(run.skillLedgers[0].outcome, "used");
 });
+
+test("Visual design strict run rejects finding with empty evidenceArtifactIds", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-visual-empty-finding-evidence-"));
+  await cp("fixtures/next-react-ts", root, { recursive: true });
+  await install(root, "frontend.visual-design-polish");
+  await install(root, "frontend.tailwind-ui-polish");
+  const skillId = "frontend.visual-design-polish";
+
+  let run = await startPreparedStrictSkillRun({
+    projectRoot: root,
+    registryRoot: path.resolve("registry"),
+    targetAgent: "codex",
+    domain: "frontend",
+    intent: "visual direction redesign hierarchy generic",
+    skillInputs: {
+      [skillId]: { brief: {}, capabilityProfile: "standard", changeClass: "material" },
+      "frontend.tailwind-ui-polish": { brief: {}, capabilityProfile: "standard", existingDirection: { source: "approved" } },
+    },
+    hostCapabilities: ["browser", "screenshots"],
+  });
+
+  const store = new StrictSkillRunStore(root);
+  run = await readAll(store, run);
+
+  run = await step(root, store, run, skillId, [{ kind: "product-evidence-ledger", value: "e\n" }]);
+  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: "d\n" }]);
+  run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: "+ <div>Hero</div>\n" }]);
+  run = await step(root, store, run, skillId, [
+    { kind: "browser-screenshot-initial-390", value: "i390\n" },
+    { kind: "browser-screenshot-initial-768", value: "i768\n" },
+    { kind: "browser-screenshot-initial-1440", value: "i1440\n" },
+  ]);
+
+  const initial390Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial-390")!.artifactId;
+  const initial768Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial-768")!.artifactId;
+  const initial1440Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial-1440")!.artifactId;
+
+  await assert.rejects(
+    step(root, store, run, skillId, [{
+      kind: "critic-report",
+      validatedAs: "critic-report",
+      value: {
+        schemaVersion: "2.0",
+        skillId,
+        criticInvocationId: "critic-empty-finding-evidence",
+        executorInvocationId: "executor-1",
+        outcome: "findings",
+        evidenceArtifactIds: [initial390Id, initial768Id, initial1440Id],
+        findings: [{
+          id: "f-1",
+          ruleId: `${skillId}/rule/no-unresolved-ai-slop`,
+          severity: "high",
+          message: "Empty finding evidence.",
+          evidenceArtifactIds: [],
+          remediation: "Add evidence.",
+        }],
+      },
+    }]),
+    (error: unknown) => error instanceof Error && error.message.includes("Critic finding 0 is invalid"),
+  );
+});
+
+test("Visual design strict run rejects finding referencing non-screenshot evidence artifact", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-visual-non-screenshot-finding-"));
+  await cp("fixtures/next-react-ts", root, { recursive: true });
+  await install(root, "frontend.visual-design-polish");
+  await install(root, "frontend.tailwind-ui-polish");
+  const skillId = "frontend.visual-design-polish";
+
+  let run = await startPreparedStrictSkillRun({
+    projectRoot: root,
+    registryRoot: path.resolve("registry"),
+    targetAgent: "codex",
+    domain: "frontend",
+    intent: "visual direction redesign hierarchy generic",
+    skillInputs: {
+      [skillId]: { brief: {}, capabilityProfile: "standard", changeClass: "material" },
+      "frontend.tailwind-ui-polish": { brief: {}, capabilityProfile: "standard", existingDirection: { source: "approved" } },
+    },
+    hostCapabilities: ["browser", "screenshots"],
+  });
+
+  const store = new StrictSkillRunStore(root);
+  run = await readAll(store, run);
+
+  run = await step(root, store, run, skillId, [{ kind: "product-evidence-ledger", value: "non-screenshot evidence\n" }]);
+  const nonScreenshotId = run.artifacts.findLast(({ kind }) => kind === "product-evidence-ledger")!.artifactId;
+
+  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: "d\n" }]);
+  run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: "+ <div>Hero</div>\n" }]);
+  run = await step(root, store, run, skillId, [
+    { kind: "browser-screenshot-initial-390", value: "i390\n" },
+    { kind: "browser-screenshot-initial-768", value: "i768\n" },
+    { kind: "browser-screenshot-initial-1440", value: "i1440\n" },
+  ]);
+
+  const initial390Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial-390")!.artifactId;
+  const initial768Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial-768")!.artifactId;
+  const initial1440Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial-1440")!.artifactId;
+
+  // Submit critic report where finding references nonScreenshotId instead of a required screenshot artifact
+  run = await step(root, store, run, skillId, [{
+    kind: "critic-report",
+    validatedAs: "critic-report",
+    value: {
+      schemaVersion: "2.0",
+      skillId,
+      criticInvocationId: "critic-non-screenshot-finding",
+      executorInvocationId: "executor-1",
+      outcome: "findings",
+      evidenceArtifactIds: [initial390Id, initial768Id, initial1440Id, nonScreenshotId],
+      findings: [{
+        id: "f-1",
+        ruleId: `${skillId}/rule/no-unresolved-ai-slop`,
+        severity: "high",
+        message: "Finding references ledger instead of screenshot.",
+        evidenceArtifactIds: [nonScreenshotId],
+        remediation: "Reference screenshot.",
+      }],
+    },
+  }]);
+
+  run = await step(root, store, run, skillId, [
+    { kind: "browser-screenshot-390", value: "r390\n" },
+    { kind: "browser-screenshot-768", value: "r768\n" },
+    { kind: "browser-screenshot-1440", value: "r1440\n" },
+  ]);
+  const r390Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-390")!.artifactId;
+  const r768Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-768")!.artifactId;
+  const r1440Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-1440")!.artifactId;
+
+  run = await step(root, store, run, skillId, [{
+    kind: "critic-report",
+    validatedAs: "critic-report",
+    value: {
+      schemaVersion: "2.0",
+      skillId,
+      criticInvocationId: "critic-r1",
+      executorInvocationId: "executor-1",
+      outcome: "clean",
+      evidenceArtifactIds: [r390Id, r768Id, r1440Id],
+      findings: [],
+    },
+  }]);
+
+  run = await step(root, store, run, skillId, [{ kind: "verification-input", value: { observations: [] } }]);
+  run = await step(root, store, run, skillId, [{
+    kind: "skill-output",
+    validatedAs: "output",
+    value: {
+      implementationOutcome: "implemented",
+      verificationState: "pending-runtime-verification",
+      artifacts: { brief: "b", recipe: "r", direction: "d", verification: "v" },
+      changes: ["changed hero"],
+      residualRisks: [],
+    },
+  }]);
+
+  run = await store.verifySkill(run.runId, skillId);
+  assert.equal(run.state, "repair-required");
+  const failedGate = run.skillLedgers[0].verificationReports[0].gateResults.find(({ gateId }) => gateId === "core/gate/critic-findings");
+  assert.ok(failedGate?.message?.includes("does not reference a required screenshot artifact"));
+});
