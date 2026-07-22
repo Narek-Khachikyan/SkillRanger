@@ -1,10 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["brief", "capabilityProfile"],
+  "required": ["brief", "capabilityProfile", "changeClass"],
   "properties": {
     "brief": { "type": "object", "description": "Canonical .design/brief.json matching the frontend design brief contract." },
     "capabilityProfile": { "enum": ["constrained", "standard", "advanced"] },
+    "changeClass": { "enum": ["micro", "bounded", "material"] },
     "existingScreenshots": { "type": "array", "items": { "type": "string" } },
     "approvedDirection": { "type": ["object", "null"] }
   },

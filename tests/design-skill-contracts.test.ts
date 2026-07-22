@@ -363,3 +363,54 @@ test("visual design skill references the canonical rule and example libraries", 
   assert.match(rules, /domains\/frontend\/rules\/index\.json/);
   assert.match(examples, /domains\/frontend\/examples\/<recipe-id>\/example\.json/);
 });
+
+test("visual-design-polish manifest and contract meet strict execution contract v2 specifications", async () => {
+  const root = path.resolve("registry/skills/frontend.visual-design-polish");
+  const manifest = JSON.parse(await readFile(path.join(root, "skill.manifest.json"), "utf8"));
+  const contract = JSON.parse(await readFile(path.join(root, "execution.contract.json"), "utf8"));
+  const outputSchema = JSON.parse(await readFile(path.join(root, "output.schema.json"), "utf8"));
+
+  assert.equal(manifest.execution.contractVersion, "2.0");
+  assert.equal(manifest.execution.contract, "execution.contract.json");
+
+  assert.equal(contract.schemaVersion, "2.0");
+  assert.equal(contract.skillId, "frontend.visual-design-polish");
+  assert.equal(contract.contractVersion, "2.0.0");
+  assert.ok(contract.mustRead.includes("SKILL.md"));
+
+  assert.deepEqual(contract.applicability, {
+    op: "input",
+    path: "changeClass",
+    equals: "material",
+  });
+
+  const caps = contract.prerequisites
+    .filter((p: { kind: string }) => p.kind === "capability")
+    .map((p: { capability: string }) => p.capability);
+  assert.ok(caps.includes("browser"));
+  assert.ok(caps.includes("screenshots"));
+
+  const criticStep = contract.steps.find((s: { type: string }) => s.type === "critic");
+  assert.ok(criticStep);
+  assert.ok(criticStep.requiredEvidenceKinds.includes("critic-report"));
+
+  const repairStep = contract.steps.find((s: { type: string }) => s.type === "repair");
+  assert.ok(repairStep);
+  assert.equal(repairStep.repairable, true);
+
+  const stepIds = contract.steps.map((s: { id: string }) => s.id);
+  const initialIdx = stepIds.findIndex((id: string) => id.includes("capture-initial-evidence"));
+  const criticIdx = stepIds.findIndex((id: string) => id.includes("independent-visual-critic"));
+  const repairIdx = stepIds.findIndex((id: string) => id.includes("bounded-repair"));
+  const recheckIdx = stepIds.findIndex((id: string) => id.includes("capture-recheck-evidence"));
+  const verifyIdx = stepIds.findIndex((id: string) => id.includes("final-verify"));
+
+  assert.ok(initialIdx !== -1 && initialIdx < criticIdx, "initial screenshots must precede critic");
+  assert.ok(criticIdx !== -1 && criticIdx < repairIdx, "critic must precede repair");
+  assert.ok(repairIdx !== -1 && repairIdx < recheckIdx, "recheck screenshots must follow repair");
+  assert.ok(recheckIdx !== -1 && recheckIdx < verifyIdx, "recheck must precede final verification");
+
+  assert.equal(outputSchema.properties?.outcome, undefined);
+  assert.equal(outputSchema.properties?.implementationOutcome !== undefined, true);
+  assert.ok(contract.maxRepairIterations >= 1 && contract.maxRepairIterations <= 5);
+});

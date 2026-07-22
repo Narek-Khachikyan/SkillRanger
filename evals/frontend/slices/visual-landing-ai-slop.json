@@ -1,0 +1,203 @@
+{
+  "schemaVersion": "1.0",
+  "name": "frontend-visual-landing-ai-slop-v1",
+  "targetCounts": {
+    "triggerPrompts": 0,
+    "taskEvals": 3
+  },
+  "triggerPrompts": [],
+  "taskBands": [
+    {
+      "id": "visual-landing-ai-slop",
+      "targetCount": 3,
+      "seedTasks": [
+        {
+          "id": "landing-industrial-aquaculture-hero",
+          "prompt": "Redesign an industrial aquaculture hero section for commercial fish farmers. Avoid dark futuristic dashboard AI slop, fake sustainability metrics, or generic neon glass composition.",
+          "assertions": [
+            {
+              "text": "frontend.visual-design-polish skill selected with material strict workflow.",
+              "graderType": "schema",
+              "requiredArtifacts": [
+                "designBrief",
+                "designDirection",
+                "screenshots",
+                "criticReport"
+              ]
+            },
+            {
+              "text": "Initial screenshots (390, 768, 1440) captured before independent visual critic.",
+              "graderType": "browser",
+              "requiredArtifacts": [
+                "screenshots",
+                "criticReport"
+              ]
+            },
+            {
+              "text": "Independent critic report present with non-executor invocation ID.",
+              "graderType": "schema",
+              "requiredArtifacts": [
+                "criticReport"
+              ]
+            },
+            {
+              "text": "High/critical AI-slop findings trigger bounded repair with fresh screenshots.",
+              "graderType": "browser",
+              "requiredArtifacts": [
+                "repairRequest",
+                "screenshots",
+                "verificationReport"
+              ]
+            },
+            {
+              "text": "No invented telemetry, fake sustainability metrics, or stock photography.",
+              "graderType": "human"
+            },
+            {
+              "text": "Domain-specific visual structure survives logo-swap without becoming interchangeable SaaS.",
+              "graderType": "human"
+            }
+          ]
+        },
+        {
+          "id": "landing-scientific-hardware",
+          "prompt": "Redesign a scientific hardware landing page for lab spectrometers. Avoid generic B2B SaaS layout with gradient orb, three-card feature grid, or unverified performance claims.",
+          "assertions": [
+            {
+              "text": "frontend.visual-design-polish skill selected with material strict workflow.",
+              "graderType": "schema",
+              "requiredArtifacts": [
+                "designBrief",
+                "designDirection",
+                "screenshots",
+                "criticReport"
+              ]
+            },
+            {
+              "text": "Initial screenshots (390, 768, 1440) captured before independent visual critic.",
+              "graderType": "browser",
+              "requiredArtifacts": [
+                "screenshots",
+                "criticReport"
+              ]
+            },
+            {
+              "text": "Independent critic report present with non-executor invocation ID.",
+              "graderType": "schema",
+              "requiredArtifacts": [
+                "criticReport"
+              ]
+            },
+            {
+              "text": "High/critical AI-slop findings trigger bounded repair with fresh screenshots.",
+              "graderType": "browser",
+              "requiredArtifacts": [
+                "repairRequest",
+                "screenshots",
+                "verificationReport"
+              ]
+            },
+            {
+              "text": "Composition built around physical hardware product rather than abstract orb/cards.",
+              "graderType": "human"
+            },
+            {
+              "text": "No unverified performance claims, fake logos, or testimonials.",
+              "graderType": "human"
+            }
+          ]
+        },
+        {
+          "id": "landing-premium-food-production-hero",
+          "prompt": "Redesign a premium food production hero section for artisanal olive oil producers. Avoid safe corporate mediocrity (text left + generic card right, sterile typography, lack of materiality).",
+          "assertions": [
+            {
+              "text": "frontend.visual-design-polish skill selected with material strict workflow.",
+              "graderType": "schema",
+              "requiredArtifacts": [
+                "designBrief",
+                "designDirection",
+                "screenshots",
+                "criticReport"
+              ]
+            },
+            {
+              "text": "Initial screenshots (390, 768, 1440) captured before independent visual critic.",
+              "graderType": "browser",
+              "requiredArtifacts": [
+                "screenshots",
+                "criticReport"
+              ]
+            },
+            {
+              "text": "Independent critic report present with non-executor invocation ID.",
+              "graderType": "schema",
+              "requiredArtifacts": [
+                "criticReport"
+              ]
+            },
+            {
+              "text": "High/critical AI-slop findings trigger bounded repair with fresh screenshots.",
+              "graderType": "browser",
+              "requiredArtifacts": [
+                "repairRequest",
+                "screenshots",
+                "verificationReport"
+              ]
+            },
+            {
+              "text": "Visual materiality and memorable domain composition establish brand identity.",
+              "graderType": "human"
+            },
+            {
+              "text": "Logo-swap with unrelated SaaS breaks product identity.",
+              "graderType": "human"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "utilityWeights": {
+      "productSpecificity": 0.25,
+      "hardGatePassRate": 0.3,
+      "responsiveQuality": 0.2,
+      "accessibility": 0.15,
+      "stability": 0.1
+    },
+    "promotionGates": {
+      "minimumRepetitions": 3,
+      "minimumBlindPreferenceShare": 0.6,
+      "minimumNoSkillDelta": 10,
+      "minimumOldSkillDelta": 0,
+      "maximumPassRateStdDev": 0.15
+    }
+  },
+  "artifactContract": {
+    "screenshots": [
+      "390x844",
+      "768x1024",
+      "1440x900"
+    ],
+    "requiredMetadata": [
+      "skillId",
+      "skillVersion",
+      "skillChecksum",
+      "model",
+      "fixture",
+      "command",
+      "durationMs",
+      "executorInvocationId",
+      "criticInvocationId"
+    ],
+    "optionalArtifacts": [
+      "designBrief",
+      "designDirection",
+      "criticReport",
+      "repairRequest",
+      "verificationReport",
+      "responsiveMatrix"
+    ]
+  }
+}

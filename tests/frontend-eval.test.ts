@@ -182,7 +182,7 @@ test("frontend suite freezes Russian routing coverage for every owned skill", as
   }
 });
 
-test("dedicated design skill eval suites each provide five valid tasks", async () => {
+test("dedicated design skill eval suites each provide valid tasks", async () => {
   for (const suitePath of [
     "evals/frontend/slices/visual-direction.json",
     "evals/frontend/slices/tailwind-execution.json",
@@ -192,6 +192,14 @@ test("dedicated design skill eval suites each provide five valid tasks", async (
     assert.deepEqual(validateFrontendEvalSuite(suite), [], suitePath);
     assert.equal(summarizeFrontendEvalSuite(suite).taskEvals.seedTasks, 5, suitePath);
   }
+
+  const visualSlopSuite = await loadFrontendEvalSuite(path.resolve("evals/frontend/slices/visual-landing-ai-slop.json"));
+  assert.deepEqual(validateFrontendEvalSuite(visualSlopSuite), []);
+  assert.equal(summarizeFrontendEvalSuite(visualSlopSuite).taskEvals.seedTasks, 3);
+  assert.deepEqual(
+    visualSlopSuite.taskBands[0]?.seedTasks.map((t) => t.id),
+    ["landing-industrial-aquaculture-hero", "landing-scientific-hardware", "landing-premium-food-production-hero"],
+  );
 });
 
 test("frontend eval suite accepts routing expectations and artifact-aware assertions", () => {

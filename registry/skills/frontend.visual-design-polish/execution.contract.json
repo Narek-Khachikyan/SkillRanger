@@ -1,0 +1,373 @@
+{
+  "schemaVersion": "2.0",
+  "skillId": "frontend.visual-design-polish",
+  "contractVersion": "2.0.0",
+  "inputSchema": "input.schema.json",
+  "outputSchema": "output.schema.json",
+  "mustRead": [
+    "SKILL.md",
+    "references/visual-rules.md",
+    "references/evidence-examples.md"
+  ],
+  "applicability": {
+    "op": "input",
+    "path": "changeClass",
+    "equals": "material"
+  },
+  "prerequisites": [
+    {
+      "id": "design-brief-present",
+      "kind": "input",
+      "path": "brief"
+    },
+    {
+      "id": "material-change-declared",
+      "kind": "input",
+      "path": "changeClass"
+    },
+    {
+      "id": "browser-ready",
+      "kind": "capability",
+      "capability": "browser",
+      "requiredStatus": "ready"
+    },
+    {
+      "id": "screenshots-ready",
+      "kind": "capability",
+      "capability": "screenshots",
+      "requiredStatus": "ready"
+    }
+  ],
+  "steps": [
+    {
+      "id": "frontend.visual-design-polish/step/collect-product-evidence",
+      "type": "collect",
+      "requiredEvidenceKinds": [
+        "product-evidence-ledger"
+      ],
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/product-evidence-present"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/step/define-structured-direction",
+      "type": "validate",
+      "requiredEvidenceKinds": [
+        "design-direction"
+      ],
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/structured-direction-present"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/step/implement-direction",
+      "type": "implement",
+      "requiredEvidenceKinds": [
+        "implementation-diff"
+      ],
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/material-scope-confirmed",
+        "frontend.visual-design-polish/rule/no-invented-proof"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/step/capture-initial-evidence",
+      "type": "collect",
+      "requiredEvidenceKinds": [
+        "browser-screenshot-initial-390",
+        "browser-screenshot-initial-768",
+        "browser-screenshot-initial-1440"
+      ],
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/initial-viewports-covered"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/step/independent-visual-critic",
+      "type": "critic",
+      "requiredEvidenceKinds": [
+        "critic-report"
+      ],
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/critic-independent",
+        "frontend.visual-design-polish/rule/no-unresolved-ai-slop"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/step/bounded-repair",
+      "type": "repair",
+      "requiredEvidenceKinds": [],
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/fresh-evidence-after-repair"
+      ],
+      "repairable": true
+    },
+    {
+      "id": "frontend.visual-design-polish/step/capture-recheck-evidence",
+      "type": "collect",
+      "requiredEvidenceKinds": [
+        "browser-screenshot-390",
+        "browser-screenshot-768",
+        "browser-screenshot-1440"
+      ],
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/no-horizontal-overflow",
+        "frontend.visual-design-polish/rule/no-clipped-controls",
+        "frontend.visual-design-polish/rule/no-sticky-overlap"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/step/final-verify",
+      "type": "verify",
+      "requiredEvidenceKinds": [
+        "verification-input"
+      ],
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/focus-visible",
+        "frontend.visual-design-polish/rule/no-runtime-console-errors",
+        "frontend.visual-design-polish/rule/reduced-motion-verified",
+        "frontend.visual-design-polish/rule/runtime-verification-required"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/step/final-report",
+      "type": "report",
+      "requiredEvidenceKinds": [
+        "skill-output"
+      ],
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/runtime-verification-required"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "frontend.visual-design-polish/rule/material-scope-confirmed",
+      "description": "Confirm material change class for visual redesign."
+    },
+    {
+      "id": "frontend.visual-design-polish/rule/product-evidence-present",
+      "description": "Ground visual direction in observed product evidence."
+    },
+    {
+      "id": "frontend.visual-design-polish/rule/structured-direction-present",
+      "description": "Define a structured visual direction with recipe and rule selections."
+    },
+    {
+      "id": "frontend.visual-design-polish/rule/no-invented-proof",
+      "description": "Do not invent domain terminology, fake metrics, stock photography subjects, or brand marks."
+    },
+    {
+      "id": "frontend.visual-design-polish/rule/initial-viewports-covered",
+      "description": "Capture initial screenshots across mobile, tablet, and desktop viewports."
+    },
+    {
+      "id": "frontend.visual-design-polish/rule/critic-independent",
+      "description": "Ensure independent visual critique actor and invocation."
+    },
+    {
+      "id": "frontend.visual-design-polish/rule/no-unresolved-ai-slop",
+      "description": "Resolve all high-risk AI slop findings before certification."
+    },
+    {
+      "id": "frontend.visual-design-polish/rule/no-horizontal-overflow",
+      "description": "Do not leave horizontal overflow."
+    },
+    {
+      "id": "frontend.visual-design-polish/rule/no-clipped-controls",
+      "description": "Do not leave clipped or unreachable interactive controls."
+    },
+    {
+      "id": "frontend.visual-design-polish/rule/no-sticky-overlap",
+      "description": "Do not leave sticky or fixed elements covering readable content."
+    },
+    {
+      "id": "frontend.visual-design-polish/rule/focus-visible",
+      "description": "Keep keyboard focus visible across interactive elements."
+    },
+    {
+      "id": "frontend.visual-design-polish/rule/no-runtime-console-errors",
+      "description": "Leave no runtime console errors during verification."
+    },
+    {
+      "id": "frontend.visual-design-polish/rule/reduced-motion-verified",
+      "description": "Verify reduced motion accessibility behavior."
+    },
+    {
+      "id": "frontend.visual-design-polish/rule/fresh-evidence-after-repair",
+      "description": "Capture fresh downstream screenshots after repair."
+    },
+    {
+      "id": "frontend.visual-design-polish/rule/runtime-verification-required",
+      "description": "Require runtime verification before certifying the run."
+    }
+  ],
+  "gates": [
+    {
+      "id": "frontend.visual-design-polish/gate/material-scope-confirmed",
+      "level": "hard",
+      "evaluator": {
+        "type": "schema-valid",
+        "schema": "input"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/material-scope-confirmed"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/product-evidence-present",
+      "level": "hard",
+      "evaluator": {
+        "type": "evidence-present",
+        "evidenceKind": "product-evidence-ledger"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/product-evidence-present"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/structured-direction-present",
+      "level": "hard",
+      "evaluator": {
+        "type": "evidence-present",
+        "evidenceKind": "design-direction"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/structured-direction-present"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/initial-viewports-covered",
+      "level": "hard",
+      "evaluator": {
+        "type": "evidence-present",
+        "evidenceKind": "browser-screenshot-initial-390"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/initial-viewports-covered"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/fresh-viewports-covered",
+      "level": "hard",
+      "evaluator": {
+        "type": "evidence-present",
+        "evidenceKind": "browser-screenshot-390"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/fresh-evidence-after-repair"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/output-schema-valid",
+      "level": "hard",
+      "evaluator": {
+        "type": "schema-valid",
+        "schema": "output"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/runtime-verification-required"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/critic-independent",
+      "level": "hard",
+      "evaluator": {
+        "type": "validator",
+        "validatorId": "core/critic-independence"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/critic-independent"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/no-unresolved-ai-slop",
+      "level": "hard",
+      "evaluator": {
+        "type": "schema-valid",
+        "schema": "critic-report"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/no-unresolved-ai-slop"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/required-states-covered",
+      "level": "hard",
+      "evaluator": {
+        "type": "validator",
+        "validatorId": "frontend/browser-hard-gates"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/initial-viewports-covered"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/no-horizontal-overflow",
+      "level": "hard",
+      "evaluator": {
+        "type": "validator",
+        "validatorId": "frontend/browser-hard-gates"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/no-horizontal-overflow"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/no-clipped-controls",
+      "level": "hard",
+      "evaluator": {
+        "type": "validator",
+        "validatorId": "frontend/browser-hard-gates"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/no-clipped-controls"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/no-sticky-overlap",
+      "level": "hard",
+      "evaluator": {
+        "type": "validator",
+        "validatorId": "frontend/browser-hard-gates"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/no-sticky-overlap"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/focus-visible",
+      "level": "hard",
+      "evaluator": {
+        "type": "validator",
+        "validatorId": "frontend/browser-hard-gates"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/focus-visible"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/no-runtime-console-errors",
+      "level": "hard",
+      "evaluator": {
+        "type": "validator",
+        "validatorId": "frontend/browser-hard-gates"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/no-runtime-console-errors"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/reduced-motion-verified",
+      "level": "hard",
+      "evaluator": {
+        "type": "validator",
+        "validatorId": "frontend/browser-hard-gates"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/reduced-motion-verified"
+      ]
+    }
+  ],
+  "maxRepairIterations": 3
+}

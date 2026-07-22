@@ -1,9 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["outcome", "artifacts", "verification", "changes", "residualRisks"],
+  "required": ["implementationOutcome", "verificationState", "artifacts", "changes", "residualRisks"],
   "properties": {
-    "outcome": { "enum": ["verified", "implemented-unverified", "failed", "blocked"] },
+    "implementationOutcome": { "enum": ["implemented", "failed", "blocked"] },
+    "verificationState": { "const": "pending-runtime-verification" },
     "artifacts": {
       "type": "object",
       "required": ["brief", "recipe", "direction", "verification"],
@@ -14,7 +15,6 @@
         "verification": { "type": "string" }
       }
     },
-    "verification": { "type": "object" },
     "changes": { "type": "array", "items": { "type": "string" } },
     "residualRisks": { "type": "array", "items": { "type": "string" } }
   },

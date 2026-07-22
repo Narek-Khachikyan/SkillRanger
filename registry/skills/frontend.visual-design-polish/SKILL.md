@@ -40,9 +40,9 @@ Treat existing `DESIGN.md` as a source to health-check, not unquestioned truth. 
 
 ## Verification Outcome
 
-- Report `verified` only after rendered mobile and desktop evidence for material visual work.
+- The implementation report must never claim `verified`. Only strict runtime verification followed by successful run finalization may produce a verified result.
 - Without browser or screenshot capability, stop before material implementation with `blocked`; analysis and a manual QA plan are still useful.
-- If the user explicitly asks to implement despite that blocker, return `implemented-unverified` with missing evidence and exact viewport/state checks. Never call it complete.
+- Return `implementationOutcome` as `implemented`, `failed`, or `blocked`, with `verificationState` set to `pending-runtime-verification`. Never call it complete self-verified.
 
 ## Workflow
 
