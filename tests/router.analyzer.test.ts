@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { analyzeTask } from "../src/router/analyzer.ts";
+import { analyzeFrontendIntent } from "../src/domains/frontend/intents/index.ts";
 import { loadRouterFixturePacks, type RouterFixturePack } from "../src/router/fixtures.ts";
 import type { ProjectFingerprint } from "../src/types.ts";
 import { buildRoutingContext } from "../src/router/context.ts";
@@ -218,4 +219,22 @@ test("noun-only design does not become an action", async () => {
   const metadata = analyzerMetadata(packs);
   assert.equal(analyzeTask({ prompt: "Красивый дизайн страницы.", ...metadata }).profile.actions.includes("design"), false);
   assert.equal(analyzeTask({ prompt: "Design the page.", ...metadata }).profile.actions.includes("design"), true);
+});
+
+test("analyzer extracts explicit visual, motion, and accessibility intents for Russian Bleach prompt", async () => {
+  const prompt = "Создай современный одностраничный сайт по Bleach с узнаваемым нешаблонным визуальным дизайном, атмосферными анимациями, интерактивными элементами, адаптивностью и доступностью. @skillranger";
+  const result = analyzeFrontendIntent(prompt);
+
+  assert.ok(result.intents.has("visual-design-polish"));
+  assert.ok(result.intents.has("motion-design"));
+  assert.ok(result.intents.has("accessibility-review"));
+});
+
+test("analyzer extracts explicit visual, motion, and accessibility intents for English Dragon Ball prompt", async () => {
+  const prompt = "Create a visually impressive responsive one-page Dragon Ball website. Avoid generic AI design. Add subtle hover and scroll interactions. Animations should be fast but not distracting. Respect prefers-reduced-motion. Ensure keyboard navigation, visible focus, semantic HTML and contrast. Maintain good Core Web Vitals. skillranger";
+  const result = analyzeFrontendIntent(prompt);
+
+  assert.ok(result.intents.has("visual-design-polish"));
+  assert.ok(result.intents.has("motion-design"));
+  assert.ok(result.intents.has("accessibility-review"));
 });

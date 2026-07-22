@@ -48,7 +48,7 @@ export const coreRoutingVocabulary = {
     entry("artifact", "page", "ru", ["страница", "странице"]),
     entry("artifact", "component", "ru", ["компонент"]),
     entry("artifact", "form", "ru", ["форма", "форму"]),
-    entry("quality", "accessibility", "mixed", ["accessibility", "accessible", "доступность", "доступную"]),
+    entry("quality", "accessibility", "mixed", ["accessibility", "accessible", "keyboard navigation", "visible focus", "semantic html", "contrast", "sufficient contrast", "screen reader", "wcag", "доступность", "доступный", "доступным", "доступностью", "доступную", "клавиатура", "фокус", "контраст"]),
     entry("quality", "performance", "mixed", ["performance", "производительность"]),
     entry("quality", "security", "mixed", ["security", "безопасность"]),
     entry("quality", "correctness", "mixed", ["correctness", "корректность"]),

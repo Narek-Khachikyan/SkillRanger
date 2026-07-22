@@ -100,7 +100,7 @@ const specializedIntentHints: Record<string, string[]> = {
     "react value", "uncontrolled",
   ],
   "frontend.react-app-review": [
-    "data flow", "derived during render", "effect", "provider", "react app", "state ownership",
+    "data flow", "derived during render", "effect", "provider", "state ownership",
     "state reset", "state resets", "useeffect",
   ],
   "frontend.tailwind-ui-polish": [
@@ -110,7 +110,7 @@ const specializedIntentHints: Record<string, string[]> = {
     "tailwind fix", "wrapping",
   ],
   "frontend.testing-strategy": [
-    "component test", "e2e mix", "no tests", "playwright component", "test portfolio", "tests are bad",
+    "component test", "e2e mix", "frontend testing strategy", "no tests", "playwright component", "test portfolio", "tests are bad",
     "testing strategy", "unit",
   ],
   "frontend.ux-critique": [
@@ -183,10 +183,10 @@ const legacySpecializedIntentHints = Object.fromEntries(
 
 const companionSkillIds: Record<string, string[]> = {
   "frontend.visual-design-polish": [
-    "frontend.tailwind-ui-polish", "frontend.interaction-polish", "frontend.accessibility-review",
+    "frontend.motion-design", "frontend.accessibility-review", "frontend.tailwind-ui-polish", "frontend.interaction-polish",
   ],
   "frontend.design-to-code": [
-    "frontend.tailwind-ui-polish", "frontend.interaction-polish", "frontend.accessibility-review",
+    "frontend.motion-design", "frontend.tailwind-ui-polish", "frontend.interaction-polish", "frontend.accessibility-review",
   ],
   "frontend.design-system": ["frontend.tailwind-ui-polish", "frontend.accessibility-review"],
   "frontend.tailwind-ui-polish": ["frontend.accessibility-review"],
@@ -215,12 +215,12 @@ const legacySpecializedIntentScore = (skillId: string, intent: string) => {
   let score = 0;
   for (const hint of hints) {
     if (hint.includes(" ")) {
-      if (normalizedIntent.includes(hint)) score += 1;
+      if (normalizedIntent.includes(hint)) score += hint.split(" ").length >= 2 ? 1.5 : 1;
     } else if (tokens.has(hint)) {
       score += 0.65;
     }
   }
-  return Math.max(0, Math.min(1, score / 2));
+  return Math.max(0, Math.min(1, score / 1.5));
 };
 
 const specializedIntentScore = (skill: RegistrySkill, intent?: string) => {
@@ -236,12 +236,55 @@ const canonicalIntentPriority: CanonicalFrontendIntent[] = [
   "tailwind-ui-polish", "ux-critique",
 ];
 
+const materialBuildActionTokens = new Set([
+  "create", "build", "implement", "design",
+  "создай", "создать", "сделай", "разработай", "реализуй", "дай",
+]);
+
+const interfaceArtifactTokens = new Set([
+  "site", "website", "page", "landing", "interface", "frontend", "ui",
+  "сайт", "сайта", "страница", "страницу", "лендинг", "интерфейс", "фронтенд",
+]);
+
+const isMaterialVisualBuildIntent = (intent: string) => {
+  const tokens = tokenize(intent);
+  return (
+    hasAnyToken(tokens, materialBuildActionTokens) &&
+    hasAnyToken(tokens, interfaceArtifactTokens)
+  );
+};
+
+const isAgentsMdIntent = (intent?: string) => {
+  if (!intent) return false;
+  const normalized = intent.toLowerCase();
+  return [
+    "agents.md",
+    "agent instructions",
+    "agent context",
+    "coding agent guidance",
+    "инструкции для агента",
+    "инструкции для ии-агента",
+    "контекст агента",
+  ].some((phrase) => normalized.includes(phrase));
+};
+
 const primaryCanonicalIntent = (intent: string): CanonicalFrontendIntent | undefined => {
   const analysis = analyzeFrontendIntent(intent);
   const hasStrongLegacySpecialist = Object.keys(legacySpecializedIntentHints)
-    .some((skillId) => legacySpecializedIntentScore(skillId, intent) > 0.5);
+    .some((skillId) => legacySpecializedIntentScore(skillId, intent) >= 0.5);
   if (hasStrongLegacySpecialist) return undefined;
   const intents = analysis.intents;
+  if (
+    intents.has("audit") &&
+    /\b(preflight|audit|quality gate|release-readiness|ship readiness|scorecard)\b/u.test(analysis.normalized)
+  ) return "audit";
+  if (
+    intents.has("visual-design-polish") &&
+    intents.has("motion-design") &&
+    isMaterialVisualBuildIntent(intent)
+  ) {
+    return "visual-design-polish";
+  }
   if (
     intents.has("interaction-polish") &&
     /\b(interaction polish|polish this modal|drag|drop|drawer|toast|взаимодействие|дровер|тост)\b/u.test(analysis.normalized)
@@ -325,19 +368,28 @@ const routing: DomainRoutingPolicy = {
     const specializedScore = specializedIntentScore(skill, intent);
     if (intentGatedSkillIds.has(skill.manifest.id) && (!intent || specializedScore === 0)) return -0.01;
     if (!intent) return 0;
-    if (skill.manifest.id === "frontend.audit") return isAuditIntent(intent) ? 0.32 : 0;
+    if (skill.manifest.id === "frontend.audit") return isAuditIntent(intent) ? 0.35 : 0;
+    if (skill.manifest.id === "frontend.visual-critic") return isVisualCriticIntent(intent) ? 0.35 : 0;
     if (skill.manifest.id === "frontend.playwright-debug") {
-      return specializedScore >= 0.5 ? 0.18 * specializedScore : -0.18;
+      const debugScore = legacySpecializedIntentScore("frontend.playwright-debug", intent);
+      return debugScore >= 0.5 ? 0.35 : -0.18;
     }
+    const legacyScore = legacySpecializedIntentScore(skill.manifest.id, intent);
+    if (legacyScore >= 0.5) return 0.35;
     if (!hasSpecializedIntent(intent)) return 0;
     const expected = canonicalIntentBySkillId[skill.manifest.id];
-    if (expected && primaryCanonicalIntent(intent) !== expected) return -0.14;
-    if (expected && specializedScore > 0) return 0.25 * specializedScore;
+    const analyzed = analyzeFrontendIntent(intent);
+    const primaryIntent = primaryCanonicalIntent(intent);
+    if (expected && expected === primaryIntent) return 0.25 * (specializedScore || 1);
+    if (expected && !analyzed.intents.has(expected) && primaryIntent !== expected) return -0.14;
     return specializedScore > 0 ? 0.18 * specializedScore : -0.14;
   },
   includeSkill(fingerprint, skill, intent) {
     if (!hasRequiredStackTags(fingerprint, skill)) return false;
-    if (skill.manifest.id === "frontend.agents-md-bootstrap" && fingerprint.agentContext.agentsMd.present) {
+    if (
+      skill.manifest.id === "frontend.agents-md-bootstrap" &&
+      (fingerprint.agentContext?.agentsMd?.present || (intent !== undefined && !isAgentsMdIntent(intent)))
+    ) {
       return false;
     }
     if (skill.manifest.id === "frontend.audit" && !isAuditIntent(intent)) return false;
@@ -359,7 +411,7 @@ const routing: DomainRoutingPolicy = {
         const recommendation = recommendations.find((candidate) => candidate.skillId === skillId);
         return recommendation ? [{ ...recommendation, role: "companion" as const }] : [];
       })
-      .sort((left, right) => phaseRankForSkill(left.skillId) - phaseRankForSkill(right.skillId))
+      .sort((left, right) => right.score - left.score || phaseRankForSkill(left.skillId) - phaseRankForSkill(right.skillId))
       .slice(0, 2);
     return [{ ...primary, role: "primary" as const }, ...companions];
   },

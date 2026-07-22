@@ -202,3 +202,76 @@ test("visual-reference phrases provide direct evidence while bare and negated no
       skillId === "frontend.design-to-code" && reason === "missing-required-evidence:intent:visual-reference"), prompt);
   }
 });
+
+test("Russian Bleach prompt selects visual design primary, motion and accessibility coverage, and excludes agents-md-bootstrap", async () => {
+  const prompt = "Создай современный одностраничный сайт по Bleach с узнаваемым нешаблонным визуальным дизайном, атмосферными анимациями, интерактивными элементами, адаптивностью и доступностью. @skillranger";
+  const prepared = await prepareTask({
+    projectRoot: await project(),
+    registry: { kind: "bundled", root: registry },
+    prompt,
+    activation: { mode: "explicit" },
+  });
+  assert.equal(prepared.status, "prepared");
+  if (prepared.status !== "prepared") return;
+
+  assert.equal(prepared.selections.primary.skillId, "frontend.visual-design-polish");
+  const companionIds = prepared.selections.companions.map(({ skillId }) => skillId);
+  const verificationIds = prepared.selections.verification.map(({ skillId }) => skillId);
+  const agentContextIds = prepared.selections.agentContext.map(({ skillId }) => skillId);
+  const selectedIds = [prepared.selections.primary.skillId, ...companionIds, ...verificationIds, ...agentContextIds];
+
+  assert.ok(selectedIds.includes("frontend.motion-design"));
+  assert.ok(selectedIds.includes("frontend.accessibility-review"));
+  assert.equal(selectedIds.includes("frontend.agents-md-bootstrap"), false);
+});
+
+test("English Dragon Ball prompt selects visual design primary, motion and accessibility coverage, and excludes agents-md-bootstrap", async () => {
+  const prompt = "Create a visually impressive responsive one-page Dragon Ball website. Avoid generic AI design. Add subtle hover and scroll interactions. Animations should be fast but not distracting. Respect prefers-reduced-motion. Ensure keyboard navigation, visible focus, semantic HTML and contrast. Maintain good Core Web Vitals. skillranger";
+  const prepared = await prepareTask({
+    projectRoot: await project(),
+    registry: { kind: "bundled", root: registry },
+    prompt,
+    activation: { mode: "explicit" },
+  });
+  assert.equal(prepared.status, "prepared");
+  if (prepared.status !== "prepared") return;
+
+  assert.equal(prepared.selections.primary.skillId, "frontend.visual-design-polish");
+  const companionIds = prepared.selections.companions.map(({ skillId }) => skillId);
+  const verificationIds = prepared.selections.verification.map(({ skillId }) => skillId);
+  const agentContextIds = prepared.selections.agentContext.map(({ skillId }) => skillId);
+  const selectedIds = [prepared.selections.primary.skillId, ...companionIds, ...verificationIds, ...agentContextIds];
+
+  assert.ok(selectedIds.includes("frontend.motion-design"));
+  assert.ok(selectedIds.includes("frontend.accessibility-review"));
+  assert.equal(selectedIds.includes("frontend.agents-md-bootstrap"), false);
+});
+
+test("Motion-first task retains motion-design as primary skill", async () => {
+  const prompt = "Create a coordinated motion system for the existing frontend, including page transitions, interruption rules and reduced motion. skillranger";
+  const prepared = await prepareTask({
+    projectRoot: await project(),
+    registry: { kind: "bundled", root: registry },
+    prompt,
+    activation: { mode: "explicit" },
+  });
+  assert.equal(prepared.status, "prepared");
+  if (prepared.status !== "prepared") return;
+
+  assert.equal(prepared.selections.primary.skillId, "frontend.motion-design");
+});
+
+test("Explicit AGENTS.md intent selects frontend.agents-md-bootstrap", async () => {
+  const prompt = "Create a concise AGENTS.md for this frontend application with project commands, architecture notes and validation guidance. skillranger";
+  const prepared = await prepareTask({
+    projectRoot: await project(),
+    registry: { kind: "bundled", root: registry },
+    prompt,
+    activation: { mode: "explicit" },
+  });
+  assert.equal(prepared.status, "prepared");
+  if (prepared.status !== "prepared") return;
+
+  const agentContextIds = prepared.selections.agentContext.map(({ skillId }) => skillId);
+  assert.ok(agentContextIds.includes("frontend.agents-md-bootstrap"));
+});

@@ -104,6 +104,7 @@ export const evaluateFrontendRunPolicy = (
       phasePlan: planFrontendPhases({
         intent: input.intent,
         recommendedSkillIds: input.recommendations.map(({ skillId }) => skillId),
+        primarySkillId: input.recommendations[0]?.skillId,
         repairFindingCodes: Array.isArray(input.artifacts?.repairFindingCodes)
           ? input.artifacts.repairFindingCodes.filter((code): code is string => typeof code === "string")
           : undefined,

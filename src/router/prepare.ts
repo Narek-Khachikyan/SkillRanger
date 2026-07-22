@@ -3,9 +3,8 @@ import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { loadRouterConfig, type RouterConfig } from "../config/index.ts";
 import { agents } from "../installers/agents.ts";
-import { loadBundledRouterPacks, type BundledRouterPack } from "../domains/registry.ts";
+import { getDomainPack, loadBundledRouterPacks, resolveDomainPackForSkill, type BundledRouterPack } from "../domains/registry.ts";
 import "../domains/bundled.ts";
-import { getDomainPack } from "../domains/registry.ts";
 import { auditSkill } from "../audit/index.ts";
 import { readLockfile } from "../lockfile/index.ts";
 import { defaultDomainsRoot } from "../paths.ts";
@@ -104,6 +103,7 @@ const skillMetadata = async (
   strict: boolean,
   inputs: Record<string, Record<string, unknown>>,
   capabilities: string[],
+  intent?: string,
 ): Promise<PreparedMetadata | undefined> => {
   const routing = skill.manifest.routing;
   if (!routing?.roles || !routing.domains || !routing.actions || !routing.artifactTypes || !routing.intentTags || !routing.technologyTags || !routing.qualityGoals) return undefined;
@@ -122,6 +122,9 @@ const skillMetadata = async (
     ...(routing.requiredCapabilities ?? []),
     ...(skill.manifest.verification?.requiredCapabilities ?? []),
   ])];
+  const domainPack = resolveDomainPackForSkill(skill.manifest.id);
+  const laneAdjustment = domainPack?.routing.laneAdjustment(routing.lane, intent) ?? 0;
+  const skillAdjustment = domainPack?.routing.skillAdjustment(skill, intent) ?? 0;
   return {
     id: skill.manifest.id,
     displayName: skill.manifest.displayName,
@@ -158,6 +161,8 @@ const skillMetadata = async (
     qualityScore: skill.manifest.qualityScore,
     securityScore: skill.manifest.securityScore,
     freshnessDate: skill.manifest.freshness?.lastReviewedAt,
+    laneAdjustment,
+    skillAdjustment,
     supportedTargets: [...new Set([
       ...skill.manifest.supportedAgents,
       ...Object.entries(skill.manifest.compatibility ?? {})
@@ -224,6 +229,26 @@ const recommendationsFor = (selections: { primary: PreparedSkillSelection; envir
   ...(index === 0 ? {} : {}),
 })) as unknown as Recommendation[];
 
+const assertRequiredPhaseOwnersSelected = (
+  policy: { artifacts?: Record<string, unknown> } | undefined,
+  selectedSkillIds: Set<string>,
+) => {
+  const phasePlan = policy?.artifacts?.phasePlan as { entries?: Array<{ status: string; ownerSkillId: string; phase: string }> } | undefined;
+  if (!phasePlan?.entries) return;
+
+  const missing = phasePlan.entries.filter(
+    ({ status, ownerSkillId }) =>
+      status === "required" && !selectedSkillIds.has(ownerSkillId),
+  );
+
+  if (missing.length === 0) return;
+
+  throw new RouterPrepareError(
+    "routing-integrity",
+    `Required phase owners are not selected: ${missing.map(({ phase, ownerSkillId }) => `${phase}:${ownerSkillId}`).join(",")}.`,
+  );
+};
+
 const createLifecyclePayload = async (input: {
   runtimeRunId: string;
   domain: string;
@@ -251,6 +276,8 @@ const createLifecyclePayload = async (input: {
     checksum: selection.packageChecksum,
     mandatory: true,
   }));
+  const selectedSkillIds = new Set(selectedSkills.map(({ skillId }) => skillId));
+  assertRequiredPhaseOwnersSelected(policy, selectedSkillIds);
   const created = createSkillRun({
     runId: input.runtimeRunId,
     domain: input.domain,
@@ -371,7 +398,7 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
     contractInputAccepted: false,
     contractMustRead: ["SKILL.md"],
   })));
-  const metadata = (await Promise.all(skills.map((skill) => skillMetadata(input.projectRoot, targetAgent, skill, strict, input.skillInputs ?? {}, capabilities))))
+  const metadata = (await Promise.all(skills.map((skill) => skillMetadata(input.projectRoot, targetAgent, skill, strict, input.skillInputs ?? {}, capabilities, parsed.normalizedIntent))))
     .filter((skill): skill is PreparedMetadata => skill !== undefined);
   const allMetadata = [...metadata, ...fixtureMetadata] as RouterSkillMetadata[];
   const canonicalSkills = allMetadata.map(canonicalSkillRoutingDocument);

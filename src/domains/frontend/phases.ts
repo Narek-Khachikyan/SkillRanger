@@ -38,11 +38,12 @@ const findingPhaseRules: Array<[RegExp, FrontendExecutionPhase]> = [
 export const phaseForFinding = (code: string): FrontendExecutionPhase =>
   findingPhaseRules.find(([pattern]) => pattern.test(code.toLowerCase()))?.[1] ?? "final-audit";
 
-const implementationOwner = (intent: string, recommended: Set<string>) => {
+const implementationOwner = (intent: string, recommended: Set<string>, primarySkillId?: string) => {
   const normalized = intent.toLowerCase();
   if (recommended.has("frontend.design-to-code") || /design[- ]to[- ]code|reference|figma/.test(normalized)) return "frontend.design-to-code";
   if (recommended.has("frontend.tailwind-ui-polish") || /tailwind/.test(normalized)) return "frontend.tailwind-ui-polish";
-  return "frontend.react-component-design";
+  if (recommended.has("frontend.react-component-design")) return "frontend.react-component-design";
+  return primarySkillId ?? "frontend.react-component-design";
 };
 
 export const phaseRankForSkill = (skillId: string) => {
@@ -66,32 +67,31 @@ export const phaseRankForSkill = (skillId: string) => {
 export const planFrontendPhases = (input: {
   intent: string;
   recommendedSkillIds: string[];
+  primarySkillId?: string;
   repairFindingCodes?: string[];
   motionDirection?: "none" | string;
   material?: boolean;
 }): FrontendPhasePlan => {
   const recommended = new Set(input.recommendedSkillIds);
   const normalized = input.intent.toLowerCase();
-  const material = input.material ?? /reimagine|redesign|build|implement|repair|polish|ui|frontend|design|accessib|tailwind|motion|визу|дизайн|интерфейс/.test(normalized);
-  const expansive = /explore|reimagine|redesign|from scratch|с нуля|редизайн/.test(normalized);
-  const motion = /motion|animation|transition|анимац|движен/.test(normalized) || (input.motionDirection !== undefined && input.motionDirection !== "none");
-  const implementation = implementationOwner(input.intent, recommended);
+  const implementation = implementationOwner(input.intent, recommended, input.primarySkillId);
   const phaseOwners: Record<FrontendExecutionPhase, string> = { ...owners, implementation };
   const required = new Set<FrontendExecutionPhase>();
-  if (material) {
-    required.add("visual-direction");
-    required.add("implementation");
-    required.add("accessibility");
-    required.add("final-audit");
+
+  for (const phase of order) {
+    if (recommended.has(phaseOwners[phase])) {
+      required.add(phase);
+    }
   }
-  if (expansive) { required.add("ux"); required.add("design-system"); }
-  if (motion) required.add("motion");
-  for (const phase of order) if (recommended.has(phaseOwners[phase])) required.add(phase);
+
   const repairPhases = (input.repairFindingCodes ?? []).map(phaseForFinding);
   const repairEntryPhase = repairPhases.length > 0
     ? [...repairPhases].sort((a, b) => order.indexOf(a) - order.indexOf(b))[0]
     : undefined;
-  if (repairEntryPhase) required.add(repairEntryPhase);
+  if (repairEntryPhase && recommended.has(phaseOwners[repairEntryPhase])) {
+    required.add(repairEntryPhase);
+  }
+
   return {
     schemaVersion: "1.0",
     entries: order.map((phase) => required.has(phase)

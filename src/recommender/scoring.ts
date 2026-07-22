@@ -52,7 +52,7 @@ export const scoreSharedFeatures = (features: SharedScoreFeatures) => {
     features.evaluationPenalty +
     features.laneAdjustment +
     features.skillAdjustment;
-  return Number(score.toFixed(3));
+  return Number(clamp(score).toFixed(3));
 };
 
 export type BuildSkillFeatureVectorInput = {

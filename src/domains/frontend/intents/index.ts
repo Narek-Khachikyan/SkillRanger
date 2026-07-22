@@ -25,7 +25,12 @@ export const normalizeFrontendText = (input: string) =>
 
 export const analyzeFrontendIntent = (input: string): FrontendIntentAnalysis => {
   const normalized = normalizeFrontendText(input);
-  const tokens = new Set(normalized.split(" ").filter(Boolean));
+  const tokens = new Set(
+    normalized
+      .split(" ")
+      .map((part) => part.replace(/^[.,:;!?()[\]{}"']+|[.,:;!?()[\]{}"']+$/g, ""))
+      .filter(Boolean),
+  );
   const hasCyrillic = /[а-я]/u.test(normalized);
   const hasLatin = /[a-z]/u.test(normalized);
   const locale = hasCyrillic && hasLatin ? "mixed" : hasCyrillic ? "ru" : hasLatin ? "en" : "unknown";

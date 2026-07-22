@@ -12,3 +12,21 @@ test("records explicit skips and routes repairs to one owner", () => {
   const plan=planFrontendPhases({intent:"Repair the invisible keyboard focus",recommendedSkillIds:["frontend.accessibility-review","frontend.audit"],repairFindingCodes:["invisible-focus"]});
   assert.equal(phaseForFinding("invisible-focus"),"accessibility");assert.equal(plan.repairEntryPhase,"accessibility");assert.equal(plan.rejoinsAt,"evidence-capture");assert.ok(plan.entries.filter(({status})=>status==="skipped").every(({skipReason})=>Boolean(skipReason)));
 });
+
+test("required phase owners are subset of selected skills invariant", () => {
+  const recommendedSkillIds = ["frontend.visual-design-polish", "frontend.motion-design"];
+  const plan = planFrontendPhases({
+    intent: "Create a page with visual design and motion",
+    recommendedSkillIds,
+    primarySkillId: "frontend.visual-design-polish",
+  });
+  const selectedSet = new Set(recommendedSkillIds);
+  const requiredEntries = plan.entries.filter((entry) => entry.status === "required");
+
+  for (const entry of requiredEntries) {
+    assert.ok(
+      selectedSet.has(entry.ownerSkillId),
+      `Required phase ${entry.phase} owner ${entry.ownerSkillId} must be in selected skills`,
+    );
+  }
+});

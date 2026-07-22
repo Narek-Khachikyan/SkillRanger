@@ -1,5 +1,6 @@
 import type { ProjectFingerprint, RegistrySkill } from "../types.ts";
 import type { RoutingContext } from "./context.ts";
+import { resolveDomainPackForSkill } from "../domains/registry.ts";
 import { orderScoredCandidates, scoreFreshness, scoreSharedFeatures } from "../recommender/scoring.ts";
 import type {
   DomainCandidate,
@@ -173,6 +174,7 @@ const sorted = <T extends { skill: RouterSkillMetadata; score: number }>(items: 
 
 const sortedPrimary = <T extends RouterCandidate>(items: T[], requirements: CanonicalRequirement[] = [], routingContext?: RoutingContext) => [...items].sort((left, right) =>
   right.score - left.score ||
+  (right.skill.skillAdjustment ?? 0) - (left.skill.skillAdjustment ?? 0) ||
   calculateRequirementCoverage({ requirements, skill: right.skill, routingContext }).coveredWeight - calculateRequirementCoverage({ requirements, skill: left.skill, routingContext }).coveredWeight ||
   (right.skill.qualityScore ?? 0) - (left.skill.qualityScore ?? 0) ||
   left.skill.id.localeCompare(right.skill.id));
@@ -284,6 +286,18 @@ export const retrieveSkillCandidates = (input: RetrieveSkillCandidatesInput): Re
     if (primaryDomainId && eligibleRoles.includes("primary") && !skill.domains.some((domain) => canonical(domain) === primaryDomainId)) {
       eligibleRoles = eligibleRoles.filter((role) => role !== "primary");
       if (eligibleRoles.length === 0) { rejections.push({ skillId: skill.id, reason: "primary-domain-mismatch" }); return []; }
+    }
+    const hasAgentsMdSignal = Boolean(
+      input.routingIntentTags?.includes("agents-md-bootstrap") ||
+      input.matchedSignals?.some((signal) =>
+        /agents\.md|agent instructions|agent context|coding agent guidance|инструкции для агента|контекст агента/i.test(signal.phrase) ||
+        signal.id.includes("agents-md")
+      ) ||
+      (input.profile.normalizedGoal && /agents\.md|agent instructions|agent context|coding agent guidance|инструкции для агента|контекст агента/i.test(input.profile.normalizedGoal))
+    );
+    if (skill.id === "frontend.agents-md-bootstrap" && !hasAgentsMdSignal) {
+      rejections.push({ skillId: skill.id, reason: "agents-md-intent-required" });
+      return [];
     }
     if (input.routingContext && (eligibleRoles.includes("primary") || eligibleRoles.includes("companion"))) {
       const evidence = evaluateRequiredEvidence({
@@ -449,7 +463,10 @@ const verificationRelevant = (profile: TaskProfile, skill: RouterSkillMetadata) 
     "schema-valid": ["verify", "schema", "database-schema"],
     "deployment-smoke-pass": ["verify", "deploy", "deployment", "smoke-test"],
   };
-  return profile.acceptanceCriteria.some((criterion) => (criteriaSignals[criterion] ?? [criterion]).some((signal) => vocabulary.has(signal)));
+  return (
+    profile.acceptanceCriteria.some((criterion) => (criteriaSignals[criterion] ?? [criterion]).some((signal) => vocabulary.has(signal))) ||
+    profile.qualityGoals.some((goal) => vocabulary.has(goal))
+  );
 };
 
 export const assignSelectedRole = (input: {
@@ -536,7 +553,14 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     const warnings: string[] = [];
     const optional = (role: RouterSkillRole) => retrieved.candidates
       .filter(({ eligibleRoles, skill }) => eligibleRoles.includes(role) && !selectedIds.has(skill.id) && (!input.strict || skill.source === "installed"))
-      .sort((left, right) => right.score - left.score || left.skill.id.localeCompare(right.skill.id));
+      .sort((left, right) => {
+        if (role === "verification") {
+          const leftCover = calculateRequirementCoverage({ requirements: explicitRequirements, skill: left.skill, routingContext: input.routingContext }).covered.length;
+          const rightCover = calculateRequirementCoverage({ requirements: explicitRequirements, skill: right.skill, routingContext: input.routingContext }).covered.length;
+          if (rightCover !== leftCover) return rightCover - leftCover;
+        }
+        return right.score - left.score || left.skill.id.localeCompare(right.skill.id);
+      });
     const add = (candidate: RouterCandidate, role: Exclude<RouterSkillRole, "primary">) => {
       if (selectedIds.has(candidate.skill.id)) return;
       if ([...dedupedRequired].some(({ skill }) => symmetricConflict(skill, candidate.skill))) return;

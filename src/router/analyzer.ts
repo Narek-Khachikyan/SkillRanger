@@ -185,10 +185,14 @@ export const analyzeTask = ({
   const qualityGoals = idsInOrder(matchedSignals, "quality");
   const constraints = idsInOrder(matchedSignals, "constraint");
   const acceptanceCriteria = idsInOrder(matchedSignals, "acceptance");
-  const routingIntentTags = unique(matchedSignals.filter(({ kind }) => kind === "intent").flatMap((signal) => {
-    const mapped = signal.ownerIds.flatMap((ownerId) => routingContext.domains.get(ownerId)?.intentMappings.get(signal.id)?.skillIntentIds ?? []);
-    return [signal.id, ...mapped];
-  }), (id) => id).sort();
+  const hasAgentsMdPrompt = /agents\.md|agent instructions|agent context|coding agent guidance|инструкции для агента|контекст агента/i.test(prompt);
+  const routingIntentTags = unique([
+    ...matchedSignals.filter(({ kind }) => kind === "intent").flatMap((signal) => {
+      const mapped = signal.ownerIds.flatMap((ownerId) => routingContext.domains.get(ownerId)?.intentMappings.get(signal.id)?.skillIntentIds ?? []);
+      return [signal.id, ...mapped];
+    }),
+    ...(hasAgentsMdPrompt ? ["agents-md-bootstrap"] : []),
+  ], (id) => id).sort();
 
   const profileEvidence = unique<TaskSignalEvidence>([
     ...matchedSignals.flatMap((signal): TaskSignalEvidence[] => signal.kind === "intent" ? [] : [{
