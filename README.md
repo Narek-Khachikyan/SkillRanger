@@ -114,7 +114,7 @@ Without those capabilities, visual recommendations remain available but are expl
 
 ## What SkillRanger Does Today
 
-The current public `0.1.3` package provides:
+The current package provides:
 
 - a compiled npm CLI and a stdio MCP server;
 - deterministic scanning for common JavaScript and TypeScript web-project signals;
