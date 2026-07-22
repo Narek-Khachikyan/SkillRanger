@@ -135,7 +135,7 @@ Before handoff, inspect and revise the implemented result—not only the plan:
 
 ## Output Contract
 
-Return the visual thesis, evidence inspected, issues ordered by impact, changes made, verified viewports/states, and the explicit verification outcome (`verified`, `blocked`, or `implemented-unverified`).
+Return `implementationOutcome` (`implemented`, `failed`, or `blocked`), `verificationState` (`pending-runtime-verification`), `artifacts`, `changes`, and `residualRisks`. Never claim `verified` in agent-authored output.
 
 ## References
 

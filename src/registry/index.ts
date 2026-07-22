@@ -306,7 +306,10 @@ export const loadLocalRegistry = async (
         throw new Error(`Execution contract schema paths must match the manifest for ${manifest.id}.`);
       }
       for (const requiredPath of parsedContract.mustRead) {
-        if (!(await fileExists(path.join(skillRoot, requiredPath)))) throw new Error(`Execution contract mustRead file does not exist: ${requiredPath}.`);
+        const isSharedContract = sharedContracts.some(({ installPath }) => installPath === requiredPath);
+        if (!isSharedContract && !(await fileExists(path.join(skillRoot, requiredPath)))) {
+          throw new Error(`Execution contract mustRead file does not exist: ${requiredPath}.`);
+        }
       }
       executionContract = parsedContract;
     }

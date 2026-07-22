@@ -398,19 +398,26 @@ test("visual-design-polish manifest and contract meet strict execution contract 
   assert.ok(repairStep);
   assert.equal(repairStep.repairable, true);
 
+  assert.ok(contract.mustRead.includes("references/shared/frontend--visual-verification.md"), "mustRead must include shared visual-verification contract");
+
   const stepIds = contract.steps.map((s: { id: string }) => s.id);
   const initialIdx = stepIds.findIndex((id: string) => id.includes("capture-initial-evidence"));
   const criticIdx = stepIds.findIndex((id: string) => id.includes("independent-visual-critic"));
   const repairIdx = stepIds.findIndex((id: string) => id.includes("bounded-repair"));
   const recheckIdx = stepIds.findIndex((id: string) => id.includes("capture-recheck-evidence"));
+  const recheckCriticIdx = stepIds.findIndex((id: string) => id.includes("recheck-visual-critic"));
   const verifyIdx = stepIds.findIndex((id: string) => id.includes("final-verify"));
 
   assert.ok(initialIdx !== -1 && initialIdx < criticIdx, "initial screenshots must precede critic");
   assert.ok(criticIdx !== -1 && criticIdx < repairIdx, "critic must precede repair");
   assert.ok(repairIdx !== -1 && repairIdx < recheckIdx, "recheck screenshots must follow repair");
-  assert.ok(recheckIdx !== -1 && recheckIdx < verifyIdx, "recheck must precede final verification");
+  assert.ok(recheckIdx !== -1 && recheckIdx < recheckCriticIdx, "recheck critic must follow recheck screenshots");
+  assert.ok(recheckCriticIdx !== -1 && recheckCriticIdx < verifyIdx, "recheck critic must precede final verification");
 
   assert.equal(outputSchema.properties?.outcome, undefined);
   assert.equal(outputSchema.properties?.implementationOutcome !== undefined, true);
   assert.ok(contract.maxRepairIterations >= 1 && contract.maxRepairIterations <= 5);
+
+  const skillMd = await readFile("registry/skills/frontend.visual-design-polish/SKILL.md", "utf8");
+  assert.doesNotMatch(skillMd, /explicit verification outcome.*verified/i);
 });

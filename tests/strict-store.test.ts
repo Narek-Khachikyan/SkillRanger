@@ -130,6 +130,7 @@ const criticReport = (outcome: "clean" | "findings", id: string) => ({
   criticInvocationId: `critic-${id}`,
   executorInvocationId: `executor-${id}`,
   outcome,
+  evidenceArtifactIds: [`evidence-${id}`],
   findings: outcome === "clean" ? [] : [{
     id: `finding-${id}`,
     ruleId: criticRepairContract.rules[0].id,
@@ -149,8 +150,42 @@ const completeStoreStep = async (
 ) => {
   run = await store.update(run.runId, (current) => beginStrictStep(current, criticRepairContract.skillId, stepId));
   for (const [index, item] of evidence.entries()) {
+    if (item.validatedAs === "critic-report" && run.artifacts.length === 0) {
+      const dummyPath = path.join(root, `${run.revision}-${index}-dummy.txt`);
+      await writeFile(dummyPath, "dummy evidence\n");
+      const step = run.skillLedgers[0].steps.find(({ id }) => id === stepId)!;
+      run = await store.ingestEvidence(run.runId, {
+        sourcePath: dummyPath,
+        kind: "browser-screenshot-initial",
+        attributions: [{
+          skillId: criticRepairContract.skillId,
+          stepId,
+          attempt: step.attempts.at(-1)!.attempt,
+          relation: "produced",
+          ruleIds: step.ruleIds,
+        }],
+      });
+    }
+
+    let val = item.value;
+    if (item.validatedAs === "critic-report" && typeof item.value === "object" && item.value !== null) {
+      const artId = run.artifacts.at(-1)!.artifactId;
+      val = {
+        ...(item.value as Record<string, unknown>),
+        evidenceArtifactIds: [artId],
+        ...(Array.isArray((item.value as Record<string, unknown>).findings)
+          ? {
+              findings: ((item.value as Record<string, unknown>).findings as Array<Record<string, unknown>>).map((f) => ({
+                ...f,
+                evidenceArtifactIds: [artId],
+              })),
+            }
+          : {}),
+      };
+    }
+
     const sourcePath = path.join(root, `${run.revision}-${index}-${item.kind}.json`);
-    await writeFile(sourcePath, `${JSON.stringify(item.value)}\n`);
+    await writeFile(sourcePath, `${JSON.stringify(val)}\n`);
     const step = run.skillLedgers[0].steps.find(({ id }) => id === stepId)!;
     run = await store.ingestEvidence(run.runId, {
       sourcePath,

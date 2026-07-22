@@ -97,6 +97,7 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
       criticInvocationId: "critic-2",
       executorInvocationId: "executor-1",
       outcome: "findings",
+      evidenceArtifactIds: [screenshotArtifactId],
       findings: [{
         id: "critical-1",
         ruleId: run.skillLedgers[0].contract.rules[0].id,
@@ -113,6 +114,7 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
     value: `browser-screenshot-${width}\n`,
     sourcePath: `evidence/initial-${width}.png`,
   })));
+
   const initialObservations = initialWidths.map((width, index) => ({
     viewport: { width, height: width === 390 ? 844 : width === 768 ? 1024 : 900 },
     state: "default",
@@ -153,6 +155,9 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
   run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: '+ <div className="bg-brand-600 text-on-brand">Save</div>\n' }]);
   const repairKinds = ["browser-screenshot-390", "browser-screenshot-768", "browser-screenshot-1440"];
   run = await step(root, store, run, skillId, repairKinds.map((kind, index) => ({ kind, value: `${kind}-fresh\n`, sourcePath: `evidence/${[390, 768, 1440][index]}.png` })));
+  const freshTw390Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-390")!.artifactId;
+  const freshTw768Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-768")!.artifactId;
+  const freshTw1440Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-1440")!.artifactId;
   const observations = [390, 768, 1440].map((width) => ({
     viewport: { width, height: width === 390 ? 844 : width === 768 ? 1024 : 900 },
     state: "default",
@@ -167,10 +172,25 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
     criticalAxeViolations: [],
     reducedMotionVerified: true,
   }));
-  run = await step(root, store, run, skillId, [{ kind: "verification-input", value: { observations } }]);
+  run = await step(root, store, run, skillId, [
+    { kind: "verification-input", value: { observations } },
+    {
+      kind: "critic-report",
+      validatedAs: "critic-report",
+      value: {
+        schemaVersion: "2.0",
+        skillId,
+        criticInvocationId: "critic-3",
+        executorInvocationId: "executor-1",
+        outcome: "clean",
+        evidenceArtifactIds: [freshTw390Id, freshTw768Id, freshTw1440Id],
+        findings: [],
+      },
+    },
+  ]);
   run = await step(root, store, run, skillId, [{ kind: "skill-output", validatedAs: "output", value: { outcome: "verified", classification: "hierarchy", changes: ["repaired"], verification: {}, residualRisks: [] } }]);
   run = await store.verifySkill(run.runId, skillId);
-  assert.equal(run.skillLedgers[0].outcome, "used", JSON.stringify(run.skillLedgers[0].verificationReports.at(-1)));
+  assert.equal(run.skillLedgers[0].outcome, "used");
   assert.deepEqual(run.skillLedgers[0].verificationReports.at(-1)!.gateResults.find(({ gateId }) => gateId === "core/gate/critic-findings"), {
     gateId: "core/gate/critic-findings",
     passed: true,
@@ -226,9 +246,11 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
     { kind: "browser-screenshot-initial-1440", value: "initial-1440\n", sourcePath: "evidence/initial-1440.png" },
   ]);
 
-  const initialScreenshotArtifactId = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial-390")!.artifactId;
+  const initial390Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial-390")!.artifactId;
+  const initial768Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial-768")!.artifactId;
+  const initial1440Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial-1440")!.artifactId;
+  const initialArtifactIds = [initial390Id, initial768Id, initial1440Id];
 
-  // Step 5: independent critic report with high finding
   run = await step(root, store, run, skillId, [{
     kind: "critic-report",
     validatedAs: "critic-report",
@@ -238,25 +260,50 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
       criticInvocationId: "critic-99",
       executorInvocationId: "executor-1",
       outcome: "findings",
+      evidenceArtifactIds: initialArtifactIds,
       findings: [{
         id: "finding-1",
         ruleId: `${skillId}/rule/no-unresolved-ai-slop`,
         severity: "high",
         message: "Hero looks like generic SaaS landing.",
-        evidenceArtifactIds: [initialScreenshotArtifactId],
+        evidenceArtifactIds: [initial390Id],
         remediation: "Replace generic cards with aquaculture domain layout.",
       }],
     },
   }]);
 
-  // Step 6: capture recheck evidence
   run = await step(root, store, run, skillId, [
     { kind: "browser-screenshot-390", value: "recheck-390\n", sourcePath: "evidence/recheck-390.png" },
     { kind: "browser-screenshot-768", value: "recheck-768\n", sourcePath: "evidence/recheck-768.png" },
     { kind: "browser-screenshot-1440", value: "recheck-1440\n", sourcePath: "evidence/recheck-1440.png" },
   ]);
 
-  // Step 8: final verify input
+  const recheck390Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-390")!.artifactId;
+  const recheck768Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-768")!.artifactId;
+  const recheck1440Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-1440")!.artifactId;
+  const recheckArtifactIds = [recheck390Id, recheck768Id, recheck1440Id];
+
+  run = await step(root, store, run, skillId, [{
+    kind: "critic-report",
+    validatedAs: "critic-report",
+    value: {
+      schemaVersion: "2.0",
+      skillId,
+      criticInvocationId: "critic-99b",
+      executorInvocationId: "executor-1",
+      outcome: "findings",
+      evidenceArtifactIds: recheckArtifactIds,
+      findings: [{
+        id: "finding-1",
+        ruleId: `${skillId}/rule/no-unresolved-ai-slop`,
+        severity: "high",
+        message: "Hero looks like generic SaaS landing.",
+        evidenceArtifactIds: [recheck390Id],
+        remediation: "Replace generic cards with aquaculture domain layout.",
+      }],
+    },
+  }]);
+
   const initialObservations = [390, 768, 1440].map((width) => ({
     viewport: { width, height: width === 390 ? 844 : width === 768 ? 1024 : 900 },
     state: "default",
@@ -274,7 +321,6 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
 
   run = await step(root, store, run, skillId, [{ kind: "verification-input", value: { observations: initialObservations } }]);
 
-  // Step 9: final report (output)
   run = await step(root, store, run, skillId, [{
     kind: "skill-output",
     validatedAs: "output",
@@ -287,14 +333,12 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
     },
   }]);
 
-  // Execute verifySkill -> should fail with repair-required due to unresolved critic finding
   run = await store.verifySkill(run.runId, skillId);
   assert.equal(run.state, "repair-required");
   assert.equal(run.skillLedgers[0].repairRequests.length, 1);
   assert.ok(run.skillLedgers[0].repairRequests[0].gateIds.includes("core/gate/critic-findings"));
   await assert.rejects(store.finalizeRun(run.runId), (error: unknown) => error instanceof Error && "code" in error && (error as { code: string }).code === "run-not-finalizable");
 
-  // Perform repair iteration:
   run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: '+ <div className="domain-aquaculture">Fresh Hero</div>\n' }]);
 
   const freshWidths = [390, 768, 1440];
@@ -303,6 +347,25 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
     value: `fresh-screenshot-${width}\n`,
     sourcePath: `evidence/fresh-${width}.png`,
   })));
+
+  const fresh390Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-390")!.artifactId;
+  const fresh768Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-768")!.artifactId;
+  const fresh1440Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-1440")!.artifactId;
+  const freshArtifactIds = [fresh390Id, fresh768Id, fresh1440Id];
+
+  run = await step(root, store, run, skillId, [{
+    kind: "critic-report",
+    validatedAs: "critic-report",
+    value: {
+      schemaVersion: "2.0",
+      skillId,
+      criticInvocationId: "critic-fresh-1",
+      executorInvocationId: "executor-1",
+      outcome: "clean",
+      evidenceArtifactIds: freshArtifactIds,
+      findings: [],
+    },
+  }]);
 
   const freshObservations = freshWidths.map((width) => ({
     viewport: { width, height: width === 390 ? 844 : width === 768 ? 1024 : 900 },
@@ -342,6 +405,8 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
     { kind: "implementation-diff", value: { checks: { "no-dynamic-tailwind-classes": true }, diff: '+ <div className="bg-brand-600">Save</div>' } },
   ]);
   run = await step(root, store, run, twId, [{ kind: "browser-screenshot-initial", value: "initial\n" }]);
+  const tw390InitialId = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial")!.artifactId;
+
   run = await step(root, store, run, twId, [{
     kind: "critic-report",
     validatedAs: "critic-report",
@@ -351,6 +416,7 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
       criticInvocationId: "critic-tw",
       executorInvocationId: "executor-tw",
       outcome: "clean",
+      evidenceArtifactIds: [tw390InitialId],
       findings: [],
     },
   }]);
@@ -400,10 +466,12 @@ test("Visual design strict run rejects same-actor critic report", async () => {
   run = await step(root, store, run, skillId, [{ kind: "design-direction", value: "direction\n" }]);
   run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: "+ <div>Hero</div>\n" }]);
   run = await step(root, store, run, skillId, [
-    { kind: "browser-screenshot-initial-390", value: "initial-390\n", sourcePath: "evidence/initial-390.png" },
-    { kind: "browser-screenshot-initial-768", value: "initial-768\n", sourcePath: "evidence/initial-768.png" },
-    { kind: "browser-screenshot-initial-1440", value: "initial-1440\n", sourcePath: "evidence/initial-1440.png" },
+    { kind: "browser-screenshot-initial-390", value: "initial-390\n" },
+    { kind: "browser-screenshot-initial-768", value: "initial-768\n" },
+    { kind: "browser-screenshot-initial-1440", value: "initial-1440\n" },
   ]);
+
+  const initial390Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial-390")!.artifactId;
 
   await assert.rejects(
     step(root, store, run, skillId, [{
@@ -415,9 +483,214 @@ test("Visual design strict run rejects same-actor critic report", async () => {
         criticInvocationId: "same-actor-1",
         executorInvocationId: "same-actor-1",
         outcome: "clean",
+        evidenceArtifactIds: [initial390Id],
         findings: [],
       },
     }]),
     (error: unknown) => error instanceof Error && error.message.includes("Critic invocation must be independent"),
   );
+});
+
+test("Visual design strict run rejects clean critic report missing screenshot evidence artifact IDs", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-visual-no-evidence-ids-"));
+  await cp("fixtures/next-react-ts", root, { recursive: true });
+  await install(root, "frontend.visual-design-polish");
+  await install(root, "frontend.tailwind-ui-polish");
+  const skillId = "frontend.visual-design-polish";
+
+  let run = await startPreparedStrictSkillRun({
+    projectRoot: root,
+    registryRoot: path.resolve("registry"),
+    targetAgent: "codex",
+    domain: "frontend",
+    intent: "visual direction redesign hierarchy generic",
+    skillInputs: {
+      [skillId]: { brief: {}, capabilityProfile: "standard", changeClass: "material" },
+      "frontend.tailwind-ui-polish": { brief: {}, capabilityProfile: "standard", existingDirection: { source: "approved" } },
+    },
+    hostCapabilities: ["browser", "screenshots"],
+  });
+
+  const store = new StrictSkillRunStore(root);
+  run = await readAll(store, run);
+
+  run = await step(root, store, run, skillId, [{ kind: "product-evidence-ledger", value: "e\n" }]);
+  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: "d\n" }]);
+  run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: "+ <div>Hero</div>\n" }]);
+  run = await step(root, store, run, skillId, [
+    { kind: "browser-screenshot-initial-390", value: "i390\n" },
+    { kind: "browser-screenshot-initial-768", value: "i768\n" },
+    { kind: "browser-screenshot-initial-1440", value: "i1440\n" },
+  ]);
+
+  // Reject report with empty or missing evidenceArtifactIds
+  await assert.rejects(
+    step(root, store, run, skillId, [{
+      kind: "critic-report",
+      validatedAs: "critic-report",
+      value: {
+        schemaVersion: "2.0",
+        skillId,
+        criticInvocationId: "critic-200",
+        executorInvocationId: "executor-1",
+        outcome: "clean",
+        evidenceArtifactIds: [],
+        findings: [],
+      },
+    }]),
+    (error: unknown) => error instanceof Error && error.message.includes("evidenceArtifactIds must be a non-empty array"),
+  );
+});
+
+test("Visual design strict run blocks verification if fresh screenshots are not re-critiqued with clean report after repair", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-visual-no-recritic-"));
+  await cp("fixtures/next-react-ts", root, { recursive: true });
+  await install(root, "frontend.visual-design-polish");
+  await install(root, "frontend.tailwind-ui-polish");
+  const skillId = "frontend.visual-design-polish";
+
+  let run = await startPreparedStrictSkillRun({
+    projectRoot: root,
+    registryRoot: path.resolve("registry"),
+    targetAgent: "codex",
+    domain: "frontend",
+    intent: "visual direction redesign hierarchy generic",
+    skillInputs: {
+      [skillId]: { brief: {}, capabilityProfile: "standard", changeClass: "material" },
+      "frontend.tailwind-ui-polish": { brief: {}, capabilityProfile: "standard", existingDirection: { source: "approved" } },
+    },
+    hostCapabilities: ["browser", "screenshots"],
+  });
+
+  const store = new StrictSkillRunStore(root);
+  run = await readAll(store, run);
+
+  run = await step(root, store, run, skillId, [{ kind: "product-evidence-ledger", value: "e\n" }]);
+  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: "d\n" }]);
+  run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: "+ <div>Hero</div>\n" }]);
+  run = await step(root, store, run, skillId, [
+    { kind: "browser-screenshot-initial-390", value: "i390\n" },
+    { kind: "browser-screenshot-initial-768", value: "i768\n" },
+    { kind: "browser-screenshot-initial-1440", value: "i1440\n" },
+  ]);
+
+  const initial390Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial-390")!.artifactId;
+  const initial768Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial-768")!.artifactId;
+  const initial1440Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-initial-1440")!.artifactId;
+
+  run = await step(root, store, run, skillId, [{
+    kind: "critic-report",
+    validatedAs: "critic-report",
+    value: {
+      schemaVersion: "2.0",
+      skillId,
+      criticInvocationId: "critic-1",
+      executorInvocationId: "executor-1",
+      outcome: "findings",
+      evidenceArtifactIds: [initial390Id, initial768Id, initial1440Id],
+      findings: [{
+        id: "f-1",
+        ruleId: `${skillId}/rule/no-unresolved-ai-slop`,
+        severity: "high",
+        message: "AI slop detected.",
+        evidenceArtifactIds: [initial390Id],
+        remediation: "Fix layout.",
+      }],
+    },
+  }]);
+
+  run = await step(root, store, run, skillId, [
+    { kind: "browser-screenshot-390", value: "r390\n" },
+    { kind: "browser-screenshot-768", value: "r768\n" },
+    { kind: "browser-screenshot-1440", value: "r1440\n" },
+  ]);
+  const r390Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-390")!.artifactId;
+  const r768Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-768")!.artifactId;
+  const r1440Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-1440")!.artifactId;
+
+  run = await step(root, store, run, skillId, [{
+    kind: "critic-report",
+    validatedAs: "critic-report",
+    value: {
+      schemaVersion: "2.0",
+      skillId,
+      criticInvocationId: "critic-1b",
+      executorInvocationId: "executor-1",
+      outcome: "findings",
+      evidenceArtifactIds: [r390Id, r768Id, r1440Id],
+      findings: [{
+        id: "f-1",
+        ruleId: `${skillId}/rule/no-unresolved-ai-slop`,
+        severity: "high",
+        message: "AI slop detected.",
+        evidenceArtifactIds: [r390Id],
+        remediation: "Fix layout.",
+      }],
+    },
+  }]);
+
+  run = await step(root, store, run, skillId, [{ kind: "verification-input", value: { observations: [] } }]);
+  run = await step(root, store, run, skillId, [{
+    kind: "skill-output",
+    validatedAs: "output",
+    value: {
+      implementationOutcome: "implemented",
+      verificationState: "pending-runtime-verification",
+      artifacts: { brief: "b", recipe: "r", direction: "d", verification: "v" },
+      changes: ["changed hero"],
+      residualRisks: [],
+    },
+  }]);
+
+  run = await store.verifySkill(run.runId, skillId);
+  assert.equal(run.state, "repair-required");
+
+  // Perform repair but submit another report with findings instead of clean
+  run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: "+ <div>Fix</div>\n" }]);
+  run = await step(root, store, run, skillId, [
+    { kind: "browser-screenshot-390", value: "fresh390\n" },
+    { kind: "browser-screenshot-768", value: "fresh768\n" },
+    { kind: "browser-screenshot-1440", value: "fresh1440\n" },
+  ]);
+  const fresh390Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-390")!.artifactId;
+  const fresh768Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-768")!.artifactId;
+  const fresh1440Id = run.artifacts.findLast(({ kind }) => kind === "browser-screenshot-1440")!.artifactId;
+
+  // Submit critic report STILL reporting findings after repair
+  run = await step(root, store, run, skillId, [{
+    kind: "critic-report",
+    validatedAs: "critic-report",
+    value: {
+      schemaVersion: "2.0",
+      skillId,
+      criticInvocationId: "critic-2",
+      executorInvocationId: "executor-1",
+      outcome: "findings",
+      evidenceArtifactIds: [fresh390Id, fresh768Id, fresh1440Id],
+      findings: [{
+        id: "f-2",
+        ruleId: `${skillId}/rule/no-unresolved-ai-slop`,
+        severity: "high",
+        message: "AI slop still present after repair.",
+        evidenceArtifactIds: [fresh390Id],
+        remediation: "Redesign hero.",
+      }],
+    },
+  }]);
+  run = await step(root, store, run, skillId, [{ kind: "verification-input", value: { observations: [] } }]);
+  run = await step(root, store, run, skillId, [{
+    kind: "skill-output",
+    validatedAs: "output",
+    value: {
+      implementationOutcome: "implemented",
+      verificationState: "pending-runtime-verification",
+      artifacts: { brief: "b", recipe: "r", direction: "d", verification: "v" },
+      changes: ["attempted repair"],
+      residualRisks: [],
+    },
+  }]);
+
+  run = await store.verifySkill(run.runId, skillId);
+  assert.equal(run.state, "repair-required");
+  assert.notEqual(run.skillLedgers[0].outcome, "used");
 });

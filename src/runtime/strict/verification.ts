@@ -7,7 +7,7 @@ import { isRfc3339DateTime } from "./date-time.ts";
 import { deriveBrowserGateResults, deriveTailwindSourceResults } from "./frontend-evidence.ts";
 import { deriveVerificationEvidenceIds } from "./report-evidence.ts";
 import { criticSystemGateId } from "./system-gates.ts";
-import { StrictSkillRunError, type EvidenceArtifact, type SkillLedger, type SkillRunV2, type StrictSystemGateResult } from "./types.ts";
+import { StrictSkillRunError, type CriticReportV2, type EvidenceArtifact, type SkillLedger, type SkillRunV2, type StrictSystemGateResult } from "./types.ts";
 
 type Result = { passed: boolean; message?: string };
 export { criticSystemGateId };
@@ -42,9 +42,9 @@ export type StrictValidatorObservation = {
 export type StrictValidatorObserver = (observation: StrictValidatorObservation) => void | Promise<void>;
 const digest = (bytes: Uint8Array) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
-const parse = (artifact: EvidenceArtifact | undefined, artifactBytes: Map<string, Buffer>) => {
+const parse = <T = unknown>(artifact: EvidenceArtifact | undefined, artifactBytes: Map<string, Buffer>): T | undefined => {
   if (!artifact) return undefined;
-  try { return JSON.parse(artifactBytes.get(artifact.artifactId)?.toString("utf8") ?? "") as unknown; }
+  try { return JSON.parse(artifactBytes.get(artifact.artifactId)?.toString("utf8") ?? "") as T; }
   catch { return undefined; }
 };
 const gateSlug = (gateId: string) => gateId.slice(gateId.lastIndexOf("/") + 1);
@@ -59,13 +59,13 @@ const canonicalCriticArtifact = (ledger: SkillLedger, artifacts: EvidenceArtifac
     && artifact.attributions.some((attribution) => attribution.relation === "produced"
       && attribution.skillId === ledger.skillId
       && criticAttempts.has(`${attribution.stepId}\u0000${attribution.attempt}`)));
-  return candidates.length === 1 ? candidates[0] : undefined;
+  return candidates.at(-1);
 };
 const atOrAfter = (candidate: string, basis: string) => {
   if (!isRfc3339DateTime(candidate) || !isRfc3339DateTime(basis)) return false;
   const candidateTime = Date.parse(candidate);
   const basisTime = Date.parse(basis);
-  return Number.isFinite(candidateTime) && Number.isFinite(basisTime) && candidateTime >= basisTime;
+  return !Number.isNaN(candidateTime) && !Number.isNaN(basisTime) && candidateTime >= basisTime;
 };
 const repairedAfterFindings = (ledger: SkillLedger, artifactId: string) => ledger.repairRequests.some((request) => {
   if (!request.gateIds.includes(criticSystemGateId)) return false;
@@ -79,6 +79,33 @@ const repairedAfterFindings = (ledger: SkillLedger, artifactId: string) => ledge
     && atOrAfter(attempt.startedAt, sourceReport.generatedAt)
     && atOrAfter(attempt.completedAt, attempt.startedAt)));
 });
+const getExpectedScreenshotsForCritic = (
+  ledger: SkillLedger,
+  artifacts: EvidenceArtifact[],
+  criticArtifact: EvidenceArtifact,
+): EvidenceArtifact[] => {
+  const attribution = criticArtifact.attributions.find(({ relation }) => relation === "produced");
+  if (!attribution) return [];
+  const criticStepIndex = ledger.contract.steps.findIndex(({ id }) => id === attribution.stepId);
+  if (criticStepIndex === -1) return [];
+
+  const precedingStepIds = new Set(ledger.contract.steps.slice(0, criticStepIndex).map(({ id }) => id));
+  const precedingScreenshots = artifacts.filter((artifact) =>
+    artifact.kind.includes("screenshot") &&
+    artifact.attributions.some(({ relation, stepId }) => relation === "produced" && precedingStepIds.has(stepId)),
+  );
+
+  const latestScreenshot = precedingScreenshots.at(-1);
+  if (!latestScreenshot) return [];
+  const latestAttribution = latestScreenshot.attributions.find(({ relation }) => relation === "produced")!;
+
+  return precedingScreenshots.filter((artifact) =>
+    artifact.attributions.some(({ relation, stepId, attempt }) =>
+      relation === "produced" && stepId === latestAttribution.stepId && attempt === latestAttribution.attempt,
+    ),
+  );
+};
+
 const deriveCriticSystemGate = (
   ledger: SkillLedger,
   artifacts: EvidenceArtifact[],
@@ -86,18 +113,90 @@ const deriveCriticSystemGate = (
 ): StrictSystemGateResult | undefined => {
   const criticArtifacts = artifacts.filter(({ validatedAs }) => validatedAs === "critic-report");
   if (criticArtifacts.length === 0) return undefined;
-  const unresolved = criticArtifacts.flatMap((artifact) => {
-    const report = parse(artifact, artifactBytes);
+  const artifactIds = new Set(artifacts.map(({ artifactId }) => artifactId));
+
+  for (const artifact of criticArtifacts) {
+    const report = parse<CriticReportV2>(artifact, artifactBytes);
+    if (!report) continue;
     assertValidCriticReportV2(report, ledger.contract);
-    return report.outcome === "findings" && !repairedAfterFindings(ledger, artifact.artifactId)
-      ? report.findings
-      : [];
+    if (!report.evidenceArtifactIds.every((id) => artifactIds.has(id))) {
+      return {
+        gateId: criticSystemGateId,
+        passed: false,
+        level: "hard",
+        message: "Critic report references evidence artifact IDs that do not exist.",
+      };
+    }
+    const expected = getExpectedScreenshotsForCritic(ledger, artifacts, artifact);
+    if (expected.length > 0 && !expected.every(({ artifactId }) => report.evidenceArtifactIds.includes(artifactId))) {
+      return {
+        gateId: criticSystemGateId,
+        passed: false,
+        level: "hard",
+        message: "Critic report does not cover all required screenshot artifacts.",
+      };
+    }
+  }
+
+  const latestRepairAttempt = ledger.steps
+    .filter(({ type }) => type === "repair")
+    .flatMap(({ attempts }) => attempts)
+    .filter((attempt) => attempt.completedAt !== undefined)
+    .at(-1);
+
+  const hasRepair = ledger.repairRequests.some((request) => request.gateIds.includes(criticSystemGateId));
+  if (hasRepair && latestRepairAttempt) {
+    const freshCleanReport = criticArtifacts.some((artifact) => {
+      const report = parse<CriticReportV2>(artifact, artifactBytes);
+      if (!report || report.outcome !== "clean") return false;
+      const produced = artifact.attributions.find(({ relation }) => relation === "produced");
+      if (!produced) return false;
+      const step = ledger.steps.find(({ id }) => id === produced.stepId);
+      const attempt = step?.attempts.find((a) => a.attempt === produced.attempt);
+      if (!attempt || !attempt.startedAt || !atOrAfter(attempt.startedAt, latestRepairAttempt.startedAt)) return false;
+      const expected = getExpectedScreenshotsForCritic(ledger, artifacts, artifact);
+      return expected.length === 0 || expected.every(({ artifactId }) => report.evidenceArtifactIds.includes(artifactId));
+    });
+
+    if (!freshCleanReport) {
+      return {
+        gateId: criticSystemGateId,
+        passed: false,
+        level: "hard",
+        message: "Repair was performed, but no fresh clean critic report covering the fresh screenshots was submitted.",
+      };
+    }
+  }
+
+  // Check all critic reports produced since the latest repair attempt (or since start if no repair)
+  const currentCriticArtifacts = latestRepairAttempt
+    ? criticArtifacts.filter((artifact) => {
+        const produced = artifact.attributions.find(({ relation }) => relation === "produced");
+        const step = ledger.steps.find(({ id }) => id === produced?.stepId);
+        const attempt = step?.attempts.find((a) => a.attempt === produced?.attempt);
+        return attempt?.startedAt && atOrAfter(attempt.startedAt, latestRepairAttempt.startedAt);
+      })
+    : criticArtifacts;
+
+  const unresolvedFindingReport = currentCriticArtifacts.find((artifact) => {
+    const report = parse<CriticReportV2>(artifact, artifactBytes);
+    return report?.outcome === "findings";
   });
+
+  if (unresolvedFindingReport) {
+    const report = parse<CriticReportV2>(unresolvedFindingReport, artifactBytes);
+    return {
+      gateId: criticSystemGateId,
+      passed: false,
+      level: "hard",
+      message: `Critic reported ${report?.findings.length ?? 1} unresolved finding(s).`,
+    };
+  }
+
   return {
     gateId: criticSystemGateId,
-    passed: unresolved.length === 0,
+    passed: true,
     level: "hard",
-    ...(unresolved.length === 0 ? {} : { message: `Critic reported ${unresolved.length} unresolved finding(s).` }),
   };
 };
 const readVerifiedArtifact = async (projectRoot: string, canonicalRoot: string, artifact: EvidenceArtifact) => {

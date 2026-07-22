@@ -3,13 +3,18 @@
   "$id": "https://skillranger.local/schemas/critic-report-v2.schema.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "skillId", "criticInvocationId", "executorInvocationId", "outcome", "findings"],
+  "required": ["schemaVersion", "skillId", "criticInvocationId", "executorInvocationId", "outcome", "evidenceArtifactIds", "findings"],
   "properties": {
     "schemaVersion": { "const": "2.0" },
     "skillId": { "type": "string", "minLength": 1 },
     "criticInvocationId": { "type": "string", "minLength": 1 },
     "executorInvocationId": { "type": "string", "minLength": 1 },
     "outcome": { "enum": ["clean", "findings"] },
+    "evidenceArtifactIds": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
     "findings": {
       "type": "array",
       "items": {

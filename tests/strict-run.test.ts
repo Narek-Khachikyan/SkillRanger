@@ -73,6 +73,7 @@ test("publishes closed run, critic, verification, and repair schemas", async () 
     criticInvocationId: "critic-2",
     executorInvocationId: "executor-1",
     outcome: "findings" as const,
+    evidenceArtifactIds: ["artifact-1"],
     findings: [{
       id: "finding-1",
       ruleId: "frontend.test-skill/rule/complete",
@@ -567,6 +568,7 @@ test("critical critic findings enter bounded repair before a later passing criti
     criticInvocationId: "critic-2",
     executorInvocationId: "executor-1",
     outcome: "findings" as const,
+    evidenceArtifactIds: ["artifact-screenshot"],
     findings: [Object.freeze({
       id: "critical-1",
       ruleId: contract().rules[0].id,

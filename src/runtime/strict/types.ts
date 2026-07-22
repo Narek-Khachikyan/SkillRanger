@@ -98,6 +98,7 @@ export type CriticReportV2 = {
   criticInvocationId: string;
   executorInvocationId: string;
   outcome: "clean" | "findings";
+  evidenceArtifactIds: string[];
   findings: Array<{
     id: string;
     ruleId: string;

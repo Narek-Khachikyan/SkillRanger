@@ -7,7 +7,8 @@
   "mustRead": [
     "SKILL.md",
     "references/visual-rules.md",
-    "references/evidence-examples.md"
+    "references/evidence-examples.md",
+    "references/shared/frontend--visual-verification.md"
   ],
   "applicability": {
     "op": "input",
@@ -114,6 +115,17 @@
         "frontend.visual-design-polish/rule/no-horizontal-overflow",
         "frontend.visual-design-polish/rule/no-clipped-controls",
         "frontend.visual-design-polish/rule/no-sticky-overlap"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/step/recheck-visual-critic",
+      "type": "critic",
+      "requiredEvidenceKinds": [
+        "critic-report"
+      ],
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/critic-independent",
+        "frontend.visual-design-polish/rule/no-unresolved-ai-slop"
       ]
     },
     {
