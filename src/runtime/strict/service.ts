@@ -4,6 +4,7 @@ import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import "../../domains/bundled.ts";
 import { getDomainPack } from "../../domains/registry.ts";
+import { resolveInstalledSkillRoot } from "../../installers/installed-path.ts";
 import { readLockfile } from "../../lockfile/index.ts";
 import { loadLocalRegistry } from "../../registry/index.ts";
 import { recommendSkills } from "../../recommender/index.ts";
@@ -107,10 +108,12 @@ const installedSelection = async (input: {
   const entry = lockfile.installed.find((candidate) => candidate.skillId === input.skill.manifest.id && candidate.targetAgent === input.targetAgent && candidate.scope === "repo");
   if (!entry || entry.checksum !== input.skill.checksum) throw new StrictSkillRunError("strict-skill-not-installed", `Strict skill is not installed from the selected checksum: ${input.skill.manifest.id}.`);
   const projectRoot = path.resolve(input.projectRoot);
-  const installedRoot = path.resolve(projectRoot, entry.installedPath);
-  if (!contained(projectRoot, installedRoot)) throw new StrictSkillRunError("strict-skill-not-installed", "Installed skill path escapes the project root.");
-  const rootInfo = await lstat(installedRoot).catch(() => undefined);
-  if (!rootInfo?.isDirectory() || rootInfo.isSymbolicLink()) throw new StrictSkillRunError("strict-skill-not-installed", `Installed skill integrity mismatch: ${input.skill.manifest.id}.`);
+  let installedRoot: string;
+  try {
+    installedRoot = await resolveInstalledSkillRoot(projectRoot, entry.installedPath);
+  } catch {
+    throw new StrictSkillRunError("strict-skill-not-installed", `Installed skill integrity mismatch: ${input.skill.manifest.id}.`);
+  }
   await assertInstalledMatches(input.skill, installedRoot, entry.checksum);
   const manifest = JSON.parse(await readFile(path.join(installedRoot, "skill.manifest.json"), "utf8")) as { id?: string; version?: string; execution?: { contractVersion?: string; contract?: string } };
   if (manifest.id !== input.skill.manifest.id || manifest.version !== entry.version || manifest.execution?.contractVersion !== "2.0" || !manifest.execution.contract) throw new StrictSkillRunError("strict-contract-missing", `Installed skill has no strict v2 contract: ${input.skill.manifest.id}.`);

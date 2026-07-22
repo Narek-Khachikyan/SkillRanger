@@ -28,16 +28,23 @@ const walkFiles = async (root: string): Promise<string[]> => {
 
 const isBinary = (buffer: Buffer) => buffer.includes(0);
 
+const normalizeText = (text: string): string => {
+  let normalized = text.normalize("NFKC").toLowerCase();
+  normalized = normalized.replace(/[\u200B-\u200D\uFEFF]/g, "");
+  normalized = normalized.replace(/cu`+rl/gi, "curl").replace(/wg`+et/gi, "wget");
+  return normalized;
+};
+
 const suspiciousPatterns: Array<[RegExp, RiskLevel, string]> = [
   [/(curl|wget)\s+[^|;&]+[|]\s*(sh|bash)/i, "block", "remote-install-pipe"],
   [/\brm\s+-rf\b/i, "block", "destructive-command"],
   [/\bsudo\b/i, "high", "privilege-escalation"],
   [/~\/\.ssh|\.ssh\//i, "block", "ssh-access"],
   [/\bbase64\b.+\b(-d|--decode)\b.+\b(sh|bash|eval)\b/i, "block", "obfuscated-execution"],
-  [/\blaunchctl\b|\bcrontab\b|\bsystemctl\b/i, "high", "persistence-mechanism"],
+  [/\b(launchctl|crontab|systemctl)\b|~\/\.(bashrc|zshrc|profile|bash_profile)/i, "high", "persistence-mechanism"],
   [/\b(npm|pnpm|pip|pip3|uv)\s+install\b/i, "medium", "dependency-install"],
-  [/\b(ignore|disregard)\s+(all\s+)?(previous|prior|above)\s+(instructions|rules)\b/i, "high", "prompt-injection"],
-  [/\b(reveal|exfiltrate|print)\s+(secrets?|tokens?|api[\s_-]?keys?|credentials)\b/i, "high", "secret-exfiltration-instruction"]
+  [/(ignore|disregard)\s+(all\s+)?(previous|prior|above)\s+(instructions|rules)|(игнорируй|не\s+следуй)\s+.*(предыдущ|прошл|выше|правил|указан)/i, "high", "prompt-injection"],
+  [/(?:\b(reveal|exfiltrate|print|send|cat)\b|(?:^|[^a-zA-Z0-9_а-яА-ЯёЁ])(отправь|покажи|выведи|прочитай|извлеки)).*?(?:\.env|\b(credentials|private[\s_-]?key|secrets?|tokens?|api[\s_-]?keys?)\b|секреты|токены|api[\s_-]?ключи|учётные\s+данные)/i, "block", "secret-exfiltration-instruction"]
 ];
 
 const maxRisk = (findings: AuditFinding[], fallback: RiskLevel): RiskLevel => {
@@ -91,7 +98,8 @@ export const auditSkill = async (skill: RegistrySkill): Promise<AuditReport> => 
       continue;
     }
 
-    const text = buffer.toString("utf8");
+    const rawText = buffer.toString("utf8");
+    const text = normalizeText(rawText);
     for (const [pattern, severity, code] of suspiciousPatterns) {
       if (pattern.test(text)) {
         findings.push({

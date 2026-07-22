@@ -74,12 +74,16 @@ const dependencyMajorVersion = (pkg: PackageJson | undefined, name: string) => {
   return match ? Number(match[0]) : undefined;
 };
 
-const scanFiles = async (root: string, maxFiles = 500): Promise<string[]> => {
+const scanFiles = async (root: string, maxFiles = 500): Promise<{ files: string[]; truncated: boolean; limit: number }> => {
   const found: string[] = [];
+  let truncated = false;
   const ignored = new Set(["node_modules", ".git", ".skillranger", ".next", "dist", "coverage"]);
 
   const walk = async (dir: string) => {
-    if (found.length >= maxFiles) return;
+    if (found.length >= maxFiles) {
+      truncated = true;
+      return;
+    }
     let entries: import("node:fs").Dirent[];
     try {
       entries = (await readdir(dir, { withFileTypes: true }))
@@ -89,7 +93,10 @@ const scanFiles = async (root: string, maxFiles = 500): Promise<string[]> => {
     }
 
     for (const entry of entries) {
-      if (found.length >= maxFiles) break;
+      if (found.length >= maxFiles) {
+        truncated = true;
+        break;
+      }
       if (ignored.has(entry.name)) continue;
       const fullPath = path.join(dir, entry.name);
       const relPath = path.relative(root, fullPath);
@@ -103,13 +110,14 @@ const scanFiles = async (root: string, maxFiles = 500): Promise<string[]> => {
   };
 
   await walk(root);
-  return found;
+  if (found.length >= maxFiles) truncated = true;
+  return { files: found, truncated, limit: maxFiles };
 };
 
 export const scanProject = async (projectRoot: string): Promise<ProjectFingerprint> => {
   const root = path.resolve(projectRoot);
   const pkg = await readJson<PackageJson>(path.join(root, "package.json"));
-  const files = await scanFiles(root);
+  const { files, truncated, limit } = await scanFiles(root);
   const signals = new Set<string>();
   const tags = new Set<string>();
   const warnings: string[] = [];
@@ -118,6 +126,10 @@ export const scanProject = async (projectRoot: string): Promise<ProjectFingerpri
   const testing: ProjectFingerprint["testing"] = [];
   const languages: Signal[] = [];
   const infrastructure: Signal[] = [];
+
+  if (truncated) {
+    warnings.push(`File scan stopped after ${limit} entries; project fingerprint may be incomplete.`);
+  }
 
   for (const file of files) signals.add(file);
 
@@ -136,6 +148,14 @@ export const scanProject = async (projectRoot: string): Promise<ProjectFingerpri
     tags.add("typescript");
   } else if (pkg) {
     languages.push(signal("javascript", 0.8, ["package.json"]));
+  }
+
+  const pyFiles = files.filter((file) => file.endsWith(".py")).slice(0, 3);
+  const pyConfig = await hasAnyFile(root, ["pyproject.toml", "requirements.txt", "Pipfile", "setup.py"]);
+  const pyEvidence = [...pyConfig, ...pyFiles];
+  if (pyEvidence.length > 0) {
+    languages.push(signal("python", 0.9, pyEvidence));
+    tags.add("python");
   }
 
   for (const [name, type, confidence] of [

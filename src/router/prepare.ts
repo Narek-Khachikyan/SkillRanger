@@ -75,25 +75,19 @@ const domainMetadata = (pack: { id: string; targetSurface?: string; routing: Bun
   routing: pack.routing,
 });
 
+import { resolveInstalledSkillRoot } from "../installers/installed-path.ts";
+
 const installedEntryFor = async (projectRoot: string, skillId: string, targetAgent: string) => {
   const lockfile = await readLockfile(projectRoot);
   return lockfile.installed.find((entry) => entry.skillId === skillId && entry.targetAgent === targetAgent && entry.scope === "repo");
 };
 
 const safeInstalledRoot = async (projectRoot: string, installedPath: string) => {
-  const root = await realpath(projectRoot);
-  const resolved = path.resolve(root, installedPath);
-  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) return undefined;
-  let current = root;
-  for (const component of path.relative(root, resolved).split(path.sep).filter(Boolean)) {
-    current = path.join(current, component);
-    const componentInfo = await lstat(current).catch(() => undefined);
-    if (!componentInfo) return undefined;
-    if (componentInfo.isSymbolicLink()) return undefined;
+  try {
+    return await resolveInstalledSkillRoot(projectRoot, installedPath);
+  } catch {
+    return undefined;
   }
-  const info = await lstat(resolved).catch(() => undefined);
-  if (!info?.isDirectory() || info.isSymbolicLink()) return undefined;
-  return resolved;
 };
 
 const skillMetadata = async (

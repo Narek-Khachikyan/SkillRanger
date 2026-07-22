@@ -45,7 +45,25 @@ You can run diagnostics first when troubleshooting:
 npx -y skillranger@latest doctor
 ```
 
-### 2. Open your AI agent and describe the task normally
+### 2. Universal Task Router
+
+Route any task prompt into an optimal, bounded skill set and lifecycle run. End the task with `@skillranger`, `skillranger`, or `/sr` when you want the installed SkillRanger workflow to run:
+
+```text
+Review this Next.js app for accessibility and fix critical keyboard-navigation issues. @skillranger
+```
+
+Or via CLI:
+
+```bash
+# Execute CLI routing for a natural-language task ending with terminal trigger
+skillranger task . --intent "Review accessibility and fix critical focus traps @skillranger" --target codex --json
+
+# Read mandatory lifecycle instructions before execution
+skillranger task:read . --router-run <router-run-id> --mandatory-next --expected-read-revision 0 --json
+```
+
+> 🌐 **Bilingual Natural Language**: Prompts can be written in English, Russian, or mixed terminology (e.g. *"Создай современный сайт по Bleach с плавной анимацией @skillranger"*). Matching is 100% deterministic using owner-scoped Domain Pack routing vocabularies. Note: End the task with `@skillranger`, `skillranger`, or `/sr` when you want the installed SkillRanger workflow to run.
 
 After setup, open Codex, Claude Code, Cursor, OpenCode, or Gemini CLI in the same repository and write your task as usual:
 

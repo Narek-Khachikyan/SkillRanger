@@ -49,7 +49,13 @@ const isPathSafe = (basePath: string, targetPath: string) => {
 
 const pathsOverlap = (left: string, right: string) => isPathSafe(left, right) || isPathSafe(right, left);
 
-const assertRepoPathSafe = async (input: InstallInput, targetPath: string, label: string, includeTarget = true) => {
+const assertRepoPathSafe = async (
+  input: InstallInput,
+  targetPath: string,
+  label: string,
+  includeTarget = true,
+  expectedCanonicalDir?: string
+) => {
   if (input.scope !== "repo") return;
   const projectRoot = path.resolve(input.projectRoot);
   const rootInfo = await lstat(projectRoot).catch(() => undefined);
@@ -63,7 +69,20 @@ const assertRepoPathSafe = async (input: InstallInput, targetPath: string, label
     current = path.join(current, component);
     const info = await lstat(current).catch(() => undefined);
     if (!info) break;
-    if (info.isSymbolicLink()) throw new Error(`${label} contains a symlink component: ${path.relative(projectRoot, current)}`);
+    if (info.isSymbolicLink()) {
+      if (current === resolvedTarget && expectedCanonicalDir) {
+        const rawTarget = await readlink(current).catch(() => undefined);
+        if (rawTarget) {
+          const resolvedLink = path.resolve(path.dirname(current), rawTarget);
+          const realTarget = await realpath(resolvedLink).catch(() => undefined);
+          const realExpected = await realpath(expectedCanonicalDir).catch(() => expectedCanonicalDir);
+          if (realTarget && realTarget === realExpected && isPathSafe(canonicalRoot, realTarget)) {
+            continue;
+          }
+        }
+      }
+      throw new Error(`${label} contains a symlink component: ${path.relative(projectRoot, current)}`);
+    }
   }
   let existing = includeTarget ? resolvedTarget : path.dirname(resolvedTarget);
   while (!(await lstat(existing).catch(() => undefined))) {
@@ -112,7 +131,7 @@ const planWrites = async (skill: RegistrySkill, input: InstallInput) => {
   await assertSkillIntegrity(skill);
   const { canonicalDir, agentDir } = skillInstallDirs(skill, input);
   await assertRepoPathSafe(input, canonicalDir, "Canonical skill install path");
-  await assertRepoPathSafe(input, agentDir, `${input.targetAgent} skill install path`);
+  await assertRepoPathSafe(input, agentDir, `${input.targetAgent} skill install path`, true, canonicalDir);
   const files = await walkSkillFiles(skill.path);
   const copiedFiles = files.filter((filePath) => filePath !== skillManifestFile);
   copiedFiles.push(...(skill.sharedContracts ?? []).map(({ installPath }) => installPath));
@@ -258,7 +277,7 @@ const makeAdapter = (id: string): AgentAdapter => ({
       throw new Error(`Refusing to install ${skill.manifest.id} onto its source directory.`);
     }
 
-    const targetSafety = () => assertRepoPathSafe(input, targetDir, "Skill install path");
+    const targetSafety = () => assertRepoPathSafe(input, targetDir, "Skill install path", true, canonicalDir);
     await targetSafety();
     await copySkillFiles(skill, targetDir, targetSafety);
     let installedPath = targetDir;
@@ -268,7 +287,7 @@ const makeAdapter = (id: string): AgentAdapter => ({
       if (linked) {
         installedPath = agentDir;
       } else {
-        const agentSafety = () => assertRepoPathSafe(input, agentDir, `${input.targetAgent} skill install path`);
+        const agentSafety = () => assertRepoPathSafe(input, agentDir, `${input.targetAgent} skill install path`, true, canonicalDir);
         await copySkillFiles(skill, agentDir, agentSafety);
         installedPath = agentDir;
         plan.warnings.push(`Symlink failed for ${input.targetAgent}; copied skill files instead.`);

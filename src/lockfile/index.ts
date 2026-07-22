@@ -60,8 +60,14 @@ function assertValidAuditFinding(finding: unknown, filePath: string, entryPath: 
 }
 
 const assertValidLockfile = (input: unknown, filePath: string): Lockfile => {
-  if (!isRecord(input) || input.schemaVersion !== "1.0" || !Array.isArray(input.installed)) {
-    throw new Error(`Invalid lockfile at ${filePath}: expected schemaVersion 1.0 with installed array.`);
+  if (!isRecord(input)) {
+    throw new Error(`Invalid lockfile at ${filePath}: expected JSON object.`);
+  }
+  if (input.schemaVersion !== "1.0") {
+    throw new Error(`Unsupported lockfile schema at ${filePath}: expected 1.0, received ${String(input.schemaVersion)}.`);
+  }
+  if (!Array.isArray(input.installed)) {
+    throw new Error(`Invalid lockfile at ${filePath}: expected installed array.`);
   }
 
   const installedKeys = new Set<string>();
@@ -127,12 +133,25 @@ const assertValidLockfile = (input: unknown, filePath: string): Lockfile => {
 
 export const readLockfile = async (projectRoot: string): Promise<Lockfile> => {
   const filePath = lockfilePath(projectRoot);
+  let content: string;
   try {
-    return assertValidLockfile(JSON.parse(await readFile(filePath, "utf8")) as unknown, filePath);
+    content = await readFile(filePath, "utf8");
   } catch (error) {
     if (isMissingFileError(error)) return { schemaVersion: "1.0", installed: [] };
     throw error;
   }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error(`Invalid lockfile at ${filePath}: file contains malformed JSON.\nRestore it from version control or remove it and reinstall the affected skills.`);
+    }
+    throw error;
+  }
+
+  return assertValidLockfile(parsed, filePath);
 };
 
 const withLockfileTransaction = async <T>(

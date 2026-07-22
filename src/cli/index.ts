@@ -10,6 +10,8 @@ import { auditSkill } from "../audit/index.ts";
 import { detectInstalledAgents, getAdapter } from "../installers/codex.ts";
 import { setupAgentTypes, type SetupAgentType } from "../installers/agents.ts";
 import { planSkillRangerAgentContext, upsertSkillRangerAgentContext } from "../installers/agent-context.ts";
+import { verifyInstalledSkills } from "../installers/verify.ts";
+import { applyUninstall, planUninstall } from "../installers/uninstall.ts";
 import { readLockfile } from "../lockfile/index.ts";
 import {
   loadFrontendEvalSuite,
@@ -684,6 +686,13 @@ const run = async () => {
       printJson({ recommendations, recommendationGroups: groupRecommendationsByLane(recommendations) });
       return;
     }
+    if (recommendations.length === 0) {
+      const langs = fingerprint.languages.map((l) => l.name).join(", ") || "unknown";
+      const types = fingerprint.projectTypes.map((p) => p.type).join(", ") || "unknown";
+      const domains = (await listDomainPacks()).map((d) => d.manifest.id).join("\n- ") || "frontend";
+      console.log(`No compatible skills found.\n\nDetected:\n- Languages: ${langs}\n- Project types: ${types}\n\nBundled domains:\n- ${domains}\n\nNext:\n- continue without SkillRanger;\n- add an audited domain pack that supports this project.`);
+      return;
+    }
     console.log(`Recommendations for ${targetAgent}:`);
     for (const group of groupRecommendationsByLane(recommendations)) {
       console.log(`\n${group.lane}:`);
@@ -775,7 +784,10 @@ const run = async () => {
     console.log("");
 
     if (recommendations.length === 0) {
-      console.log("No recommendations found. No files were changed.");
+      const langs = fingerprint.languages.map((l) => l.name).join(", ") || "unknown";
+      const types = fingerprint.projectTypes.map((p) => p.type).join(", ") || "unknown";
+      const domains = (await listDomainPacks()).map((d) => d.manifest.id).join(", ") || "frontend";
+      console.log(`No recommendations found for detected languages (${langs}) and project types (${types}). Available bundled domains: ${domains}. No files were changed.`);
       return;
     }
 
@@ -1137,9 +1149,90 @@ const run = async () => {
     return;
   }
 
+  if (command === "verify") {
+    const projectRoot = path.resolve(asString(args.flags.project, args.positionals[0] ?? "."));
+    const skillId = typeof args.flags.skill === "string" ? args.flags.skill : undefined;
+    const targetAgent = typeof args.flags.target === "string" ? args.flags.target : undefined;
+    const result = await verifyInstalledSkills({ projectRoot, registryRoot, skillId, targetAgent });
+    if (args.flags.json) {
+      printJson(result);
+      if (!result.verified) process.exitCode = 1;
+      return;
+    }
+    if (result.entries.length === 0) {
+      console.log(`No matching installed skills to verify in ${projectRoot}.`);
+      return;
+    }
+    for (const entry of result.entries) {
+      console.log(entry.skillId);
+      console.log(`Target: ${entry.targetAgent}`);
+      console.log(`Status: ${entry.status}`);
+      if (entry.reason) {
+        console.log(`Reason: ${entry.reason}`);
+      }
+      console.log("");
+    }
+    if (!result.verified) {
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (command === "uninstall") {
+    const skillId = args.positionals[0] ?? asString(args.flags.skill, "");
+    if (!skillId) throw new Error("Missing skill id for uninstall.");
+    const projectRoot = path.resolve(asString(args.flags.project, "."));
+    const targetAgent = typeof args.flags.target === "string" ? args.flags.target : undefined;
+    const scope = (asString(args.flags.scope, "repo") as "repo" | "user");
+    const dryRun = !Boolean(args.flags.yes);
+    const result = dryRun
+      ? { plan: await planUninstall({ projectRoot, skillId, targetAgent, scope, dryRun: true, registryRoot }), applied: false }
+      : await applyUninstall({ projectRoot, skillId, targetAgent, scope, dryRun: false, registryRoot });
+    if (args.flags.json) {
+      printJson({ ...result, nextStep: dryRun ? "Re-run with --yes to apply uninstall." : "Uninstalled successfully." });
+      return;
+    }
+    if (result.plan.warnings.some((w) => w.includes("is not installed"))) {
+      console.log(`Skill ${skillId} is not installed.`);
+      return;
+    }
+    if (dryRun) {
+      console.log(`Would remove:`);
+      for (const item of result.plan.wouldRemove) {
+        console.log(`- ${item}`);
+      }
+      console.log("Would update:");
+      for (const item of result.plan.wouldUpdate) {
+        console.log(`- ${item}`);
+      }
+      return;
+    }
+    console.log(`Uninstalled ${skillId} successfully.`);
+    return;
+  }
+
   if (command === "installed") {
     const projectRoot = path.resolve(asString(args.flags.project, args.positionals[0] ?? "."));
     const lockfile = await readLockfile(projectRoot);
+    if (args.flags.verify) {
+      const verification = await verifyInstalledSkills({ projectRoot, registryRoot });
+      if (args.flags.json) {
+        printJson({ projectRoot, installed: lockfile.installed, verification });
+        return;
+      }
+      console.log(`Installed skills for ${projectRoot}:`);
+      if (lockfile.installed.length === 0) {
+        console.log("No skills installed.");
+        return;
+      }
+      const vMap = new Map(verification.entries.map((v) => [`${v.skillId}:${v.targetAgent}:${v.scope}`, v]));
+      for (const entry of lockfile.installed) {
+        const v = vMap.get(`${entry.skillId}:${entry.targetAgent}:${entry.scope}`);
+        const statusStr = v ? ` [${v.status}]` : "";
+        console.log(`- ${entry.skillId}@${entry.version} -> ${entry.installedPath} (${entry.targetAgent}, ${entry.scope})${statusStr}`);
+      }
+      return;
+    }
     if (args.flags.json) {
       printJson({ projectRoot, installed: lockfile.installed });
       return;
