@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { getAdapter } from "../src/installers/codex.ts";
@@ -335,11 +335,13 @@ test("Stage 3 - Claude install -> uninstall removes canonical directory", async 
 test("CLI command parser resolves verify, uninstall, and installed --verify", async () => {
   const { parseCliInvocation } = await import("../src/cli/commands.ts");
 
-  const verifyResult = parseCliInvocation(["verify", "my-project"]);
+  const verifyResult = parseCliInvocation(["verify", "my-project", "--skill", "frontend.next-app-router-review", "--target", "claude-code"]);
   assert.equal(verifyResult.kind, "command");
   if (verifyResult.kind === "command") {
     assert.equal(verifyResult.command, "verify");
     assert.deepEqual(verifyResult.positionals, ["my-project"]);
+    assert.equal(verifyResult.flags.skill, "frontend.next-app-router-review");
+    assert.equal(verifyResult.flags.target, "claude-code");
   }
 
   const uninstallResult = parseCliInvocation(["uninstall", "frontend.next-app-router-review", "--yes"]);
@@ -354,5 +356,146 @@ test("CLI command parser resolves verify, uninstall, and installed --verify", as
   if (installedResult.kind === "command") {
     assert.equal(installedResult.command, "installed");
     assert.equal(installedResult.flags.verify, true);
+  }
+});
+
+test("Codex + Claude -> uninstall Codex preserves canonical and Claude remains verified", async () => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-shared-canonical-"));
+  const projectRoot = path.join(tmpRoot, "project");
+  await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
+
+  const skill = await findSkill("frontend.next-app-router-review", "registry");
+  assert.ok(skill);
+
+  const codexAdapter = getAdapter("codex");
+  const claudeAdapter = getAdapter("claude-code");
+
+  await codexAdapter.applyInstall(skill, { projectRoot, targetAgent: "codex", scope: "repo", dryRun: false });
+  await claudeAdapter.applyInstall(skill, { projectRoot, targetAgent: "claude-code", scope: "repo", dryRun: false });
+
+  await applyUninstall({
+    projectRoot,
+    skillId: skill.manifest.id,
+    targetAgent: "codex",
+    scope: "repo",
+    dryRun: false,
+  });
+
+  const canonicalDir = path.join(projectRoot, ".agents", "skills", "next-app-router-review");
+  const claudeSymlink = path.join(projectRoot, ".claude", "skills", "next-app-router-review");
+
+  assert.ok(await lstat(canonicalDir).catch(() => undefined));
+  assert.ok(await lstat(claudeSymlink).catch(() => undefined));
+
+  const verification = await verifyInstalledSkills({ projectRoot, targetAgent: "claude-code" });
+  assert.equal(verification.verified, true);
+  assert.equal(verification.entries[0].status, "verified");
+});
+
+test("Missing Claude symlink + modified canonical -> uninstall removes lock entry only and preserves canonical", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-stale-canonical-"));
+  const projectRoot = path.join(tmpRoot, "project");
+  await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
+
+  const skill = await findSkill("frontend.next-app-router-review", "registry");
+  assert.ok(skill);
+
+  const adapter = getAdapter("claude-code");
+  await adapter.applyInstall(skill, { projectRoot, targetAgent: "claude-code", scope: "repo", dryRun: false });
+
+  // Tamper with canonical directory content
+  const canonicalFile = path.join(projectRoot, ".agents", "skills", "next-app-router-review", "SKILL.md");
+  await writeFile(canonicalFile, "# Tampered content\n");
+
+  // Remove Claude symlink to simulate stale agent entry
+  const claudeSymlink = path.join(projectRoot, ".claude", "skills", "next-app-router-review");
+  await rm(claudeSymlink, { recursive: true, force: true });
+
+  const result = await applyUninstall({
+    projectRoot,
+    skillId: skill.manifest.id,
+    targetAgent: "claude-code",
+    scope: "repo",
+    dryRun: false,
+  });
+
+  assert.equal(result.applied, true);
+
+  // Canonical directory must NOT be deleted
+  const canonicalContent = await readFile(canonicalFile, "utf8");
+  assert.equal(canonicalContent, "# Tampered content\n");
+
+  const lockfile = await readLockfile(projectRoot);
+  assert.equal(lockfile.installed.length, 0);
+});
+
+test("Copy install + unrelated canonical directory -> uninstall preserves unrelated canonical directory", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-unrelated-canonical-"));
+  const projectRoot = path.join(tmpRoot, "project");
+  await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
+
+  const skill = await findSkill("frontend.next-app-router-review", "registry");
+  assert.ok(skill);
+
+  // Install via copy-mode adapter (claude-code with mode: "copy")
+  const claudeAdapter = getAdapter("claude-code");
+  await claudeAdapter.applyInstall(skill, {
+    projectRoot,
+    targetAgent: "claude-code",
+    scope: "repo",
+    mode: "copy",
+    dryRun: false,
+  });
+
+  // Create unrelated canonical directory in .agents/skills
+  const unrelatedCanonical = path.join(projectRoot, ".agents", "skills", "next-app-router-review");
+  await mkdir(unrelatedCanonical, { recursive: true });
+  await writeFile(path.join(unrelatedCanonical, "unrelated.txt"), "important data");
+
+  await applyUninstall({
+    projectRoot,
+    skillId: skill.manifest.id,
+    targetAgent: "claude-code",
+    scope: "repo",
+    dryRun: false,
+  });
+
+  const unrelatedData = await readFile(path.join(unrelatedCanonical, "unrelated.txt"), "utf8");
+  assert.equal(unrelatedData, "important data");
+});
+
+test("User-scope install -> verify returns verified and options --skill / --target work", async () => {
+  const tmpHome = await mkdtemp(path.join(os.tmpdir(), "skillranger-user-home-"));
+  const oldHome = process.env.HOME;
+  process.env.HOME = tmpHome;
+
+  try {
+    const projectRoot = path.join(tmpHome, "project");
+    await mkdir(projectRoot, { recursive: true });
+
+    const skill = await findSkill("frontend.next-app-router-review", "registry");
+    assert.ok(skill);
+
+    const adapter = getAdapter("claude-code");
+    await adapter.applyInstall(skill, {
+      projectRoot,
+      targetAgent: "claude-code",
+      scope: "user",
+      dryRun: false,
+    });
+
+    const verification = await verifyInstalledSkills({
+      projectRoot,
+      skillId: skill.manifest.id,
+      targetAgent: "claude-code",
+    });
+
+    assert.equal(verification.verified, true);
+    assert.equal(verification.entries[0].status, "verified");
+    assert.equal(verification.entries[0].scope, "user");
+  } finally {
+    process.env.HOME = oldHome;
   }
 });

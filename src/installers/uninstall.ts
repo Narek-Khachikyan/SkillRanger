@@ -1,4 +1,4 @@
-import { lstat, rm } from "node:fs/promises";
+import { lstat, realpath, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { lockfilePath, readLockfile, writeLockfile } from "../lockfile/index.ts";
@@ -80,6 +80,8 @@ export const planUninstall = async (options: UninstallOptions): Promise<Uninstal
     (e) => e.skillId === options.skillId && !matching.includes(e)
   );
 
+  let canonicalVerified = false;
+
   for (const entry of matching) {
     if (entry.checksum !== registrySkill.checksum) {
       throw new Error(`Cannot uninstall skill ${entry.skillId}: lockfile checksum does not match local registry.`);
@@ -109,10 +111,21 @@ export const planUninstall = async (options: UninstallOptions): Promise<Uninstal
       throw new Error(`Cannot uninstall modified skill ${entry.skillId}: ${matchError.message}`);
     }
 
-    wouldRemove.push(resolvedInstalledPath);
+    const realCanonicalDir = await realpath(expectedCanonicalDir).catch(() => expectedCanonicalDir);
+    const realResolvedRoot = await realpath(resolvedRoot).catch(() => resolvedRoot);
+
+    if (resolvedRoot === expectedCanonicalDir || realResolvedRoot === realCanonicalDir) {
+      canonicalVerified = true;
+    }
+
+    if (resolvedInstalledPath === expectedCanonicalDir && remainingMatchingEntries.length > 0) {
+      // Preserve shared canonical package while other targets for this skill remain installed
+    } else {
+      wouldRemove.push(resolvedInstalledPath);
+    }
   }
 
-  if (remainingMatchingEntries.length === 0) {
+  if (remainingMatchingEntries.length === 0 && canonicalVerified) {
     const expectedCanonicalDir = path.resolve(getCanonicalSkillsDir({ projectRoot, scope }), slug);
     const canonicalInfo = await lstat(expectedCanonicalDir).catch(() => undefined);
     if (canonicalInfo) {

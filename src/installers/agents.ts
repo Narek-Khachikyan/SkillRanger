@@ -29,59 +29,73 @@ export type AgentConfig = {
   detectInstalled(): Promise<boolean>;
 };
 
-const home = os.homedir();
-const configHome = process.env.XDG_CONFIG_HOME?.trim() || path.join(home, ".config");
-const codexHome = process.env.CODEX_HOME?.trim() || path.join(home, ".codex");
-const claudeHome = process.env.CLAUDE_CONFIG_DIR?.trim() || path.join(home, ".claude");
+const getHome = () => os.homedir();
+const getConfigHome = () => process.env.XDG_CONFIG_HOME?.trim() || path.join(getHome(), ".config");
+const getCodexHome = () => process.env.CODEX_HOME?.trim() || path.join(getHome(), ".codex");
+const getClaudeHome = () => process.env.CLAUDE_CONFIG_DIR?.trim() || path.join(getHome(), ".claude");
 
 export const agents: Record<AgentType, AgentConfig> = {
   "claude-code": {
     name: "claude-code",
     displayName: "Claude Code",
     skillsDir: ".claude/skills",
-    globalSkillsDir: path.join(claudeHome, "skills"),
-    detectInstalled: async () => existsSync(claudeHome)
+    get globalSkillsDir() {
+      return path.join(getClaudeHome(), "skills");
+    },
+    detectInstalled: async () => existsSync(getClaudeHome())
   },
   codex: {
     name: "codex",
     displayName: "Codex",
     skillsDir: ".agents/skills",
-    globalSkillsDir: path.join(codexHome, "skills"),
-    detectInstalled: async () => existsSync(codexHome) || existsSync("/etc/codex")
+    get globalSkillsDir() {
+      return path.join(getCodexHome(), "skills");
+    },
+    detectInstalled: async () => existsSync(getCodexHome()) || existsSync("/etc/codex")
   },
   cursor: {
     name: "cursor",
     displayName: "Cursor",
     skillsDir: ".agents/skills",
-    globalSkillsDir: path.join(home, ".cursor/skills"),
-    detectInstalled: async () => existsSync(path.join(home, ".cursor"))
+    get globalSkillsDir() {
+      return path.join(getHome(), ".cursor/skills");
+    },
+    detectInstalled: async () => existsSync(path.join(getHome(), ".cursor"))
   },
   "gemini-cli": {
     name: "gemini-cli",
     displayName: "Gemini CLI",
     skillsDir: ".agents/skills",
-    globalSkillsDir: path.join(home, ".gemini/skills"),
-    detectInstalled: async () => existsSync(path.join(home, ".gemini"))
+    get globalSkillsDir() {
+      return path.join(getHome(), ".gemini/skills");
+    },
+    detectInstalled: async () => existsSync(path.join(getHome(), ".gemini"))
   },
   "generic-agent-skills": {
     name: "generic-agent-skills",
     displayName: "Generic Agent Skills",
     skillsDir: ".agents/skills",
-    globalSkillsDir: path.join(configHome, "agents/skills"),
+    get globalSkillsDir() {
+      return path.join(getConfigHome(), "agents/skills");
+    },
     detectInstalled: async () => false
   },
   opencode: {
     name: "opencode",
     displayName: "OpenCode",
     skillsDir: ".agents/skills",
-    globalSkillsDir: path.join(configHome, "opencode/skills"),
-    detectInstalled: async () => existsSync(path.join(configHome, "opencode"))
+    get globalSkillsDir() {
+      return path.join(getConfigHome(), "opencode/skills");
+    },
+    detectInstalled: async () => existsSync(path.join(getConfigHome(), "opencode"))
   },
   universal: {
     name: "universal",
     displayName: "Universal",
     skillsDir: ".agents/skills",
-    globalSkillsDir: path.join(configHome, "agents/skills"),
+    get globalSkillsDir() {
+      return path.join(getConfigHome(), "agents/skills");
+    },
     detectInstalled: async () => false
   }
 };

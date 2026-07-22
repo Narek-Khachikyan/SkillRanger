@@ -374,9 +374,9 @@ export const cliCommandDefinitions = Object.freeze([
   defineCommand({
     name: "verify",
     description: "Verify lockfile and file integrity for installed skills.",
-    usages: ["verify [project] [--project <path>] [--json]"],
+    usages: ["verify [project] [--project <path>] [--skill <skill-id>] [--target <agent>] [--json]"],
     booleanOptions: ["json"],
-    valueOptions: ["project"],
+    valueOptions: ["project", "skill", "target"],
   }),
   defineCommand({
     name: "uninstall",

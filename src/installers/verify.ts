@@ -52,7 +52,7 @@ export const verifyInstalledSkills = async (options: {
 
     let installedRoot: string;
     try {
-      installedRoot = await resolveInstalledSkillRoot(projectRoot, entry.installedPath);
+      installedRoot = await resolveInstalledSkillRoot(projectRoot, entry.installedPath, entry.scope as "repo" | "user");
     } catch (error) {
       if (error instanceof InvalidInstalledPathError) {
         if (error.message.includes("does not exist")) {

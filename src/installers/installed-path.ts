@@ -76,8 +76,8 @@ export const resolveInstalledSkillRoot = async (
       }
       const canonicalBase = path.resolve(home, ".agents", "skills");
       const canonicalBaseReal = await realpath(canonicalBase).catch(() => canonicalBase);
-      if (!isPathSafe(canonicalBaseReal, realTarget) && !isPathSafe(home, realTarget)) {
-        throw new InvalidInstalledPathError(`Symlink target is not within user home directory: ${installedPath}`);
+      if (!isPathSafe(canonicalBaseReal, realTarget) && !isPathSafe(canonicalBase, realTarget)) {
+        throw new InvalidInstalledPathError(`Symlink target is not within canonical user skill directory: ${installedPath}`);
       }
       canonicalTargetDir = realTarget;
     } else if (leafInfo.isDirectory()) {

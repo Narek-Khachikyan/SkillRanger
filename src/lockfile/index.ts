@@ -93,8 +93,14 @@ const assertValidLockfile = (input: unknown, filePath: string): Lockfile => {
     }
     if (typeof entry.installedPath === "string") {
       const normalizedPath = entry.installedPath.replace(/\\/g, "/");
-      if (path.isAbsolute(entry.installedPath) || normalizedPath.split("/").includes("..")) {
-        throw new Error(`Invalid lockfile at ${filePath}: ${entryPath}.installedPath must be a relative path without traversal.`);
+      if (entry.scope === "user") {
+        if (normalizedPath.split("/").includes("..")) {
+          throw new Error(`Invalid lockfile at ${filePath}: ${entryPath}.installedPath for user scope must not contain path traversal.`);
+        }
+      } else {
+        if (path.isAbsolute(entry.installedPath) || normalizedPath.startsWith("~") || normalizedPath.split("/").includes("..")) {
+          throw new Error(`Invalid lockfile at ${filePath}: ${entryPath}.installedPath must be a relative path without traversal.`);
+        }
       }
     }
     const installedKey = `${entry.skillId}\0${entry.targetAgent}\0${entry.scope}`;
