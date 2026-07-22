@@ -6,7 +6,7 @@ import { auditSkill } from "../audit/index.ts";
 import { assertSkillIntegrity } from "../registry/index.ts";
 import { upsertInstalledSkill } from "../lockfile/index.ts";
 import type { InstallPlan, InstallScope, RegistrySkill } from "../types.ts";
-import { getAgentConfig, isUniversalAgent } from "./agents.ts";
+import { getAgentConfig } from "./agents.ts";
 import {
   InstallAuditBlockedError,
   type AgentAdapter,
@@ -136,7 +136,7 @@ const planWrites = async (skill: RegistrySkill, input: InstallInput) => {
   const copiedFiles = files.filter((filePath) => filePath !== skillManifestFile);
   copiedFiles.push(...(skill.sharedContracts ?? []).map(({ installPath }) => installPath));
   const mode = installMode(input);
-  const universal = isUniversalAgent(input.targetAgent) || canonicalDir === agentDir;
+  const universal = canonicalDir === agentDir;
   const targetDir = mode === "copy" ? agentDir : canonicalDir;
   const writes = copiedFiles.map((filePath) => path.join(targetDir, filePath));
   writes.push(path.join(targetDir, skillManifestFile));
@@ -270,7 +270,7 @@ const makeAdapter = (id: string): AgentAdapter => ({
 
     const { canonicalDir, agentDir } = skillInstallDirs(skill, input);
     const mode = installMode(input);
-    const universal = isUniversalAgent(input.targetAgent) || canonicalDir === agentDir;
+    const universal = canonicalDir === agentDir;
   const targetDir = mode === "copy" ? agentDir : canonicalDir;
 
     if (pathsOverlap(skill.path, targetDir)) {

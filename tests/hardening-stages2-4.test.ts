@@ -603,3 +603,56 @@ test("Claude install -> remove symlink and change lockfile installedPath to cano
   assert.equal(verification.entries[0].status, "invalid-path");
   assert.ok(verification.entries[0].reason?.includes("does not match expected managed installation directory"));
 });
+
+test("User-scope Codex install with custom CODEX_HOME -> lockfile path points to CODEX_HOME/skills, verify and uninstall succeed", async () => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-codex-user-"));
+  const fakeHome = path.join(tmpRoot, "home");
+  const customCodexHome = path.join(tmpRoot, "custom-codex");
+  const projectRoot = path.join(tmpRoot, "project");
+
+  await mkdir(fakeHome, { recursive: true });
+  await mkdir(customCodexHome, { recursive: true });
+  await mkdir(projectRoot, { recursive: true });
+
+  await withIsolatedUserEnv({ tmpHome: fakeHome }, async () => {
+    process.env.CODEX_HOME = customCodexHome;
+
+    const skill = await findSkill("frontend.next-app-router-review", "registry");
+    assert.ok(skill);
+
+    const adapter = getAdapter("codex");
+    await adapter.applyInstall(skill, {
+      projectRoot,
+      targetAgent: "codex",
+      scope: "user",
+      dryRun: false,
+    });
+
+    const lockfile = await readLockfile(projectRoot);
+    const codexEntry = lockfile.installed.find((e) => e.targetAgent === "codex" && e.scope === "user");
+    assert.ok(codexEntry);
+    assert.ok(
+      codexEntry.installedPath.includes("custom-codex"),
+      `Expected installedPath to point to custom-codex directory, got: ${codexEntry.installedPath}`
+    );
+
+    const verification = await verifyInstalledSkills({
+      projectRoot,
+      skillId: skill.manifest.id,
+      targetAgent: "codex",
+    });
+
+    assert.equal(verification.verified, true);
+    assert.equal(verification.entries[0].status, "verified");
+
+    const uninstallRes = await applyUninstall({
+      projectRoot,
+      skillId: skill.manifest.id,
+      targetAgent: "codex",
+      scope: "user",
+      dryRun: false,
+    });
+
+    assert.equal(uninstallRes.applied, true);
+  });
+});
