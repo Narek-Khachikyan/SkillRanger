@@ -457,11 +457,11 @@ export const parseCliInvocation = (argv: string[]): CliInvocation => {
     }
 
     const next = rest[index + 1];
-    if (!next || next.startsWith("-")) flags[key] = true;
-    else {
-      flags[key] = next;
-      index += 1;
+    if (next === undefined || next.startsWith("--")) {
+      throw new Error(`--${key} requires a value.`);
     }
+    flags[key] = next;
+    index += 1;
   }
 
   return {

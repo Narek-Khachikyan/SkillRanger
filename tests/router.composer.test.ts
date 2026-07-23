@@ -331,3 +331,20 @@ test("a primary-only dependency cannot become a second primary", () => {
   assert.ok(result.rejections.some(({ skillId, reason }) => skillId === root.id && reason === "dependency-role-unassignable"));
   if (result.status === "prepared") assert.equal(result.composed.all.filter(({ role }) => role === "primary").length, 1);
 });
+
+test("composer reports an unknown dependency as missing-dependency, not a cycle", () => {
+  const root: RouterSkillMetadata = {
+    id: "backend.needs-missing", displayName: "Needs Missing", version: "1.0.0", riskLevel: "low",
+    roles: ["primary"], domains: ["backend-api"], actions: ["implement"], artifactTypes: ["api"], intentTags: ["api"],
+    technologyTags: [], qualityGoals: [], requiredCapabilities: [], optionalCapabilities: [],
+    dependencies: ["backend.does-not-exist"], conflictsWith: [], supersedes: [], complements: [], score: 0.9,
+  };
+  const candidate = (skill: RouterSkillMetadata) => ({
+    skill, score: skill.score!, eligibleRoles: ["primary" as const], reasons: [], missingCapabilities: [], missingOptionalCapabilities: [], verificationStatus: "not-required" as const,
+  });
+  const result = composeSkillSet({
+    profile: profile(), skills: [root], selectedDomainIds: ["backend-api"], candidates: [candidate(root)],
+  });
+  assert.ok(result.rejections.some(({ skillId, reason }) => skillId === root.id && reason === "missing-dependency"));
+  assert.ok(!result.rejections.some(({ reason }) => reason === "dependency-cycle"));
+});

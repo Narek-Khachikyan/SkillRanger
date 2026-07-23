@@ -211,7 +211,7 @@ const recommendationsFor = (selections: { primary: PreparedSkillSelection; envir
   ...selections.companions,
   ...selections.verification,
   ...selections.agentContext,
-].map((selection, index) => ({
+].map((selection) => ({
   skillId: selection.skillId,
   displayName: selection.displayName,
   role: selection.role === "primary" ? "primary" as const : "companion" as const,
@@ -220,7 +220,6 @@ const recommendationsFor = (selections: { primary: PreparedSkillSelection; envir
   riskLevel: "low" as const,
   verification: { status: selection.verificationStatus === "guidance-only" ? "unverified" as const : "ready" as const, missingCapabilities: [] },
   scoreBreakdown: { stackMatch: 0, userIntentMatch: 0, qualityScore: 0, effectiveQualityScore: 0, securityScore: 0, freshnessScore: 0, compatibilityScore: 1, duplicatePenalty: 0, evaluationPenalty: 0, laneAdjustment: 0, skillAdjustment: 0, finalScore: selection.score },
-  ...(index === 0 ? {} : {}),
 })) as unknown as Recommendation[];
 
 const assertRequiredPhaseOwnersSelected = (

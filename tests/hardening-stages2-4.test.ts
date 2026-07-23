@@ -359,6 +359,22 @@ test("CLI command parser resolves verify, uninstall, and installed --verify", as
   }
 });
 
+test("CLI parser rejects a value option with no following value", async () => {
+  const { parseCliInvocation } = await import("../src/cli/commands.ts");
+
+  const missingValueCases = [
+    ["install", "frontend.next-app-router-review", "--project", "--json"], // next token is another option
+    ["install", "frontend.next-app-router-review", "--project"],            // no following token
+  ];
+  for (const argv of missingValueCases) {
+    assert.throws(() => parseCliInvocation(argv), /--project requires a value\./, argv.join(" "));
+  }
+
+  const ok = parseCliInvocation(["install", "frontend.next-app-router-review", "--project", "/tmp/app"]);
+  assert.equal(ok.kind, "command");
+  if (ok.kind === "command") assert.equal(ok.flags.project, "/tmp/app");
+});
+
 test("Codex + Claude -> uninstall Codex preserves canonical and Claude remains verified", async () => {
   const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-shared-canonical-"));
   const projectRoot = path.join(tmpRoot, "project");

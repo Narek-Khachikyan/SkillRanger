@@ -368,7 +368,7 @@ const hasCycle = (root: RouterSkillMetadata, byId: Map<string, RouterSkillMetada
     if (visiting.has(id)) return true;
     if (visited.has(id)) return false;
     const skill = byId.get(canonical(id));
-    if (!skill) return true;
+    if (!skill) return false;
     visiting.add(id);
     if ((skill.dependencies ?? []).some(visit)) return true;
     visiting.delete(id);
@@ -509,10 +509,7 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
   const requiredDecomposition = decomposition(input.profile, retrieved.candidates, input.skills);
   if (requiredDecomposition) return { status: "decomposition_required", subtasks: requiredDecomposition, rejections: retrieved.rejections };
   if (primaryCandidates.length === 0) {
-    const subtasks = decomposition(input.profile, retrieved.candidates, input.skills);
-    return subtasks
-      ? { status: "decomposition_required", subtasks, rejections: retrieved.rejections }
-      : { status: "no_matching_skills", reasonCode: "no-primary-candidate", rejections: retrieved.rejections };
+    return { status: "no_matching_skills", reasonCode: "no-primary-candidate", rejections: retrieved.rejections };
   }
 
   primaryLoop: for (const primary of primaryCandidates) {
