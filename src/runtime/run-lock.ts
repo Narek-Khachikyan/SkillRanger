@@ -230,8 +230,25 @@ export class RunFileLock {
             await rename(candidatePath, guardPath);
             published = true;
           } catch (error) {
-            if (!isErrno(error, "EEXIST") && !isErrno(error, "ENOTEMPTY")) throw error;
-            await this.reclaimGuardIfAbandoned(guardPath);
+            if (isErrno(error, "EEXIST") || isErrno(error, "ENOTEMPTY")) {
+              await this.reclaimGuardIfAbandoned(guardPath);
+            } else if (isErrno(error, "EPERM") && process.platform === "win32") {
+              // Windows reports EPERM (not EEXIST/ENOTEMPTY) from rename() when the
+              // destination guard directory already exists. Treat this as contention
+              // only when the destination is confirmed to be an existing directory;
+              // an EPERM with an absent, non-directory, or un-inspectable destination is
+              // unrelated and must propagate.
+              let guardIsDirectory: boolean;
+              try {
+                guardIsDirectory = (await stat(guardPath)).isDirectory();
+              } catch {
+                guardIsDirectory = false;
+              }
+              if (!guardIsDirectory) throw error;
+              await this.reclaimGuardIfAbandoned(guardPath);
+            } else {
+              throw error;
+            }
           }
           if (published) {
             const publishedIdentity = await stat(guardPath).catch((error: unknown) => {
