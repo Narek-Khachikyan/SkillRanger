@@ -36,7 +36,7 @@ test("published tarball contains shared contracts and supports registry install 
   const projectRoot = path.join(root, "project"); await mkdir(projectRoot, { recursive: true });
   const input = { projectRoot, targetAgent: "codex", scope: "repo" as const, dryRun: false, mode: "copy" as const };
   const plan = await installers.getAdapter("codex").planInstall(skill, input);
-  assert.ok(plan.writes.some((write) => write.endsWith("references/shared/frontend--browser-evidence.md")));
+  assert.ok(plan.writes.some((write) => write.replaceAll("\\", "/").endsWith("references/shared/frontend--browser-evidence.md")));
   await installers.getAdapter("codex").applyInstall(skill, input);
   const installed = path.join(projectRoot, ".agents/skills/visual-design-polish/references/shared/frontend--browser-evidence.md");
   assert.ok((await stat(installed)).isFile()); assert.match(await readFile(installed, "utf8"), /Contract-Version: 1\.0\.0/);
