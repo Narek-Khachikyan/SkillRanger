@@ -99,7 +99,7 @@ const scanFiles = async (root: string, maxFiles = 500): Promise<{ files: string[
       }
       if (ignored.has(entry.name)) continue;
       const fullPath = path.join(dir, entry.name);
-      const relPath = path.relative(root, fullPath);
+      const relPath = path.relative(root, fullPath).split(path.sep).join("/");
       if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) {
         await walk(fullPath);

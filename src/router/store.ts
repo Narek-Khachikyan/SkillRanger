@@ -439,14 +439,14 @@ export class RouterStore {
     let source: Buffer;
     try {
       const metadata = await lstat(target);
-      if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size !== identityKeyBytes || (metadata.mode & 0o077) !== 0) {
+      if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size !== identityKeyBytes || (process.platform !== "win32" && (metadata.mode & 0o077) !== 0)) {
         throw new RouterStoreError("identity-integrity", "Router identity key is malformed or not owner-only.");
       }
       let handle;
       try {
         handle = await open(target, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
         const opened = await handle.stat();
-        if (!opened.isFile() || opened.size !== identityKeyBytes || (opened.mode & 0o077) !== 0) throw new RouterStoreError("identity-integrity", "Router identity key changed or permissions are unsafe.");
+        if (!opened.isFile() || opened.size !== identityKeyBytes || (process.platform !== "win32" && (opened.mode & 0o077) !== 0)) throw new RouterStoreError("identity-integrity", "Router identity key changed or permissions are unsafe.");
         source = await handle.readFile();
       } finally {
         await handle?.close();
