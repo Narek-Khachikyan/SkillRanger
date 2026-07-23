@@ -38,7 +38,7 @@ test("install CLI prints a human dry-run summary without writing files", async (
 
     assert.match(stdout, /Install plan for frontend\.next-app-router-review/);
     assert.match(stdout, /Would write:/);
-    assert.match(stdout, /\.agents\/skills\/next-app-router-review\/SKILL\.md/);
+    assert.match(stdout.split(path.sep).join("/"), /\.agents\/skills\/next-app-router-review\/SKILL\.md/);
     assert.match(stdout, /Would update:/);
     assert.match(stdout, /skillranger\.lock\.json/);
     assert.match(stdout, /Next: re-run with --yes to apply\./);

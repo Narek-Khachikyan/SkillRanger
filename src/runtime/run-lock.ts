@@ -230,8 +230,48 @@ export class RunFileLock {
             await rename(candidatePath, guardPath);
             published = true;
           } catch (error) {
-            if (!isErrno(error, "EEXIST") && !isErrno(error, "ENOTEMPTY")) throw error;
-            await this.reclaimGuardIfAbandoned(guardPath);
+            if (isErrno(error, "EEXIST") || isErrno(error, "ENOTEMPTY")) {
+              await this.reclaimGuardIfAbandoned(guardPath);
+            } else if (isErrno(error, "EPERM") && process.platform === "win32") {
+              // Windows reports EPERM (not EEXIST/ENOTEMPTY) from rename() when the
+              // destination guard directory already exists. Confirm the destination
+              // before treating the EPERM as contention.
+              let guardStat;
+              try {
+                guardStat = await stat(guardPath);
+              } catch (statError) {
+                if (!isErrno(statError, "ENOENT")) throw error;
+                guardStat = undefined;
+              }
+              if (guardStat?.isDirectory()) {
+                await this.reclaimGuardIfAbandoned(guardPath);
+              } else if (guardStat === undefined) {
+                // TOCTOU: the guard owner released between the failed rename and this
+                // stat, so the EPERM was ordinary contention whose destination vanished.
+                // Retry the publish once with the same candidate.
+                try {
+                  await rename(candidatePath, guardPath);
+                  published = true;
+                } catch (retryError) {
+                  if (isErrno(retryError, "EEXIST") || isErrno(retryError, "ENOTEMPTY")) {
+                    await this.reclaimGuardIfAbandoned(guardPath);
+                  } else if (
+                    isErrno(retryError, "EPERM")
+                    && process.platform === "win32"
+                    && (await stat(guardPath).catch(() => undefined))?.isDirectory()
+                  ) {
+                    await this.reclaimGuardIfAbandoned(guardPath);
+                  } else {
+                    throw retryError;
+                  }
+                }
+              } else {
+                // guardPath exists but is not a directory: unrelated EPERM, propagate.
+                throw error;
+              }
+            } else {
+              throw error;
+            }
           }
           if (published) {
             const publishedIdentity = await stat(guardPath).catch((error: unknown) => {
