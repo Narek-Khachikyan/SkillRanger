@@ -9,6 +9,8 @@ import { InstallAuditBlockedError } from "../src/installers/types.ts";
 import { readLockfile } from "../src/lockfile/index.ts";
 import type { RegistrySkill, SkillManifest } from "../src/types.ts";
 
+const toPosix = (value: string) => value.split(path.sep).join("/");
+
 const exists = async (filePath: string) => {
   try {
     await stat(filePath);
@@ -34,7 +36,7 @@ test("codex installer writes repo skill and lockfile", async () => {
     dryRun: true
   });
 
-  assert.ok(dryRun.writes.some((filePath) => filePath.endsWith(".agents/skills/next-app-router-review/SKILL.md")));
+  assert.ok(dryRun.writes.some((filePath) => toPosix(filePath).endsWith(".agents/skills/next-app-router-review/SKILL.md")));
   assert.equal(await exists(path.join(projectRoot, ".agents/skills/next-app-router-review/SKILL.md")), false);
 
   const result = await adapter.applyInstall(skill, {
@@ -112,7 +114,7 @@ test("codex installer copies skill support files", async () => {
     dryRun: true
   });
 
-  assert.ok(dryRun.writes.some((filePath) => filePath.endsWith(".agents/skills/supported-skill/references/design.md")));
+  assert.ok(dryRun.writes.some((filePath) => toPosix(filePath).endsWith(".agents/skills/supported-skill/references/design.md")));
 
   await adapter.applyInstall(skill, {
     projectRoot,
@@ -145,7 +147,7 @@ test("codex installer keeps structured design skills self-contained", async () =
     "gates.json",
     "evals.json",
   ]) {
-    assert.ok(plan.writes.some((filePath) => filePath.endsWith(`visual-design-polish/${file}`)));
+    assert.ok(plan.writes.some((filePath) => toPosix(filePath).endsWith(`visual-design-polish/${file}`)));
   }
 
   await adapter.applyInstall(skill, {
@@ -235,7 +237,7 @@ test("codex installer plans user-scope install into global canonical skills", as
     dryRun: true
   });
 
-  assert.ok(plan.writes.some((filePath) => filePath.endsWith(".agents/skills/next-app-router-review/SKILL.md")));
+  assert.ok(plan.writes.some((filePath) => toPosix(filePath).endsWith(".agents/skills/next-app-router-review/SKILL.md")));
   assert.ok(plan.writes.some((filePath) => filePath.startsWith(os.homedir())));
 });
 
@@ -255,8 +257,8 @@ test("claude-code installer writes canonical skill and links agent-specific dire
     dryRun: true
   });
 
-  assert.ok(dryRun.writes.some((filePath) => filePath.endsWith(".agents/skills/next-app-router-review/SKILL.md")));
-  assert.ok(dryRun.writes.some((filePath) => filePath.endsWith(".claude/skills/next-app-router-review")));
+  assert.ok(dryRun.writes.some((filePath) => toPosix(filePath).endsWith(".agents/skills/next-app-router-review/SKILL.md")));
+  assert.ok(dryRun.writes.some((filePath) => toPosix(filePath).endsWith(".claude/skills/next-app-router-review")));
 
   await adapter.applyInstall(skill, {
     projectRoot,

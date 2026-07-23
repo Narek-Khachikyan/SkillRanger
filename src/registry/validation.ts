@@ -125,7 +125,8 @@ const tokenOverlap = (left: string, right: string) => {
 
 export const parseSkillFrontmatter = (skillText: string) => {
   const issues: RegistryValidationIssue[] = [];
-  if (!skillText.startsWith("---\n")) {
+  const normalized = skillText.replace(/\r\n/g, "\n");
+  if (!normalized.startsWith("---\n")) {
     return {
       frontmatter: undefined,
       issues: [
@@ -137,7 +138,7 @@ export const parseSkillFrontmatter = (skillText: string) => {
     };
   }
 
-  const closingIndex = skillText.indexOf("\n---", 4);
+  const closingIndex = normalized.indexOf("\n---", 4);
   if (closingIndex === -1) {
     return {
       frontmatter: undefined,
@@ -151,7 +152,7 @@ export const parseSkillFrontmatter = (skillText: string) => {
   }
 
   const frontmatter: SkillFrontmatter = {};
-  const lines = skillText.slice(4, closingIndex).split("\n");
+  const lines = normalized.slice(4, closingIndex).split("\n");
   for (const [index, line] of lines.entries()) {
     const trimmed = line.trim();
     if (!trimmed) continue;
