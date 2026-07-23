@@ -1,6 +1,6 @@
 {
   "name": "skillranger",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "SkillRanger is a local-first router and package manager for AI agent skills.",
   "type": "module",
   "engines": {
