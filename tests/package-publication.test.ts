@@ -21,7 +21,10 @@ test("release smoke uses the tarball produced by the current checkout", async ()
 
 test("published tarball contains shared contracts and supports registry install materialization", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "skillranger-pack-"));
-  const { stdout } = await exec(process.platform === "win32" ? "npm.cmd" : "npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", root], { maxBuffer: 10 * 1024 * 1024 });
+  const npmArgs = ["pack", "--ignore-scripts", "--json", "--pack-destination", root];
+  const { stdout } = process.platform === "win32"
+    ? await exec(process.env.ComSpec ?? "cmd.exe", ["/d", "/c", "npm.cmd", ...npmArgs], { maxBuffer: 10 * 1024 * 1024 })
+    : await exec("npm", npmArgs, { maxBuffer: 10 * 1024 * 1024 });
   const packed = JSON.parse(stdout) as Array<{ filename: string; files: Array<{ path: string }> }>;
   assert.ok(packed[0].files.some(({ path: packedPath }) => packedPath === "registry/contracts/frontend/browser-evidence.md"));
   const extracted = path.join(root, "extracted"); await mkdir(extracted, { recursive: true });
