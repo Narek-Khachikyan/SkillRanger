@@ -7,7 +7,7 @@ import {
   loadLocalRegistry,
   validateLocalRegistry,
 } from "../src/registry/index.ts";
-import { validateSkillManifest } from "../src/registry/validation.ts";
+import { parseSkillFrontmatter, validateSkillManifest } from "../src/registry/validation.ts";
 
 const validManifest = (
   id: string,
@@ -362,6 +362,14 @@ test("local registry loader rejects SKILL.md frontmatter description drift", asy
     loadLocalRegistry(registryRoot),
     /SKILL\.md\.frontmatter\.description/,
   );
+});
+
+test("parseSkillFrontmatter accepts CRLF-delimited frontmatter (Windows checkout)", () => {
+  const crlf = "---\r\nname: crlf-skill\r\ndescription: Review frontend code for quality, accessibility, and maintainability.\r\n---\r\n# CRLF\r\n";
+  const { frontmatter, issues } = parseSkillFrontmatter(crlf);
+  assert.deepEqual(issues, []);
+  assert.equal(frontmatter?.name, "crlf-skill");
+  assert.equal(frontmatter?.description, "Review frontend code for quality, accessibility, and maintainability.");
 });
 
 test("local registry loader rejects hidden registry files", async () => {
