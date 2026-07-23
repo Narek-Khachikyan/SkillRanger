@@ -27,8 +27,8 @@ test("published tarball contains shared contracts and supports registry install 
   const extracted = path.join(root, "extracted"); await exec("mkdir", ["-p", extracted]);
   await exec("tar", ["-xzf", path.join(root, packed[0].filename), "-C", extracted]);
   const packageDir = path.join(extracted, "package");
-  const registry = await import(pathToFileURL(path.join(packageDir, "src/registry/index.ts")).href) as typeof import("../src/registry/index.ts");
-  const installers = await import(pathToFileURL(path.join(packageDir, "src/installers/codex.ts")).href) as typeof import("../src/installers/codex.ts");
+  const registry = await import(pathToFileURL(path.join(packageDir, "dist/registry/index.js")).href) as typeof import("../src/registry/index.ts");
+  const installers = await import(pathToFileURL(path.join(packageDir, "dist/installers/codex.js")).href) as typeof import("../src/installers/codex.ts");
   const skill = await registry.findSkill("frontend.visual-design-polish", path.join(packageDir, "registry")); assert.ok(skill);
   const projectRoot = path.join(root, "project"); await exec("mkdir", ["-p", projectRoot]);
   const input = { projectRoot, targetAgent: "codex", scope: "repo" as const, dryRun: false, mode: "copy" as const };

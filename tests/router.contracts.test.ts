@@ -129,8 +129,7 @@ test("package scripts include router tests through npm test and the router eval 
   assert.match(packageJson.scripts?.test ?? "", /tests\/\*\.test\.ts/);
   assert.equal(packageJson.scripts?.["eval:router"], "node src/evals/router/index.ts");
   assert.match(packageJson.scripts?.["release:check"] ?? "", /npm run eval:router/);
-  assert.match(packageJson.scripts?.check ?? "", /src\/router\/\*\.ts/);
-  assert.match(packageJson.scripts?.check ?? "", /src\/config\/\*\.ts/);
+  assert.match(packageJson.scripts?.check ?? "", /tsc -p tsconfig\.json --noEmit/);
   const packageFiles = JSON.parse(await readFile("package.json", "utf8")) as { files?: string[] };
   assert.ok(packageFiles.files?.includes("tests/fixtures/router-cases.json"));
   assert.ok(packageFiles.files?.includes("tests/fixtures/router-packs/"));

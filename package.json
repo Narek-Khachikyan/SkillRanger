@@ -12,7 +12,6 @@
   },
   "files": [
     "dist/",
-    "src/",
     "registry/skills/",
     "registry/contracts/",
     "domains/",
@@ -20,9 +19,8 @@
     "evals/",
     "tests/fixtures/router-cases.json",
     "tests/fixtures/router-packs/",
-    "docs/",
+    "docs/workflow-runtime.md",
     "README.md",
-    "RELEASE.md",
     "LICENSE"
   ],
   "scripts": {
@@ -40,7 +38,7 @@
     "eval:frontend:ru": "node src/cli/index.ts eval:frontend --run-routing --project fixtures/next-react-ts --locale ru --json",
     "mcp": "node src/mcp/server.ts",
     "test": "node --test tests/*.test.ts",
-    "check": "node --check src/cli/index.ts && node --check src/paths.ts && node --check src/evals/frontend.ts && node --check src/evals/router/index.ts && node --check src/mcp/server.ts && node --check src/mcp/protocol.ts && node --check src/mcp/tools.ts && node --check src/mcp/tools/types.ts && node --check src/mcp/tools/utils.ts && node --check src/mcp/tools/project.ts && node --check src/mcp/tools/registry.ts && node --check src/mcp/tools/install.ts && node --check src/mcp/tools/domains.ts && node --check src/mcp/tools/visual.ts && node --check src/mcp/tools/router.ts && node --check src/mcp/router-context.ts && node --check src/cli/task.ts && node --check src/cli/visual-eval.ts && node --check src/evals/process.ts && node --check src/evals/visual/types.ts && node --check src/evals/visual/suite.ts && node --check src/evals/visual/runner.ts && node --check src/evals/visual/review.ts && node --check src/evals/visual/metrics.ts && node --check src/evals/visual/calibration.ts && for file in src/config/*.ts src/router/*.ts; do node --check \"$file\"; done",
+    "check": "tsc -p tsconfig.json --noEmit",
     "eval:visual": "node src/cli/index.ts eval:visual",
     "eval:router": "node src/evals/router/index.ts"
   },
