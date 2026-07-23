@@ -519,7 +519,7 @@ test("MCP plan_skill_install returns dry-run writes without writing files", asyn
 
   assert.equal(content.plan.skillId, "frontend.next-app-router-review");
   assert.equal(content.plan.dryRun, true);
-  assert.ok(content.plan.writes.some((filePath) => filePath.endsWith(".agents/skills/next-app-router-review/SKILL.md")));
+  assert.ok(content.plan.writes.some((filePath) => filePath.split(path.sep).join("/").endsWith(".agents/skills/next-app-router-review/SKILL.md")));
   assert.ok(content.plan.lockfileUpdates.some((filePath) => filePath.endsWith("skillranger.lock.json")));
 });
 
