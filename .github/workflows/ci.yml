@@ -32,10 +32,13 @@ jobs:
           version: 11.7.0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - run: node dist/cli/index.js --version
       - run: node dist/cli/index.js doctor
       - run: node dist/cli/index.js scan fixtures/next-react-ts
@@ -57,4 +60,3 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
-

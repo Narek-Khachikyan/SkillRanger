@@ -893,6 +893,48 @@ test("ingests immutable evidence and binds it to the active step", async () => {
   assert.equal(await readFile(path.join(root, artifact.path), "utf8"), "{}\n");
 });
 
+test("rejects stale-attribution ingestion without leaving an orphan artifact", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-evidence-stale-attempt-"));
+  const store = new StrictSkillRunStore(root);
+  let run = beginStrictStep(
+    readNextStrictChunk(fixtureRun(), contract.skillId).run,
+    contract.skillId,
+    contract.steps[0].id,
+  );
+  await store.create(run);
+
+  const validSource = path.join(root, "report.json");
+  await writeFile(validSource, "{}\n");
+  run = await store.ingestEvidence(run.runId, {
+    sourcePath: validSource,
+    kind: "report",
+    validatedAs: "output",
+    attributions: [{ skillId: contract.skillId, stepId: contract.steps[0].id, attempt: 1, relation: "produced", ruleIds: contract.rules.map(({ id }) => id) }],
+  });
+  run = await store.update(run.runId, (current) => completeStrictStep(current, contract.skillId, contract.steps[0].id));
+
+  const before = await store.read(run.runId);
+  const staleBytes = "{\"stale\":true}\n";
+  const staleSource = path.join(root, "stale.json");
+  await writeFile(staleSource, staleBytes);
+  const orphanPath = path.join(root, ".skillranger", "runs", run.runId, "artifacts", sha(staleBytes).slice("sha256:".length));
+
+  await assert.rejects(
+    store.ingestEvidence(run.runId, {
+      sourcePath: staleSource,
+      kind: "report",
+      attributions: [{ skillId: contract.skillId, stepId: contract.steps[0].id, attempt: 1, relation: "produced", ruleIds: contract.rules.map(({ id }) => id) }],
+    }),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "step-out-of-order",
+  );
+
+  await assert.rejects(
+    readFile(orphanPath),
+    (error: unknown) => error instanceof Error && "code" in error && (error as { code?: string }).code === "ENOENT",
+  );
+  assert.deepEqual(await store.read(run.runId), before);
+});
+
 test("rejects evidence whose parent symlink escapes the project root", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-evidence-parent-link-"));
   const outside = await mkdtemp(path.join(os.tmpdir(), "strict-evidence-outside-"));

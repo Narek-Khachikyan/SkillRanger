@@ -96,7 +96,7 @@ test("router store creates owner-only identity key and preserves its project ide
 
   assert.match(first, /^sha256:[a-f0-9]{64}$/);
   assert.equal(second, first);
-  assert.equal(metadata.mode & 0o077, 0);
+  if (process.platform !== "win32") assert.equal(metadata.mode & 0o077, 0);
   assert.equal((await readFile(keyPath)).byteLength, 32);
 });
 
@@ -227,11 +227,13 @@ test("journal payload mismatch and identity mutation fail closed", async () => {
     () => first.projectIdentity(),
     (error) => error instanceof RouterStoreError && error.code === "identity-integrity",
   );
-  await chmod(keyPath, 0o644);
-  await assert.rejects(
-    () => new RouterStore(root).projectIdentity(),
-    (error) => error instanceof RouterStoreError && error.code === "identity-integrity",
-  );
+  if (process.platform !== "win32") {
+    await chmod(keyPath, 0o644);
+    await assert.rejects(
+      () => new RouterStore(root).projectIdentity(),
+      (error) => error instanceof RouterStoreError && error.code === "identity-integrity",
+    );
+  }
 });
 
 test("pruning removes old runs but keeps identity key", async () => {

@@ -123,46 +123,54 @@ export class StrictSkillRunStore {
     const root = path.resolve(this.projectRoot);
     if (sourcePath !== root && !sourcePath.startsWith(`${root}${path.sep}`)) throw new StrictSkillRunError("artifact-integrity", "Evidence source must stay inside the project root.");
     const bytes = await readContainedEvidenceSource(root, sourcePath);
-    if (input.validatedAs !== undefined) {
-      const run = await this.read(runId);
-      const producer = input.attributions.find(({ relation }) => relation === "produced");
-      const ledger = run.skillLedgers.find(({ skillId }) => skillId === producer?.skillId);
-      if (!ledger) throw new StrictSkillRunError("artifact-integrity", "Schema-validated evidence requires a selected producing skill.");
-      let parsed: unknown;
-      try { parsed = JSON.parse(bytes.toString("utf8")); }
-      catch { throw new StrictSkillRunError("artifact-integrity", "Schema-validated evidence must be valid JSON."); }
-      if (input.validatedAs === "critic-report") {
-        try { assertValidCriticReportV2(parsed, ledger.contract); }
-        catch (error) { throw new StrictSkillRunError("artifact-integrity", `Critic report validation failed: ${(error as Error).message}`); }
-      } else {
-        const errors = validateJsonSchema(ledger.schemaSnapshots[input.validatedAs], parsed);
-        if (errors.length > 0) throw new StrictSkillRunError("artifact-integrity", `Evidence schema validation failed: ${errors.join(" ")}`);
-      }
-    }
     const sha256 = digestBytes(bytes);
     const hex = sha256.slice("sha256:".length);
     const relativeArtifactPath = path.join(".skillranger", "runs", runId, "artifacts", hex).replace(/\\/g, "/");
     const destination = path.join(this.projectRoot, relativeArtifactPath);
-    await mkdir(path.dirname(destination), { recursive: true });
+    let createdBlob = false;
     try {
-      await writeFile(destination, bytes, { flag: "wx" });
+      return await this.update(runId, async (run) => {
+        if (input.validatedAs !== undefined) {
+          const producer = input.attributions.find(({ relation }) => relation === "produced");
+          const ledger = run.skillLedgers.find(({ skillId }) => skillId === producer?.skillId);
+          if (!ledger) throw new StrictSkillRunError("artifact-integrity", "Schema-validated evidence requires a selected producing skill.");
+          let parsed: unknown;
+          try { parsed = JSON.parse(bytes.toString("utf8")); }
+          catch { throw new StrictSkillRunError("artifact-integrity", "Schema-validated evidence must be valid JSON."); }
+          if (input.validatedAs === "critic-report") {
+            try { assertValidCriticReportV2(parsed, ledger.contract); }
+            catch (error) { throw new StrictSkillRunError("artifact-integrity", `Critic report validation failed: ${(error as Error).message}`); }
+          } else {
+            const errors = validateJsonSchema(ledger.schemaSnapshots[input.validatedAs], parsed);
+            if (errors.length > 0) throw new StrictSkillRunError("artifact-integrity", `Evidence schema validation failed: ${errors.join(" ")}`);
+          }
+        }
+        const sourceControl = await captureSourceControl(this.projectRoot, run.sourceControl.mode === "git" ? run.sourceControl.base : undefined);
+        const next = addStrictEvidence(run, {
+          artifactId: `artifact_${randomUUID()}`,
+          kind: input.kind,
+          path: relativeArtifactPath,
+          sourcePath: path.relative(this.projectRoot, sourcePath).replace(/\\/g, "/"),
+          sha256,
+          size: bytes.byteLength,
+          sourceControl,
+          ...(input.validatedAs === undefined ? {} : { validatedAs: input.validatedAs }),
+          attributions: input.attributions,
+        });
+        await mkdir(path.dirname(destination), { recursive: true });
+        try {
+          await writeFile(destination, bytes, { flag: "wx" });
+          createdBlob = true;
+        } catch (error) {
+          if (!errno(error, "EEXIST")) throw error;
+          if (digestBytes(await readFile(destination)) !== sha256) throw new StrictSkillRunError("artifact-integrity", "Existing content-addressed artifact is corrupt.");
+        }
+        return next;
+      });
     } catch (error) {
-      if (!errno(error, "EEXIST")) throw error;
-      if (digestBytes(await readFile(destination)) !== sha256) throw new StrictSkillRunError("artifact-integrity", "Existing content-addressed artifact is corrupt.");
+      if (createdBlob) await unlink(destination).catch(() => undefined);
+      throw error;
     }
-    const current = await this.read(runId);
-    const sourceControl = await captureSourceControl(this.projectRoot, current.sourceControl.mode === "git" ? current.sourceControl.base : undefined);
-    return this.update(runId, (run) => addStrictEvidence(run, {
-      artifactId: `artifact_${randomUUID()}`,
-      kind: input.kind,
-      path: relativeArtifactPath,
-      sourcePath: path.relative(this.projectRoot, sourcePath).replace(/\\/g, "/"),
-      sha256,
-      size: bytes.byteLength,
-      sourceControl,
-      ...(input.validatedAs === undefined ? {} : { validatedAs: input.validatedAs }),
-      attributions: input.attributions,
-    }));
   }
 
   async verifySkill(runId: string, skillId: string) {
