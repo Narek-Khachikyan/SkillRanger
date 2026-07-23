@@ -55,7 +55,9 @@ test("capture requires explicit confirmation", async () => {
   try {
     const result = await callMcpTool(
       "capture_ui_evidence",
-      await captureArgs(projectRoot, outputDir),
+      // confirm: false keeps the call schema-valid under CHG-03 (confirm is a required field),
+      // so the handler's confirmation gate is exercised rather than centralized schema validation.
+      { ...(await captureArgs(projectRoot, outputDir)), confirm: false },
     );
 
     assert.equal(result.isError, true);
