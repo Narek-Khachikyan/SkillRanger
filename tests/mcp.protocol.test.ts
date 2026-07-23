@@ -174,8 +174,11 @@ test("MCP protocol returns tool-level error results without JSON-RPC failure", a
     params: {
       name: "install_skill",
       arguments: {
+        // confirm: false keeps the call schema-valid (confirm is a required field), so the
+        // handler's confirmation gate — not centralized inputSchema validation — is exercised.
         skillId: "frontend.next-app-router-review",
         projectRoot: "fixtures/next-react-ts",
+        confirm: false,
         expectedWrites: [],
         expectedLockfileUpdates: []
       }
@@ -186,6 +189,26 @@ test("MCP protocol returns tool-level error results without JSON-RPC failure", a
   assert.equal(response?.error, undefined);
   assert.equal(result.isError, true);
   assert.equal(result.structuredContent?.code, "confirmation-required");
+});
+
+test("MCP tools/call rejects inputs that violate the published inputSchema before dispatch", async () => {
+  const cases = [
+    { name: "analyze_project", args: { projectRoot: 123 } },                    // wrong type
+    { name: "analyze_project", args: { unexpectedOption: true } },              // unknown property
+    { name: "compare_design_variants", args: { policyId: "p", generatorActorId: "g", criticActorId: "c", candidates: [{}, {}, {}, {}] } }, // exceeds published maxItems: 3
+  ];
+  for (const [index, { name, args }] of cases.entries()) {
+    const response = await handleJsonRpcRequest({
+      jsonrpc: "2.0",
+      id: `invalid-${index}`,
+      method: "tools/call",
+      params: { name, arguments: args },
+    });
+    const result = response?.result as { isError?: boolean; structuredContent?: { code?: string } };
+    assert.equal(response?.error, undefined, name);
+    assert.equal(result.isError, true, name);
+    assert.equal(result.structuredContent?.code, "invalid-arguments", name);
+  }
 });
 
 test("MCP protocol rejects malformed tools/call params", async () => {

@@ -27,6 +27,7 @@ import type {
   McpToolResult,
 } from "./tools/types.ts";
 import { codedErrorToolResult, withToolErrors } from "./tools/utils.ts";
+import { validateJsonSchema } from "../runtime/strict/json-schema.ts";
 
 export type {
   JsonObject,
@@ -57,6 +58,16 @@ const mcpToolHandlers: Record<string, McpToolHandler> = {
   ...routerToolHandlers,
 };
 
+// Router tools enforce their own argument contract and map projectRoot/registryRoot
+// injection to the project-root-unauthorized trust-boundary code (ADR 0001). Centralized
+// validation must not preempt that authority, so it covers only the non-router tools.
+const routerToolNames = new Set(routerToolDefinitions.map(({ name }) => name));
+const mcpToolDefinitionsByName: Record<string, McpToolDefinition> = Object.fromEntries(
+  mcpTools
+    .filter(({ name }) => !routerToolNames.has(name))
+    .map((definition) => [definition.name, definition]),
+);
+
 export const callMcpTool = async (
   name: string,
   args: JsonObject = {},
@@ -66,5 +77,13 @@ export const callMcpTool = async (
     return codedErrorToolResult("unknown-tool", `Unknown MCP tool: ${name}`, {
       toolName: name,
     });
+  const definition = mcpToolDefinitionsByName[name];
+  if (definition) {
+    const errors = validateJsonSchema(definition.inputSchema, args);
+    if (errors.length > 0)
+      return codedErrorToolResult("invalid-arguments", `Invalid arguments for ${name}: ${errors.join(" ")}`, {
+        toolName: name,
+      });
+  }
   return withToolErrors(() => handler(args));
 };

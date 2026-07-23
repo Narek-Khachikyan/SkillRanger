@@ -525,8 +525,11 @@ test("MCP plan_skill_install returns dry-run writes without writing files", asyn
 
 test("MCP install_skill requires explicit confirmation", async () => {
   const result = await callMcpTool("install_skill", {
+    // confirm: false keeps the call schema-valid under CHG-03 (confirm is a required field),
+    // so the handler's confirmation gate is exercised rather than centralized schema validation.
     skillId: "frontend.next-app-router-review",
     projectRoot: "fixtures/next-react-ts",
+    confirm: false,
     expectedWrites: [],
     expectedLockfileUpdates: []
   });
