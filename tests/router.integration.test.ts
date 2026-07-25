@@ -203,6 +203,16 @@ test("visual-reference phrases provide direct evidence while bare and negated no
   }
 });
 
+test("bundled frontend vocabulary recognizes Russian visual quality and responsiveness", async () => {
+  const result = await routeFrontendPrompt("Улучши визуальное качество, адаптивность, доступность и производительность интерфейса.");
+  assert.deepEqual(result.analysis.profile.qualityGoals, [
+    "visual-quality",
+    "responsiveness",
+    "accessibility",
+    "performance",
+  ]);
+});
+
 test("Russian Bleach prompt selects visual design primary, motion and accessibility coverage, and excludes agents-md-bootstrap", async () => {
   const prompt = "Создай современный одностраничный сайт по Bleach с узнаваемым нешаблонным визуальным дизайном, атмосферными анимациями, интерактивными элементами, адаптивностью и доступностью. @skillranger";
   const prepared = await prepareTask({

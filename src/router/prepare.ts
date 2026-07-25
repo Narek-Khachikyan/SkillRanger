@@ -132,6 +132,13 @@ const skillMetadata = async (
     technologyTags: routing.technologyTags,
     qualityGoals: routing.qualityGoals,
     environmentSignals: routing.environmentSignals,
+    ...(contract?.applicability?.op === "signal" ? {
+      applicabilitySignal: {
+        collection: contract.applicability.collection,
+        name: contract.applicability.name,
+        minConfidence: contract.applicability.minConfidence ?? 0.5,
+      },
+    } : {}),
     requiredCapabilities,
     routingRequiredCapabilities: routing.requiredCapabilities ?? [],
     verificationRequiredCapabilities: skill.manifest.verification?.requiredCapabilities ?? [],

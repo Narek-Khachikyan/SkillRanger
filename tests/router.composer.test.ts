@@ -81,6 +81,36 @@ test("strict retrieval is installed-only and requires valid strict contracts", a
   assert.ok(result.rejections.some(({ skillId, reason }) => skillId === "backend.contractless" && reason === "strict-contract-v2"));
 });
 
+test("applicability signal demotes Tailwind without project evidence or explicit intent", () => {
+  const skill: RouterSkillMetadata = {
+    id: "frontend.tailwind-ui-polish",
+    displayName: "Tailwind UI polish",
+    version: "1.0.0",
+    riskLevel: "low",
+    domains: ["frontend"],
+    roles: ["primary", "companion"],
+    actions: ["implement"],
+    artifactTypes: ["web-interface"],
+    intentTags: [],
+    technologyTags: ["tailwind"],
+    qualityGoals: [],
+    score: 0.9,
+    applicabilitySignal: { collection: "styling", name: "tailwindcss", minConfidence: 0.5 },
+  };
+  const base = {
+    profile: profile({ normalizedGoal: "implement web interface", artifactTypes: ["web-interface"] }),
+    skills: [skill],
+    selectedDomainIds: ["frontend"],
+  };
+  const withoutEvidence = retrieveSkillCandidates(base);
+  assert.equal(withoutEvidence.candidates.length, 0);
+  assert.deepEqual(withoutEvidence.rejections, [{ skillId: skill.id, reason: "environment-signal-unmet" }]);
+  const explicit = retrieveSkillCandidates({ ...base, profile: { ...base.profile, normalizedGoal: "implement Tailwind web interface", technologies: ["tailwind"] } });
+  assert.equal(explicit.candidates.length, 1);
+  const withFingerprint = retrieveSkillCandidates({ ...base, fingerprint: { schemaVersion: "1.0", root: ".", styling: [{ name: "tailwindcss", confidence: 0.9, evidence: [] }], projectTypes: [], frameworks: [], languages: [], testing: [], infrastructure: [], dependencies: [], agentContext: { agentsMd: { present: false, paths: [] }, codexSkills: { present: false, paths: [] }, claudeSkills: { present: false, paths: [] } }, signals: [], tags: [], warnings: [] } });
+  assert.equal(withFingerprint.candidates.length, 1);
+});
+
 test("composer closes dependencies and preserves one primary", async () => {
   const packs = await loadRouterFixturePacks(fixtureRoot);
   const input = backendInput(packs);

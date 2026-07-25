@@ -75,6 +75,7 @@ export type RouterSkillMetadata = TaskAnalyzerSkillMetadata & {
   supersedes?: string[];
   instructionBytes?: number;
   environmentSignals?: string[];
+  applicabilitySignal?: { collection: string; name: string; minConfidence: number };
   securityScore?: number;
   qualityScore?: number;
   freshnessDate?: string;
@@ -206,6 +207,24 @@ const environmentSignalMatches = (fingerprint: ProjectFingerprint | undefined, s
   return values.some((value) => value.toLowerCase() === operand);
 };
 
+const applicabilitySignalMatches = (fingerprint: ProjectFingerprint | undefined, signal: RouterSkillMetadata["applicabilitySignal"]) => {
+  if (!fingerprint || !signal) return false;
+  const values = signal.collection === "projectTypes" ? fingerprint.projectTypes
+    : signal.collection === "languages" ? fingerprint.languages
+      : signal.collection === "frameworks" ? fingerprint.frameworks
+        : signal.collection === "styling" ? fingerprint.styling
+          : signal.collection === "testing" ? fingerprint.testing
+            : signal.collection === "infrastructure" ? fingerprint.infrastructure : [];
+  return values.some((value) => {
+    const name = "name" in value ? value.name : value.type;
+    return name.toLowerCase() === signal.name.toLowerCase() && value.confidence >= signal.minConfidence;
+  });
+};
+
+const hasExplicitTechnologyIntent = (profile: TaskProfile, technology: string) =>
+  profile.technologies.some((value) => canonical(value) === canonical(technology))
+  || new RegExp(`\\b${technology.replace(/[.*+?^${}()|[\\]\\]/g, "\\\\$&")}\\b`, "i").test(profile.normalizedGoal);
+
 const scoreSkill = (profile: TaskProfile, skill: RouterSkillMetadata, selectedDomains: Set<string>, fingerprint?: ProjectFingerprint, routingDate = "1970-01-01", routingIntentTags: string[] = []) => {
   const domainMatch = skill.domains.some((domain) => selectedDomains.has(canonical(domain))) ? 1 : 0;
   const actionMatches = profile.actions.filter((requested) => skill.actions.some((supported) => actionCompatibilityScore(requested, supported) > 0));
@@ -298,6 +317,16 @@ export const retrieveSkillCandidates = (input: RetrieveSkillCandidatesInput): Re
     if (skill.id === "frontend.agents-md-bootstrap" && !hasAgentsMdSignal) {
       rejections.push({ skillId: skill.id, reason: "agents-md-intent-required" });
       return [];
+    }
+    if (!input.strict && skill.applicabilitySignal
+      && !applicabilitySignalMatches(input.fingerprint, skill.applicabilitySignal)
+      && ![skill.applicabilitySignal.name, ...skill.technologyTags]
+        .some((technology) => hasExplicitTechnologyIntent(input.profile, technology))) {
+      eligibleRoles = eligibleRoles.filter((role) => role !== "primary" && role !== "companion");
+      if (eligibleRoles.length === 0) {
+        rejections.push({ skillId: skill.id, reason: "environment-signal-unmet" });
+        return [];
+      }
     }
     if (input.routingContext && (eligibleRoles.includes("primary") || eligibleRoles.includes("companion"))) {
       const evidence = evaluateRequiredEvidence({
