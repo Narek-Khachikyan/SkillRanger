@@ -129,6 +129,8 @@ test("frontend lifecycle prepared/read/begin/complete/verify, unread gate, MCP e
     evidence: [{ kind: "test", path: "artifacts/result.json", description: "Accessibility checks passed" }],
     residualRisks: [],
   };
+  await mkdir(path.join(mcpRoot, "artifacts"), { recursive: true });
+  await writeFile(path.join(mcpRoot, "artifacts/result.json"), "ok\n");
   runtime = content<SkillRun>(await callMcpTool("verify_skill_run", {
     projectRoot: mcpRoot,
     runId: runtime.runId,

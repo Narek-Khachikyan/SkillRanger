@@ -287,10 +287,20 @@ export const assertValidSkillRun: (input: unknown) => asserts input is SkillRun 
 
   array(value.artifacts, "skill run.artifacts").forEach((artifact, index) => validateArtifact(artifact, `skill run.artifacts[${index}]`));
   if (Object.hasOwn(value, "verification")) {
-    const verification = keys(value.verification, ["reportPath", "reportSha256", "report"], [], "skill run.verification");
+    const verification = keys(value.verification, ["reportPath", "reportSha256", "report"], ["evidenceSnapshots"], "skill run.verification");
     string(verification.reportPath, "skill run.verification.reportPath");
     const reportSha256 = digest(verification.reportSha256, "skill run.verification.reportSha256");
     assertValidVerificationReport(verification.report);
+    if (verification.evidenceSnapshots !== undefined) {
+      array(verification.evidenceSnapshots, "skill run.verification.evidenceSnapshots").forEach((snapshot, index) => {
+        const item = keys(snapshot, ["kind", "path", "description", "byteLength", "sha256"], [], `skill run.verification.evidenceSnapshots[${index}]`);
+        string(item.kind, `skill run.verification.evidenceSnapshots[${index}].kind`);
+        string(item.path, `skill run.verification.evidenceSnapshots[${index}].path`, true);
+        string(item.description, `skill run.verification.evidenceSnapshots[${index}].description`);
+        integer(item.byteLength, `skill run.verification.evidenceSnapshots[${index}].byteLength`);
+        digest(item.sha256, `skill run.verification.evidenceSnapshots[${index}].sha256`);
+      });
+    }
     validateReportConsistency({ domain }, verification.report);
     const expectedDigest = `sha256:${createHash("sha256").update(canonicalizeJson(verification.report), "utf8").digest("hex")}`;
     if (reportSha256 !== expectedDigest) fail("Verification report digest does not match its canonical content.");

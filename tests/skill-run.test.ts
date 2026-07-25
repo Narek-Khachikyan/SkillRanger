@@ -64,6 +64,13 @@ const fixtureReport: VerificationReport = {
   evidence: [{ kind: "browser-screenshot", path: "artifacts/desktop.png", description: "Desktop verification screenshot" }],
   residualRisks: [],
 };
+const fixtureEvidenceSnapshot = {
+  kind: "browser-screenshot",
+  path: "artifacts/desktop.png",
+  description: "Desktop verification screenshot",
+  byteLength: 1,
+  sha256: visualChecksum,
+};
 
 const toSkillsRead = () => {
   let run = reduceSkillRun(createSkillRun(fixtureInput), { type: "select-skills", skills: fixtureSkills });
@@ -79,7 +86,7 @@ test("skill run reaches verified only through the complete lifecycle", () => {
   run = reduceSkillRun(run, { type: "resolve-clarification", answers: fixtureAnswers, declinedFields: [], assumptions: [] });
   run = reduceSkillRun(run, { type: "start-execution" });
   run = reduceSkillRun(run, { type: "complete-execution", status: "implemented", artifacts: [{ kind: "implementation-diff", path: "diff.patch", description: "UI diff" }] });
-  run = reduceSkillRun(run, { type: "record-verification", reportPath: ".design/verification.json", reportSha256: reportChecksum, report: fixtureReport });
+  run = reduceSkillRun(run, { type: "record-verification", reportPath: ".design/verification.json", reportSha256: reportChecksum, report: fixtureReport, evidenceSnapshots: [fixtureEvidenceSnapshot] });
   assert.equal(run.state, "verified");
   assert.equal(run.revision, 0);
   assert.equal(run.verification?.reportSha256, reportChecksum);
@@ -225,7 +232,7 @@ for (const [name, report] of [
   test(`rejects verified report with ${name}`, () => {
     const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
     assert.throws(
-      () => reduceSkillRun(implemented, { type: "record-verification", reportPath: "report.json", reportSha256: reportChecksum, report }),
+      () => reduceSkillRun(implemented, { type: "record-verification", reportPath: "report.json", reportSha256: reportChecksum, report, evidenceSnapshots: [fixtureEvidenceSnapshot] }),
       (error: unknown) => error instanceof SkillRunError && error.code === "verification-blocked",
     );
   });
@@ -235,7 +242,7 @@ test("maps non-verified verification outcomes to run states", () => {
   const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
   for (const outcome of ["implemented-unverified", "failed", "blocked"] as const) {
     const report: VerificationReport = { ...fixtureReport, outcome, verificationStatus: outcome === "implemented-unverified" ? "partial" : "failed" };
-    const result = reduceSkillRun(implemented, { type: "record-verification", reportPath: "report.json", reportSha256: reportChecksum, report });
+    const result = reduceSkillRun(implemented, { type: "record-verification", reportPath: "report.json", reportSha256: reportChecksum, report, evidenceSnapshots: [fixtureEvidenceSnapshot] });
     assert.equal(result.state, outcome);
   }
 });
@@ -261,6 +268,7 @@ test("skill-run JSON schema represents the complete contract", () => {
   assertRequired(schema.properties.clarification.properties.answers.items, ["questionId", "answer"]);
   assertRequired(schema.properties.artifacts.items, ["kind", "description"]);
   assertRequired(schema.properties.verification, ["reportPath", "reportSha256", "report"]);
+  assertRequired(schema.$defs.evidenceSnapshot, ["kind", "path", "description", "byteLength", "sha256"]);
   assertRequired(schema.$defs.verificationReport, ["schemaVersion", "domain", "workflowId", "iteration", "capabilityStatus", "executionStatus", "verificationStatus", "outcome", "findings", "gates", "evidence", "residualRisks"]);
   assertRequired(schema.$defs.finding, ["id", "code", "source", "severity", "gate", "message", "evidence", "remediation", "autofixable"]);
   assertRequired(schema.$defs.verificationReport.properties.gates, ["hardPassed", "criticalFindings", "highFindings"]);
@@ -348,6 +356,7 @@ test("running and terminal persisted runs require every mandatory skill read", (
     reportPath: "report.json",
     reportSha256,
     report: fixtureReport,
+    evidenceSnapshots: [fixtureEvidenceSnapshot],
   });
   for (const run of [runningRun, implemented, verified]) {
     assert.throws(
@@ -441,6 +450,8 @@ test("canonical report serialization recursively sorts object keys and preserves
 test("store-backed lifecycle hashes intent and canonical verification before persistence", async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
   const store = new SkillRunStore(projectRoot);
+  await mkdir(path.join(projectRoot, "artifacts"), { recursive: true });
+  await writeFile(path.join(projectRoot, "artifacts/desktop.png"), "x");
   let run = await startSkillRun(store, {
     runId: fixtureInput.runId,
     domain: fixtureInput.domain,
@@ -462,7 +473,23 @@ test("store-backed lifecycle hashes intent and canonical verification before per
   run = await verifySkillRun(store, run.runId, { reportPath: "report.json", report: fixtureReport });
   assert.equal(run.state, "verified");
   assert.equal(run.verification?.reportSha256, `sha256:${createHash("sha256").update(canonicalizeVerificationReport(fixtureReport), "utf8").digest("hex")}`);
+  assert.deepEqual(run.verification?.evidenceSnapshots, [{
+    ...fixtureReport.evidence[0],
+    byteLength: 1,
+    sha256: `sha256:${createHash("sha256").update("x").digest("hex")}`,
+  }]);
   assert.deepEqual(JSON.parse(await readFile(path.join(projectRoot, ".skillranger/runs", `${run.runId}.json`), "utf8")), run);
+});
+
+test("verified lifecycle rejects missing project evidence", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
+  await store.create(implemented);
+  await assert.rejects(
+    verifySkillRun(store, implemented.runId, { reportPath: "report.json", report: fixtureReport }),
+    (error: unknown) => error instanceof SkillRunError && error.code === "verification-blocked",
+  );
 });
 
 test("validates verification reports before canonicalizing runtime input", async () => {
@@ -495,6 +522,7 @@ test("persisted verification digest must match canonical report content", () => 
     reportPath: "report.json",
     reportSha256: reportChecksum,
     report: fixtureReport,
+    evidenceSnapshots: [fixtureEvidenceSnapshot],
   });
   assert.throws(
     () => assertValidSkillRun(corrupted),

@@ -96,7 +96,8 @@
       "properties": {
         "reportPath": { "type": "string" },
         "reportSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-        "report": { "$ref": "#/$defs/verificationReport" }
+        "report": { "$ref": "#/$defs/verificationReport" },
+        "evidenceSnapshots": { "type": "array", "items": { "$ref": "#/$defs/evidenceSnapshot" } }
       }
     }
   },
@@ -122,6 +123,18 @@
         "version": { "type": "string" },
         "checksum": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
         "recordedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "evidenceSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "description", "byteLength", "sha256"],
+      "properties": {
+        "kind": { "type": "string" },
+        "path": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "byteLength": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
       }
     },
     "artifact": {

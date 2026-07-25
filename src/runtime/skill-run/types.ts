@@ -5,6 +5,7 @@ export type SkillRunLocale = "en" | "ru" | "mixed" | "unknown";
 export type SkillRunErrorCode = "run-not-found" | "invalid-transition" | "mandatory-skill-unread" | "stale-skill-checksum" | "clarification-required" | "verification-blocked" | "run-integrity";
 
 export type SkillRunArtifact = { kind: string; path?: string; description: string };
+export type VerifiedEvidenceSnapshot = { kind: string; path: string; description: string; byteLength: number; sha256: string };
 
 export type SkillRunPolicyDecision = {
   lifecycleRequired: boolean;
@@ -32,7 +33,7 @@ export type SkillRunEvent =
   | { type: "resolve-clarification"; answers: Array<{ questionId: string; answer: string }>; declinedFields: string[]; assumptions: string[] }
   | { type: "start-execution" }
   | { type: "complete-execution"; status: "implemented" | "failed" | "blocked"; artifacts: SkillRunArtifact[] }
-  | { type: "record-verification"; reportPath: string; reportSha256: string; report: VerificationReport };
+  | { type: "record-verification"; reportPath: string; reportSha256: string; report: VerificationReport; evidenceSnapshots?: VerifiedEvidenceSnapshot[] };
 
 export type SkillRun = {
   schemaVersion: "1.0";
@@ -51,7 +52,7 @@ export type SkillRun = {
   skillReads: Array<{ skillId: string; version: string; checksum: string; recordedAt: string }>;
   clarification: { status: "not-required" | "pending" | "resolved" | "declined"; questions: SkillRunPolicyDecision["clarification"]["questions"]; answers: Array<{ questionId: string; answer: string }>; declinedFields: string[]; assumptions: string[] };
   artifacts: SkillRunArtifact[];
-  verification?: { reportPath: string; reportSha256: string; report: VerificationReport };
+  verification?: { reportPath: string; reportSha256: string; report: VerificationReport; evidenceSnapshots?: VerifiedEvidenceSnapshot[] };
 };
 
 export class SkillRunError extends Error {
