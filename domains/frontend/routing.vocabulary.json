@@ -56,6 +56,24 @@
       ]
     },
     {
+      "kind": "technology",
+      "id": "tailwind",
+      "locale": "mixed",
+      "phrases": ["tailwind", "tailwind css"]
+    },
+    {
+      "kind": "quality",
+      "id": "visual-quality",
+      "locale": "mixed",
+      "phrases": ["визуальное качество", "visual quality"]
+    },
+    {
+      "kind": "quality",
+      "id": "responsiveness",
+      "locale": "mixed",
+      "phrases": ["адаптивность", "адаптивный интерфейс", "responsiveness", "responsive interface"]
+    },
+    {
       "kind": "intent",
       "id": "visual-design",
       "locale": "mixed",
