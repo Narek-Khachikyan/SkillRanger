@@ -120,6 +120,16 @@ test("record-skill-read is idempotent for the selected version and checksum", ()
   assert.equal(repeated.skillReads[0].version, fixtureSkills[0].version);
 });
 
+test("record-skill-read upgrades provenance idempotently without downgrade", () => {
+  let run = reduceSkillRun(createSkillRun(fixtureInput), { type: "select-skills", skills: fixtureSkills });
+  run = reduceSkillRun(run, { type: "record-skill-read", skillId: fixtureSkills[0].skillId, checksum: visualChecksum });
+  run = reduceSkillRun(run, { type: "record-skill-read", skillId: fixtureSkills[0].skillId, checksum: visualChecksum, source: "content-delivered" });
+  run = reduceSkillRun(run, { type: "record-skill-read", skillId: fixtureSkills[0].skillId, checksum: visualChecksum, source: "content-delivered" });
+  run = reduceSkillRun(run, { type: "record-skill-read", skillId: fixtureSkills[0].skillId, checksum: visualChecksum });
+  assert.equal(run.skillReads.length, 1);
+  assert.equal(run.skillReads[0].source, "content-delivered");
+});
+
 test("reaches skills-read only after every selected mandatory skill is read", () => {
   const input: CreateSkillRunInput = {
     ...fixtureInput,
@@ -488,10 +498,36 @@ test("verified lifecycle rejects missing project evidence", async () => {
   const store = new SkillRunStore(projectRoot);
   const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
   await store.create(implemented);
+  const before = await store.read(implemented.runId);
   await assert.rejects(
     verifySkillRun(store, implemented.runId, { reportPath: "report.json", report: fixtureReport }),
     (error: unknown) => error instanceof SkillRunError && error.code === "verification-blocked",
   );
+  assert.deepEqual(await store.read(implemented.runId), before);
+  assert.equal((await store.read(implemented.runId)).verification, undefined);
+});
+
+test("verified lifecycle rejects outside-root evidence without mutation", async () => {
+  const parentRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const projectRoot = path.join(parentRoot, "project");
+  const outsidePath = path.join(parentRoot, "outside.log");
+  await mkdir(projectRoot);
+  await writeFile(outsidePath, "unchanged", "utf8");
+  const store = new SkillRunStore(projectRoot);
+  const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
+  const delivered = { ...implemented, skillReads: implemented.skillReads.map((read) => ({ ...read, source: "content-delivered" as const })) };
+  await store.create(delivered);
+  const report: VerificationReport = {
+    ...fixtureReport,
+    evidence: [{ ...fixtureReport.evidence[0], path: "../outside.log" }],
+  };
+  const before = await store.read(delivered.runId);
+  await assert.rejects(
+    verifySkillRun(store, delivered.runId, { reportPath: "report.json", report }),
+    (error: unknown) => error instanceof SkillRunError && error.code === "verification-blocked",
+  );
+  assert.deepEqual(await store.read(delivered.runId), before);
+  assert.equal(await readFile(outsidePath, "utf8"), "unchanged");
 });
 
 test("verified lifecycle rejects checksum-only read attestations", async () => {
@@ -505,6 +541,29 @@ test("verified lifecycle rejects checksum-only read attestations", async () => {
     verifySkillRun(store, implemented.runId, { reportPath: "report.json", report: fixtureReport }),
     (error: unknown) => error instanceof SkillRunError && error.code === "verification-blocked",
   );
+});
+
+test("verified reducer rejects malformed or mismatched evidence snapshots", () => {
+  const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
+  const delivered = { ...implemented, skillReads: implemented.skillReads.map((read) => ({ ...read, source: "content-delivered" as const })) };
+  const cases = [
+    { ...fixtureEvidenceSnapshot, path: "artifacts/other.png" },
+    { ...fixtureEvidenceSnapshot, path: "../desktop.png" },
+    { ...fixtureEvidenceSnapshot, byteLength: -1 },
+    { ...fixtureEvidenceSnapshot, sha256: `sha256:${"g".repeat(64)}` },
+  ];
+  for (const evidenceSnapshot of cases) {
+    assert.throws(
+      () => reduceSkillRun(delivered, {
+        type: "record-verification",
+        reportPath: "report.json",
+        reportSha256: reportChecksum,
+        report: fixtureReport,
+        evidenceSnapshots: [evidenceSnapshot],
+      }),
+      (error: unknown) => error instanceof SkillRunError && error.code === "verification-blocked",
+    );
+  }
 });
 
 test("validates verification reports before canonicalizing runtime input", async () => {

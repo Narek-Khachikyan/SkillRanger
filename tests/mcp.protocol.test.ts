@@ -196,6 +196,16 @@ test("MCP tools/call rejects inputs that violate the published inputSchema befor
     { name: "analyze_project", args: { projectRoot: 123 } },                    // wrong type
     { name: "analyze_project", args: { unexpectedOption: true } },              // unknown property
     { name: "compare_design_variants", args: { policyId: "p", generatorActorId: "g", criticActorId: "c", candidates: [{}, {}, {}, {}] } }, // exceeds published maxItems: 3
+    {
+      name: "record_skill_read",
+      args: {
+        projectRoot: process.cwd(),
+        runId: "run_12345678",
+        skillId: "frontend.accessibility-review",
+        checksum: `sha256:${"a".repeat(64)}`,
+        source: "content-delivered",
+      },
+    }, // provenance is internal-only and cannot be spoofed through the public MCP schema
   ];
   for (const [index, { name, args }] of cases.entries()) {
     const response = await handleJsonRpcRequest({

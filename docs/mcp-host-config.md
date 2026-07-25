@@ -146,7 +146,7 @@ Call the lifecycle tools in this order:
 {"name":"resolve_skill_run_clarifications","arguments":{"projectRoot":"/path/to/project","runId":"<run-id>","answers":[],"declinedFields":[],"assumptions":[]}}
 {"name":"begin_skill_run_execution","arguments":{"projectRoot":"/path/to/project","runId":"<run-id>"}}
 {"name":"complete_skill_run","arguments":{"projectRoot":"/path/to/project","runId":"<run-id>","status":"implemented","artifacts":[{"kind":"test","path":"artifacts/test.log","description":"Focused tests"}]}}
-{"name":"verify_skill_run","arguments":{"projectRoot":"/path/to/project","runId":"<run-id>","reportPath":"verification.json","report":{"schemaVersion":"1.0","domain":"frontend","workflowId":"frontend-accessibility-review","iteration":0,"capabilityStatus":"ready","executionStatus":"implemented","verificationStatus":"passed","outcome":"verified","findings":[],"gates":{"hardPassed":true,"criticalFindings":0,"highFindings":0},"evidence":[{"kind":"test","path":"artifacts/test.log","description":"Focused tests passed"}],"residualRisks":[]}}}
+{"name":"verify_skill_run","arguments":{"projectRoot":"/path/to/project","runId":"<run-id>","reportPath":"verification.json","report":{"schemaVersion":"1.0","domain":"frontend","workflowId":"frontend-accessibility-review","iteration":0,"capabilityStatus":"ready","executionStatus":"implemented","verificationStatus":"partial","outcome":"implemented-unverified","findings":[],"gates":{"hardPassed":true,"criticalFindings":0,"highFindings":0},"evidence":[{"kind":"test","path":"artifacts/test.log","description":"Focused tests passed"}],"residualRisks":[]}}}
 {"name":"inspect_skill_run","arguments":{"projectRoot":"/path/to/project","runId":"<run-id>"}}
 ```
 
