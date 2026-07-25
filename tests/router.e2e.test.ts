@@ -129,6 +129,20 @@ test("frontend lifecycle prepared/read/begin/complete/verify, unread gate, MCP e
     evidence: [{ kind: "test", path: "artifacts/result.json", description: "Accessibility checks passed" }],
     residualRisks: [],
   };
+  const missingEvidence = await callMcpTool("verify_skill_run", {
+    projectRoot: mcpRoot,
+    runId: runtime.runId,
+    reportPath: "verification.json",
+    report,
+  });
+  assert.equal(missingEvidence.isError, true);
+  assert.equal((missingEvidence.structuredContent as { code: string }).code, "verification-blocked");
+  const afterMissingEvidence = content<SkillRun>(await callMcpTool("inspect_skill_run", {
+    projectRoot: mcpRoot,
+    runId: runtime.runId,
+  }));
+  assert.equal(afterMissingEvidence.state, "implemented");
+  assert.equal(afterMissingEvidence.verification, undefined);
   await mkdir(path.join(mcpRoot, "artifacts"), { recursive: true });
   await writeFile(path.join(mcpRoot, "artifacts/result.json"), "ok\n");
   runtime = content<SkillRun>(await callMcpTool("verify_skill_run", {

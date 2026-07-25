@@ -214,8 +214,13 @@ export const reduceSkillRun = (run: SkillRun, event: SkillRunEvent): SkillRun =>
           || event.report.findings.some((finding) => finding.gate === "hard")
           || event.report.evidence.length === 0
           || !event.evidenceSnapshots?.length
-          || event.evidenceSnapshots.length !== event.report.evidence.length
-          || [...mandatorySkillIds(run)].some((skillId) => !hasDeliveredRead(run, skillId)))
+          || event.evidenceSnapshots.length !== event.report.evidence.length)
+      ) {
+        fail("verification-blocked", "Verified outcome requires passed gates and readable project-contained evidence.");
+      }
+      if (
+        event.report.outcome === "verified"
+        && [...mandatorySkillIds(run)].some((skillId) => !hasDeliveredRead(run, skillId))
       ) {
         fail("verification-blocked", "Verified outcome requires mandatory skill content delivered by the SkillRanger router.");
       }
