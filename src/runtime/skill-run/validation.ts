@@ -218,11 +218,12 @@ export const assertValidSkillRun: (input: unknown) => asserts input is SkillRun 
 
   const reads = array(value.skillReads, "skill run.skillReads").map((read, index) => {
     const readPath = `skill run.skillReads[${index}]`;
-    const item = keys(read, ["skillId", "version", "checksum", "recordedAt"], [], readPath);
+    const item = keys(read, ["skillId", "version", "checksum", "recordedAt"], ["source"], readPath);
     const skillId = string(item.skillId, `${readPath}.skillId`);
     const version = string(item.version, `${readPath}.version`);
     const checksum = digest(item.checksum, `${readPath}.checksum`);
     dateTime(item.recordedAt, `${readPath}.recordedAt`);
+    if (item.source !== undefined) enumeration(item.source, new Set(["attested", "content-delivered"]), `${readPath}.source`);
     const skill = selected.find((candidate) => candidate.skillId === skillId);
     if (!skill || skill.version !== version || skill.checksum !== checksum) fail(`${readPath} does not match a selected skill snapshot.`);
     return item;

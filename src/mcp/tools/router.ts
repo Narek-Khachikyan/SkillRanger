@@ -88,7 +88,7 @@ const readInputSchema = {
 };
 
 export const routerToolDefinitions: McpToolDefinition[] = [
-  { ...mcpToolEffects.runStateWrite, name: "prepare_task", title: "Prepare SkillRanger Task", description: "Prepare an explicit SkillRanger workflow from the complete, unmodified user request, including its terminal trigger. Read every required instruction before resolving runtime clarification or beginning the returned runtime run.", inputSchema, outputSchema: prepareTaskOutputSchema },
+  { ...mcpToolEffects.runStateWrite, name: "prepare_task", title: "Prepare SkillRanger Task", description: "Canonical authoritative entrypoint for an explicit SkillRanger workflow. Prepare the complete, unmodified user request, including its terminal trigger; read every required instruction before resolving runtime clarification or beginning the returned runtime run.", inputSchema, outputSchema: prepareTaskOutputSchema },
   { ...mcpToolEffects.runStateWrite, annotations: { ...mcpToolEffects.runStateWrite.annotations, idempotentHint: true }, name: "read_run_skill_file", title: "Read Prepared Skill Instructions", description: "Read the next mandatory chunk or an allowed optional text file from a prepared router run. Use a new RFC 4122 UUID for each new read; retry a transport failure with the identical request and its current revision.", inputSchema: readInputSchema, outputSchema: readRunSkillFileOutputSchema },
 ];
 
@@ -150,7 +150,7 @@ const read: McpToolHandler = async (args) => {
       if (!existing) throw new RouterStoreError("run-not-found", `Runtime run not found: ${run.runtime.runId}`);
       if (run.runtime.kind === "lifecycle-v1") {
         const current = existing as Awaited<ReturnType<SkillRunStore["read"]>>;
-        const reduced = reduceSkillRun(current, { type: "record-skill-read", skillId, checksum: packageChecksum });
+        const reduced = reduceSkillRun(current, { type: "record-skill-read", skillId, checksum: packageChecksum, source: "content-delivered" });
         const next = { ...reduced, revision: current.revision + 1 };
         return { runtime, runtimePayload: next, applyRuntime: async () => { await runtime.replace(run.runtime.runId, next); } };
       }

@@ -40,6 +40,9 @@ const hasValidRead = (run: SkillRun, skillId: string) => {
   );
 };
 
+const hasDeliveredRead = (run: SkillRun, skillId: string) => run.skillReads.some((read) =>
+  read.skillId === skillId && read.source === "content-delivered");
+
 const mandatorySkillIds = (run: SkillRun) => new Set([
   ...run.policy.mandatorySkillIds,
   ...run.selectedSkills.filter((skill) => skill.mandatory).map((skill) => skill.skillId),
@@ -121,9 +124,12 @@ export const reduceSkillRun = (run: SkillRun, event: SkillRunEvent): SkillRun =>
       if (existing && (existing.version !== selected.version || existing.checksum !== event.checksum)) {
         fail("stale-skill-checksum", `Read record for ${event.skillId} conflicts with the selected snapshot.`);
       }
-      const skillReads = existing ? run.skillReads : [
+      const source = event.source ?? "attested";
+      const skillReads = existing ? run.skillReads.map((read) => read.skillId === event.skillId
+        ? { ...read, source: read.source === "content-delivered" || source === "content-delivered" ? "content-delivered" as const : "attested" as const }
+        : read) : [
         ...run.skillReads,
-        { skillId: selected.skillId, version: selected.version, checksum: event.checksum, recordedAt: new Date().toISOString() },
+        { skillId: selected.skillId, version: selected.version, checksum: event.checksum, recordedAt: new Date().toISOString(), source },
       ];
       const candidate = { ...run, skillReads };
       const allMandatoryRead = [...mandatorySkillIds(candidate)].every((skillId) => hasValidRead(candidate, skillId));
@@ -208,9 +214,10 @@ export const reduceSkillRun = (run: SkillRun, event: SkillRunEvent): SkillRun =>
           || event.report.findings.some((finding) => finding.gate === "hard")
           || event.report.evidence.length === 0
           || !event.evidenceSnapshots?.length
-          || event.evidenceSnapshots.length !== event.report.evidence.length)
+          || event.evidenceSnapshots.length !== event.report.evidence.length
+          || [...mandatorySkillIds(run)].some((skillId) => !hasDeliveredRead(run, skillId)))
       ) {
-        fail("verification-blocked", "A verified outcome requires passed verification, passed hard gates, no hard findings, and readable evidence.");
+        fail("verification-blocked", "Verified outcome requires mandatory skill content delivered by the SkillRanger router.");
       }
       if (event.report.outcome === "verified") {
         event.evidenceSnapshots?.forEach((snapshot, index) => {

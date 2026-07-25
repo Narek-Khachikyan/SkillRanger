@@ -45,6 +45,12 @@ export const recordSkillRead = (
   input: { skillId: string; checksum: string },
 ) => store.update(runId, (run) => reduceSkillRun(run, { type: "record-skill-read", ...input }));
 
+export const recordSkillContentDelivered = (
+  store: SkillRunStore,
+  runId: string,
+  input: { skillId: string; checksum: string },
+) => store.update(runId, (run) => reduceSkillRun(run, { type: "record-skill-read", ...input, source: "content-delivered" }));
+
 export const resolveSkillRunClarifications = (
   store: SkillRunStore,
   runId: string,

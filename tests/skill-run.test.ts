@@ -13,6 +13,7 @@ import {
   canonicalizeVerificationReport,
   completeSkillRun,
   createSkillRun,
+  recordSkillContentDelivered,
   recordSkillRead,
   resolveSkillRunClarifications,
   startSkillRun,
@@ -81,8 +82,8 @@ const toSkillsRead = () => {
 test("skill run reaches verified only through the complete lifecycle", () => {
   let run = createSkillRun(fixtureInput);
   run = reduceSkillRun(run, { type: "select-skills", skills: fixtureSkills });
-  run = reduceSkillRun(run, { type: "record-skill-read", skillId: "frontend.visual-design-polish", checksum: visualChecksum });
-  run = reduceSkillRun(run, { type: "record-skill-read", skillId: "frontend.accessibility-review", checksum: a11yChecksum });
+  run = reduceSkillRun(run, { type: "record-skill-read", skillId: "frontend.visual-design-polish", checksum: visualChecksum, source: "content-delivered" });
+  run = reduceSkillRun(run, { type: "record-skill-read", skillId: "frontend.accessibility-review", checksum: a11yChecksum, source: "content-delivered" });
   run = reduceSkillRun(run, { type: "resolve-clarification", answers: fixtureAnswers, declinedFields: [], assumptions: [] });
   run = reduceSkillRun(run, { type: "start-execution" });
   run = reduceSkillRun(run, { type: "complete-execution", status: "implemented", artifacts: [{ kind: "implementation-diff", path: "diff.patch", description: "UI diff" }] });
@@ -350,8 +351,9 @@ test("created persisted runs cannot contain a selected skill snapshot", () => {
 
 test("running and terminal persisted runs require every mandatory skill read", () => {
   const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
+  const delivered = { ...implemented, skillReads: implemented.skillReads.map((read) => ({ ...read, source: "content-delivered" as const })) };
   const reportSha256 = `sha256:${createHash("sha256").update(canonicalizeVerificationReport(fixtureReport), "utf8").digest("hex")}`;
-  const verified = reduceSkillRun(implemented, {
+  const verified = reduceSkillRun(delivered, {
     type: "record-verification",
     reportPath: "report.json",
     reportSha256,
@@ -466,7 +468,7 @@ test("store-backed lifecycle hashes intent and canonical verification before per
   });
   assert.equal(run.intent.sha256, `sha256:${createHash("sha256").update(" redesign the landing ", "utf8").digest("hex")}`);
   assert.equal(run.intent.raw, undefined);
-  await Promise.all(fixtureSkills.map((skill) => recordSkillRead(store, run.runId, { skillId: skill.skillId, checksum: skill.checksum })));
+  await Promise.all(fixtureSkills.map((skill) => recordSkillContentDelivered(store, run.runId, { skillId: skill.skillId, checksum: skill.checksum })));
   run = await resolveSkillRunClarifications(store, run.runId, { answers: fixtureAnswers, declinedFields: [], assumptions: [] });
   run = await startSkillRunExecution(store, run.runId);
   run = await completeSkillRun(store, run.runId, { status: "implemented", artifacts: [] });
@@ -484,6 +486,19 @@ test("store-backed lifecycle hashes intent and canonical verification before per
 test("verified lifecycle rejects missing project evidence", async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
   const store = new SkillRunStore(projectRoot);
+  const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
+  await store.create(implemented);
+  await assert.rejects(
+    verifySkillRun(store, implemented.runId, { reportPath: "report.json", report: fixtureReport }),
+    (error: unknown) => error instanceof SkillRunError && error.code === "verification-blocked",
+  );
+});
+
+test("verified lifecycle rejects checksum-only read attestations", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  await mkdir(path.join(projectRoot, "artifacts"), { recursive: true });
+  await writeFile(path.join(projectRoot, "artifacts/desktop.png"), "x");
   const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
   await store.create(implemented);
   await assert.rejects(
@@ -517,7 +532,8 @@ test("read rejects corrupted persisted runs without rewriting them", async () =>
 
 test("persisted verification digest must match canonical report content", () => {
   const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
-  const corrupted = reduceSkillRun(implemented, {
+  const delivered = { ...implemented, skillReads: implemented.skillReads.map((read) => ({ ...read, source: "content-delivered" as const })) };
+  const corrupted = reduceSkillRun(delivered, {
     type: "record-verification",
     reportPath: "report.json",
     reportSha256: reportChecksum,

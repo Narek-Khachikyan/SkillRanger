@@ -16,7 +16,7 @@ const runCli = async (...args: string[]) => {
   return JSON.parse(stdout) as { ok: true; run: SkillRun };
 };
 
-const passedReport = (): VerificationReport => ({
+const passedReport = (outcome: VerificationReport["outcome"] = "verified"): VerificationReport => ({
   schemaVersion: "1.0",
   domain: "frontend",
   workflowId: "frontend.design-generation",
@@ -24,7 +24,7 @@ const passedReport = (): VerificationReport => ({
   capabilityStatus: "ready",
   executionStatus: "implemented",
   verificationStatus: "passed",
-  outcome: "verified",
+  outcome,
   findings: [],
   gates: { hardPassed: true, criticalFindings: 0, highFindings: 0 },
   evidence: [{
@@ -171,7 +171,7 @@ test("CLI completes and verifies a run while storing raw intent only by opt-in",
     { kind: "build-log", path: "artifacts/build.log" },
   ]);
 
-  const report = passedReport();
+  const report = passedReport("implemented-unverified");
   await writeJson(verificationPath, report);
   current = (await runCli(
     "run:verify",
@@ -182,7 +182,7 @@ test("CLI completes and verifies a run while storing raw intent only by opt-in",
     verificationPath,
     "--json",
   )).run;
-  assert.equal(current.state, "verified");
+  assert.equal(current.state, "implemented-unverified");
   assert.equal(
     current.verification?.reportSha256,
     `sha256:${createHash("sha256").update(canonicalizeVerificationReport(report), "utf8").digest("hex")}`,
