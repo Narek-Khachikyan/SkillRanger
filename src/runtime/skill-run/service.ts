@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
+import path from "node:path";
 import type { VerificationReport } from "../types.ts";
 import { createSkillRun, reduceSkillRun } from "./reducer.ts";
-import type { CreateSkillRunInput, SkillRunArtifact, SkillRunPolicyDecision, SkillRunSkill, SkillRunLocale } from "./types.ts";
+import { ContainedFileReadError, readContainedFile } from "../strict/contained-file.ts";
+import { SkillRunError, type CreateSkillRunInput, type SkillRunArtifact, type SkillRunPolicyDecision, type SkillRunSkill, type SkillRunLocale, type VerifiedEvidenceSnapshot } from "./types.ts";
 import type { SkillRunStore } from "./store.ts";
 import { canonicalizeVerificationReport, validateVerificationReportForRun } from "./verification.ts";
 
@@ -63,9 +65,40 @@ export const verifySkillRun = (
   store: SkillRunStore,
   runId: string,
   input: { reportPath: string; report: VerificationReport },
-) => store.update(runId, (run) => {
+) => store.update(runId, async (run) => {
   const report = validateVerificationReportForRun(run, input.report);
+  let evidenceSnapshots: VerifiedEvidenceSnapshot[] | undefined;
+  if (report.outcome === "verified") {
+    if (report.evidence.length === 0 || report.evidence.some(({ path: evidencePath }) => !evidencePath || path.isAbsolute(evidencePath))) {
+      throw new SkillRunError("verification-blocked", "Verified outcome requires readable project-contained evidence.");
+    }
+    const projectRoot = path.resolve(store.projectRoot);
+    try {
+      evidenceSnapshots = await Promise.all(report.evidence.map(async (evidence) => {
+        const relativePath = evidence.path as string;
+        const target = path.resolve(projectRoot, relativePath);
+        const relative = path.relative(projectRoot, target);
+        if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+          throw new Error("outside project root");
+        }
+        const bytes = await readContainedFile({ projectRoot, target, phase: "verification" });
+        return {
+          kind: evidence.kind,
+          path: relativePath.split(path.sep).join("/"),
+          description: evidence.description,
+          byteLength: bytes.bytes.byteLength,
+          sha256: `sha256:${createHash("sha256").update(bytes.bytes).digest("hex")}`,
+        };
+      }));
+    } catch (error) {
+      if (error instanceof SkillRunError) throw error;
+      if (error instanceof ContainedFileReadError || error instanceof Error) {
+        throw new SkillRunError("verification-blocked", "Verified outcome requires readable project-contained evidence.");
+      }
+      throw error;
+    }
+  }
   const canonical = canonicalizeVerificationReport(report);
   const reportSha256 = `sha256:${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
-  return reduceSkillRun(run, { type: "record-verification", reportPath: input.reportPath, reportSha256, report });
+  return reduceSkillRun(run, { type: "record-verification", reportPath: input.reportPath, reportSha256, report, evidenceSnapshots });
 });

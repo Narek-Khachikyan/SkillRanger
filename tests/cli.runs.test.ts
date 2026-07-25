@@ -63,6 +63,8 @@ test("CLI records a Russian OpenCode skill lifecycle and blocks premature verifi
   const projectRoot = path.join(tmpRoot, "project");
   const verificationPath = path.join(tmpRoot, "verification.json");
   await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
+  await mkdir(path.join(projectRoot, "artifacts"), { recursive: true });
+  await writeFile(path.join(projectRoot, "artifacts/desktop.png"), "pixels");
   await writeJson(verificationPath, passedReport());
 
   const started = await runCli(
@@ -101,6 +103,8 @@ test("CLI completes and verifies a run while storing raw intent only by opt-in",
   const briefPath = path.join(tmpRoot, "brief.json");
   const verificationPath = path.join(tmpRoot, "verification.json");
   await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
+  await mkdir(path.join(projectRoot, "artifacts"), { recursive: true });
+  await writeFile(path.join(projectRoot, "artifacts/desktop.png"), "pixels");
 
   let current = (await runCli(
     "run:start",

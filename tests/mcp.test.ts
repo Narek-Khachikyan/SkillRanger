@@ -265,6 +265,14 @@ test("MCP and CLI preserve parity through the complete skill run lifecycle", asy
     cp("fixtures/next-react-ts", cliProjectRoot, { recursive: true }),
     cp("fixtures/next-react-ts", mcpProjectRoot, { recursive: true }),
   ]);
+  await Promise.all([
+    mkdir(path.join(cliProjectRoot, "artifacts"), { recursive: true }),
+    mkdir(path.join(mcpProjectRoot, "artifacts"), { recursive: true }),
+  ]);
+  await Promise.all([
+    writeFile(path.join(cliProjectRoot, "artifacts/result.json"), "ok\n"),
+    writeFile(path.join(mcpProjectRoot, "artifacts/result.json"), "ok\n"),
+  ]);
   const intent = "Проверь доступность формы и используй скиллы";
   let cliRun = (await runCli([
     "run:start", cliProjectRoot, "--target", "opencode", "--domain", "frontend", "--intent", intent, "--json",

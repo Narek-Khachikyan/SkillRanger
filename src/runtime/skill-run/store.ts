@@ -10,11 +10,11 @@ const isErrno = (error: unknown, code: string): error is NodeJS.ErrnoException =
 );
 
 export class SkillRunStore {
-  private readonly projectRoot: string;
+  private readonly projectRootInput: string;
   private readonly lock: RunFileLock;
 
   constructor(projectRoot: string, hooks: RunFileLockHooks = {}) {
-    this.projectRoot = projectRoot;
+    this.projectRootInput = projectRoot;
     this.lock = new RunFileLock({
       lockPath: (runId) => `${this.runPath(runId).slice(0, -5)}.lock`,
       error: (message) => new SkillRunError("run-integrity", message),
@@ -22,9 +22,11 @@ export class SkillRunStore {
     });
   }
 
+  get projectRoot(): string { return this.projectRootInput; }
+
   private runPath(runId: string): string {
     if (!runIdPattern.test(runId)) throw new SkillRunError("run-integrity", `Invalid run id: ${runId}`);
-    return path.join(this.projectRoot, ".skillranger", "runs", `${runId}.json`);
+    return path.join(this.projectRootInput, ".skillranger", "runs", `${runId}.json`);
   }
 
   private async writeUnlocked(run: SkillRun): Promise<string> {

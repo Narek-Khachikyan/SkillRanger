@@ -1,4 +1,5 @@
 import type { VerificationReport } from "../types.ts";
+import path from "node:path";
 import {
   SkillRunError,
   type CreateSkillRunInput,
@@ -205,13 +206,25 @@ export const reduceSkillRun = (run: SkillRun, event: SkillRunEvent): SkillRun =>
         && (event.report.verificationStatus !== "passed"
           || !event.report.gates.hardPassed
           || event.report.findings.some((finding) => finding.gate === "hard")
-          || event.report.evidence.length === 0)
+          || event.report.evidence.length === 0
+          || !event.evidenceSnapshots?.length
+          || event.evidenceSnapshots.length !== event.report.evidence.length)
       ) {
-        fail("verification-blocked", "A verified outcome requires passed verification, passed hard gates, no hard findings, and evidence.");
+        fail("verification-blocked", "A verified outcome requires passed verification, passed hard gates, no hard findings, and readable evidence.");
+      }
+      if (event.report.outcome === "verified") {
+        event.evidenceSnapshots?.forEach((snapshot, index) => {
+          const evidence = event.report.evidence[index];
+          if (snapshot.kind !== evidence.kind || snapshot.path !== evidence.path || snapshot.description !== evidence.description
+            || path.isAbsolute(snapshot.path) || snapshot.path.split(/[\\/]/u).includes("..")
+            || !Number.isInteger(snapshot.byteLength) || snapshot.byteLength < 0 || !sha256Pattern.test(snapshot.sha256)) {
+            fail("verification-blocked", "Verified outcome requires readable project-contained evidence.");
+          }
+        });
       }
       return updated(run, {
         state: event.report.outcome,
-        verification: { reportPath: event.reportPath, reportSha256: event.reportSha256, report: event.report },
+        verification: { reportPath: event.reportPath, reportSha256: event.reportSha256, report: event.report, ...(event.evidenceSnapshots === undefined ? {} : { evidenceSnapshots: event.evidenceSnapshots }) },
       });
     }
   }
