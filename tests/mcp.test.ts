@@ -336,7 +336,7 @@ test("MCP and CLI preserve parity through the complete skill run lifecycle", asy
     capabilityStatus: "ready",
     executionStatus: "implemented",
     verificationStatus: "passed",
-    outcome: "verified",
+    outcome: "implemented-unverified",
     findings: [],
     gates: { hardPassed: true, criticalFindings: 0, highFindings: 0 },
     evidence: [{ kind: "test", path: "artifacts/result.json", description: "Accessibility assertions passed." }],
@@ -360,7 +360,7 @@ test("MCP and CLI preserve parity through the complete skill run lifecycle", asy
 
   assert.deepEqual(pickRunContract(mcpRun), pickRunContract(cliRun));
   assert.deepEqual(parseStructuredContent<SkillRun>(inspected), mcpRun);
-  assert.equal(mcpRun.state, "verified");
+  assert.equal(mcpRun.state, "implemented-unverified");
 });
 
 test("MCP maps every lifecycle error code without a generic fallback", () => {

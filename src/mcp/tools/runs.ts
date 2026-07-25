@@ -294,7 +294,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.runStateWrite,
     name: "start_skill_run",
     title: "Start Skill Run",
-    description: "Prepare and persist a skill run from project signals, intent, and domain policy.",
+    description: "Low-level compatibility path for preparing and persisting a skill run from project signals, intent, and domain policy. Use prepare_task for authoritative routing and content delivery.",
     inputSchema: {
       type: "object",
       properties: {
@@ -317,7 +317,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.runStateWrite,
     name: "record_skill_read",
     title: "Record Skill Read",
-    description: "Record a selected skill checksum as read for a skill run.",
+    description: "Record checksum attestation for a selected skill. This does not deliver skill content and cannot establish authoritative verified provenance; use prepare_task and read_run_skill_file for that workflow.",
     inputSchema: {
       type: "object",
       properties: {
@@ -386,7 +386,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.runStateWrite,
     name: "verify_skill_run",
     title: "Verify Skill Run",
-    description: "Record a JSON-native verification report for an implemented skill run.",
+    description: "Record a JSON-native verification report for an implemented skill run. A verified outcome requires real project-contained evidence and mandatory skill content delivered by the SkillRanger router.",
     inputSchema: {
       type: "object",
       properties: {

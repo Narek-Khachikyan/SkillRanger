@@ -122,7 +122,8 @@
         "skillId": { "type": "string" },
         "version": { "type": "string" },
         "checksum": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-        "recordedAt": { "type": "string", "format": "date-time" }
+        "recordedAt": { "type": "string", "format": "date-time" },
+        "source": { "enum": ["attested", "content-delivered"] }
       }
     },
     "evidenceSnapshot": {

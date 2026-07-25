@@ -6,6 +6,7 @@ export type SkillRunErrorCode = "run-not-found" | "invalid-transition" | "mandat
 
 export type SkillRunArtifact = { kind: string; path?: string; description: string };
 export type VerifiedEvidenceSnapshot = { kind: string; path: string; description: string; byteLength: number; sha256: string };
+export type SkillReadSource = "attested" | "content-delivered";
 
 export type SkillRunPolicyDecision = {
   lifecycleRequired: boolean;
@@ -29,7 +30,7 @@ export type CreateSkillRunInput = {
 
 export type SkillRunEvent =
   | { type: "select-skills"; skills: SkillRunSkill[] }
-  | { type: "record-skill-read"; skillId: string; checksum: string }
+  | { type: "record-skill-read"; skillId: string; checksum: string; source?: SkillReadSource }
   | { type: "resolve-clarification"; answers: Array<{ questionId: string; answer: string }>; declinedFields: string[]; assumptions: string[] }
   | { type: "start-execution" }
   | { type: "complete-execution"; status: "implemented" | "failed" | "blocked"; artifacts: SkillRunArtifact[] }
@@ -49,7 +50,7 @@ export type SkillRun = {
   policy: SkillRunPolicyDecision;
   recommendations: SkillRunSkill[];
   selectedSkills: SkillRunSkill[];
-  skillReads: Array<{ skillId: string; version: string; checksum: string; recordedAt: string }>;
+  skillReads: Array<{ skillId: string; version: string; checksum: string; recordedAt: string; source?: SkillReadSource }>;
   clarification: { status: "not-required" | "pending" | "resolved" | "declined"; questions: SkillRunPolicyDecision["clarification"]["questions"]; answers: Array<{ questionId: string; answer: string }>; declinedFields: string[]; assumptions: string[] };
   artifacts: SkillRunArtifact[];
   verification?: { reportPath: string; reportSha256: string; report: VerificationReport; evidenceSnapshots?: VerifiedEvidenceSnapshot[] };

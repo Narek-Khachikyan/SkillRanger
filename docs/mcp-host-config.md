@@ -59,7 +59,7 @@ Normal outcomes are `prepared`, `clarification_required`, `decomposition_require
 
 For a prepared run, call `read_run_skill_file` in `mandatory-next` mode with a new UUID `readRequestId` and the current `expectedReadRevision`. The server chooses the next skill, path, offset, and UTF-8 chunk. Replaying the same bound request ID returns the same content and revision. Do not begin the runtime until `readStatus.runMandatoryReadsComplete` is true.
 
-`hostCapabilities` describe what the host can provide; they are not verification evidence. Missing optional verification capabilities produce guidance-only or unverified outcomes. Strict mode additionally requires every selected skill to be repo-installed with matching lockfile and files, contract v2, accepted inputs, and complete strict reads. The router never auto-installs a missing skill.
+`hostCapabilities` describe what the host can provide; they are not verification evidence. Missing optional verification capabilities produce guidance-only or unverified outcomes. Strict mode additionally requires every selected skill to be repo-installed with matching lockfile and files, contract v2, accepted inputs, and complete strict reads. The router never auto-installs a missing skill. A lifecycle `record_skill_read` is checksum attestation only; it does not prove content delivery. Only mandatory reads completed through `read_run_skill_file` are persisted as `content-delivered` and can support lifecycle `verified`.
 
 The persisted task profile contains canonical routing vocabulary and digests, not raw prompts, URLs, arbitrary free text, or absolute project roots. Optional skill files use progressive disclosure and become readable only after mandatory instructions are complete.
 
@@ -95,10 +95,10 @@ SkillRanger exposes 33 tools in four effect classes, each with a distinct host a
 
 These tools use host-managed mutation approval and update the persisted run JSON under `.skillranger/runs`.
 
-- `prepare_task` routes one explicitly activated prompt and atomically creates a router sidecar plus runtime only for a prepared outcome.
+- `prepare_task` is the canonical authoritative entrypoint: it routes one explicitly activated prompt and atomically creates a router sidecar plus runtime only for a prepared outcome.
 - `read_run_skill_file` delivers an integrity-pinned prepared skill chunk and atomically bridges completed mandatory reads into the runtime ledger.
-- `start_skill_run` prepares and persists a skill run from project signals, intent, and domain policy.
-- `record_skill_read` records a selected skill checksum as read for a skill run.
+- `start_skill_run` prepares and persists a low-level compatibility lifecycle run from project signals, intent, and domain policy.
+- `record_skill_read` records checksum attestation only; standalone attestation cannot produce `verified`.
 - `resolve_skill_run_clarifications` resolves required clarifications with JSON-native answers, declines, and assumptions.
 - `begin_skill_run_execution` transitions a prepared skill run into execution.
 - `complete_skill_run` records an execution status and JSON-native artifacts.
@@ -135,6 +135,8 @@ The tool returns both flat `recommendations` and grouped `recommendationGroups`;
 ## Skill-run example and CLI parity
 
 All lifecycle transition and read-progress tools update the persisted run JSON; `inspect_skill_run` is the only read-only lifecycle tool.
+
+For an authoritative non-strict lifecycle, call `prepare_task`, read every mandatory file with `read_run_skill_file` until `runMandatoryReadsComplete` is true, then use the returned runtime run ID for clarification, begin, complete, and verify. The low-level compatibility example below may persist a run, but checksum-only reads can finish only as `implemented-unverified` or another non-verified outcome.
 
 Call the lifecycle tools in this order:
 
