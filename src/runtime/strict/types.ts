@@ -50,7 +50,8 @@ export type StrictSkillOutcome = "used" | "no-op" | "blocked";
 export type StrictSkillRunErrorCode =
   | "strict-contract-missing" | "strict-skill-not-installed" | "skill-content-unread"
   | "step-out-of-order" | "evidence-missing" | "unknown-rule-id" | "artifact-integrity"
-  | "hard-gate-failed" | "repair-limit" | "run-not-finalizable" | "run-integrity" | "run-not-found";
+  | "hard-gate-failed" | "repair-limit" | "run-not-finalizable" | "run-integrity" | "run-not-found"
+  | "run-blocked";
 
 export type SkillContentChunk = { path: string; ordinal: number; total: number; sha256: string; content: string };
 export type SkillReadReceipt = Omit<SkillContentChunk, "content"> & { deliveredAt: string };

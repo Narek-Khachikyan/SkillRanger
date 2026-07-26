@@ -44,6 +44,9 @@ const stateSynchronizationStatuses = ["verified", "mismatch", "not-applicable"];
  * Shape rule for a capture's causal state record. Capture-time ingestion and the final verifier
  * both apply it: the verifier receives bundles as untrusted snapshots, so a field required only at
  * capture can be edited back out before verification.
+ *
+ * The published bundle schema states the two-observation minimum as an if/then branch, which the
+ * local JSON Schema subset does not implement; this predicate is where that rule is enforced.
  */
 export const isValidStateSynchronization = (value: unknown): value is StateSynchronization => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;

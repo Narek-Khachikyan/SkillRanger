@@ -22,7 +22,7 @@ import {
 import * as strictApi from "../src/runtime/strict/index.ts";
 import { initializeRouterContext } from "../src/mcp/router-context.ts";
 import { callMcpTool } from "../src/mcp/tools.ts";
-import { describeBlockedSkills } from "../src/mcp/tools/runs.ts";
+import { describeBlockedSkills } from "../src/runtime/strict/finalization.ts";
 import { deriveBrowserGateResults } from "../src/runtime/strict/frontend-evidence.ts";
 import { verifyStrictSkill } from "../src/runtime/strict/reducer.ts";
 
@@ -662,11 +662,15 @@ test("MCP finalize reports run-blocked for a run blocked before execution", asyn
   assert.equal(finalized.isError, true);
   const body = finalized.structuredContent as {
     code: string;
+    lifecycleCode: string;
     state: string;
     userMessage: string;
     blockedSkills: Array<{ skillId: string; reason: string; failedHardGates: string[]; unmetPrerequisites: string[] }>;
   };
   assert.equal(body.code, "run-blocked");
+  // Additive: raising this through StrictSkillRunError so the CLI shares one helper routes it via
+  // withSkillRunErrors, which stamps lifecycleCode on every strict error.
+  assert.equal(body.lifecycleCode, "run-blocked");
   assert.equal(body.state, "blocked");
   assert.match(body.userMessage, /no verified result/);
   assert.equal(body.blockedSkills.length, 1);

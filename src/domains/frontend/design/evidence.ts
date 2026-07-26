@@ -45,7 +45,9 @@ const stateSynchronization = (value: unknown): BrowserCheckPayload["stateSynchro
       + "unless status is not-applicable.",
     );
   }
-  return value;
+  // Rebuilt rather than passed through: this object lands verbatim in captures[].stateSynchronization,
+  // and the published bundle schema forbids additional properties.
+  return { status: value.status, path: value.path, observations: value.observations };
 };
 
 const parsePayload = (value: unknown) => {

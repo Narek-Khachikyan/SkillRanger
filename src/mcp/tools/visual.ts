@@ -25,6 +25,10 @@ const objectSchema = { type: "object" } as const;
 // Canonical VisualCriticReport v1, loaded from the shipped skill package so the published contract
 // cannot drift from the one the validator enforces. This is NOT the strict CriticReportV2 used for
 // `critic-report` evidence inside a strict run.
+// Local MCP pre-validation intentionally implements a JSON Schema subset without conditional
+// if/then, so this schema's outcome/selectedVariantId branches are inert here even though its
+// nested `not` is supported; the handler revalidates that conditional invariant to preserve
+// structured domain findings (critic-selection-invalid) over a generic invalid-arguments error.
 const visualCriticReportSchema = JSON.parse(readFileSync(
   new URL("../../../registry/skills/frontend.visual-critic/output.schema.json", import.meta.url),
   "utf8",

@@ -88,7 +88,7 @@ SkillRanger exposes 33 tools in four effect classes, each with a distinct host a
 - `recommend_frontend_recipe` recommends a frontend implementation recipe for a design brief.
 - `validate_frontend_result` validates a frontend result against its design requirements.
 - `compile_frontend_design_spec` compiles a frontend design brief into an implementation specification.
-- `verify_frontend_result` verifies a frontend result using the canonical frontend verifier.
+- `verify_frontend_result` applies the same stateless frontend hard gates as `validate_frontend_result` and adds a `notice` field marking the result non-certifying. It does not create, advance, or certify a strict run.
 - `repair_frontend_result` prepares a bounded frontend repair request without applying it.
 - `run_domain_eval` evaluates a domain workflow from supplied inputs.
 - `inspect_skill_run` reads the current persisted skill-run state without changing it.

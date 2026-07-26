@@ -22,7 +22,7 @@ import {
 import { createRepairRequest } from "../../runtime/verification.ts";
 import type { VerificationReport } from "../../runtime/types.ts";
 import { scanProject } from "../../scanner/index.ts";
-import { McpToolError, mcpToolEffects, type McpToolDefinition, type McpToolHandler } from "./types.ts";
+import { McpToolError, mcpToolEffects, type JsonObject, type McpToolDefinition, type McpToolHandler } from "./types.ts";
 import { asString, jsonToolResult, projectRootProperty, requireString } from "./utils.ts";
 
 export const domainToolDefinitions: McpToolDefinition[] = [
@@ -200,35 +200,30 @@ const recommendFrontendRecipeTool: McpToolHandler = async (args) => {
   });
 };
 
-const validateFrontendResult: McpToolHandler = async (args) =>
-  jsonToolResult(
-    validateDesignResult({
-      workflowId: "frontend.design-generation",
-      brief: args.brief as DesignBrief,
-      direction: args.direction as DesignDirection,
-      observations: Array.isArray(args.observations) ? args.observations as BrowserObservation[] : [],
-      capabilities: Array.isArray(args.capabilities) ? args.capabilities as string[] : [],
-      iteration: typeof args.iteration === "number" ? args.iteration : 0,
-    }).report,
-  );
+const frontendResultReport = (args: JsonObject) => validateDesignResult({
+  workflowId: "frontend.design-generation",
+  brief: args.brief as DesignBrief,
+  direction: args.direction as DesignDirection,
+  observations: Array.isArray(args.observations) ? args.observations as BrowserObservation[] : [],
+  capabilities: Array.isArray(args.capabilities) ? args.capabilities as string[] : [],
+  iteration: typeof args.iteration === "number" ? args.iteration : 0,
+}).report;
 
-const verifyFrontendResult: McpToolHandler = async (args) => {
-  const result = await validateFrontendResult(args);
-  const notice = [
+const validateFrontendResult: McpToolHandler = async (args) => jsonToolResult(frontendResultReport(args));
+
+// The notice travels inside the payload rather than prefixed to content[0].text: every other tool's
+// text is the JSON of structuredContent, and a prose prefix made this the only one a host could not
+// parse.
+const verifyFrontendResult: McpToolHandler = async (args) => jsonToolResult({
+  ...frontendResultReport(args),
+  notice: [
     "NON-CERTIFYING STATELESS RESULT:",
     "This tool only validates caller-supplied frontend artifacts and observations.",
     "It does not prove browser capture, an independent critic exchange, or a persisted strict SkillRanger run.",
     "Do not report strict verification as passed from this result.",
     "For strict frontend completion use prepare_task, capture_ui_evidence, compare_design_variants, verify_visual_result, complete_skill_run, verify_skill_run, and inspect_skill_run; only a persisted verified run with passed verification status certifies completion.",
-  ].join(" ");
-  return {
-    ...result,
-    content: result.content.map((entry) => ({
-      ...entry,
-      text: `${notice}\n\n${entry.text}`,
-    })),
-  };
-};
+  ].join(" "),
+});
 
 const compileFrontendDesignSpec: McpToolHandler = async (args) => {
   const brief = args.brief as DesignBrief;

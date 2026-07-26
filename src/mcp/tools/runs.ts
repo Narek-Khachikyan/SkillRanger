@@ -16,6 +16,7 @@ import {
 } from "../../runtime/skill-run/index.ts";
 import type { VerificationReport } from "../../runtime/types.ts";
 import {
+  assertFinalizedVerified,
   beginStrictStep,
   completeStrictStep,
   readNextStrictChunk,
@@ -52,6 +53,7 @@ const strictErrorCodeMap: Record<StrictSkillRunErrorCode, McpToolErrorCode> = {
   "artifact-integrity": "artifact-integrity", "hard-gate-failed": "hard-gate-failed",
   "repair-limit": "repair-limit", "run-not-finalizable": "run-not-finalizable",
   "run-not-found": "run-not-found", "run-integrity": "run-integrity",
+  "run-blocked": "run-blocked",
 };
 
 export const mapSkillRunError = (error: SkillRunError): McpToolError => (
@@ -206,40 +208,14 @@ const verifyStrict: McpToolHandler = async (args) => {
   return strictRunResult(run);
 };
 
-/**
- * A run blocks either before execution (unmet prerequisites, so no verification report exists) or
- * after hard gates fail past the repair budget. The prerequisite list is the discriminator; an
- * empty gate list is a valid outcome, not a missing one. Only `blocked` ledgers belong here: a
- * `no-op` skill was never applicable and reporting it as a gate failure is the dishonest terminal
- * report this contract exists to prevent.
- */
-export const describeBlockedSkills = (run: SkillRunV2) => run.skillLedgers
-  .filter((ledger) => ledger.outcome === "blocked")
-  .map((ledger) => {
-    const unmetPrerequisites = ledger.applicability?.unmetPrerequisites ?? [];
-    return {
-      skillId: ledger.skillId,
-      reason: unmetPrerequisites.length > 0 ? "unmet-prerequisites" as const : "hard-gates-failed" as const,
-      failedHardGates: (ledger.verificationReports.at(-1)?.gateResults ?? [])
-        .filter((gate) => !gate.passed && gate.level === "hard")
-        .map((gate) => gate.gateId),
-      unmetPrerequisites,
-    };
-  });
-
 // A blocked run finalized as ok:true reads like success and has been narrated as one. The terminal
 // state is still persisted first, so inspect_skill_run reports it; only the reply becomes an error.
+// assertFinalizedVerified is shared with the CLI surface so the two cannot disagree.
 const finalizeStrict: McpToolHandler = async (args) => {
   const store = new StrictSkillRunStore(asProjectRoot(args.projectRoot));
-  const run = await store.finalizeRun(requireString(args.runId, "runId"));
-  if (run.state === "verified") return strictRunResult(run);
-  const blockedSkills = describeBlockedSkills(run);
-  throw new McpToolError("run-blocked", `Skill run ${run.runId} finalized as ${run.state}, not verified.`, {
-    runId: run.runId,
-    state: run.state,
-    blockedSkills,
-    userMessage: "SkillRanger run is blocked; no verified result was produced.",
-  });
+  return strictRunResult(assertFinalizedVerified(
+    await store.finalizeRun(requireString(args.runId, "runId")),
+  ));
 };
 
 const recordRead: McpToolHandler = async (args) => runResult(await recordSkillRead(

@@ -173,6 +173,9 @@ test("MCP descriptions and stateless frontend verification prevent strict comple
   assert.match(result.content?.[0]?.text ?? "", /NON-CERTIFYING STATELESS RESULT/);
   assert.match(result.content?.[0]?.text ?? "", /Do not report strict verification as passed/);
   assert.equal(typeof result.structuredContent, "object");
+  // The notice must not cost a host the ability to parse the text, which is the JSON of
+  // structuredContent for every other tool.
+  assert.deepEqual(JSON.parse(result.content?.[0]?.text ?? ""), result.structuredContent);
 });
 
 test("MCP tools publish complete effect and confirmation metadata", async () => {
