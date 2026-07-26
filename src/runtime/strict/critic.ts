@@ -3,11 +3,22 @@ import type { CriticReportV2, ExecutionContractV2 } from "./types.ts";
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const nonEmpty = (value: unknown) => typeof value === "string" && value.trim().length > 0;
 
+/**
+ * Strict evidence critic contract. This is CriticReportV2, not the VisualCriticReport v1 that
+ * compare_design_variants accepts; an agent that submits the v1 shape here is rejected, so the
+ * required fields travel with every rejection.
+ */
+export const criticReportV2RequiredFields = [
+  "schemaVersion", "skillId", "criticInvocationId", "executorInvocationId", "outcome", "evidenceArtifactIds", "findings",
+] as const;
+
+const contractHint = `Required CriticReportV2 fields: ${criticReportV2RequiredFields.join(", ")}; schemaVersion must be "2.0". This is not VisualCriticReport v1.`;
+
 export const assertValidCriticReportV2: (input: unknown, contract: ExecutionContractV2) => asserts input is CriticReportV2 = (input, contract) => {
-  if (!record(input)) throw new Error("Critic report must be an object.");
-  const required = ["schemaVersion", "skillId", "criticInvocationId", "executorInvocationId", "outcome", "evidenceArtifactIds", "findings"];
+  if (!record(input)) throw new Error(`Critic report must be an object. ${contractHint}`);
+  const required = [...criticReportV2RequiredFields] as string[];
   const unknown = Object.keys(input).find((key) => !required.includes(key));
-  if (unknown || required.some((key) => !Object.hasOwn(input, key))) throw new Error("Critic report must use the closed v2 shape.");
+  if (unknown || required.some((key) => !Object.hasOwn(input, key))) throw new Error(`Critic report must use the closed v2 shape. ${contractHint}`);
   if (input.schemaVersion !== "2.0" || input.skillId !== contract.skillId) throw new Error("Critic report identity does not match the skill contract.");
   if (!nonEmpty(input.criticInvocationId) || !nonEmpty(input.executorInvocationId) || input.criticInvocationId === input.executorInvocationId) throw new Error("Critic invocation must be independent from the executor invocation.");
   if (input.outcome !== "clean" && input.outcome !== "findings") throw new Error("Critic outcome is invalid.");

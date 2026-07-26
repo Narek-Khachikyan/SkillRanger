@@ -8,6 +8,7 @@ export {
   createStrictSkillRun,
   readNextStrictChunk,
 } from "./reducer.ts";
+export * from "./finalization.ts";
 export * from "./validation.ts";
 export * from "./store.ts";
 export * from "./critic.ts";

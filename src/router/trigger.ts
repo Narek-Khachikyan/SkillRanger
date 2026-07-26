@@ -2,6 +2,9 @@ import type { TriggerParseResult } from "./types.ts";
 
 const defaultMaxIntentBytes = 64_000;
 const aliases = ["@skillranger", "skillranger", "/sr"] as const;
+// A leading bare "skillranger" would turn any sentence starting with the product name into a
+// command, so only the unambiguous mention and command forms activate from the front.
+const leadingAliases = ["@skillranger", "/sr"] as const;
 
 export type TriggerParseInput = {
   prompt: string;
@@ -87,12 +90,32 @@ const hasTokenBoundary = (source: string, start: number) => {
   return /\p{P}/u.test(previous);
 };
 
+// Only whitespace or an explicit command delimiter may follow a leading trigger, and the delimiter
+// belongs to the command rather than the intent. Accepting any Unicode punctuation turned a
+// possessive mention ("@skillranger's tests are failing") into a command with a mangled intent.
+const leadingSeparator = /^[\s:,;]+/u;
+
 const explicitTrigger = (source: string) => {
   const lower = source.toLowerCase();
   for (const alias of aliases) {
     if (!lower.endsWith(alias)) continue;
     const start = source.length - alias.length;
-    if (hasTokenBoundary(source, start) && !isInsideCode(source, start)) return { alias, start };
+    if (hasTokenBoundary(source, start) && !isInsideCode(source, start)) return { alias, intent: source.slice(0, start) };
+  }
+  return undefined;
+};
+
+// A leading match is by construction the first non-whitespace character, so it can never sit
+// inside a fenced or inline code span: both require an opening delimiter ahead of it.
+const leadingTrigger = (source: string) => {
+  const lower = source.toLowerCase();
+  const start = source.length - source.trimStart().length;
+  for (const alias of leadingAliases) {
+    if (!lower.startsWith(alias, start)) continue;
+    const end = start + alias.length;
+    if (end === source.length) return { alias, intent: "" };
+    const separator = leadingSeparator.exec(source.slice(end));
+    if (separator) return { alias, intent: source.slice(end + separator[0].length) };
   }
   return undefined;
 };
@@ -114,9 +137,9 @@ export const parseTrigger = ({
       : { activated: false, mode, originalPrompt: prompt, reason: "empty-intent" };
   }
 
-  const match = explicitTrigger(normalizedPrompt);
+  const match = explicitTrigger(normalizedPrompt) ?? leadingTrigger(normalizedPrompt);
   if (!match) return { activated: false, mode, originalPrompt: prompt, reason: "trigger-required" };
-  const normalizedIntent = normalizedPrompt.slice(0, match.start).trim();
+  const normalizedIntent = match.intent.trim();
   return normalizedIntent
     ? { activated: true, mode, trigger: match.alias, originalPrompt: prompt, normalizedIntent }
     : { activated: false, mode, originalPrompt: prompt, reason: "empty-intent" };

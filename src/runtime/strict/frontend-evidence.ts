@@ -94,7 +94,13 @@ export const deriveBrowserGateResults = (
     browserGateSlugs.map((slug) => [slug, { passed: false, message }]),
   );
   if (!record(value) || !exactKeys(value, ["observations"]) || !Array.isArray(value.observations)) {
-    return failed("verification-input must have the required closed shape with valid browser observations.");
+    // The rejection carries the contract: without it an agent cannot tell this apart from the
+    // other verification-input shapes (performance review passes {measurements}) and retries blind.
+    return failed(
+      "verification-input for frontend/browser-hard-gates must be exactly { observations: [...] }, "
+      + `where every observation has the closed shape: ${observationKeys.join(", ")}. `
+      + "Self-declared pass flags are not accepted; observations must come from a real browser capture.",
+    );
   }
   let observations: Observation[];
   try {

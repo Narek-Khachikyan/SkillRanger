@@ -54,6 +54,22 @@ A single justified aesthetic risk is enough: stronger type, a data-specific trea
 domain material, composition, or feedback. State why restraint is better if no risk is
 warranted.
 
+### Category Applicability Matrix
+
+Choose the closest experience shape from product evidence, the primary task, and the selected recipe. These are category-specific choices; accessibility, responsive integrity, state rendering, clipping, and causal state synchronization remain universal hard gates.
+
+| Experience shape | Priority | Permitted signature move | Main risk |
+| --- | --- | --- | --- |
+| Utility / admin / dashboard | Speed, density, predictability | One functional device | Decorative overload |
+| Developer tool | Causality, diagnosis, precision | Reveal system state | Theater instead of clarity |
+| Commerce / configurator | Media, variant, availability, cart coherence | Synchronized product change | Visuals diverge from the selected variant |
+| Editorial / content-heavy | Reading, navigation, provenance | Typographic or structural rhythm | Effects obstruct reading |
+| Data-heavy | Comparison, filtering, explanation | Data-explaining transformation | Meaningless chart decoration |
+| Portfolio / agency | Authorship, work selection, narrative | Branded transition or composition motif | Hidden navigation |
+| Experimental / immersive | Exploration and atmosphere | One dominant interaction model | Inaccessible or heavy spectacle |
+
+Calm utility-first work can score highly when it is specific and coherent. Experimental work earns no exception: universal hard gates still apply. A Signature Move is required only for material visual work and must support the primary task. Motion is optional and must have a named function when used.
+
 ## Composition And Type
 
 - Encode sequence, ownership, priority, status, or grouping with structure; avoid decorative rails, badges, cards, and dividers.
@@ -73,6 +89,7 @@ warranted.
 ## States And Motion
 
 - Empty states explain what belongs there, why it is empty, and the best next action. Errors identify the object, problem, known cause, and recovery.
+- For one state-changing primary action, verify control → resulting state → at least two dependent representations. The product preview, summary, count, availability, cart, schedule, transcript, or progress must agree with the selected state.
 - AI output needs provenance, uncertainty when useful, and controls to edit, accept, reject, retry, stop, or inspect sources.
 - Motion communicates feedback, causality, continuity, progress, or a rare brand moment. Prefer opacity and transform; respect reduced motion; do not default to scroll-jacking, cursor followers, animated counters, or blanket reveals.
 

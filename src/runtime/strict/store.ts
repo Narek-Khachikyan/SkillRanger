@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promis
 import path from "node:path";
 import { RunFileLock } from "../run-lock.ts";
 import { addStrictEvidence, verifyStrictSkill } from "./reducer.ts";
-import { assertValidCriticReportV2 } from "./critic.ts";
+import { assertValidCriticReportV2, criticReportV2RequiredFields } from "./critic.ts";
 import { validateJsonSchema } from "./json-schema.ts";
 import { assertValidStrictSkillRun } from "./validation.ts";
 import { StrictSkillRunError, type EvidenceArtifact, type SkillRunV2 } from "./types.ts";
@@ -14,6 +14,16 @@ import { ContainedFileReadError, readContainedFile } from "./contained-file.ts";
 
 const errno = (error: unknown, code: string) => typeof error === "object" && error !== null && (error as { code?: unknown }).code === code;
 const digestBytes = (bytes: Uint8Array) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+/**
+ * Evidence kinds that verification looks up by validatedAs rather than by kind. A contract step may
+ * name the report kind after its skill (performance-report), so the kind a host must send to satisfy
+ * requiredEvidenceKinds is not always the one the output gate reads.
+ */
+const inferredValidatedAs: Record<string, EvidenceArtifact["validatedAs"]> = {
+  "critic-report": "critic-report",
+  "skill-output": "output",
+  "performance-report": "output",
+};
 const readContainedEvidenceSource = async (projectRoot: string, sourcePath: string) => {
   try {
     return (await readContainedFile({ projectRoot, target: sourcePath, phase: "ingestion" })).bytes;
@@ -130,6 +140,20 @@ export class StrictSkillRunStore {
     let createdBlob = false;
     try {
       return await this.update(runId, async (run) => {
+        // Verification selects these two artifacts by validatedAs, but agents only ever set `kind`,
+        // so a correct artifact stayed invisible and the run could never converge. Infer it from
+        // the kind rather than requiring a field nothing advertises.
+        const inferred = inferredValidatedAs[input.kind];
+        if (inferred) {
+          if (input.validatedAs !== undefined && input.validatedAs !== inferred) {
+            throw new StrictSkillRunError(
+              "artifact-integrity",
+              `Evidence of kind ${input.kind} cannot be validated as ${input.validatedAs}.`,
+              { kind: input.kind, expectedValidatedAs: inferred, receivedValidatedAs: input.validatedAs },
+            );
+          }
+          input = { ...input, validatedAs: inferred };
+        }
         if (input.validatedAs !== undefined) {
           const producer = input.attributions.find(({ relation }) => relation === "produced");
           const ledger = run.skillLedgers.find(({ skillId }) => skillId === producer?.skillId);
@@ -139,7 +163,13 @@ export class StrictSkillRunStore {
           catch { throw new StrictSkillRunError("artifact-integrity", "Schema-validated evidence must be valid JSON."); }
           if (input.validatedAs === "critic-report") {
             try { assertValidCriticReportV2(parsed, ledger.contract); }
-            catch (error) { throw new StrictSkillRunError("artifact-integrity", `Critic report validation failed: ${(error as Error).message}`); }
+            catch (error) {
+              throw new StrictSkillRunError(
+                "artifact-integrity",
+                `Critic report validation failed: ${(error as Error).message}`,
+                { contract: "CriticReportV2", expectedSchemaVersion: "2.0", requiredFields: [...criticReportV2RequiredFields] },
+              );
+            }
           } else {
             const errors = validateJsonSchema(ledger.schemaSnapshots[input.validatedAs], parsed);
             if (errors.length > 0) throw new StrictSkillRunError("artifact-integrity", `Evidence schema validation failed: ${errors.join(" ")}`);

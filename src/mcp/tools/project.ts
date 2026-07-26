@@ -23,8 +23,8 @@ export const projectToolDefinitions: McpToolDefinition[] = [
   {
     ...mcpToolEffects.readOnly,
     name: "recommend_skills",
-    title: "Recommend Skills",
-    description: "Recommend relevant skills for a project fingerprint and target agent.",
+    title: "Recommend Skills (Advisory Only)",
+    description: "Return advisory recommendations for a project fingerprint and target agent without creating a run. For any explicit @skillranger, skillranger, or /sr workflow, use prepare_task instead; this tool cannot start or certify strict execution.",
     inputSchema: {
       type: "object",
       properties: {

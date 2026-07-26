@@ -47,9 +47,9 @@ test("CLI starts, inspects, and fully reads a strict installed skill", async () 
   assert.equal(result.run.skillLedgers[0].readReceipts.length, result.run.skillLedgers[0].contentChunks.length);
 });
 
-test("CLI strict finalize keeps the JSON response shape", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "cli-strict-finalize-"));
-  const digest = (value: string) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
+const digest = (value: string) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
+
+const terminalRun = (runId: string, applicability: { applicable: boolean; unmetPrerequisites: string[] }) => {
   const contract: ExecutionContractV2 = {
     schemaVersion: "2.0", skillId: "frontend.noop", contractVersion: "2.0.0",
     inputSchema: "input.schema.json", outputSchema: "output.schema.json", mustRead: ["SKILL.md"],
@@ -58,17 +58,22 @@ test("CLI strict finalize keeps the JSON response shape", async () => {
     steps: [{ id: "frontend.noop/step/noop", type: "collect", requiredEvidenceKinds: ["noop"], ruleIds: ["frontend.noop/rule/noop"] }],
     gates: [{ id: "frontend.noop/gate/noop", level: "hard", evaluator: { type: "evidence-present", evidenceKind: "noop" }, ruleIds: ["frontend.noop/rule/noop"] }],
   };
-  const run = createStrictSkillRun({
-    runId: "run_cli_finalize", domain: "frontend", targetAgent: "codex", locale: "en",
-    intent: { sha256: digest("cli finalize"), normalizedGoal: "preserve CLI shape" },
+  return createStrictSkillRun({
+    runId, domain: "frontend", targetAgent: "codex", locale: "en",
+    intent: { sha256: digest(runId), normalizedGoal: "preserve CLI shape" },
     selectedSkills: [{
       skillId: contract.skillId, role: "primary", mandatory: true, version: "1.0.0",
       packageChecksum: digest("package"), contractChecksum: digest(JSON.stringify(contract)), contract,
       schemaSnapshots: { input: { type: "object" }, output: { type: "object" } },
       schemaChecksums: { input: digest(JSON.stringify({ type: "object" })), output: digest(JSON.stringify({ type: "object" })) },
-      contentChunks: createContentChunks("SKILL.md", "# No-op\n"), applicable: false, unmetPrerequisites: [],
+      contentChunks: createContentChunks("SKILL.md", "# No-op\n"), ...applicability,
     }],
   });
+};
+
+test("CLI strict finalize keeps the JSON response shape", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "cli-strict-finalize-"));
+  const run = terminalRun("run_cli_finalize", { applicable: false, unmetPrerequisites: [] });
   await new StrictSkillRunStore(root).create(run);
 
   const result = await cli("run:finalize", root, "--run", run.runId, "--json");
@@ -76,4 +81,22 @@ test("CLI strict finalize keeps the JSON response shape", async () => {
   assert.deepEqual(Object.keys(result), ["ok", "run"]);
   assert.equal(result.ok, true);
   assert.equal(result.run.state, "verified");
+});
+
+test("CLI strict finalize reports a blocked run as a failure", async () => {
+  // The MCP surface has errored on a blocked finalize since 0.3.0; the CLI printed ok:true and
+  // exited 0 for the identical store result, so a CI wrapper read a blocked run as success.
+  const root = await mkdtemp(path.join(os.tmpdir(), "cli-strict-blocked-"));
+  const run = terminalRun("run_cli_blocked", { applicable: true, unmetPrerequisites: ["browser-ready"] });
+  await new StrictSkillRunStore(root).create(run);
+
+  const failure = await execFileAsync(process.execPath, ["src/cli/index.ts", "run:finalize", root, "--run", run.runId, "--json"])
+    .then(() => undefined, (error: { code?: number; stderr?: string }) => error);
+
+  assert.ok(failure, "a blocked finalize must not exit 0");
+  assert.notEqual(failure.code, 0);
+  const body = JSON.parse(failure.stderr ?? "") as { ok: boolean; error: { code: string; remediation: string } };
+  assert.equal(body.ok, false);
+  assert.equal(body.error.code, "run-blocked");
+  assert.ok(body.error.remediation.length > 0);
 });

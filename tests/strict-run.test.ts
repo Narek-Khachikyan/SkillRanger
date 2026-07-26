@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -20,6 +20,10 @@ import {
   type StrictSkillSelection,
 } from "../src/runtime/strict/index.ts";
 import * as strictApi from "../src/runtime/strict/index.ts";
+import { initializeRouterContext } from "../src/mcp/router-context.ts";
+import { callMcpTool } from "../src/mcp/tools.ts";
+import { describeBlockedSkills } from "../src/runtime/strict/finalization.ts";
+import { deriveBrowserGateResults } from "../src/runtime/strict/frontend-evidence.ts";
 import { verifyStrictSkill } from "../src/runtime/strict/reducer.ts";
 
 const sha = (value: string) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
@@ -627,5 +631,206 @@ test("derives no-op and blocked ledgers before execution and blocks aggregate ce
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-terminal-finalize-"));
   const store = new StrictSkillRunStore(root);
   await store.create(run);
-  assert.equal((await store.finalizeRun(run.runId)).state, "blocked");
+  const finalized = await store.finalizeRun(run.runId);
+  assert.equal(finalized.state, "blocked");
+
+  // A no-op skill was never applicable; reporting it as a gate failure is the dishonest terminal
+  // report this contract exists to prevent.
+  assert.deepEqual(describeBlockedSkills(finalized), [{
+    skillId: "frontend.blocked",
+    reason: "unmet-prerequisites",
+    failedHardGates: [],
+    unmetPrerequisites: ["browser-ready"],
+  }]);
+});
+
+test("MCP finalize reports run-blocked for a run blocked before execution", async () => {
+  // Blocked at creation: no verification report exists, so failedHardGates is legitimately empty.
+  // An acceptance criterion demanding a non-empty gate list would be unsatisfiable here.
+  const run = createStrictSkillRun({
+    runId: "run_strict_blocked_mcp", domain: "frontend", targetAgent: "codex", locale: "en",
+    intent: { sha256: sha("test"), normalizedGoal: "blocked before execution" },
+    selectedSkills: [selection({ unmetPrerequisites: ["browser-ready"] })],
+    now: "2026-07-15T10:00:00.000Z",
+  });
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-blocked-mcp-"));
+  await new StrictSkillRunStore(root).create(run);
+  process.env.SKILLRANGER_PROJECT_ROOT = root;
+  initializeRouterContext();
+
+  const finalized = await callMcpTool("finalize_skill_run", { projectRoot: root, runId: run.runId });
+  assert.equal(finalized.isError, true);
+  const body = finalized.structuredContent as {
+    code: string;
+    lifecycleCode: string;
+    state: string;
+    userMessage: string;
+    blockedSkills: Array<{ skillId: string; reason: string; failedHardGates: string[]; unmetPrerequisites: string[] }>;
+  };
+  assert.equal(body.code, "run-blocked");
+  // Additive: raising this through StrictSkillRunError so the CLI shares one helper routes it via
+  // withSkillRunErrors, which stamps lifecycleCode on every strict error.
+  assert.equal(body.lifecycleCode, "run-blocked");
+  assert.equal(body.state, "blocked");
+  assert.match(body.userMessage, /no verified result/);
+  assert.equal(body.blockedSkills.length, 1);
+  assert.equal(body.blockedSkills[0].reason, "unmet-prerequisites");
+  assert.deepEqual(body.blockedSkills[0].failedHardGates, []);
+  assert.deepEqual(body.blockedSkills[0].unmetPrerequisites, ["browser-ready"]);
+
+  // The error must not replace terminal persistence, or the run would be left unfinalized.
+  const inspected = await callMcpTool("inspect_skill_run", { projectRoot: root, runId: run.runId });
+  assert.equal(inspected.isError, false);
+  assert.equal((inspected.structuredContent as { state: string }).state, "blocked");
+});
+
+test("blocked-skill reasons distinguish unmet prerequisites from failed hard gates", () => {
+  const ledger = (overrides: Record<string, unknown>) => ({
+    skillId: "frontend.test-skill", outcome: "blocked",
+    applicability: { applicable: true, unmetPrerequisites: [] },
+    verificationReports: [],
+    ...overrides,
+  });
+  const described = describeBlockedSkills({
+    skillLedgers: [
+      ledger({ applicability: { applicable: true, unmetPrerequisites: ["browser-ready"] } }),
+      ledger({
+        skillId: "frontend.gated",
+        verificationReports: [{ gateResults: [
+          { gateId: "frontend.gated/gate/critic-independent", level: "hard", passed: false },
+          { gateId: "frontend.gated/gate/soft-hint", level: "soft", passed: false },
+          { gateId: "frontend.gated/gate/ok", level: "hard", passed: true },
+        ] }],
+      }),
+      ledger({ skillId: "frontend.done", outcome: "used" }),
+    ],
+  } as never);
+
+  assert.deepEqual(described.map(({ skillId, reason }) => [skillId, reason]), [
+    ["frontend.test-skill", "unmet-prerequisites"],
+    ["frontend.gated", "hard-gates-failed"],
+  ]);
+  assert.deepEqual(described[0].failedHardGates, []);
+  assert.deepEqual(described[1].failedHardGates, ["frontend.gated/gate/critic-independent"]);
+});
+
+test("critic v2 rejection names its contract and travels with structured details", async () => {
+  // The observed failure: an agent submitted a VisualCriticReport v1 shape as strict evidence and
+  // could not tell from the message which of the two critic contracts was expected.
+  assert.throws(
+    () => assertValidCriticReportV2({ schemaVersion: "1.0", policyId: "p", findings: [], passed: true }, contract()),
+    (error: unknown) => error instanceof Error
+      && /CriticReportV2/.test(error.message)
+      && /not VisualCriticReport v1/.test(error.message),
+  );
+
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-critic-details-"));
+  const store = new StrictSkillRunStore(root);
+  await store.create(beginStrictStep(fullyRead(), "frontend.test-skill", contract().steps[0].id));
+  process.env.SKILLRANGER_PROJECT_ROOT = root;
+  initializeRouterContext();
+  const sourcePath = path.join(root, "critic.json");
+  await writeFile(sourcePath, JSON.stringify({ schemaVersion: "1.0", passed: true }), "utf8");
+
+  const result = await callMcpTool("add_skill_evidence", {
+    projectRoot: root, runId: "run_strict_test", skillId: "frontend.test-skill",
+    stepId: contract().steps[0].id, sourcePath, kind: "critic-report", validatedAs: "critic-report",
+    relation: "produced", ruleIds: contract().steps[0].ruleIds,
+  });
+  assert.equal(result.isError, true);
+  const details = (result.structuredContent as { details?: Record<string, unknown> }).details ?? {};
+  assert.equal(details.contract, "CriticReportV2");
+  assert.equal(details.expectedSchemaVersion, "2.0");
+  assert.deepEqual(details.requiredFields, [
+    "schemaVersion", "skillId", "criticInvocationId", "executorInvocationId", "outcome", "evidenceArtifactIds", "findings",
+  ]);
+});
+
+test("browser verification-input rejection states its contract instead of a bare shape complaint", () => {
+  // The agent self-declared {buildPassed, visualGateResults:{...true}} and retried the same shape
+  // three times, because the rejection never said what a valid input looks like.
+  const results = deriveBrowserGateResults({ buildPassed: true, visualGateResults: { focusVisible: true } }, []);
+  const messages = new Set(Object.values(results).map(({ message }) => message));
+  assert.equal(Object.values(results).every(({ passed }) => !passed), true);
+  assert.equal(messages.size, 1);
+  const [message] = [...messages];
+  assert.match(message ?? "", /must be exactly \{ observations: \[\.\.\.\] \}/);
+  assert.match(message ?? "", /horizontalOverflow/);
+  assert.match(message ?? "", /reducedMotionVerified/);
+  assert.match(message ?? "", /Self-declared pass flags are not accepted/);
+});
+
+test("validatedAs is inferred from kind for the artifacts verification looks up by it", async () => {
+  // Agents set only `kind`; the critic gate selects by `validatedAs`, so a correct report used to
+  // be ingested unvalidated and then stay invisible to verification.
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-critic-infer-"));
+  const store = new StrictSkillRunStore(root);
+  await store.create(beginStrictStep(fullyRead(), "frontend.test-skill", contract().steps[0].id));
+  const stepId = contract().steps[0].id;
+  const attribution = { skillId: "frontend.test-skill", stepId, attempt: 1, relation: "produced" as const, ruleIds: ["frontend.test-skill/rule/complete"] };
+  const report = {
+    schemaVersion: "2.0", skillId: "frontend.test-skill",
+    criticInvocationId: "critic-1", executorInvocationId: "exec-1",
+    outcome: "clean", evidenceArtifactIds: ["artifact-1"], findings: [],
+  };
+  const sourcePath = path.join(root, "critic.json");
+  await writeFile(sourcePath, JSON.stringify(report), "utf8");
+
+  const run = await store.ingestEvidence("run_strict_test", {
+    sourcePath, kind: "critic-report", attributions: [attribution],
+  });
+  const stored = run.artifacts.at(-1);
+  assert.equal(stored?.kind, "critic-report");
+  assert.equal(stored?.validatedAs, "critic-report", "validatedAs must be inferred so the verifier can find it");
+
+  // An invalid report of the same kind is now rejected at ingestion rather than accepted silently.
+  const badPath = path.join(root, "bad-critic.json");
+  await writeFile(badPath, JSON.stringify({ schemaVersion: "1.0", passed: true }), "utf8");
+  await assert.rejects(
+    () => store.ingestEvidence("run_strict_test", { sourcePath: badPath, kind: "critic-report", attributions: [attribution] }),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
+  );
+
+  // A conflicting explicit validatedAs is refused instead of silently overridden.
+  await assert.rejects(
+    () => store.ingestEvidence("run_strict_test", { sourcePath, kind: "critic-report", validatedAs: "output", attributions: [attribution] }),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
+  );
+});
+
+test("skill-output evidence is validated against the output schema without an explicit validatedAs", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-output-infer-"));
+  const store = new StrictSkillRunStore(root);
+  await store.create(beginStrictStep(fullyRead(), "frontend.test-skill", contract().steps[0].id));
+  const stepId = contract().steps[0].id;
+  const attribution = { skillId: "frontend.test-skill", stepId, attempt: 1, relation: "produced" as const, ruleIds: ["frontend.test-skill/rule/complete"] };
+  const sourcePath = path.join(root, "skill-output.json");
+  await writeFile(sourcePath, JSON.stringify({ summary: "done" }), "utf8");
+
+  const run = await store.ingestEvidence("run_strict_test", {
+    sourcePath, kind: "skill-output", attributions: [attribution],
+  });
+  assert.equal(run.artifacts.at(-1)?.validatedAs, "output", "verification.ts selects the output artifact by validatedAs");
+
+  await assert.rejects(
+    () => store.ingestEvidence("run_strict_test", { sourcePath, kind: "skill-output", validatedAs: "critic-report", attributions: [attribution] }),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
+  );
+});
+
+test("a contract-named report kind is still inferred as the output the gates read", async () => {
+  // frontend.performance-review names its report kind performance-report, so the kind a host must
+  // send to satisfy requiredEvidenceKinds is not the one the output gate looks up.
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-report-infer-"));
+  const store = new StrictSkillRunStore(root);
+  await store.create(beginStrictStep(fullyRead(), "frontend.test-skill", contract().steps[0].id));
+  const stepId = contract().steps[0].id;
+  const attribution = { skillId: "frontend.test-skill", stepId, attempt: 1, relation: "produced" as const, ruleIds: ["frontend.test-skill/rule/complete"] };
+  const sourcePath = path.join(root, "performance-report.json");
+  await writeFile(sourcePath, JSON.stringify({ summary: "done" }), "utf8");
+
+  const run = await store.ingestEvidence("run_strict_test", {
+    sourcePath, kind: "performance-report", attributions: [attribution],
+  });
+  assert.equal(run.artifacts.at(-1)?.validatedAs, "output", "the schema-valid output gate selects by validatedAs");
 });

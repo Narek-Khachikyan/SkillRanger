@@ -289,6 +289,84 @@ test("frontend strict installed/read/steps/finalize reaches verified", async () 
   assert.equal((await strictStore.finalizeRun(run.runId)).state, "verified");
 });
 
+// The other strict test drives StrictSkillRunStore directly, so it cannot catch a broken
+// agent-facing route. This one uses only MCP tools, exactly as a host agent would.
+test("MCP-only strict path reaches verified and refuses lifecycle-v1 transitions", async () => {
+  const root = await temporaryProject("vite-react-ts");
+  await install(root, "frontend.performance-review");
+  process.env.SKILLRANGER_PROJECT_ROOT = root;
+  initializeRouterContext();
+  const skillId = "frontend.performance-review";
+
+  const preparedResult = (await callMcpTool("prepare_task", {
+    prompt: "Review bundle size, loading speed, and runtime performance @skillranger",
+    targetAgent: "codex",
+    strict: true,
+    skillInputs: { [skillId]: { mode: "risk-review", affectedFlows: ["initial load"] } },
+  })).structuredContent as {
+    status: string;
+    run: { routerRunId: string; runtimeRunId: string; runtime: string; readRevision: number };
+  };
+  assert.equal(preparedResult.status, "prepared");
+  assert.equal(preparedResult.run.runtime, "strict-v2");
+  const runId = preparedResult.run.runtimeRunId;
+
+  let readRevision = preparedResult.run.readRevision;
+  for (let guard = 0; guard < 32; guard += 1) {
+    const body = (await callMcpTool("read_run_skill_file", {
+      routerRunId: preparedResult.run.routerRunId,
+      readRequestId: randomUUID(),
+      expectedReadRevision: readRevision,
+      mode: "mandatory-next",
+    })).structuredContent as { readRevision: number; readStatus: { runMandatoryReadsComplete: boolean } };
+    readRevision = body.readRevision;
+    if (body.readStatus.runMandatoryReadsComplete) break;
+  }
+
+  const failedTransition = await callMcpTool("begin_skill_run_execution", { projectRoot: root, runId });
+  assert.equal(failedTransition.isError, true, "lifecycle-v1 transition must not accept a strict-v2 run");
+
+  const evidencePerStep: Array<Array<{ kind: string; value: unknown; validatedAs?: "output" }>> = [
+    [{ kind: "affected-flow-inventory", value: "initial load\n" }],
+    [{ kind: "static-performance-review", value: "reviewed\n" }],
+    [],
+    [{
+      kind: "performance-report",
+      validatedAs: "output",
+      value: {
+        mode: "risk-review",
+        findings: [{ affectedFlow: "initial load", dimension: "LCP", basis: "risk", impact: "high", confidence: "medium", behavior: "Hero delivery may delay paint", evidence: [], expectedBenefit: "Earlier LCP", tradeoff: "Potential preload bytes" }],
+        measurementsInspected: [],
+        measurementGaps: ["Capture before/after LCP traces for the initial load flow"],
+        residualRisks: [],
+      },
+    }],
+    [{ kind: "verification-input", value: { measurements: [] } }],
+  ];
+
+  for (const [index, evidence] of evidencePerStep.entries()) {
+    const current = (await callMcpTool("inspect_skill_run", { projectRoot: root, runId })).structuredContent as SkillRunV2;
+    const step = current.skillLedgers[0].steps.find(({ status }) => status === "pending");
+    assert.ok(step, `expected a pending step at index ${index}`);
+    await callMcpTool("begin_skill_step", { projectRoot: root, runId, skillId, stepId: step.id });
+    for (const [entry, item] of evidence.entries()) {
+      const sourcePath = path.join(root, "evidence", `${index}-${entry}-${item.kind}.json`);
+      await mkdir(path.dirname(sourcePath), { recursive: true });
+      await writeFile(sourcePath, typeof item.value === "string" ? item.value : `${JSON.stringify(item.value, null, 2)}\n`);
+      await callMcpTool("add_skill_evidence", {
+        projectRoot: root, runId, skillId, stepId: step.id, sourcePath,
+        kind: item.kind, relation: "produced", ruleIds: step.ruleIds,
+        ...(item.validatedAs ? { validatedAs: item.validatedAs } : {}),
+      });
+    }
+    await callMcpTool("complete_skill_step", { projectRoot: root, runId, skillId, stepId: step.id });
+  }
+
+  await callMcpTool("verify_skill", { projectRoot: root, runId, skillId });
+  const finalized = (await callMcpTool("finalize_skill_run", { projectRoot: root, runId })).structuredContent as SkillRunV2;
+  assert.equal(finalized.state, "verified");
+});
+
 test("strict not installed and missing capabilities return normal outcomes without partial runs", async () => {
   const strictRoot = await temporaryProject("vite-react-ts");
   const strictResult = await prepareTask({
@@ -315,6 +393,34 @@ test("strict not installed and missing capabilities return normal outcomes witho
   assert.equal(capabilityResult.status, "strict_requirements_unmet");
   if (capabilityResult.status === "strict_requirements_unmet") assert.ok(capabilityResult.missing.some(({ requirement }) => requirement === "capability"));
   assert.deepEqual(await runFiles(capabilityRoot), { runtime: [], router: [] });
+});
+
+test("MCP prepare_task accepts strict skill inputs and rejects invalid ones", async () => {
+  const root = await temporaryProject("vite-react-ts");
+  process.env.SKILLRANGER_PROJECT_ROOT = root;
+  initializeRouterContext();
+  const prompt = "Review bundle size and frontend performance @skillranger";
+  const skillInputs = { "frontend.performance-review": { mode: "risk-review", affectedFlows: ["initial load"] } };
+
+  const accepted = await callMcpTool("prepare_task", { prompt, strict: true, skillInputs });
+  const missing = (accepted.structuredContent as { status: string; missing: Array<{ requirement: string }> });
+  assert.equal(missing.status, "strict_requirements_unmet");
+  assert.equal(missing.missing.some(({ requirement }) => requirement === "skill-input"), false);
+
+  const withoutInputs = await callMcpTool("prepare_task", { prompt, strict: true });
+  assert.equal(
+    (withoutInputs.structuredContent as { missing: Array<{ requirement: string }> }).missing
+      .some(({ requirement }) => requirement === "skill-input"),
+    true,
+  );
+
+  const nonStrict = await callMcpTool("prepare_task", { prompt, skillInputs });
+  assert.equal(nonStrict.isError, true);
+  assert.equal((nonStrict.structuredContent as { code: string }).code, "invalid-arguments");
+
+  const unknownSkill = await callMcpTool("prepare_task", { prompt, strict: true, skillInputs: { "frontend.not-a-skill": {} } });
+  assert.equal(unknownSkill.isError, true);
+  assert.equal((unknownSkill.structuredContent as { code: string }).code, "invalid-arguments");
 });
 
 test("clarification continuation creates both records only after a valid answer", async () => {

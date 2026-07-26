@@ -3,7 +3,7 @@ import path from "node:path";
 import { executeAdapterJson } from "./adapter.ts";
 import { evaluateBrowserPayload, type BrowserCheckPayload } from "./browser-checks.ts";
 import type { UiEvidenceCapturePlan } from "./evidence-plan.ts";
-import type { MechanicalSnapshot, UiEvidenceBundle } from "./evidence-types.ts";
+import { isValidStateSynchronization, type MechanicalSnapshot, type UiEvidenceBundle } from "./evidence-types.ts";
 import { defaultMechanicalCheckPolicy, evaluateMechanicalSnapshot, sortUiCheckResults } from "./mechanical.ts";
 import type { BrowserObservation } from "./types.ts";
 
@@ -37,6 +37,19 @@ const mechanicalSnapshot = (value: unknown): MechanicalSnapshot => {
   return value as MechanicalSnapshot;
 };
 
+const stateSynchronization = (value: unknown): BrowserCheckPayload["stateSynchronization"] => {
+  if (!isValidStateSynchronization(value)) {
+    throw new Error(
+      "Browser observation stateSynchronization must be { status: verified | mismatch | not-applicable, "
+      + "path: non-empty string, observations: array of non-empty strings }, with at least two observations "
+      + "unless status is not-applicable.",
+    );
+  }
+  // Rebuilt rather than passed through: this object lands verbatim in captures[].stateSynchronization,
+  // and the published bundle schema forbids additional properties.
+  return { status: value.status, path: value.path, observations: value.observations };
+};
+
 const parsePayload = (value: unknown) => {
   if (!isRecord(value)) throw new Error("Browser adapter must return one JSON object per invocation.");
   const contrast = value.contrastViolations;
@@ -58,6 +71,7 @@ const parsePayload = (value: unknown) => {
     overlaps: stringArray(value, "overlaps"),
     focusOrderViolations: stringArray(value, "focusOrderViolations"),
     contrastViolations: contrast as BrowserCheckPayload["contrastViolations"],
+    stateSynchronization: stateSynchronization(value.stateSynchronization),
   };
   return { browser, mechanical: mechanicalSnapshot(value.mechanicalSnapshot) };
 };
@@ -132,7 +146,12 @@ export const executeUiEvidenceCapture = async (input: {
         ...evaluateBrowserPayload({ payload: parsed.browser, viewport: entry.viewport.width, state: entry.state, screenshotPath: entry.screenshotPath }),
         ...evaluateMechanicalSnapshot({ snapshot: parsed.mechanical, policy: defaultMechanicalCheckPolicy, viewport: entry.viewport.width, state: entry.state, screenshotPath: entry.screenshotPath }),
       ]);
-      captures.push({ ...entry, observation: observationFor(parsed.browser, entry, input.plan.route), checks });
+      captures.push({
+        ...entry,
+        observation: observationFor(parsed.browser, entry, input.plan.route),
+        stateSynchronization: parsed.browser.stateSynchronization,
+        checks,
+      });
     }
   } catch (error) {
     const retained = captures.map(({ screenshotPath }) => screenshotPath);

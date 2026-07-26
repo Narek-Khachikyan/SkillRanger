@@ -61,6 +61,11 @@ const runPackagedMcp = async (tarball, version, cwd) => {
   const read = tools.find(({ name }) => name === "read_run_skill_file");
   assert.equal(read?.annotations?.idempotentHint, true);
   assert.deepEqual(read?.outputSchema?.oneOf?.map((entry) => entry.properties?.schemaVersion?.const).filter(Boolean), ["router-read-result/1.0"]);
+  // The visual tools load VisualCriticReport v1 from registry/skills at import time, so a package
+  // missing that file would not even start the server. Assert the contract actually shipped.
+  const criticReport = tools.find(({ name }) => name === "compare_design_variants")?.inputSchema?.properties?.criticReport;
+  assert.equal(criticReport?.title, "VisualCriticReport", "Packaged compare_design_variants must publish the canonical critic schema.");
+  assert.ok(Array.isArray(criticReport?.required) && criticReport.required.includes("comparisons"));
 };
 
 const smokeRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-package-smoke-"));

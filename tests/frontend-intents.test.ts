@@ -26,3 +26,19 @@ test("detects explicit skill-use control intent without inventing a task intent"
 test("reports mixed locale for Russian prompts containing frontend terms", () => {
   assert.equal(analyzeFrontendIntent("Используй frontend skill и проверь responsive layout").locale, "mixed");
 });
+
+test("maps confirmed category requests without broad visual aliases", () => {
+  for (const prompt of [
+    "build an immersive museum experience",
+    "create a product configurator",
+    "design a data story",
+    "сделай интерактивный музейный опыт",
+    "создай конфигуратор продукта",
+    "сделай редакционный data story",
+  ]) {
+    assert.ok(analyzeFrontendIntent(prompt).intents.has("visual-design-polish"), prompt);
+  }
+  for (const prompt of ["site", "beautiful", "modern", "beautiful modern site"]) {
+    assert.ok(!analyzeFrontendIntent(prompt).intents.has("visual-design-polish"), prompt);
+  }
+});

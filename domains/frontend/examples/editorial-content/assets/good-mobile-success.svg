@@ -6,10 +6,16 @@
 <text x="24" y="82" fill="#18201d" font-family="system-ui, sans-serif" font-size="28" font-weight="750">section</text>
 <text x="366" y="42" text-anchor="end" fill="#176b55" font-family="system-ui, sans-serif" font-size="14" font-weight="700">Continue reading</text>
 <rect x="24" y="128" width="342" height="104" rx="10" fill="#ffffff" stroke="#c9d0cc"/>
-<text x="46" y="170" fill="#18201d" font-family="system-ui, sans-serif" font-size="34" font-weight="700">section</text>
+<text x="46" y="170" fill="#18201d" font-family="system-ui, sans-serif" font-size="34" font-weight="700">Current section</text>
 <text x="46" y="212" fill="#66716c" font-family="system-ui, sans-serif" font-size="13">heading</text>
 <rect x="24" y="250" width="342" height="104" rx="10" fill="#ffffff" stroke="#c9d0cc"/>
-<text x="54" y="292" fill="#18201d" font-family="system-ui, sans-serif" font-size="22" font-weight="500">Continue reading</text>
-<text x="54" y="334" fill="#66716c" font-family="system-ui, sans-serif" font-size="13">action</text>
+<text x="54" y="292" fill="#18201d" font-family="system-ui, sans-serif" font-size="22" font-weight="500">Guide navigation</text>
+<text x="54" y="334" fill="#66716c" font-family="system-ui, sans-serif" font-size="13">list</text>
+<rect x="24" y="372" width="342" height="104" rx="10" fill="#ffffff" stroke="#c9d0cc"/>
+<text x="54" y="414" fill="#18201d" font-family="system-ui, sans-serif" font-size="22" font-weight="500">Source context</text>
+<text x="54" y="456" fill="#66716c" font-family="system-ui, sans-serif" font-size="13">copy</text>
+<rect x="24" y="494" width="342" height="104" rx="10" fill="#ffffff" stroke="#c9d0cc"/>
+<text x="54" y="536" fill="#18201d" font-family="system-ui, sans-serif" font-size="22" font-weight="500">Continue reading</text>
+<text x="54" y="578" fill="#66716c" font-family="system-ui, sans-serif" font-size="13">action</text>
 <text x="24" y="816" fill="#66716c" font-family="ui-monospace, monospace" font-size="12">typography.role-contrast · layout.action-evidence · responsive.recompose-not-stack · color.semantic-roles · state.complete-primary-flow · signature.product-data-grammar</text>
 </svg>

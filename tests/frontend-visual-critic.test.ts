@@ -293,6 +293,57 @@ test("accepts a complete code-free comparison without mutating the report", () =
   assert.deepEqual(report, before);
 });
 
+test("rejects a selected variant below the art-direction floor using quality-oriented ai-slop risk", () => {
+  const report = makeCriticReport({ selectedVariantId: "v1" });
+  Object.assign(report.comparisons[0].scores, {
+    "product-specificity": 0.7, hierarchy: 0.7, composition: 0.7,
+    typography: 0.7, "color-roles": 0.7, "ai-slop-risk": 0,
+  });
+  report.evidenceIds = ["e2", "e1"];
+
+  const result = compareDesignVariants(input, report);
+  const finding = result.findings.find(({ code }) => code === "critic-art-direction-below-floor");
+  assert.equal(result.ok, false);
+  assert.ok(finding);
+  assert.deepEqual(finding.evidence, ["e1", "v1"]);
+  assert.match(finding.message, /0\.583.*0\.60/);
+});
+
+test("rejects a selected variant below the production-integrity floor", () => {
+  const report = makeCriticReport({ selectedVariantId: "v1" });
+  Object.assign(report.comparisons[0].scores, {
+    "state-quality": 0.55, "responsive-transformation": 0.55,
+    accessibility: 0.55, "implementation-coherence": 0.55,
+  });
+  const result = compareDesignVariants(input, report);
+  assert.equal(result.ok, false);
+  assert.ok(result.findings.some(({ code, message }) =>
+    code === "critic-production-integrity-below-floor" && message.includes("0.550")));
+});
+
+test("rejects one sub-floor integrity criterion even when its axis average passes", () => {
+  const report = makeCriticReport({ selectedVariantId: "v1" });
+  Object.assign(report.comparisons[0].scores, {
+    "state-quality": 0.49, "responsive-transformation": 0.9,
+    accessibility: 0.9, "implementation-coherence": 0.9,
+  });
+  const result = compareDesignVariants(input, report);
+  assert.equal(result.ok, false);
+  assert.ok(result.findings.some(({ code, message }) =>
+    code === "critic-integrity-criterion-below-floor" && message.includes("state-quality=0.490")));
+  assert.ok(!result.findings.some(({ code }) => code === "critic-production-integrity-below-floor"));
+});
+
+test("keeps an honest no-acceptable-variant outcome valid below quality floors", () => {
+  const report = makeCriticReport({});
+  for (const comparison of report.comparisons) {
+    for (const criterion of Object.keys(comparison.scores) as Array<keyof typeof comparison.scores>) {
+      comparison.scores[criterion] = 0;
+    }
+  }
+  assert.equal(compareDesignVariants(input, report).ok, true);
+});
+
 test("treats the critic report as an untrusted complete contract", () => {
   const malformed: unknown[] = [null, [], "report", {}, { schemaVersion: "1.0" }];
   for (const value of malformed) {
@@ -414,6 +465,17 @@ test("maps a validated critic report into a drift-free critique event", () => {
     type: "critique-recorded", id: "event-4", at: "2026-07-14T00:00:04Z",
     critiqueId: "critique-1", selectedVariantId: "v2", repairFindingCount: 1,
   });
+});
+
+test("rejects a critique event for a selected variant below the quality floor", () => {
+  const report = makeCriticReport({ selectedVariantId: "v1" });
+  for (const criterion of Object.keys(report.comparisons[0].scores) as Array<keyof typeof report.comparisons[0]["scores"]>) {
+    report.comparisons[0].scores[criterion] = 0.1;
+  }
+  const run = { variantIds: ["v1", "v2"] } as VisualRun;
+  assert.throws(() => createCritiqueRecordedEvent(
+    run, input, report, { id: "event-4", at: "2026-07-14T00:00:04Z" },
+  ), /quality floor/i);
 });
 
 test("binds critique events to the current run candidate snapshot", () => {

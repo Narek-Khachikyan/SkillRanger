@@ -1,7 +1,79 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { verifyVisualResult } from "../src/domains/frontend/design/index.ts";
+import type { UiCaptureEntry, VisualCriterion, VisualCriticReport } from "../src/domains/frontend/design/index.ts";
 import { makeBundle, makeVerificationInput } from "./helpers/frontend-visual-fixtures.ts";
+
+const freshCycle = () => makeVerificationInput({
+  initialEvidence: makeBundle({ id: "e1", variantId: "v1", sourceIdentity: "git:abc" }),
+  recheckEvidence: makeBundle({ id: "e2", variantId: "v1", sourceIdentity: "git:def" }),
+});
+
+test("rejects a selected variant below the critic quality floor", () => {
+  // The critic report is an untrusted caller-supplied snapshot here, so the floor compare_design_variants
+  // applies has to be re-applied independently at the final boundary.
+  const input = freshCycle();
+  const { scores } = input.criticReport.comparisons[0];
+  for (const criterion of Object.keys(scores) as VisualCriterion[]) scores[criterion] = 0.05;
+
+  const result = verifyVisualResult(input);
+  assert.equal(result.report.outcome, "failed");
+  assert.deepEqual(
+    result.findings.map(({ code }) => code).filter((code) => code.endsWith("below-floor")),
+    ["critic-art-direction-below-floor", "critic-production-integrity-below-floor", "critic-integrity-criterion-below-floor"],
+  );
+});
+
+test("requires exactly one scorecard for the selected variant", () => {
+  // The published critic schema allows both inconsistencies. Zero would disable the floor; a
+  // duplicate would make it depend on array order, since a passing 0.8 card can shadow a 0.05 one.
+  for (const [label, mutate] of [
+    ["never scored", (report: VisualCriticReport) => { report.comparisons[0].variantId = "v2"; }],
+    ["scored twice", (report: VisualCriticReport) => {
+      const scores = Object.fromEntries(
+        Object.keys(report.comparisons[0].scores).map((criterion) => [criterion, 0.05]),
+      ) as VisualCriticReport["comparisons"][number]["scores"];
+      report.comparisons.push({ ...report.comparisons[0], scores });
+    }],
+  ] as const) {
+    const input = freshCycle();
+    mutate(input.criticReport);
+
+    const result = verifyVisualResult(input);
+    assert.equal(result.report.outcome, "failed", label);
+    assert.ok(result.findings.some(({ code }) => code === "critic-selected-comparison-invalid"), label);
+  }
+});
+
+test("rejects recheck evidence that still records a causal state mismatch", () => {
+  // checks is caller-supplied, so the generated state-mismatch check is deleted here too.
+  const input = freshCycle();
+  for (const capture of input.recheckEvidence.captures) {
+    capture.stateSynchronization = {
+      status: "mismatch",
+      path: "run selection -> log -> recovery",
+      observations: ["log=run-7", "recovery=run-3"],
+    };
+    capture.checks = [];
+  }
+
+  const result = verifyVisualResult(input);
+  assert.equal(result.report.outcome, "failed");
+  assert.ok(result.findings.some(({ code }) => code === "visual-recheck-state-desynchronized"));
+});
+
+test("rejects evidence whose captures lost the required state synchronization", () => {
+  const input = freshCycle();
+  for (const capture of input.recheckEvidence.captures) {
+    delete (capture as Partial<UiCaptureEntry>).stateSynchronization;
+  }
+
+  const result = verifyVisualResult(input);
+  assert.equal(result.report.outcome, "failed");
+  assert.ok(result.findings.some(({ code, evidence }) =>
+    code === "visual-evidence-matrix-incomplete"
+    && evidence.includes("recheck:capture state synchronization missing or malformed")));
+});
 
 test("fails stale, incomplete, or mismatched evidence", () => {
   const result = verifyVisualResult(makeVerificationInput({

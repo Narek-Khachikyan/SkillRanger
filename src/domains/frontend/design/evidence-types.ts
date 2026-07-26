@@ -4,7 +4,7 @@ export type UiCheckCode =
   | "horizontal-overflow" | "clipped-content" | "element-overlap" | "sticky-overlap"
   | "console-error" | "unreachable-action" | "keyboard-trap" | "focus-order"
   | "invisible-focus" | "contrast" | "critical-axe" | "reduced-motion"
-  | "state-not-rendered" | "inconsistent-spacing" | "random-color"
+  | "state-not-rendered" | "state-mismatch" | "inconsistent-spacing" | "random-color"
   | "excessive-radii" | "excessive-shadows" | "generic-card-repetition"
   | "weak-typography-hierarchy" | "text-measure" | "touch-target";
 
@@ -32,11 +32,38 @@ export type MechanicalSnapshot = {
   touchTargets: Array<{ locator: string; widthPx: number; heightPx: number; interactive: boolean }>;
 };
 
+export type StateSynchronization = {
+  status: "verified" | "mismatch" | "not-applicable";
+  path: string;
+  observations: string[];
+};
+
+const stateSynchronizationStatuses = ["verified", "mismatch", "not-applicable"];
+
+/**
+ * Shape rule for a capture's causal state record. Capture-time ingestion and the final verifier
+ * both apply it: the verifier receives bundles as untrusted snapshots, so a field required only at
+ * capture can be edited back out before verification.
+ *
+ * The published bundle schema states the two-observation minimum as an if/then branch, which the
+ * local JSON Schema subset does not implement; this predicate is where that rule is enforced.
+ */
+export const isValidStateSynchronization = (value: unknown): value is StateSynchronization => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const { status, path, observations } = value as Record<string, unknown>;
+  if (!stateSynchronizationStatuses.includes(status as string)) return false;
+  if (typeof path !== "string" || path.trim().length === 0) return false;
+  if (!Array.isArray(observations)
+    || !observations.every((entry) => typeof entry === "string" && entry.trim().length > 0)) return false;
+  return observations.length >= (status === "not-applicable" ? 1 : 2);
+};
+
 export type UiCaptureEntry = {
   viewport: { width: number; height: number };
   state: string;
   screenshotPath: string;
   observation: BrowserObservation;
+  stateSynchronization: StateSynchronization;
   checks: UiCheckResult[];
 };
 

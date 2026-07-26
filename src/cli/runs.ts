@@ -17,6 +17,7 @@ import type { VerificationReport } from "../runtime/types.ts";
 import {
   StrictSkillRunError,
   StrictSkillRunStore,
+  assertFinalizedVerified,
   beginStrictStep,
   completeStrictStep,
   readNextStrictChunk,
@@ -70,6 +71,7 @@ const strictRemediationByCode: Record<string, string> = {
   "run-not-finalizable": "Finish every selected skill as used, no-op, or blocked before finalizing.",
   "run-not-found": "Check the run ID and project path, then retry.",
   "run-integrity": "Inspect the persisted run and correct the invalid or tampered input.",
+  "run-blocked": "Inspect blockedSkills, resolve every unmet prerequisite or failed hard gate, and start a new run.",
 };
 
 const fail = (message: string): never => {
@@ -216,7 +218,7 @@ const executeRunCommand = async (input: RunCliInput): Promise<RunCommandResult> 
   if (command === "run:skill:verify") {
     return strictStore.verifySkill(runId, flag(input.flags, "skill"));
   }
-  if (command === "run:finalize") return strictStore.finalizeRun(runId);
+  if (command === "run:finalize") return assertFinalizedVerified(await strictStore.finalizeRun(runId));
   if (command === "run:record-read") {
     const skillId = flag(input.flags, "skill");
     const run = await store.read(runId);

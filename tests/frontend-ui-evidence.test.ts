@@ -53,6 +53,9 @@ test("captures observations and extended mechanical evidence", async () => {
       clippedControls: [], unreachableActions: [], stickyOverlaps: [], consoleErrors: [],
       keyboardTraps: [], invisibleFocus: [], criticalAxeViolations: [], reducedMotionVerified: true,
       stateRendered: true, overlaps: [], focusOrderViolations: [], contrastViolations: [],
+      stateSynchronization: state === "success"
+        ? { status: "verified", path: "run[failed] -> log -> recovery", observations: ["log=failed", "recovery=retry"], adapterInternalId: "leak" }
+        : { status: "not-applicable", path: state + " capture", observations: ["No state-changing primary action is available in this requested state."], adapterInternalId: "leak" },
       mechanicalSnapshot: {
         spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [], textBlocks: [],
         touchTargets: [{ locator: "button.icon", widthPx: 28, heightPx: 28, interactive: true }],
@@ -78,8 +81,60 @@ test("captures observations and extended mechanical evidence", async () => {
   assert.equal(bundle.captures.length, 12);
   assert.ok(bundle.captures.every(({ screenshotPath }) => existsSync(screenshotPath)));
   assert.ok(bundle.captures.some(({ checks }) => checks.some(({ code }) => code === "touch-target")));
+  assert.ok(bundle.captures.some(({ stateSynchronization }) =>
+    stateSynchronization.status === "verified"
+    && stateSynchronization.observations.length === 2));
+  assert.ok(bundle.captures.some(({ stateSynchronization, checks }) =>
+    stateSynchronization.status === "not-applicable"
+    && stateSynchronization.observations.length === 1
+    && !checks.some(({ code }) => code === "state-mismatch")));
+  // The adapter leaks an extra key; the published bundle schema forbids additional properties here,
+  // so it must survive neither into the returned bundle nor into the persisted one.
+  assert.ok(bundle.captures.every(({ stateSynchronization }) =>
+    Object.keys(stateSynchronization).sort().join(",") === "observations,path,status"));
   assert.deepEqual(JSON.parse(await readFile(path.join(root, "e1", "bundle.json"), "utf8")), bundle);
   await assert.rejects(() => executeUiEvidenceCapture({ plan, commandTemplate: `node ${adapter}`, projectRoot: root }), /already exists/);
+});
+
+test("rejects missing or empty state synchronization evidence", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "skillranger-evidence-invalid-"));
+  const adapter = path.join(root, "adapter.mjs");
+  await writeFile(adapter, `
+    import { mkdir, writeFile } from "node:fs/promises";
+    import path from "node:path";
+    const [screenshotPath, mode] = process.argv.slice(2);
+    await mkdir(path.dirname(screenshotPath), { recursive: true });
+    await writeFile(screenshotPath, "png");
+    const payload = {
+      horizontalOverflow: false, clippedControls: [], unreachableActions: [], stickyOverlaps: [],
+      consoleErrors: [], keyboardTraps: [], invisibleFocus: [], criticalAxeViolations: [],
+      reducedMotionVerified: true, stateRendered: true, overlaps: [], focusOrderViolations: [],
+      contrastViolations: [],
+      mechanicalSnapshot: {
+        spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [],
+        textBlocks: [], touchTargets: []
+      }
+    };
+    if (mode === "empty") {
+      payload.stateSynchronization = { status: "not-applicable", path: "", observations: [] };
+    }
+    process.stdout.write(JSON.stringify(payload));
+  `);
+  for (const mode of ["missing", "empty"]) {
+    const plan = createUiEvidenceCapturePlan({
+      evidenceId: `invalid-${mode}`, brief: makeBrief({ requiredStates: ["success"] }), policy,
+      variantId: "v1", sourceIdentity: `git:${mode}`, baseUrl: "http://127.0.0.1:3000",
+      route: "/", outputDir: path.join(root, `invalid-${mode}`),
+    });
+    await assert.rejects(
+      () => executeUiEvidenceCapture({
+        plan,
+        commandTemplate: `node ${adapter} "{{screenshotPath}}" ${mode}`,
+        projectRoot: root,
+      }),
+      /stateSynchronization/,
+    );
+  }
 });
 
 

@@ -2,7 +2,8 @@ import { statSync } from "node:fs";
 import { createVerificationReport } from "../../../runtime/verification.ts";
 import type { VerificationFinding } from "../../../runtime/types.ts";
 import type { BoundedRepairRequest, DesignExecutionPolicy } from "./policy-types.ts";
-import type { UiCheckResult, UiEvidenceBundle } from "./evidence-types.ts";
+import { isValidStateSynchronization, type UiCheckResult, type UiEvidenceBundle } from "./evidence-types.ts";
+import { visualCriticQualityFloorFindings } from "./critic.ts";
 import type { DesignBrief, DesignDirection, DesignValidationResult } from "./types.ts";
 import type { DesignVariantMetadata, VisualCriticReport, VisualRun, VisualRunState } from "./visual-loop-types.ts";
 import { assertValidVisualRunSnapshot, digestDesignExecutionPolicy } from "./visual-loop.ts";
@@ -127,6 +128,11 @@ const evidenceMatrixIssues = (
     && policy.requiredStates.every((state) => bundle.requiredStates.includes(state));
   if (!metadataMatches) issues.push(`${label}:required matrix metadata mismatch`);
   if (validCaptures.length !== bundle.captures.length) issues.push(`${label}:capture observation identity mismatch`);
+  // Required at capture, but the verifier receives the bundle as an untrusted snapshot, so a hand
+  // edited bundle can drop the field entirely between capture and verification.
+  if (!bundle.captures.every(({ stateSynchronization }) => isValidStateSynchronization(stateSynchronization))) {
+    issues.push(`${label}:capture state synchronization missing or malformed`);
+  }
   return issues;
 };
 
@@ -190,6 +196,22 @@ export const verifyVisualResult = (input: {
       [input.criticReport.id, input.criticReport.generatorActorId, input.criticReport.criticActorId],
       "Run an independent critic against the initial evidence and persist its selected variant.",
       selectedVariantId,
+    ));
+  }
+  findings.push(...visualCriticQualityFloorFindings(input.criticReport, input.initialEvidence.id));
+  // The recorded status is the primary fact. Its generated state-mismatch check lives in the
+  // caller-supplied checks array and can simply be deleted, so post-correction evidence that still
+  // reports a broken causal path has to fail from the status itself.
+  const desynchronized = input.recheckEvidence.captures
+    .filter(({ stateSynchronization }) => stateSynchronization?.status === "mismatch")
+    .map(({ viewport, state }) => `${viewport.width}px:${state}`);
+  if (desynchronized.length > 0) {
+    findings.push(hardFinding(
+      "visual-recheck-state-desynchronized",
+      "Recheck evidence records a causal state mismatch after correction.",
+      desynchronized,
+      "Repair the causal state path and recapture the affected states before final verification.",
+      input.recheckEvidence.route,
     ));
   }
   if (input.initialEvidence.id === input.recheckEvidence.id) {

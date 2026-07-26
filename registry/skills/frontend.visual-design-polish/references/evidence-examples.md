@@ -10,6 +10,8 @@ Before implementation, load `domains/frontend/examples/<recipe-id>/example.json`
 
 The narrative examples below remain reasoning exercises. The canonical packs govern recipe-specific comparison and use neutral structural content.
 
+Every subject-specific content choice must retain its evidence status: `observed`, `inferred`, `assumed`, or `unknown`. Assumed content may illustrate structure, but it must not be presented as a real client, metric, award, review, testimonial, transaction, or production proof. For state-changing examples, the good scene must keep the chosen control, visible result, and dependent summary causally synchronized.
+
 ## 1. Operations SaaS: Fleet Maintenance Dashboard
 
 **Product truth:** Dispatchers scan 50+ work orders/hour. Each order has priority,

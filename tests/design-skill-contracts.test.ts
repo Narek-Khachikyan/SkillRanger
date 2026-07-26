@@ -364,6 +364,13 @@ test("visual design skill references the canonical rule and example libraries", 
   assert.match(examples, /domains\/frontend\/examples\/<recipe-id>\/example\.json/);
 });
 
+test("visual design guidance separates category choices from universal causal gates", async () => {
+  const skill = await readSkill("visual-design-polish");
+  const rules = await readFile("registry/skills/frontend.visual-design-polish/references/visual-rules.md", "utf8");
+  assert.match(rules, /Utility \/ admin \/ dashboard[\s\S]*Experimental \/ immersive[\s\S]*universal hard gates/i);
+  assert.match(`${skill}\n${rules}`, /state-changing primary action[\s\S]*(at least two dependent representations|control → resulting state)/i);
+});
+
 test("visual-design-polish manifest and contract meet strict execution contract v2 specifications", async () => {
   const root = path.resolve("registry/skills/frontend.visual-design-polish");
   const manifest = JSON.parse(await readFile(path.join(root, "skill.manifest.json"), "utf8"));

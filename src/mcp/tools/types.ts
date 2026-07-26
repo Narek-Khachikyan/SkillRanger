@@ -59,6 +59,7 @@ export type McpToolResult = {
 
 export type McpToolErrorCode =
   | "audit-blocked"
+  | "capture-failed"
   | "confirmation-required"
   | "clarification-required"
   | "critic-required"
@@ -66,6 +67,7 @@ export type McpToolErrorCode =
   | "invalid-transition"
   | "mandatory-skill-unread"
   | "repair-scope-violation"
+  | "run-blocked"
   | "run-integrity"
   | "run-not-found"
   | "skill-not-found"

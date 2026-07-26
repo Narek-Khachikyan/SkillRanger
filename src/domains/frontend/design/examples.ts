@@ -35,14 +35,23 @@ const requiredSceneKeys = [
   "good:mobile:error", "bad:mobile:error",
 ] as const;
 
-const scenarios: Record<string, { scenario: string; object: string; action: string }> = {
+const scenarios: Record<string, { scenario: string; object: string; action: string; labels?: string[] }> = {
   "operational-command-center": { scenario: "Incident queue with stale and assigned states", object: "incident", action: "Triage incident" },
   "consumer-discovery": { scenario: "Saved reading catalogue with filters", object: "title", action: "Save title" },
-  "developer-tool": { scenario: "Repository run diagnostics", object: "run", action: "Inspect failure" },
-  "editorial-content": { scenario: "Sourced implementation guide", object: "section", action: "Continue reading" },
+  "developer-tool": {
+    scenario: "Repository run diagnostics", object: "run", action: "Inspect failure",
+    labels: ["Run command", "Failed step", "Log evidence", "Retry run"],
+  },
+  "editorial-content": {
+    scenario: "Sourced implementation guide", object: "section", action: "Continue reading",
+    labels: ["Current section", "Guide navigation", "Source context"],
+  },
   "marketing-landing": { scenario: "Product capability explanation with supplied proof slot", object: "capability", action: "Request access" },
   "saas-workspace": { scenario: "Team project task list with permissions", object: "task", action: "Update status" },
-  "e-commerce": { scenario: "Product comparison with availability and fulfillment", object: "product", action: "Add to cart" },
+  "e-commerce": {
+    scenario: "Product comparison with availability and fulfillment", object: "product", action: "Add to cart",
+    labels: ["Selected variant", "Available", "Price and cart summary"],
+  },
   "mobile-consumer-app": { scenario: "Daily habit check-in with offline recovery", object: "check-in", action: "Mark complete" },
 };
 
@@ -110,7 +119,7 @@ const validatePack = (
     throw new Error(`Invalid recipe example pack state matrix: ${recipeId}`);
   }
   const allowedLabels = new Set([
-    scenarios[recipeId].object, scenarios[recipeId].action,
+    scenarios[recipeId].object, scenarios[recipeId].action, ...(scenarios[recipeId].labels ?? []),
     "Loading", "Nothing here yet", "Try again", "Unavailable", "Permission required", "Offline",
   ]);
   if (scenes.some((scene) =>

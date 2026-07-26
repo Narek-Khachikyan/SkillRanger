@@ -23,6 +23,15 @@ const criteria: VisualCriterion[] = [
   "ai-slop-risk",
 ];
 
+const artDirectionCriteria: VisualCriterion[] = [
+  "product-specificity", "hierarchy", "composition", "typography", "color-roles", "ai-slop-risk",
+];
+const productionIntegrityCriteria: VisualCriterion[] = [
+  "state-quality", "responsive-transformation", "accessibility", "implementation-coherence",
+];
+const axisQualityFloor = 0.60;
+const integrityCriterionFloor = 0.50;
+
 const codeShape = /```(?:jsx|tsx|css|html|javascript|typescript)|(?:^|\n)(?:diff --git|@@ |\+\+\+ |--- )|<\/?[a-z][^>]*>|\bclassName\s*=|\b(?:git|npm|pnpm|yarn)\s+(?:add|commit|run)\b/i;
 
 const aiSlopCodes = new Set<AiSlopCode>([
@@ -159,7 +168,7 @@ export const createVisualCriticInput = (
     if (!isRecord(candidate) || !nonEmpty(candidate.variantId) || !nonEmpty(candidate.directionPath)
       || !nonEmpty(candidate.evidenceId) || !stringArray(candidate.screenshotPaths, true)
       || candidate.screenshotPaths.length === 0) {
-      throw new Error("Visual critic input candidates require non-empty artifact references and screenshots.");
+      throw new Error("Visual critic input candidates require non-empty variantId, directionPath, evidenceId, and screenshotPaths.");
     }
     if (!hasOnlyKeys(candidate, ["variantId", "directionPath", "evidenceId", "screenshotPaths"])) {
       throw new Error("Visual critic input candidate contains a schema-forbidden field.");
@@ -464,6 +473,84 @@ export const validateVisualCriticReport = (
   return findings;
 };
 
+/**
+ * The quality floor for a selected variant, derived from the report alone. The final visual
+ * verifier receives the critic report as an untrusted snapshot without the critic input, so it must
+ * be able to re-apply this floor independently of compare_design_variants.
+ */
+export const visualCriticQualityFloorFindings = (
+  report: VisualCriticReport,
+  evidenceId: string,
+): VerificationFinding[] => {
+  if (report.outcome !== "selected" || report.selectedVariantId === undefined) return [];
+  // The published critic schema neither cross-links selectedVariantId with comparisons nor forbids
+  // duplicates, so both "selected but never scored" and "scored twice" are schema-valid. Picking one
+  // of several scorecards would make the floor depend on array order, and failing open on none would
+  // disable it outright; the contract is exactly one scorecard, and anything else is the failure.
+  const comparisons = report.comparisons.filter(
+    ({ variantId }) => variantId === report.selectedVariantId,
+  );
+  if (comparisons.length !== 1) {
+    return [hardFinding(
+      "critic-selected-comparison-invalid",
+      `Selected variant ${report.selectedVariantId} must have exactly one comparison scorecard, found ${comparisons.length}.`,
+      "Score the selected variant exactly once in comparisons, or report no-acceptable-variant.",
+      [evidenceId, report.selectedVariantId],
+      report.selectedVariantId,
+    )];
+  }
+  const [comparison] = comparisons;
+
+  const findings: VerificationFinding[] = [];
+  const average = (axis: VisualCriterion[]) =>
+    axis.reduce((total, criterion) => total + comparison.scores[criterion], 0) / axis.length;
+  const artDirectionScore = average(artDirectionCriteria);
+  const productionIntegrityScore = average(productionIntegrityCriteria);
+  const failedIntegrityCriteria = productionIntegrityCriteria.filter(
+    (criterion) => comparison.scores[criterion] < integrityCriterionFloor,
+  );
+  const evidence = [evidenceId, report.selectedVariantId];
+
+  if (artDirectionScore < axisQualityFloor) {
+    findings.push(hardFinding(
+      "critic-art-direction-below-floor",
+      `Selected variant ${report.selectedVariantId} has art direction score ${artDirectionScore.toFixed(3)} below required floor ${axisQualityFloor.toFixed(2)}.`,
+      `Raise the failed art-direction criteria (${artDirectionCriteria.filter((criterion) => comparison.scores[criterion] < axisQualityFloor).join(", ")}) to the minimum acceptable quality; ai-slop-risk is quality-oriented, where 0 means high risk and 1 means risk absent or well-contained.`,
+      evidence,
+      report.selectedVariantId,
+    ));
+  }
+  if (productionIntegrityScore < axisQualityFloor) {
+    findings.push(hardFinding(
+      "critic-production-integrity-below-floor",
+      `Selected variant ${report.selectedVariantId} has production integrity score ${productionIntegrityScore.toFixed(3)} below required floor ${axisQualityFloor.toFixed(2)}.`,
+      `Raise the failed production-integrity criteria (${productionIntegrityCriteria.filter((criterion) => comparison.scores[criterion] < axisQualityFloor).join(", ")}) to the minimum acceptable quality.`,
+      evidence,
+      report.selectedVariantId,
+    ));
+  }
+  if (failedIntegrityCriteria.length > 0) {
+    findings.push(hardFinding(
+      "critic-integrity-criterion-below-floor",
+      `Selected variant ${report.selectedVariantId} has production-integrity criteria below required floor ${integrityCriterionFloor.toFixed(2)}: ${failedIntegrityCriteria.map((criterion) => `${criterion}=${comparison.scores[criterion].toFixed(3)}`).join(", ")}.`,
+      `Raise the failed criteria (${failedIntegrityCriteria.join(", ")}) to at least ${integrityCriterionFloor.toFixed(2)}.`,
+      [...evidence, ...failedIntegrityCriteria],
+      report.selectedVariantId,
+    ));
+  }
+  return findings;
+};
+
+const qualityFloorFindings = (
+  input: VisualCriticInput,
+  report: VisualCriticReport,
+): VerificationFinding[] => {
+  const candidate = input.candidates.find(
+    ({ variantId }) => variantId === report.selectedVariantId,
+  );
+  return candidate ? visualCriticQualityFloorFindings(report, candidate.evidenceId) : [];
+};
+
 export const createCritiqueRecordedEvent = (
   run: Pick<VisualRun, "variantIds">,
   input: VisualCriticInput,
@@ -483,6 +570,9 @@ export const createCritiqueRecordedEvent = (
   const findings = validateVisualCriticReport(input, report);
   if (findings.length > 0 || !validReportContract(report)) {
     throw new Error("Cannot create a critique event from an invalid visual critic report.");
+  }
+  if (qualityFloorFindings(input, report).length > 0) {
+    throw new Error("Cannot create a critique event for a selected variant below the quality floor.");
   }
   return {
     type: "critique-recorded",
@@ -504,6 +594,11 @@ export const compareDesignVariants = (
     return { ok: false, findings };
   }
   const validReport = report as VisualCriticReport;
+  findings.push(...qualityFloorFindings(input, validReport));
+  if (findings.some(({ severity, gate }) =>
+    gate === "hard" && (severity === "critical" || severity === "high"))) {
+    return { ok: false, findings };
+  }
   return {
     ok: true,
     ...(validReport.selectedVariantId === undefined ? {} : { selectedVariantId: validReport.selectedVariantId }),

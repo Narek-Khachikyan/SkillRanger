@@ -22,7 +22,7 @@ import {
 import { createRepairRequest } from "../../runtime/verification.ts";
 import type { VerificationReport } from "../../runtime/types.ts";
 import { scanProject } from "../../scanner/index.ts";
-import { McpToolError, mcpToolEffects, type McpToolDefinition, type McpToolHandler } from "./types.ts";
+import { McpToolError, mcpToolEffects, type JsonObject, type McpToolDefinition, type McpToolHandler } from "./types.ts";
 import { asString, jsonToolResult, projectRootProperty, requireString } from "./utils.ts";
 
 export const domainToolDefinitions: McpToolDefinition[] = [
@@ -112,8 +112,8 @@ export const domainToolDefinitions: McpToolDefinition[] = [
   {
     ...mcpToolEffects.readOnly,
     name: "verify_frontend_result",
-    title: "Verify Frontend Result",
-    description: "Apply frontend hard gates to canonical design artifacts and browser observations. Alias of deterministic frontend validation.",
+    title: "Validate Frontend Hard Gates (Stateless, Not Strict)",
+    description: "Apply deterministic frontend hard gates to caller-supplied design artifacts and observations without creating, advancing, or certifying a persisted strict run. Never report this result as strict SkillRanger completion; strict frontend completion requires prepare_task, real capture_ui_evidence, compare_design_variants, verify_visual_result, complete_skill_run, verify_skill_run, and inspect_skill_run.",
     inputSchema: {
       type: "object",
       properties: {
@@ -200,17 +200,30 @@ const recommendFrontendRecipeTool: McpToolHandler = async (args) => {
   });
 };
 
-const validateFrontendResult: McpToolHandler = async (args) =>
-  jsonToolResult(
-    validateDesignResult({
-      workflowId: "frontend.design-generation",
-      brief: args.brief as DesignBrief,
-      direction: args.direction as DesignDirection,
-      observations: Array.isArray(args.observations) ? args.observations as BrowserObservation[] : [],
-      capabilities: Array.isArray(args.capabilities) ? args.capabilities as string[] : [],
-      iteration: typeof args.iteration === "number" ? args.iteration : 0,
-    }).report,
-  );
+const frontendResultReport = (args: JsonObject) => validateDesignResult({
+  workflowId: "frontend.design-generation",
+  brief: args.brief as DesignBrief,
+  direction: args.direction as DesignDirection,
+  observations: Array.isArray(args.observations) ? args.observations as BrowserObservation[] : [],
+  capabilities: Array.isArray(args.capabilities) ? args.capabilities as string[] : [],
+  iteration: typeof args.iteration === "number" ? args.iteration : 0,
+}).report;
+
+const validateFrontendResult: McpToolHandler = async (args) => jsonToolResult(frontendResultReport(args));
+
+// The notice travels inside the payload rather than prefixed to content[0].text: every other tool's
+// text is the JSON of structuredContent, and a prose prefix made this the only one a host could not
+// parse.
+const verifyFrontendResult: McpToolHandler = async (args) => jsonToolResult({
+  ...frontendResultReport(args),
+  notice: [
+    "NON-CERTIFYING STATELESS RESULT:",
+    "This tool only validates caller-supplied frontend artifacts and observations.",
+    "It does not prove browser capture, an independent critic exchange, or a persisted strict SkillRanger run.",
+    "Do not report strict verification as passed from this result.",
+    "For strict frontend completion use prepare_task, capture_ui_evidence, compare_design_variants, verify_visual_result, complete_skill_run, verify_skill_run, and inspect_skill_run; only a persisted verified run with passed verification status certifies completion.",
+  ].join(" "),
+});
 
 const compileFrontendDesignSpec: McpToolHandler = async (args) => {
   const brief = args.brief as DesignBrief;
@@ -270,7 +283,7 @@ export const domainToolHandlers: Record<string, McpToolHandler> = {
   recommend_frontend_recipe: recommendFrontendRecipeTool,
   validate_frontend_result: validateFrontendResult,
   compile_frontend_design_spec: compileFrontendDesignSpec,
-  verify_frontend_result: validateFrontendResult,
+  verify_frontend_result: verifyFrontendResult,
   repair_frontend_result: repairFrontendResult,
   run_domain_eval: runDomainEval,
 };

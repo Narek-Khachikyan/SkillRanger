@@ -16,6 +16,7 @@ import {
 } from "../../runtime/skill-run/index.ts";
 import type { VerificationReport } from "../../runtime/types.ts";
 import {
+  assertFinalizedVerified,
   beginStrictStep,
   completeStrictStep,
   readNextStrictChunk,
@@ -52,6 +53,7 @@ const strictErrorCodeMap: Record<StrictSkillRunErrorCode, McpToolErrorCode> = {
   "artifact-integrity": "artifact-integrity", "hard-gate-failed": "hard-gate-failed",
   "repair-limit": "repair-limit", "run-not-finalizable": "run-not-finalizable",
   "run-not-found": "run-not-found", "run-integrity": "run-integrity",
+  "run-blocked": "run-blocked",
 };
 
 export const mapSkillRunError = (error: SkillRunError): McpToolError => (
@@ -63,7 +65,7 @@ const withSkillRunErrors = (handler: McpToolHandler): McpToolHandler => async (a
     return await handler(args);
   } catch (error) {
     if (error instanceof SkillRunError) throw mapSkillRunError(error);
-    if (error instanceof StrictSkillRunError) throw new McpToolError(strictErrorCodeMap[error.code], error.message, { lifecycleCode: error.code });
+    if (error instanceof StrictSkillRunError) throw new McpToolError(strictErrorCodeMap[error.code], error.message, { lifecycleCode: error.code, ...error.details });
     throw error;
   }
 };
@@ -206,9 +208,14 @@ const verifyStrict: McpToolHandler = async (args) => {
   return strictRunResult(run);
 };
 
+// A blocked run finalized as ok:true reads like success and has been narrated as one. The terminal
+// state is still persisted first, so inspect_skill_run reports it; only the reply becomes an error.
+// assertFinalizedVerified is shared with the CLI surface so the two cannot disagree.
 const finalizeStrict: McpToolHandler = async (args) => {
   const store = new StrictSkillRunStore(asProjectRoot(args.projectRoot));
-  return strictRunResult(await store.finalizeRun(requireString(args.runId, "runId")));
+  return strictRunResult(assertFinalizedVerified(
+    await store.finalizeRun(requireString(args.runId, "runId")),
+  ));
 };
 
 const recordRead: McpToolHandler = async (args) => runResult(await recordSkillRead(
@@ -358,7 +365,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.runStateWrite,
     name: "begin_skill_run_execution",
     title: "Begin Skill Run Execution",
-    description: "Transition a runtime run into execution after every mandatory router read and any runtime clarification have completed.",
+    description: "Lifecycle-v1 only. Transition a lifecycle-v1 runtime run into execution after every mandatory router read and any runtime clarification have completed. A strict-v2 run is rejected; use begin_skill_step instead.",
     inputSchema: {
       type: "object",
       properties: runIdProperties,
@@ -370,7 +377,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.runStateWrite,
     name: "complete_skill_run",
     title: "Complete Skill Run",
-    description: "Complete execution with a lifecycle status and JSON-native artifacts.",
+    description: "Lifecycle-v1 only. Complete execution with a lifecycle status and JSON-native artifacts. A strict-v2 run is rejected; use complete_skill_step and finalize_skill_run instead.",
     inputSchema: {
       type: "object",
       properties: {
@@ -386,7 +393,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.runStateWrite,
     name: "verify_skill_run",
     title: "Verify Skill Run",
-    description: "Record a JSON-native verification report for an implemented skill run. A verified outcome requires real project-contained evidence and mandatory skill content delivered by the SkillRanger router.",
+    description: "Lifecycle-v1 only. Record a JSON-native verification report for an implemented lifecycle-v1 run. A verified outcome requires real project-contained evidence and mandatory skill content delivered by the SkillRanger router. A strict-v2 run is rejected; use verify_skill instead.",
     inputSchema: {
       type: "object",
       properties: {
@@ -402,7 +409,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.readOnly,
     name: "inspect_skill_run",
     title: "Inspect Skill Run",
-    description: "Read the current persisted skill run state.",
+    description: "Read the current persisted skill run state. Accepts both lifecycle-v1 and strict-v2 runs.",
     inputSchema: {
       type: "object",
       properties: runIdProperties,
@@ -415,7 +422,8 @@ export const runToolDefinitions: McpToolDefinition[] = [
     ["begin_skill_step", "Begin Skill Step", { skillId: { type: "string" }, stepId: { type: "string" } }, ["skillId", "stepId"]],
     ["add_skill_evidence", "Add Skill Evidence", {
       skillId: { type: "string" }, stepId: { type: "string" }, sourcePath: { type: "string" }, kind: { type: "string" },
-      validatedAs: { type: "string" }, relation: { type: "string", enum: ["produced", "informed", "verified"] },
+      validatedAs: { type: "string", description: "Inferred from kind for the artifacts verification looks up by validatedAs: critic-report is validated as a CriticReportV2, and skill-output against the skill output schema. Sending this field for those kinds is optional; sending a conflicting value is rejected." },
+      relation: { type: "string", enum: ["produced", "informed", "verified"] },
       ruleIds: { type: "array", items: { type: "string" } },
     }, ["skillId", "stepId", "sourcePath", "kind", "ruleIds"]],
     ["complete_skill_step", "Complete Skill Step", { skillId: { type: "string" }, stepId: { type: "string" } }, ["skillId", "stepId"]],
