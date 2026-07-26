@@ -1144,6 +1144,39 @@ test("store finalization rejects a used report whose artifact disappeared after 
   );
 });
 
+test("first finalize of a mid-run blocked record with all-terminal outcomes still verifies used evidence", async () => {
+  // Exhausting the LAST skill's repair budget leaves state=blocked with every outcome terminal
+  // before any finalization ran; that shape must not short-circuit the used-ledger integrity check.
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-finalize-midrun-blocked-"));
+  const store = new StrictSkillRunStore(root);
+  const verified = await store.verifySkill((await stageCompletedEvidence(root, store)).runId, contract.skillId);
+
+  const companionContract = JSON.parse(JSON.stringify(contract).replaceAll("frontend.store-test", "frontend.blocked-companion")) as typeof contract;
+  const companion = createStrictSkillRun({
+    runId: "run_blocked_companion", domain: "frontend", targetAgent: "codex", locale: "en",
+    intent: { sha256: sha("companion"), normalizedGoal: "blocked companion" }, now: "2026-07-15T10:00:00.000Z",
+    selectedSkills: [{
+      skillId: companionContract.skillId, role: "companion", mandatory: false, version: "1.0.0",
+      packageChecksum: sha("package"), contractChecksum: sha(JSON.stringify(companionContract)), contract: companionContract,
+      schemaSnapshots: { input: { type: "object" }, output: { type: "object" } },
+      schemaChecksums: { input: sha(JSON.stringify({ type: "object" })), output: sha(JSON.stringify({ type: "object" })) },
+      contentChunks: createContentChunks("SKILL.md", "# Companion\n"), applicable: true, unmetPrerequisites: ["browser-ready"],
+    }],
+  }).skillLedgers[0];
+
+  const tampered = structuredClone(verified);
+  tampered.skillLedgers.push(companion);
+  tampered.state = "blocked";
+  assert.doesNotThrow(() => assertValidStrictSkillRun(tampered));
+  await writeFile(path.join(root, ".skillranger", "runs", `${tampered.runId}.json`), `${JSON.stringify(tampered)}\n`);
+  await unlink(path.join(root, tampered.artifacts[0].path));
+
+  await assert.rejects(
+    store.finalizeRun(tampered.runId),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
+  );
+});
+
 test("store finalization rejects a structurally valid forged passing report for a runtime-failing gate", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-finalize-forged-gate-"));
   const store = new StrictSkillRunStore(root);

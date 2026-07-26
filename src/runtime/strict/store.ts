@@ -216,13 +216,12 @@ export class StrictSkillRunStore {
     const lock = await this.lock.acquire(runId);
     try {
       const current = await this.readUnlocked(runId);
-      // Finalization is terminal. Agents retry an errored blocked finalize, and a repeat call must
-      // not advance the revision of a final record or re-derive evidence pruned after success.
-      // A blocked aggregate state alone is not proof of finalization: exhausting one skill's repair
-      // budget blocks the run mid-flight while other ledgers are still non-terminal, and that run
-      // must keep failing as run-not-finalizable until every skill has an outcome.
-      if ((current.state === "verified" || current.state === "blocked")
-        && current.skillLedgers.every(({ outcome }) => outcome !== undefined)) return current;
+      // Only finalization itself produces "verified" (reducer transitions never do), so that state
+      // alone proves the checks below already passed; repeating them could newly fail against
+      // evidence legitimately pruned after success. A blocked state proves nothing: exhausting the
+      // last skill's repair budget yields blocked with every outcome terminal before any
+      // finalization ran, so blocked runs must always re-run the used-ledger integrity checks.
+      if (current.state === "verified") return current;
       for (const ledger of current.skillLedgers) {
         if (ledger.outcome !== "used") continue;
         const derivation = await deriveStrictValidatorResults(this.projectRoot, current, ledger);
@@ -238,6 +237,9 @@ export class StrictSkillRunStore {
         }
       }
       const finalized = finalizeStrictRun(current);
+      // A repeat finalize of an already-blocked record changes nothing but revision and updatedAt;
+      // skip the write so retried blocked finalizes cannot drift the terminal record.
+      if (finalized.state === current.state) return current;
       await this.writeUnlocked(finalized);
       return finalized;
     } finally { await this.lock.release(lock); }
