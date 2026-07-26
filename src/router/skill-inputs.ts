@@ -4,9 +4,7 @@ export const maxSkillInputEntries = 32;
 
 const canonicalId = /^[a-z0-9][a-z0-9._-]{1,127}$/;
 
-export class SkillInputsError extends Error {
-  readonly code = "invalid-arguments";
-}
+export class SkillInputsError extends Error {}
 
 const fail = (message: string): never => { throw new SkillInputsError(message); };
 

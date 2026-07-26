@@ -95,8 +95,14 @@ test("CLI strict finalize reports a blocked run as a failure", async () => {
 
   assert.ok(failure, "a blocked finalize must not exit 0");
   assert.notEqual(failure.code, 0);
-  const body = JSON.parse(failure.stderr ?? "") as { ok: boolean; error: { code: string; remediation: string } };
+  const body = JSON.parse(failure.stderr ?? "") as {
+    ok: boolean;
+    error: { code: string; remediation: string; details?: { userMessage?: string; blockedSkills?: Array<{ unmetPrerequisites: string[] }> } };
+  };
   assert.equal(body.ok, false);
   assert.equal(body.error.code, "run-blocked");
   assert.ok(body.error.remediation.length > 0);
+  // The remediation says "Inspect blockedSkills", so the CLI must emit the same details as MCP.
+  assert.ok(body.error.details?.userMessage);
+  assert.deepEqual(body.error.details?.blockedSkills?.map(({ unmetPrerequisites }) => unmetPrerequisites), [["browser-ready"]]);
 });

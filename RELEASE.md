@@ -2,6 +2,8 @@
 
 This checklist covers the current public beta. It verifies the npx/npm UX, compiled npm binaries, source-run CLI, MCP server, Universal Prompt Router, bundled registry, audit gates, frontend and router eval suites, and package hygiene before handing the beta to another user or publishing a tarball.
 
+0.3.1 is a patch release. CLI `run:finalize` now emits the same error `details` (`userMessage`, `blockedSkills`) as the MCP surface; repeat finalization of a terminal run is a no-op instead of advancing its revision; evidence kinds named after `Object.prototype` members are ingested as plain evidence again; `verify_visual_result` publishes the container fields it dereferences and rejects deeper malformed snapshot shapes as `invalid-arguments` instead of a JSON-RPC internal error; and the fixtures `eval:router` loads at startup now ship in the package.
+
 0.3.0 is a breaking release for host browser adapters: every capture payload must now carry `stateSynchronization` with a status, a non-empty `path`, and observed values, and a payload without it is rejected by the parser. See `docs/browser-adapter.md` and the `frontend/browser-evidence` shared contract (1.1.0).
 
 MCP `prepare_task` now accepts `skillInputs` with `strict: true`, so strict runs are reachable from an MCP host instead of only from CLI `task --skill-inputs`. Explicit activation now also accepts a leading `@skillranger` or `/sr`; a bare leading `skillranger` stays inactive.

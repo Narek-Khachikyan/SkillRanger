@@ -27,6 +27,9 @@ test("published tarball contains shared contracts and supports registry install 
     : await exec("npm", npmArgs, { maxBuffer: 10 * 1024 * 1024 });
   const packed = JSON.parse(stdout) as Array<{ filename: string; files: Array<{ path: string }> }>;
   assert.ok(packed[0].files.some(({ path: packedPath }) => packedPath === "registry/contracts/frontend/browser-evidence.md"));
+  // eval:router loads these at startup, so the packaged script crashed without them.
+  assert.ok(packed[0].files.some(({ path: packedPath }) => packedPath === "tests/fixtures/router-paraphrase-cases.json"));
+  assert.ok(packed[0].files.some(({ path: packedPath }) => packedPath.startsWith("fixtures/next-react-ts/")));
   const extracted = path.join(root, "extracted"); await mkdir(extracted, { recursive: true });
   await exec("tar", ["-xzf", path.join(root, packed[0].filename), "-C", extracted]);
   const packageDir = path.join(extracted, "package");

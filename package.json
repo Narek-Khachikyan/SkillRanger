@@ -1,6 +1,6 @@
 {
   "name": "skillranger",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "SkillRanger is a local-first router and package manager for AI agent skills.",
   "type": "module",
   "engines": {
@@ -19,7 +19,9 @@
     "schemas/",
     "evals/",
     "tests/fixtures/router-cases.json",
+    "tests/fixtures/router-paraphrase-cases.json",
     "tests/fixtures/router-packs/",
+    "fixtures/next-react-ts/",
     "docs/",
     "README.md",
     "RELEASE.md",

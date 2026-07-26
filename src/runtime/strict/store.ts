@@ -143,7 +143,7 @@ export class StrictSkillRunStore {
         // Verification selects these two artifacts by validatedAs, but agents only ever set `kind`,
         // so a correct artifact stayed invisible and the run could never converge. Infer it from
         // the kind rather than requiring a field nothing advertises.
-        const inferred = inferredValidatedAs[input.kind];
+        const inferred = Object.hasOwn(inferredValidatedAs, input.kind) ? inferredValidatedAs[input.kind] : undefined;
         if (inferred) {
           if (input.validatedAs !== undefined && input.validatedAs !== inferred) {
             throw new StrictSkillRunError(
@@ -216,6 +216,12 @@ export class StrictSkillRunStore {
     const lock = await this.lock.acquire(runId);
     try {
       const current = await this.readUnlocked(runId);
+      // Only finalization itself produces "verified" (reducer transitions never do), so that state
+      // alone proves the checks below already passed; repeating them could newly fail against
+      // evidence legitimately pruned after success. A blocked state proves nothing: exhausting the
+      // last skill's repair budget yields blocked with every outcome terminal before any
+      // finalization ran, so blocked runs must always re-run the used-ledger integrity checks.
+      if (current.state === "verified") return current;
       for (const ledger of current.skillLedgers) {
         if (ledger.outcome !== "used") continue;
         const derivation = await deriveStrictValidatorResults(this.projectRoot, current, ledger);
@@ -231,6 +237,9 @@ export class StrictSkillRunStore {
         }
       }
       const finalized = finalizeStrictRun(current);
+      // A repeat finalize of an already-blocked record changes nothing but revision and updatedAt;
+      // skip the write so retried blocked finalizes cannot drift the terminal record.
+      if (finalized.state === current.state) return current;
       await this.writeUnlocked(finalized);
       return finalized;
     } finally { await this.lock.release(lock); }

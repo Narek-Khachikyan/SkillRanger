@@ -218,4 +218,29 @@ test("capture rejects output directories outside projectRoot before creating art
   }
 });
 
+test("verify_visual_result rejects missing dereferenced containers as invalid-arguments", async () => {
+  // A bare {} visualRun/policy passed the old published schema and crashed the verifier into a
+  // JSON-RPC -32603 internal error a host cannot branch on.
+  const args = makeVerificationInput({
+    initialEvidence: makeBundle({ id: "e1", variantId: "v1", sourceIdentity: "git:abc" }),
+    recheckEvidence: makeBundle({ id: "e2", variantId: "v1", sourceIdentity: "git:abc" }),
+  });
+  const { artifactExists: _artifactExists, ...serializable } = args;
+  const result = await callMcpTool("verify_visual_result", { ...serializable, visualRun: {}, policy: {} } as never);
+  assert.equal(result.isError, true);
+  assert.equal((result.structuredContent as { code?: string }).code, "invalid-arguments");
+
+  // Shapes one level deeper than the published schema subset can express (a capture with only
+  // stateSynchronization) must also reject as invalid-arguments, not a JSON-RPC internal error.
+  const brokenCapture = await callMcpTool("verify_visual_result", {
+    ...serializable,
+    initialEvidence: {
+      ...serializable.initialEvidence,
+      captures: [{ stateSynchronization: { status: "verified", path: "p", observations: ["a", "b"] } }],
+    },
+  } as never);
+  assert.equal(brokenCapture.isError, true);
+  assert.equal((brokenCapture.structuredContent as { code?: string }).code, "invalid-arguments");
+});
+
 test("visual verification delegates stale and mismatched evidence to the strict verifier",async()=>{const args=makeVerificationInput({initialEvidence:makeBundle({id:"e1",variantId:"v1",sourceIdentity:"git:abc"}),recheckEvidence:makeBundle({id:"e1",variantId:"v2",sourceIdentity:"git:abc",captures:[]})});const {artifactExists:_artifactExists,...serializable}=args;const result=await callMcpTool("verify_visual_result",serializable as any);assert.equal(result.isError,false);const report=result.structuredContent as any;assert.equal(report.outcome,"failed");assert.ok(report.findings.some((finding:any)=>finding.code==="visual-evidence-stale"));assert.ok(report.findings.some((finding:any)=>finding.code==="visual-evidence-matrix-incomplete"));});

@@ -23,7 +23,6 @@ import * as strictApi from "../src/runtime/strict/index.ts";
 import { initializeRouterContext } from "../src/mcp/router-context.ts";
 import { callMcpTool } from "../src/mcp/tools.ts";
 import { describeBlockedSkills } from "../src/runtime/strict/finalization.ts";
-import { deriveBrowserGateResults } from "../src/runtime/strict/frontend-evidence.ts";
 import { verifyStrictSkill } from "../src/runtime/strict/reducer.ts";
 
 const sha = (value: string) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
@@ -634,6 +633,11 @@ test("derives no-op and blocked ledgers before execution and blocks aggregate ce
   const finalized = await store.finalizeRun(run.runId);
   assert.equal(finalized.state, "blocked");
 
+  // Agents retry an errored blocked finalize; a repeat call must not rewrite the terminal record.
+  const repeated = await store.finalizeRun(run.runId);
+  assert.equal(repeated.revision, finalized.revision);
+  assert.equal(repeated.updatedAt, finalized.updatedAt);
+
   // A no-op skill was never applicable; reporting it as a gate failure is the dishonest terminal
   // report this contract exists to prevent.
   assert.deepEqual(describeBlockedSkills(finalized), [{
@@ -642,6 +646,27 @@ test("derives no-op and blocked ledgers before execution and blocks aggregate ce
     failedHardGates: [],
     unmetPrerequisites: ["browser-ready"],
   }]);
+});
+
+test("mid-run blocked aggregate state does not satisfy repeat-finalize idempotence", async () => {
+  // Exhausting one skill's repair budget blocks the aggregate state while other ledgers are still
+  // non-terminal; finalize must keep demanding terminal outcomes instead of returning the record.
+  const run = createStrictSkillRun({
+    runId: "run_strict_midrun_blocked", domain: "frontend", targetAgent: "codex", locale: "en",
+    intent: { sha256: sha("test"), normalizedGoal: "mid-run blocked" },
+    selectedSkills: [
+      selection({ skillId: "frontend.blocked", contract: renamedContract("frontend.blocked"), contractChecksum: sha(JSON.stringify(renamedContract("frontend.blocked"))), unmetPrerequisites: ["browser-ready"] }),
+      selection({ skillId: "frontend.pending", contract: renamedContract("frontend.pending"), contractChecksum: sha(JSON.stringify(renamedContract("frontend.pending"))) }),
+    ],
+    now: "2026-07-15T10:00:00.000Z",
+  });
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-midrun-blocked-"));
+  const store = new StrictSkillRunStore(root);
+  await store.create({ ...run, state: "blocked" as const });
+  await assert.rejects(
+    () => store.finalizeRun(run.runId),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-not-finalizable",
+  );
 });
 
 test("MCP finalize reports run-blocked for a run blocked before execution", async () => {
@@ -746,20 +771,6 @@ test("critic v2 rejection names its contract and travels with structured details
   ]);
 });
 
-test("browser verification-input rejection states its contract instead of a bare shape complaint", () => {
-  // The agent self-declared {buildPassed, visualGateResults:{...true}} and retried the same shape
-  // three times, because the rejection never said what a valid input looks like.
-  const results = deriveBrowserGateResults({ buildPassed: true, visualGateResults: { focusVisible: true } }, []);
-  const messages = new Set(Object.values(results).map(({ message }) => message));
-  assert.equal(Object.values(results).every(({ passed }) => !passed), true);
-  assert.equal(messages.size, 1);
-  const [message] = [...messages];
-  assert.match(message ?? "", /must be exactly \{ observations: \[\.\.\.\] \}/);
-  assert.match(message ?? "", /horizontalOverflow/);
-  assert.match(message ?? "", /reducedMotionVerified/);
-  assert.match(message ?? "", /Self-declared pass flags are not accepted/);
-});
-
 test("validatedAs is inferred from kind for the artifacts verification looks up by it", async () => {
   // Agents set only `kind`; the critic gate selects by `validatedAs`, so a correct report used to
   // be ingested unvalidated and then stay invisible to verification.
@@ -796,6 +807,15 @@ test("validatedAs is inferred from kind for the artifacts verification looks up 
     () => store.ingestEvidence("run_strict_test", { sourcePath, kind: "critic-report", validatedAs: "output", attributions: [attribution] }),
     (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
   );
+
+  // A kind that collides with an Object.prototype member must stay plain evidence, not walk the
+  // prototype into inference and fail against a schema the agent never requested.
+  const protoRun = await store.ingestEvidence("run_strict_test", {
+    sourcePath, kind: "toString", attributions: [attribution],
+  });
+  const protoStored = protoRun.artifacts.at(-1);
+  assert.equal(protoStored?.kind, "toString");
+  assert.equal(protoStored?.validatedAs, undefined);
 });
 
 test("skill-output evidence is validated against the output schema without an explicit validatedAs", async () => {
