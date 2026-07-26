@@ -238,10 +238,16 @@ test("derives browser gates only from closed observations bound to screenshot ev
 
   const forged = deriveBrowserGateResults({ checks: { "required-states-covered": true } }, browserArtifacts);
   // The rejection now carries the contract itself, so an agent can correct the shape instead of
-  // resubmitting self-declared pass flags.
-  assert.ok(Object.values(forged).every(({ passed, message }) => !passed
-    && /must be exactly \{ observations: \[\.\.\.\] \}/.test(message ?? "")
-    && /Self-declared pass flags are not accepted/.test(message ?? "")));
+  // resubmitting self-declared pass flags. Every gate must state the identical contract, naming
+  // the closed observation keys.
+  const forgedMessages = new Set(Object.values(forged).map(({ message }) => message));
+  assert.equal(forgedMessages.size, 1);
+  const [forgedMessage] = [...forgedMessages];
+  assert.ok(Object.values(forged).every(({ passed }) => !passed));
+  assert.match(forgedMessage ?? "", /must be exactly \{ observations: \[\.\.\.\] \}/);
+  assert.match(forgedMessage ?? "", /horizontalOverflow/);
+  assert.match(forgedMessage ?? "", /reducedMotionVerified/);
+  assert.match(forgedMessage ?? "", /Self-declared pass flags are not accepted/);
 
   const unbound = deriveBrowserGateResults({ observations: observations.map((item, index) => index === 0 ? { ...item, screenshotPath: "evidence/unbound.png" } : item) }, browserArtifacts);
   assert.ok(Object.values(unbound).every(({ passed, message }) => !passed && /not bound/i.test(message ?? "")));

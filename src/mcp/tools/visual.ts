@@ -56,16 +56,32 @@ const captureBriefSchema = {
 } as const;
 // stateSynchronization is mandatory at capture, so a bundle reaching the final verifier without it
 // was edited after capture. The verifier rejects it either way; publishing the requirement here
-// names the missing field instead of returning a generic matrix finding.
+// names the missing field instead of returning a generic matrix finding. requiredViewports and
+// requiredStates are dereferenced by the matrix check before any finding can report their absence.
 const verifiedEvidenceSchema = {
   type: "object",
-  required: ["captures"],
+  required: ["captures", "requiredViewports", "requiredStates"],
   properties: {
     captures: {
       type: "array",
       items: { type: "object", required: ["stateSynchronization"] },
     },
+    requiredViewports: { type: "array" },
+    requiredStates: { type: "array" },
   },
+} as const;
+// The final verifier dereferences these containers before its lifecycle guards can turn their
+// absence into findings, so an input that omitted them surfaced as a JSON-RPC internal error a
+// host cannot branch on. Publishing them rejects the call as invalid-arguments before dispatch.
+const verifyPolicySchema = {
+  type: "object",
+  required: ["requiredViewports", "requiredStates"],
+  properties: { requiredViewports: { type: "array" }, requiredStates: { type: "array" } },
+} as const;
+const verifyVisualRunSchema = {
+  type: "object",
+  required: ["history", "variantIds", "artifacts"],
+  properties: { history: { type: "array" }, variantIds: { type: "array" }, artifacts: { type: "object" } },
 } as const;
 
 export const visualToolDefinitions: McpToolDefinition[] = [
@@ -88,7 +104,7 @@ export const visualToolDefinitions: McpToolDefinition[] = [
     name: "verify_visual_result",
     title: "Verify visual result",
     description: "Run the canonical strict final visual verifier. criticReport must be a VisualCriticReport v1 (schemaVersion 1.0), not the CriticReportV2 evidence shape.",
-    inputSchema: { type: "object", required: ["workflowId", "policy", "visualRun", "variant", "brief", "direction", "initialEvidence", "recheckEvidence", "criticReport", "boundedRepairFindings"], properties: { workflowId: { type: "string" }, policy: objectSchema, visualRun: objectSchema, variant: objectSchema, brief: objectSchema, direction: objectSchema, initialEvidence: verifiedEvidenceSchema, recheckEvidence: verifiedEvidenceSchema, criticReport: visualCriticReportSchema, boundedRepairRequest: objectSchema, boundedRepairFindings: { type: "array", items: objectSchema } } },
+    inputSchema: { type: "object", required: ["workflowId", "policy", "visualRun", "variant", "brief", "direction", "initialEvidence", "recheckEvidence", "criticReport", "boundedRepairFindings"], properties: { workflowId: { type: "string" }, policy: verifyPolicySchema, visualRun: verifyVisualRunSchema, variant: objectSchema, brief: objectSchema, direction: objectSchema, initialEvidence: verifiedEvidenceSchema, recheckEvidence: verifiedEvidenceSchema, criticReport: visualCriticReportSchema, boundedRepairRequest: objectSchema, boundedRepairFindings: { type: "array", items: objectSchema } } },
   },
 ];
 
@@ -227,20 +243,31 @@ const compare: McpToolHandler = async (args) => {
 };
 
 const verify: McpToolHandler = async (args) => {
-  const result = verifyVisualResult({
-    workflowId: requireString(args.workflowId, "workflowId"),
-    policy: args.policy as DesignExecutionPolicy,
-    visualRun: args.visualRun as VisualRun,
-    variant: args.variant as DesignVariantMetadata,
-    brief: args.brief as DesignBrief,
-    direction: args.direction as DesignDirection,
-    initialEvidence: args.initialEvidence as UiEvidenceBundle,
-    recheckEvidence: args.recheckEvidence as UiEvidenceBundle,
-    criticReport: args.criticReport as VisualCriticReport,
-    boundedRepairRequest: args.boundedRepairRequest as BoundedRepairRequest | undefined,
-    boundedRepairFindings: (args.boundedRepairFindings ?? []) as VerificationFinding[],
-  });
-  return jsonToolResult(result.report);
+  // Unlike the asToolFailure convention, a TypeError here is an input fault, not a JS fault: every
+  // argument is an untrusted caller-supplied snapshot, and the pure verifier reports shape problems
+  // as findings rather than thrown guards, so a dereference crash can only come from a shape the
+  // published schema subset cannot express. It must stay a branchable tool error.
+  try {
+    const result = verifyVisualResult({
+      workflowId: requireString(args.workflowId, "workflowId"),
+      policy: args.policy as DesignExecutionPolicy,
+      visualRun: args.visualRun as VisualRun,
+      variant: args.variant as DesignVariantMetadata,
+      brief: args.brief as DesignBrief,
+      direction: args.direction as DesignDirection,
+      initialEvidence: args.initialEvidence as UiEvidenceBundle,
+      recheckEvidence: args.recheckEvidence as UiEvidenceBundle,
+      criticReport: args.criticReport as VisualCriticReport,
+      boundedRepairRequest: args.boundedRepairRequest as BoundedRepairRequest | undefined,
+      boundedRepairFindings: (args.boundedRepairFindings ?? []) as VerificationFinding[],
+    });
+    return jsonToolResult(result.report);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new McpToolError("invalid-arguments", `verify_visual_result input has an invalid shape: ${error.message}`);
+    }
+    throw error;
+  }
 };
 
 export const visualToolHandlers: Record<string, McpToolHandler> = {

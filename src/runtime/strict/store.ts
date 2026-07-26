@@ -143,7 +143,7 @@ export class StrictSkillRunStore {
         // Verification selects these two artifacts by validatedAs, but agents only ever set `kind`,
         // so a correct artifact stayed invisible and the run could never converge. Infer it from
         // the kind rather than requiring a field nothing advertises.
-        const inferred = inferredValidatedAs[input.kind];
+        const inferred = Object.hasOwn(inferredValidatedAs, input.kind) ? inferredValidatedAs[input.kind] : undefined;
         if (inferred) {
           if (input.validatedAs !== undefined && input.validatedAs !== inferred) {
             throw new StrictSkillRunError(
@@ -216,6 +216,13 @@ export class StrictSkillRunStore {
     const lock = await this.lock.acquire(runId);
     try {
       const current = await this.readUnlocked(runId);
+      // Finalization is terminal. Agents retry an errored blocked finalize, and a repeat call must
+      // not advance the revision of a final record or re-derive evidence pruned after success.
+      // A blocked aggregate state alone is not proof of finalization: exhausting one skill's repair
+      // budget blocks the run mid-flight while other ledgers are still non-terminal, and that run
+      // must keep failing as run-not-finalizable until every skill has an outcome.
+      if ((current.state === "verified" || current.state === "blocked")
+        && current.skillLedgers.every(({ outcome }) => outcome !== undefined)) return current;
       for (const ledger of current.skillLedgers) {
         if (ledger.outcome !== "used") continue;
         const derivation = await deriveStrictValidatorResults(this.projectRoot, current, ledger);

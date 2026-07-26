@@ -121,13 +121,17 @@ const printRun = (result: RunCommandResult, json: boolean) => {
 
 const printError = (error: SkillRunError | StrictSkillRunError, json: boolean) => {
   const remediation = (remediationByCode as Record<string, string>)[error.code] ?? strictRemediationByCode[error.code] ?? strictRemediationByCode["run-integrity"];
+  // The run-blocked remediation tells the caller to inspect blockedSkills, so the CLI must emit
+  // the same details the MCP surface spreads into McpToolError.
+  const details = error instanceof StrictSkillRunError ? error.details : undefined;
   if (json) {
     console.error(JSON.stringify({
       ok: false,
-      error: { code: error.code, message: error.message, remediation },
+      error: { code: error.code, message: error.message, remediation, ...(details === undefined ? {} : { details }) },
     }));
   } else {
     console.error(`[${error.code}] ${error.message}`);
+    if (details !== undefined) console.error(`Details: ${JSON.stringify(details)}`);
     console.error(`Remediation: ${remediation}`);
   }
 };
