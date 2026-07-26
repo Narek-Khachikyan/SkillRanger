@@ -3,7 +3,7 @@ import path from "node:path";
 import { executeAdapterJson } from "./adapter.ts";
 import { evaluateBrowserPayload, type BrowserCheckPayload } from "./browser-checks.ts";
 import type { UiEvidenceCapturePlan } from "./evidence-plan.ts";
-import type { MechanicalSnapshot, UiEvidenceBundle } from "./evidence-types.ts";
+import { isValidStateSynchronization, type MechanicalSnapshot, type UiEvidenceBundle } from "./evidence-types.ts";
 import { defaultMechanicalCheckPolicy, evaluateMechanicalSnapshot, sortUiCheckResults } from "./mechanical.ts";
 import type { BrowserObservation } from "./types.ts";
 
@@ -38,18 +38,14 @@ const mechanicalSnapshot = (value: unknown): MechanicalSnapshot => {
 };
 
 const stateSynchronization = (value: unknown): BrowserCheckPayload["stateSynchronization"] => {
-  if (!isRecord(value)
-    || !["verified", "mismatch", "not-applicable"].includes(String(value.status))
-    || typeof value.path !== "string" || value.path.trim().length === 0
-    || !Array.isArray(value.observations)
-    || !value.observations.every((entry) => typeof entry === "string" && entry.trim().length > 0)) {
-    throw new Error("Browser observation stateSynchronization must contain a valid status, non-empty path, and non-empty observations.");
+  if (!isValidStateSynchronization(value)) {
+    throw new Error(
+      "Browser observation stateSynchronization must be { status: verified | mismatch | not-applicable, "
+      + "path: non-empty string, observations: array of non-empty strings }, with at least two observations "
+      + "unless status is not-applicable.",
+    );
   }
-  const minimumObservations = value.status === "not-applicable" ? 1 : 2;
-  if (value.observations.length < minimumObservations) {
-    throw new Error(`Browser observation stateSynchronization ${String(value.status)} requires at least ${minimumObservations} observation(s).`);
-  }
-  return value as BrowserCheckPayload["stateSynchronization"];
+  return value;
 };
 
 const parsePayload = (value: unknown) => {

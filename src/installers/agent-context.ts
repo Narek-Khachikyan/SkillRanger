@@ -16,7 +16,7 @@ export type SkillRangerAgentContextPlan = {
 export const renderSkillRangerAgentBlock = () => [
   startMarker,
   "## SkillRanger Universal Prompt Router",
-  "When the user's request ends with `@skillranger`, `skillranger`, or `/sr`, use the SkillRanger MCP workflow before implementation.",
+  "When the user's request ends with `@skillranger`, `skillranger`, or `/sr`, or begins with `@skillranger` or `/sr`, use the SkillRanger MCP workflow before implementation. A bare leading `skillranger` is not a trigger.",
   "1. Call `prepare_task` with the complete user request verbatim. Do not remove, move, or rewrite the trigger.",
   "2. If routing clarification is required, ask only the returned routing question, then call `prepare_task` again with the original complete request, continuation token, and typed answers.",
   "3. If decomposition or no-match is returned, report that outcome instead of inventing a workflow.",

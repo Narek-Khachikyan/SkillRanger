@@ -138,7 +138,8 @@ test("explicit mode recognizes a leading mention or command alias", () => {
     ["@SkillRanger Fix the tests", "@skillranger", "Fix the tests"],
     ["  @skillranger\nFix the tests", "@skillranger", "Fix the tests"],
     ["/sr Fix the tests", "/sr", "Fix the tests"],
-    ["@skillranger: Fix the tests", "@skillranger", ": Fix the tests"],
+    ["@skillranger: Fix the tests", "@skillranger", "Fix the tests"],
+    ["/sr, Fix the tests", "/sr", "Fix the tests"],
   ] as const) {
     assert.deepEqual(explicit(prompt), {
       activated: true,
@@ -159,6 +160,8 @@ test("a leading bare product name is not a trigger", () => {
     "@skillranger.com is down",
     "/srv reboot the box",
     "/sr/foo fix the tests",
+    "@skillranger's tests are failing",
+    "@skillranger! fix the tests",
   ]) {
     assert.equal(explicit(prompt).activated, false, prompt);
   }

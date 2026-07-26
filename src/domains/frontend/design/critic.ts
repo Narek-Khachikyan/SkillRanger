@@ -473,18 +473,33 @@ export const validateVisualCriticReport = (
   return findings;
 };
 
-const qualityFloorFindings = (
-  input: VisualCriticInput,
+/**
+ * The quality floor for a selected variant, derived from the report alone. The final visual
+ * verifier receives the critic report as an untrusted snapshot without the critic input, so it must
+ * be able to re-apply this floor independently of compare_design_variants.
+ */
+export const visualCriticQualityFloorFindings = (
   report: VisualCriticReport,
+  evidenceId: string,
 ): VerificationFinding[] => {
   if (report.outcome !== "selected" || report.selectedVariantId === undefined) return [];
-  const comparison = report.comparisons.find(
+  // The published critic schema neither cross-links selectedVariantId with comparisons nor forbids
+  // duplicates, so both "selected but never scored" and "scored twice" are schema-valid. Picking one
+  // of several scorecards would make the floor depend on array order, and failing open on none would
+  // disable it outright; the contract is exactly one scorecard, and anything else is the failure.
+  const comparisons = report.comparisons.filter(
     ({ variantId }) => variantId === report.selectedVariantId,
   );
-  const candidate = input.candidates.find(
-    ({ variantId }) => variantId === report.selectedVariantId,
-  );
-  if (!comparison || !candidate) return [];
+  if (comparisons.length !== 1) {
+    return [hardFinding(
+      "critic-selected-comparison-invalid",
+      `Selected variant ${report.selectedVariantId} must have exactly one comparison scorecard, found ${comparisons.length}.`,
+      "Score the selected variant exactly once in comparisons, or report no-acceptable-variant.",
+      [evidenceId, report.selectedVariantId],
+      report.selectedVariantId,
+    )];
+  }
+  const [comparison] = comparisons;
 
   const findings: VerificationFinding[] = [];
   const average = (axis: VisualCriterion[]) =>
@@ -494,7 +509,7 @@ const qualityFloorFindings = (
   const failedIntegrityCriteria = productionIntegrityCriteria.filter(
     (criterion) => comparison.scores[criterion] < integrityCriterionFloor,
   );
-  const evidence = [candidate.evidenceId, report.selectedVariantId];
+  const evidence = [evidenceId, report.selectedVariantId];
 
   if (artDirectionScore < axisQualityFloor) {
     findings.push(hardFinding(
@@ -524,6 +539,16 @@ const qualityFloorFindings = (
     ));
   }
   return findings;
+};
+
+const qualityFloorFindings = (
+  input: VisualCriticInput,
+  report: VisualCriticReport,
+): VerificationFinding[] => {
+  const candidate = input.candidates.find(
+    ({ variantId }) => variantId === report.selectedVariantId,
+  );
+  return candidate ? visualCriticQualityFloorFindings(report, candidate.evidenceId) : [];
 };
 
 export const createCritiqueRecordedEvent = (

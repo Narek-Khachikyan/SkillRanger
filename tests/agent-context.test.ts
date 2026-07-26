@@ -23,7 +23,7 @@ test("renders the exact SkillRanger universal router block", () => {
     renderSkillRangerAgentBlock(),
       "<!-- SKILLRANGER_START -->\n" +
       "## SkillRanger Universal Prompt Router\n" +
-      "When the user's request ends with `@skillranger`, `skillranger`, or `/sr`, use the SkillRanger MCP workflow before implementation.\n" +
+      "When the user's request ends with `@skillranger`, `skillranger`, or `/sr`, or begins with `@skillranger` or `/sr`, use the SkillRanger MCP workflow before implementation. A bare leading `skillranger` is not a trigger.\n" +
       "1. Call `prepare_task` with the complete user request verbatim. Do not remove, move, or rewrite the trigger.\n" +
       "2. If routing clarification is required, ask only the returned routing question, then call `prepare_task` again with the original complete request, continuation token, and typed answers.\n" +
       "3. If decomposition or no-match is returned, report that outcome instead of inventing a workflow.\n" +

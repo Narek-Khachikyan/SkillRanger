@@ -50,6 +50,19 @@ const captureBriefSchema = {
   required: ["surface"],
   properties: { surface: { type: "object", required: ["requiredStates"], properties: { requiredStates: stateListSchema } } },
 } as const;
+// stateSynchronization is mandatory at capture, so a bundle reaching the final verifier without it
+// was edited after capture. The verifier rejects it either way; publishing the requirement here
+// names the missing field instead of returning a generic matrix finding.
+const verifiedEvidenceSchema = {
+  type: "object",
+  required: ["captures"],
+  properties: {
+    captures: {
+      type: "array",
+      items: { type: "object", required: ["stateSynchronization"] },
+    },
+  },
+} as const;
 
 export const visualToolDefinitions: McpToolDefinition[] = [
   {
@@ -71,7 +84,7 @@ export const visualToolDefinitions: McpToolDefinition[] = [
     name: "verify_visual_result",
     title: "Verify visual result",
     description: "Run the canonical strict final visual verifier. criticReport must be a VisualCriticReport v1 (schemaVersion 1.0), not the CriticReportV2 evidence shape.",
-    inputSchema: { type: "object", required: ["workflowId", "policy", "visualRun", "variant", "brief", "direction", "initialEvidence", "recheckEvidence", "criticReport", "boundedRepairFindings"], properties: { workflowId: { type: "string" }, policy: objectSchema, visualRun: objectSchema, variant: objectSchema, brief: objectSchema, direction: objectSchema, initialEvidence: objectSchema, recheckEvidence: objectSchema, criticReport: visualCriticReportSchema, boundedRepairRequest: objectSchema, boundedRepairFindings: { type: "array", items: objectSchema } } },
+    inputSchema: { type: "object", required: ["workflowId", "policy", "visualRun", "variant", "brief", "direction", "initialEvidence", "recheckEvidence", "criticReport", "boundedRepairFindings"], properties: { workflowId: { type: "string" }, policy: objectSchema, visualRun: objectSchema, variant: objectSchema, brief: objectSchema, direction: objectSchema, initialEvidence: verifiedEvidenceSchema, recheckEvidence: verifiedEvidenceSchema, criticReport: visualCriticReportSchema, boundedRepairRequest: objectSchema, boundedRepairFindings: { type: "array", items: objectSchema } } },
   },
 ];
 

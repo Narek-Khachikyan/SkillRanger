@@ -631,7 +631,17 @@ test("derives no-op and blocked ledgers before execution and blocks aggregate ce
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-terminal-finalize-"));
   const store = new StrictSkillRunStore(root);
   await store.create(run);
-  assert.equal((await store.finalizeRun(run.runId)).state, "blocked");
+  const finalized = await store.finalizeRun(run.runId);
+  assert.equal(finalized.state, "blocked");
+
+  // A no-op skill was never applicable; reporting it as a gate failure is the dishonest terminal
+  // report this contract exists to prevent.
+  assert.deepEqual(describeBlockedSkills(finalized), [{
+    skillId: "frontend.blocked",
+    reason: "unmet-prerequisites",
+    failedHardGates: [],
+    unmetPrerequisites: ["browser-ready"],
+  }]);
 });
 
 test("MCP finalize reports run-blocked for a run blocked before execution", async () => {
@@ -802,4 +812,21 @@ test("skill-output evidence is validated against the output schema without an ex
     () => store.ingestEvidence("run_strict_test", { sourcePath, kind: "skill-output", validatedAs: "critic-report", attributions: [attribution] }),
     (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
   );
+});
+
+test("a contract-named report kind is still inferred as the output the gates read", async () => {
+  // frontend.performance-review names its report kind performance-report, so the kind a host must
+  // send to satisfy requiredEvidenceKinds is not the one the output gate looks up.
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-report-infer-"));
+  const store = new StrictSkillRunStore(root);
+  await store.create(beginStrictStep(fullyRead(), "frontend.test-skill", contract().steps[0].id));
+  const stepId = contract().steps[0].id;
+  const attribution = { skillId: "frontend.test-skill", stepId, attempt: 1, relation: "produced" as const, ruleIds: ["frontend.test-skill/rule/complete"] };
+  const sourcePath = path.join(root, "performance-report.json");
+  await writeFile(sourcePath, JSON.stringify({ summary: "done" }), "utf8");
+
+  const run = await store.ingestEvidence("run_strict_test", {
+    sourcePath, kind: "performance-report", attributions: [attribution],
+  });
+  assert.equal(run.artifacts.at(-1)?.validatedAs, "output", "the schema-valid output gate selects by validatedAs");
 });

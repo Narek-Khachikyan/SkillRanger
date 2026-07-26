@@ -14,10 +14,15 @@ import { ContainedFileReadError, readContainedFile } from "./contained-file.ts";
 
 const errno = (error: unknown, code: string) => typeof error === "object" && error !== null && (error as { code?: unknown }).code === code;
 const digestBytes = (bytes: Uint8Array) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-/** Evidence kinds that verification looks up by validatedAs rather than by kind. */
+/**
+ * Evidence kinds that verification looks up by validatedAs rather than by kind. A contract step may
+ * name the report kind after its skill (performance-report), so the kind a host must send to satisfy
+ * requiredEvidenceKinds is not always the one the output gate reads.
+ */
 const inferredValidatedAs: Record<string, EvidenceArtifact["validatedAs"]> = {
   "critic-report": "critic-report",
   "skill-output": "output",
+  "performance-report": "output",
 };
 const readContainedEvidenceSource = async (projectRoot: string, sourcePath: string) => {
   try {

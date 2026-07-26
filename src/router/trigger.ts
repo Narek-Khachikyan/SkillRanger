@@ -90,13 +90,10 @@ const hasTokenBoundary = (source: string, start: number) => {
   return /\p{P}/u.test(previous);
 };
 
-const hasTrailingTokenBoundary = (source: string, end: number) => {
-  if (end === source.length) return true;
-  const next = source[end];
-  if (/\s/u.test(next)) return true;
-  if (/[./\\_@-]/u.test(next)) return false;
-  return /\p{P}/u.test(next);
-};
+// Only whitespace or an explicit command delimiter may follow a leading trigger, and the delimiter
+// belongs to the command rather than the intent. Accepting any Unicode punctuation turned a
+// possessive mention ("@skillranger's tests are failing") into a command with a mangled intent.
+const leadingSeparator = /^[\s:,;]+/u;
 
 const explicitTrigger = (source: string) => {
   const lower = source.toLowerCase();
@@ -116,7 +113,9 @@ const leadingTrigger = (source: string) => {
   for (const alias of leadingAliases) {
     if (!lower.startsWith(alias, start)) continue;
     const end = start + alias.length;
-    if (hasTrailingTokenBoundary(source, end)) return { alias, intent: source.slice(end) };
+    if (end === source.length) return { alias, intent: "" };
+    const separator = leadingSeparator.exec(source.slice(end));
+    if (separator) return { alias, intent: source.slice(end + separator[0].length) };
   }
   return undefined;
 };

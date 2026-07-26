@@ -209,10 +209,12 @@ const verifyStrict: McpToolHandler = async (args) => {
 /**
  * A run blocks either before execution (unmet prerequisites, so no verification report exists) or
  * after hard gates fail past the repair budget. The prerequisite list is the discriminator; an
- * empty gate list is a valid outcome, not a missing one.
+ * empty gate list is a valid outcome, not a missing one. Only `blocked` ledgers belong here: a
+ * `no-op` skill was never applicable and reporting it as a gate failure is the dishonest terminal
+ * report this contract exists to prevent.
  */
 export const describeBlockedSkills = (run: SkillRunV2) => run.skillLedgers
-  .filter((ledger) => ledger.outcome !== "used")
+  .filter((ledger) => ledger.outcome === "blocked")
   .map((ledger) => {
     const unmetPrerequisites = ledger.applicability?.unmetPrerequisites ?? [];
     return {

@@ -65,7 +65,9 @@ Supply accepted inputs with `skillInputs`, a map from bundled skill id to that s
 
 ```json
 {"prompt":"улучши визуальное качество главной страницы @skillranger","strict":true,"hostCapabilities":["browser","screenshots"],"skillInputs":{"frontend.visual-design-polish":{"brief":{},"capabilityProfile":"standard","changeClass":"material"}}}
-``` The router never auto-installs a missing skill. A lifecycle `record_skill_read` is checksum attestation only; it does not prove content delivery. Only mandatory reads completed through `read_run_skill_file` are persisted as `content-delivered` and can support lifecycle `verified`.
+```
+
+The router never auto-installs a missing skill. A lifecycle `record_skill_read` is checksum attestation only; it does not prove content delivery. Only mandatory reads completed through `read_run_skill_file` are persisted as `content-delivered` and can support lifecycle `verified`.
 
 The persisted task profile contains canonical routing vocabulary and digests, not raw prompts, URLs, arbitrary free text, or absolute project roots. Optional skill files use progressive disclosure and become readable only after mandatory instructions are complete.
 
