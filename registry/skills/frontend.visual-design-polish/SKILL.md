@@ -56,10 +56,10 @@ Name the concrete problem the current UI creates for a real user task: weak hier
 Each direction must differ on at least two of: density model, hierarchy strategy, typographic voice, color temperature, composition pattern, or material treatment. Each must include a one-sentence product reason and one rejected default it intentionally avoids. Do not propose directions that could describe the same "clean modern SaaS" with different accent colors.
 
 ### 4. Choose And Thesis
-Select one direction with its product justification. Select and record one compatible rule id for typography, layout, responsive, color, state, and signature move. State a compact visual thesis: product/audience, hierarchy and density target, type/color roles, one useful signature move, and one generic default deliberately rejected. Compare it with the recipe's good/bad pack, then set design variance, motion, and density to suit the product. Choose one primary direction and at most one supporting accent; do not mix unrelated trends.
+Select one direction with its product justification. Select and record one compatible rule id for typography, layout, responsive, color, state, and signature move. Use the category applicability matrix in `references/visual-rules.md`, chosen from product evidence, the primary task, and the current recipe; universal hard gates remain unchanged. State a compact visual thesis: product/audience, hierarchy and density target, type/color roles, one useful signature move, and one generic default deliberately rejected. Compare it with the recipe's good/bad pack, then set design variance, motion, and density to suit the product. Choose one primary direction and at most one supporting accent; do not mix unrelated trends.
 
 ### 5. Define The Signature Move
-Name one non-generic visual decision the thesis earns: a treatment of a real data shape, a domain-appropriate surface material, a typographic conflict and resolution, a composition structure tied to a user workflow, a color-as-meaning rule, or a motion behavior that clarifies cause and effect. If the signature could describe any SaaS product, it is not specific enough.
+For material visual work, name one non-generic visual decision that supports the primary task: a treatment of a real data shape, a domain-appropriate surface material, a typographic conflict and resolution, a composition structure tied to a user workflow, a color-as-meaning rule, or a motion behavior that clarifies cause and effect. Motion is optional; when used, state its function. If the signature could describe any SaaS product, it is not specific enough.
 
 ### 6. Apply Across First Viewport And Common Surfaces
 Demonstrate the thesis on the primary screen, then verify on: primary/secondary CTA, repeated card or row, input/form control and focus state, navigation active state, dense data cell or metadata row, empty/loading/error state, modal/drawer/toast surface, and mobile version of the primary workflow. If the thesis breaks on any surface, revise it before implementing.
@@ -79,6 +79,8 @@ Run the **final corrective gate** below immediately before handoff. It has prior
 - Make hierarchy, readability, task clarity, accessibility, and responsive recomposition more important than ornament.
 - Give typography and color semantic roles. Use saturation, motion, glow, glass, gradients, and imagery only when they clarify action, state, data, trust, or an earned signature.
 - Copy and states are visual material. Use domain objects and observable verbs; account for loading, empty, error, disabled, focus-visible, selected, long-content, and permission states when relevant.
+- For a state-changing primary action, keep the control, resulting state, and at least two dependent representations causally consistent; verify the observed path rather than assuming shared internal state.
+- Classify subject-specific content as `observed`, `inferred`, `assumed`, or `unknown`. Never present assumed clients, metrics, awards, reviews, testimonials, or production results as proof.
 - Mobile is a separate composition: preserve focal hierarchy and action reachability; do not merely stack desktop cards.
 - Public references are attribute sources, not blueprints. Never reproduce a logo, marks, exact palette-plus-layout, mascot, hero composition, or trade-dress impression.
 

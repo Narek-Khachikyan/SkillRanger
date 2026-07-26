@@ -45,7 +45,7 @@ export const enFrontendIntentAliases: FrontendIntentAliasPack = {
     },
     "visual-design-polish": {
       tokens: ["crowded", "editorial", "generic", "hierarchy", "looks", "manga", "modernize", "rebrand", "redesign", "refresh", "revamp", "visual"],
-      phrases: ["art direction", "before-after", "brand direction", "design language", "design.md", "layout bug", "look and feel", "looks off", "product fit", "screenshot looks off", "style guide", "subject-specific", "tell me what to change", "visual direction", "visual identity", "visual language", "visual regression", "visual thesis"],
+      phrases: ["art direction", "before-after", "brand direction", "data story", "design language", "design.md", "immersive museum experience", "layout bug", "look and feel", "looks off", "product configurator", "product fit", "screenshot looks off", "style guide", "subject-specific", "tell me what to change", "visual direction", "visual identity", "visual language", "visual regression", "visual thesis"],
     },
   },
   controls: {

@@ -4,6 +4,7 @@ import { createRouterReader, createRouterRuntimeStore, prepareTask, RouterPrepar
 import type { PrepareTaskCoreInput, ReadRunSkillFileInput } from "../../router/types.ts";
 import { RouterReaderError } from "../../router/reader.ts";
 import { RouterStore, RouterStoreError } from "../../router/store.ts";
+import { maxSkillInputEntries, SkillInputsError, validateSkillInputs } from "../../router/skill-inputs.ts";
 import { SkillRunStore } from "../../runtime/skill-run/index.ts";
 import { reduceSkillRun } from "../../runtime/skill-run/reducer.ts";
 import { StrictSkillRunStore, readNextStrictChunk } from "../../runtime/strict/index.ts";
@@ -64,6 +65,7 @@ const inputSchema = {
     continuationToken: { type: "string", minLength: 1, maxLength: 4096 },
     clarificationAnswers: { type: "array", maxItems: 8, items: { type: "object", properties: { questionId: { type: "string", minLength: 1, maxLength: 128 }, value: { type: "string", minLength: 1, maxLength: 128 } }, required: ["questionId", "value"], additionalProperties: false } },
     semanticHints: { type: "object" },
+    skillInputs: { type: "object", maxProperties: maxSkillInputEntries, additionalProperties: { type: "object" }, description: "Strict-mode only. Maps a bundled skill ID to the input object required by that skill's input.schema.json." },
   },
   required: ["prompt"],
   additionalProperties: false,
@@ -88,7 +90,7 @@ const readInputSchema = {
 };
 
 export const routerToolDefinitions: McpToolDefinition[] = [
-  { ...mcpToolEffects.runStateWrite, name: "prepare_task", title: "Prepare SkillRanger Task", description: "Canonical authoritative entrypoint for an explicit SkillRanger workflow. Prepare the complete, unmodified user request, including its terminal trigger; read every required instruction before resolving runtime clarification or beginning the returned runtime run.", inputSchema, outputSchema: prepareTaskOutputSchema },
+  { ...mcpToolEffects.runStateWrite, name: "prepare_task", title: "Prepare SkillRanger Task", description: "Canonical authoritative entrypoint for an explicit SkillRanger workflow. Prepare the complete, unmodified user request, including its leading or terminal trigger; read every required instruction before resolving runtime clarification or beginning the returned runtime run.", inputSchema, outputSchema: prepareTaskOutputSchema },
   { ...mcpToolEffects.runStateWrite, annotations: { ...mcpToolEffects.runStateWrite.annotations, idempotentHint: true }, name: "read_run_skill_file", title: "Read Prepared Skill Instructions", description: "Read the next mandatory chunk or an allowed optional text file from a prepared router run. Use a new RFC 4122 UUID for each new read; retry a transport failure with the identical request and its current revision.", inputSchema: readInputSchema, outputSchema: readRunSkillFileOutputSchema },
 ];
 
@@ -112,8 +114,15 @@ const withRouterErrors = (handler: McpToolHandler): McpToolHandler => async (arg
 
 const prepare: McpToolHandler = async (args) => {
   const context = routerContext();
-  const unknown = Object.keys(args).find((key) => !["prompt", "targetAgent", "hostCapabilities", "strict", "continuationToken", "clarificationAnswers", "semanticHints"].includes(key));
+  const unknown = Object.keys(args).find((key) => !["prompt", "targetAgent", "hostCapabilities", "strict", "continuationToken", "clarificationAnswers", "semanticHints", "skillInputs"].includes(key));
   if (unknown) throw new McpToolError(unknown === "projectRoot" || unknown === "registryRoot" ? "project-root-unauthorized" as never : "invalid-arguments", `Unknown router argument: ${unknown}.`, { argument: unknown });
+  if (args.skillInputs !== undefined && args.strict !== true) throw new McpToolError("invalid-arguments", "skillInputs is only available with strict: true.", { argument: "skillInputs" });
+  const skillInputs = args.skillInputs === undefined
+    ? undefined
+    : await validateSkillInputs(args.skillInputs, context.registryRoot).catch((error) => {
+      if (error instanceof SkillInputsError) throw new McpToolError("invalid-arguments", error.message, { argument: "skillInputs" });
+      throw error;
+    });
   const input: PrepareTaskCoreInput = {
     projectRoot: context.projectRoot,
     registry: { kind: "bundled", root: context.registryRoot },
@@ -125,6 +134,7 @@ const prepare: McpToolHandler = async (args) => {
     ...(typeof args.continuationToken === "string" ? { continuationToken: args.continuationToken } : {}),
     ...(Array.isArray(args.clarificationAnswers) ? { clarificationAnswers: args.clarificationAnswers as Array<{ questionId: string; value: string }> } : {}),
     ...(args.semanticHints !== undefined ? { semanticHints: args.semanticHints as PrepareTaskCoreInput["semanticHints"] } : {}),
+    ...(skillInputs === undefined ? {} : { skillInputs }),
   };
   return jsonToolResult(await prepareTask(input));
 };

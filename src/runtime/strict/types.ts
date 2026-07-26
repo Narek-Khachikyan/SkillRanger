@@ -173,10 +173,13 @@ export type SkillRunV2 = {
 
 export class StrictSkillRunError extends Error {
   readonly code: StrictSkillRunErrorCode;
+  /** Machine-readable contract facts, surfaced to hosts as McpToolError details. */
+  readonly details?: Record<string, unknown>;
 
-  constructor(code: StrictSkillRunErrorCode, message: string) {
+  constructor(code: StrictSkillRunErrorCode, message: string, details?: Record<string, unknown>) {
     super(message);
     this.name = "StrictSkillRunError";
     this.code = code;
+    if (details) this.details = details;
   }
 }

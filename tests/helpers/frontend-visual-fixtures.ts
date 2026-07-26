@@ -61,6 +61,11 @@ export const makeBundle = (input: {
           stickyOverlaps: [], consoleErrors: [], keyboardTraps: [], invisibleFocus: [],
           criticalAxeViolations: [], reducedMotionVerified: true, screenshotPath,
         },
+        stateSynchronization: {
+          status: "verified" as const,
+          path: "run selection -> log -> recovery",
+          observations: ["log=selected-run", "recovery=selected-run"],
+        },
         checks: [],
       };
     }),

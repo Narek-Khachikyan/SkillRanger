@@ -37,6 +37,21 @@ const mechanicalSnapshot = (value: unknown): MechanicalSnapshot => {
   return value as MechanicalSnapshot;
 };
 
+const stateSynchronization = (value: unknown): BrowserCheckPayload["stateSynchronization"] => {
+  if (!isRecord(value)
+    || !["verified", "mismatch", "not-applicable"].includes(String(value.status))
+    || typeof value.path !== "string" || value.path.trim().length === 0
+    || !Array.isArray(value.observations)
+    || !value.observations.every((entry) => typeof entry === "string" && entry.trim().length > 0)) {
+    throw new Error("Browser observation stateSynchronization must contain a valid status, non-empty path, and non-empty observations.");
+  }
+  const minimumObservations = value.status === "not-applicable" ? 1 : 2;
+  if (value.observations.length < minimumObservations) {
+    throw new Error(`Browser observation stateSynchronization ${String(value.status)} requires at least ${minimumObservations} observation(s).`);
+  }
+  return value as BrowserCheckPayload["stateSynchronization"];
+};
+
 const parsePayload = (value: unknown) => {
   if (!isRecord(value)) throw new Error("Browser adapter must return one JSON object per invocation.");
   const contrast = value.contrastViolations;
@@ -58,6 +73,7 @@ const parsePayload = (value: unknown) => {
     overlaps: stringArray(value, "overlaps"),
     focusOrderViolations: stringArray(value, "focusOrderViolations"),
     contrastViolations: contrast as BrowserCheckPayload["contrastViolations"],
+    stateSynchronization: stateSynchronization(value.stateSynchronization),
   };
   return { browser, mechanical: mechanicalSnapshot(value.mechanicalSnapshot) };
 };
@@ -132,7 +148,12 @@ export const executeUiEvidenceCapture = async (input: {
         ...evaluateBrowserPayload({ payload: parsed.browser, viewport: entry.viewport.width, state: entry.state, screenshotPath: entry.screenshotPath }),
         ...evaluateMechanicalSnapshot({ snapshot: parsed.mechanical, policy: defaultMechanicalCheckPolicy, viewport: entry.viewport.width, state: entry.state, screenshotPath: entry.screenshotPath }),
       ]);
-      captures.push({ ...entry, observation: observationFor(parsed.browser, entry, input.plan.route), checks });
+      captures.push({
+        ...entry,
+        observation: observationFor(parsed.browser, entry, input.plan.route),
+        stateSynchronization: parsed.browser.stateSynchronization,
+        checks,
+      });
     }
   } catch (error) {
     const retained = captures.map(({ screenshotPath }) => screenshotPath);

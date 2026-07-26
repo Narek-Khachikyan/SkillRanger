@@ -33,6 +33,22 @@ test("ships complete good/bad desktop/mobile/state packs", async () => {
   assert.equal(assetCount, 80);
 });
 
+test("category packs encode their primary product relationships", async () => {
+  const packs = new Map((await loadRecipeExamplePacks()).map((pack) => [pack.recipeId, pack]));
+  const goodBlocks = (recipeId: string) => packs.get(recipeId)?.scenes
+    .find(({ id }) => id === "good-desktop-success")?.blocks
+    .map(({ kind, label }) => `${kind}:${label}`) ?? [];
+  assert.deepEqual(goodBlocks("developer-tool"), [
+    "action:Run command", "status:Failed step", "list:Log evidence", "action:Retry run",
+  ]);
+  assert.deepEqual(goodBlocks("e-commerce"), [
+    "media:Selected variant", "status:Available", "copy:Price and cart summary", "action:Add to cart",
+  ]);
+  assert.deepEqual(goodBlocks("editorial-content"), [
+    "heading:Current section", "list:Guide navigation", "copy:Source context", "action:Continue reading",
+  ]);
+});
+
 test("rejects incomplete example packs at runtime", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "skillranger-examples-"));
   try {

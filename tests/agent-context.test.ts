@@ -24,15 +24,17 @@ test("renders the exact SkillRanger universal router block", () => {
       "<!-- SKILLRANGER_START -->\n" +
       "## SkillRanger Universal Prompt Router\n" +
       "When the user's request ends with `@skillranger`, `skillranger`, or `/sr`, use the SkillRanger MCP workflow before implementation.\n" +
-      "1. Call `prepare_task` with the complete user request verbatim. Do not remove, move, or rewrite the terminal trigger.\n" +
+      "1. Call `prepare_task` with the complete user request verbatim. Do not remove, move, or rewrite the trigger.\n" +
       "2. If routing clarification is required, ask only the returned routing question, then call `prepare_task` again with the original complete request, continuation token, and typed answers.\n" +
       "3. If decomposition or no-match is returned, report that outcome instead of inventing a workflow.\n" +
       "4. For a prepared task, repeatedly call `read_run_skill_file` until `readStatus.runMandatoryReadsComplete` is true. Each new read uses a freshly generated RFC 4122 UUID and the latest returned `readRevision`; retry a transport failure with the identical request.\n" +
       "5. Do not call lifecycle clarification or execution tools before mandatory reads complete. `runtimeClarification` applies to the returned runtime run ID, never the router run ID.\n" +
       "6. Resolve runtime clarification from facts in the request. For an allowed decline, continue with one neutral explicit assumption per declined field instead of asking the user; ask only when a non-declinable question cannot be answered from the request.\n" +
       "7. Begin the returned runtime run only after the reads and any runtime clarification complete, then implement the original request without stopping for a plan or confirmation unless the user asked for one.\n" +
+      "7a. Branch on `run.runtime`. For `lifecycle-v1` use `begin_skill_run_execution`, `complete_skill_run`, and `verify_skill_run`. For `strict-v2` use `read_next_skill_chunk`, `begin_skill_step`, `add_skill_evidence`, `complete_skill_step`, `verify_skill`, and `finalize_skill_run`. The lifecycle-v1 transition tools reject a strict-v2 run; never mix the two families on one run. `inspect_skill_run` reads either runtime.\n" +
       "8. Do not install skills automatically or execute skill package scripts.\n" +
       "9. Do not claim `verified` unless SkillRanger runtime verification succeeds.\n" +
+      "9a. A `run-blocked` error from `finalize_skill_run` means no verified result exists. Report its `userMessage` and `blockedSkills` verbatim; never describe such a run as passed, processed, or complete.\n" +
       "<!-- SKILLRANGER_END -->",
   );
 });

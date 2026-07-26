@@ -53,13 +53,19 @@ If the host supports environment variables, set `SKILLRANGER_PROJECT_ROOT` to th
 
 ## Universal Router
 
-Call `prepare_task` with the complete prompt ending in `@skillranger`, `skillranger`, or `/sr`. The model cannot select activation mode, project root, registry root, or raw-intent persistence. The router uses the fixed server root and bundled audited registry.
+Call `prepare_task` with the complete prompt. Any alias — `@skillranger`, `skillranger`, or `/sr` — activates at the end of the prompt; `@skillranger` and `/sr` also activate at the start, so a host that puts the mention first does not need to rewrite the prompt. A bare leading `skillranger` is not a trigger, because it would turn any sentence starting with the product name into a command. The model cannot select activation mode, project root, registry root, or raw-intent persistence. The router uses the fixed server root and bundled audited registry.
 
 Normal outcomes are `prepared`, `clarification_required`, `decomposition_required`, `no_matching_skills`, `strict_requirements_unmet`, and `context_budget_exceeded`. Only `prepared` creates a router sidecar and one lifecycle-v1 or strict-v2 runtime record. Clarification provides a short-lived opaque continuation token; resend the same canonical task with `continuationToken` and closed-option `clarificationAnswers`. Decomposition and no-match do not create partial runs.
 
 For a prepared run, call `read_run_skill_file` in `mandatory-next` mode with a new UUID `readRequestId` and the current `expectedReadRevision`. The server chooses the next skill, path, offset, and UTF-8 chunk. Replaying the same bound request ID returns the same content and revision. Do not begin the runtime until `readStatus.runMandatoryReadsComplete` is true.
 
-`hostCapabilities` describe what the host can provide; they are not verification evidence. Missing optional verification capabilities produce guidance-only or unverified outcomes. Strict mode additionally requires every selected skill to be repo-installed with matching lockfile and files, contract v2, accepted inputs, and complete strict reads. The router never auto-installs a missing skill. A lifecycle `record_skill_read` is checksum attestation only; it does not prove content delivery. Only mandatory reads completed through `read_run_skill_file` are persisted as `content-delivered` and can support lifecycle `verified`.
+`hostCapabilities` describe what the host can provide; they are not verification evidence. Missing optional verification capabilities produce guidance-only or unverified outcomes. Strict mode additionally requires every selected skill to be repo-installed with matching lockfile and files, contract v2, accepted inputs, and complete strict reads.
+
+Supply accepted inputs with `skillInputs`, a map from bundled skill id to that skill's input object. It is available only with `strict: true`, accepts at most 32 entries, and rejects any id that is not in the bundled registry. Each skill declares its required object in `input.schema.json`, which is readable inside the installed skill directory after `install_skill`; an entry that does not validate leaves the skill reported as a missing `skill-input` requirement. The CLI equivalent is `task --strict --skill-inputs <file>`.
+
+```json
+{"prompt":"улучши визуальное качество главной страницы @skillranger","strict":true,"hostCapabilities":["browser","screenshots"],"skillInputs":{"frontend.visual-design-polish":{"brief":{},"capabilityProfile":"standard","changeClass":"material"}}}
+``` The router never auto-installs a missing skill. A lifecycle `record_skill_read` is checksum attestation only; it does not prove content delivery. Only mandatory reads completed through `read_run_skill_file` are persisted as `content-delivered` and can support lifecycle `verified`.
 
 The persisted task profile contains canonical routing vocabulary and digests, not raw prompts, URLs, arbitrary free text, or absolute project roots. Optional skill files use progressive disclosure and become readable only after mandatory instructions are complete.
 
@@ -176,6 +182,14 @@ If the current plan differs from the expected paths, installation is rejected. I
 4. Treat the invoked command as open-world and potentially destructive according to MCP annotations.
 5. Do not send install-only `expectedWrites` or `expectedLockfileUpdates` fields.
 
+## Critic and Verification Contracts
+
+Three distinct contracts share similar names. Submitting one where another is expected is rejected.
+
+- **`VisualCriticReport` v1** (`schemaVersion` `1.0`) is the `criticReport` argument of `compare_design_variants` and `verify_visual_result`. Its full JSON Schema is published on both tools and ships at `registry/skills/frontend.visual-critic/output.schema.json`.
+- **`CriticReportV2`** (`schemaVersion` `2.0`) is the strict-run evidence submitted with `add_skill_evidence` as `critic-report`. It is a closed shape: `schemaVersion`, `skillId`, `criticInvocationId`, `executorInvocationId`, `outcome`, `evidenceArtifactIds`, `findings`. Its `criticInvocationId` must differ from `executorInvocationId`. Rejections carry `requiredFields` in the error details.
+- **Browser verification input** is the strict-run evidence submitted as `verification-input` for skills whose gates use the `frontend/browser-hard-gates` validator. It must be exactly `{ "observations": [...] }` with real captured observations; self-declared pass flags are rejected. Other skills use a different `verification-input` shape, so this contract applies only to that validator.
+
 ## Tool Error Codes
 
 Expected tool-level failures return an MCP tool result with `isError: true`, `ok: false`, and a stable `code` in `structuredContent`. Hosts should branch on these codes rather than parsing message text.
@@ -183,6 +197,8 @@ Expected tool-level failures return an MCP tool result with `isError: true`, `ok
 - `confirmation-required`: either confirmed-write tool (`install_skill` or `capture_ui_evidence`) was called without `confirm: true`. Only `install_skill` uses the install-plan `expectedWrites` and `expectedLockfileUpdates` fields.
 - `stale-plan`: expected paths do not match the current `install_skill` plan.
 - `audit-blocked`: audit risk is `block`; no files were written.
+- `run-blocked`: `finalize_skill_run` finalized a strict run in a terminal state other than `verified`. The terminal state is persisted before the error, so `inspect_skill_run` still reports it. Details carry `state`, `userMessage`, and `blockedSkills`, each entry naming `reason` (`hard-gates-failed` or `unmet-prerequisites`), `failedHardGates`, and `unmetPrerequisites`. A run blocked before execution has no verification report and therefore no failed gates.
+- `capture-failed`: `capture_ui_evidence` ran but the browser adapter or its returned payload violated the evidence contract. Argument-shape problems return `invalid-arguments` instead. Unexpected implementation faults still surface as JSON-RPC internal errors.
 - `unsupported-target`: no MVP adapter exists for the requested target agent.
 - `skill-not-found`: the requested skill id does not exist in the registry.
 - `invalid-arguments`: tool arguments have the wrong shape.

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { resolveDesignExecutionPolicy } from "../src/domains/frontend/design/index.ts";
@@ -21,6 +21,11 @@ const captureArgs = async (projectRoot: string, outputDir: string) => {
       clippedControls: [], unreachableActions: [], stickyOverlaps: [], consoleErrors: [],
       keyboardTraps: [], invisibleFocus: [], criticalAxeViolations: [], reducedMotionVerified: true,
       stateRendered: true, overlaps: [], focusOrderViolations: [], contrastViolations: [],
+      stateSynchronization: {
+        status: "not-applicable",
+        path: "requested capture state",
+        observations: ["This fixture has no state-changing primary action."],
+      },
       mechanicalSnapshot: {
         spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [],
         textBlocks: [], touchTargets: [],
@@ -47,7 +52,54 @@ const captureArgs = async (projectRoot: string, outputDir: string) => {
 };
 
 test("registers exactly the three visual tool names",()=>{const names=mcpTools.map(({name})=>name);for(const name of ["capture_ui_evidence","compare_design_variants","verify_visual_result"])assert.equal(names.filter((candidate)=>candidate===name).length,1);});
+test("both critic tools publish the canonical VisualCriticReport v1 schema", async () => {
+  const canonical = JSON.parse(await readFile("registry/skills/frontend.visual-critic/output.schema.json", "utf8"));
+  const byName = new Map(mcpTools.map((tool) => [tool.name, tool]));
+  for (const name of ["compare_design_variants", "verify_visual_result"]) {
+    const published = (byName.get(name)?.inputSchema.properties as any).criticReport;
+    // Compared whole, not just `required`: a partial copy would drift from the enforced contract.
+    assert.deepEqual(published, canonical, name);
+    assert.match(byName.get(name)?.description ?? "", /VisualCriticReport v1/, name);
+    assert.match(byName.get(name)?.description ?? "", /CriticReportV2/, name);
+  }
+});
+
+test("visual MCP array inputs publish item schemas",()=>{
+  const byName = new Map(mcpTools.map((tool) => [tool.name, tool]));
+  // A bare {type:"object"} item left agents guessing candidate field names from the rejection
+  // text; the required contract is published so a host can see and pre-validate it.
+  const candidates = (byName.get("compare_design_variants")?.inputSchema.properties as any).candidates;
+  assert.deepEqual(candidates.items.required, ["variantId", "directionPath", "evidenceId", "screenshotPaths"]);
+  assert.equal(candidates.items.properties.screenshotPaths.minItems, 1);
+  assert.deepEqual((byName.get("verify_visual_result")?.inputSchema.properties as any).boundedRepairFindings.items,{type:"object"});
+});
 test("compare tool returns a critic exchange before validation",async()=>{const result=await callMcpTool("compare_design_variants",{policyId:"p1",generatorActorId:"g1",criticActorId:"c1",candidates:[{variantId:"v1",directionPath:"v1.json",evidenceId:"e1",screenshotPaths:["v1.png"]},{variantId:"v2",directionPath:"v2.json",evidenceId:"e2",screenshotPaths:["v2.png"]}]});assert.equal(result.isError,false);assert.equal((result.structuredContent as any).status,"critic-required");});
+
+test("visual contract violations surface as tool-level codes, not internal errors", async () => {
+  // Real host traffic hit both of these as JSON-RPC -32603, which a host cannot branch on.
+  // Blank-but-present strings satisfy the published schema and reach the domain guard, so this
+  // exercises the handler's mapping rather than centralized schema validation.
+  const blank = { variantId: " ", directionPath: " ", evidenceId: " ", screenshotPaths: [" "] };
+  const semantic = await callMcpTool("compare_design_variants", {
+    policyId: "p1",
+    generatorActorId: "g1",
+    criticActorId: "c1",
+    candidates: [blank, { ...blank, variantId: "  " }],
+  });
+  assert.equal(semantic.isError, true);
+  assert.equal((semantic.structuredContent as { code?: string }).code, "invalid-arguments");
+
+  const projectRoot = await mkdtemp(path.join(tmpdir(), "skillranger-mcp-capture-policy-"));
+  try {
+    const args = await captureArgs(projectRoot, path.join(projectRoot, "evidence"));
+    const { requiredStates, ...policyWithoutStates } = args.policy as { requiredStates: string[] };
+    const missingStates = await callMcpTool("capture_ui_evidence", { ...args, policy: policyWithoutStates, confirm: true });
+    assert.equal(missingStates.isError, true);
+    assert.equal((missingStates.structuredContent as { code?: string }).code, "invalid-arguments");
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
 
 test("capture requires explicit confirmation", async () => {
   const projectRoot = await mkdtemp(path.join(tmpdir(), "skillranger-mcp-capture-confirm-"));

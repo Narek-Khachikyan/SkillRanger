@@ -2,6 +2,12 @@
 
 This checklist covers the current public beta. It verifies the npx/npm UX, compiled npm binaries, source-run CLI, MCP server, Universal Prompt Router, bundled registry, audit gates, frontend and router eval suites, and package hygiene before handing the beta to another user or publishing a tarball.
 
+0.3.0 is a breaking release for host browser adapters: every capture payload must now carry `stateSynchronization` with a status, a non-empty `path`, and observed values, and a payload without it is rejected by the parser. See `docs/browser-adapter.md` and the `frontend/browser-evidence` shared contract (1.1.0).
+
+MCP `prepare_task` now accepts `skillInputs` with `strict: true`, so strict runs are reachable from an MCP host instead of only from CLI `task --skill-inputs`. Explicit activation now also accepts a leading `@skillranger` or `/sr`; a bare leading `skillranger` stays inactive.
+
+Server instructions and the managed `AGENTS.md` block now branch on `run.runtime`. A strict task creates a `strict-v2` run that is advanced with `begin_skill_step`, `add_skill_evidence`, `complete_skill_step`, `verify_skill`, and `finalize_skill_run`; the `lifecycle-v1` transition tools are labelled accordingly and reject a strict run. `capture_ui_evidence` publishes the required-state fields it consumes, and visual contract violations now return `invalid-arguments` or the new `capture-failed` code instead of a JSON-RPC internal error.
+
 Lifecycle v1 now verifies real project-contained evidence files and persists byte length plus SHA-256 snapshots for new `verified` transitions.
 Checksum-only skill reads are attestations and cannot produce `verified`; authoritative non-strict runs use `prepare_task` followed by complete `read_run_skill_file` delivery.
 Russian routing now recognizes visual quality and responsiveness vocabulary, while Tailwind-specific routing requires project applicability evidence or explicit Tailwind intent.

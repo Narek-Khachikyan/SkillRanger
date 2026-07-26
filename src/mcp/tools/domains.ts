@@ -112,8 +112,8 @@ export const domainToolDefinitions: McpToolDefinition[] = [
   {
     ...mcpToolEffects.readOnly,
     name: "verify_frontend_result",
-    title: "Verify Frontend Result",
-    description: "Apply frontend hard gates to canonical design artifacts and browser observations. Alias of deterministic frontend validation.",
+    title: "Validate Frontend Hard Gates (Stateless, Not Strict)",
+    description: "Apply deterministic frontend hard gates to caller-supplied design artifacts and observations without creating, advancing, or certifying a persisted strict run. Never report this result as strict SkillRanger completion; strict frontend completion requires prepare_task, real capture_ui_evidence, compare_design_variants, verify_visual_result, complete_skill_run, verify_skill_run, and inspect_skill_run.",
     inputSchema: {
       type: "object",
       properties: {
@@ -212,6 +212,24 @@ const validateFrontendResult: McpToolHandler = async (args) =>
     }).report,
   );
 
+const verifyFrontendResult: McpToolHandler = async (args) => {
+  const result = await validateFrontendResult(args);
+  const notice = [
+    "NON-CERTIFYING STATELESS RESULT:",
+    "This tool only validates caller-supplied frontend artifacts and observations.",
+    "It does not prove browser capture, an independent critic exchange, or a persisted strict SkillRanger run.",
+    "Do not report strict verification as passed from this result.",
+    "For strict frontend completion use prepare_task, capture_ui_evidence, compare_design_variants, verify_visual_result, complete_skill_run, verify_skill_run, and inspect_skill_run; only a persisted verified run with passed verification status certifies completion.",
+  ].join(" ");
+  return {
+    ...result,
+    content: result.content.map((entry) => ({
+      ...entry,
+      text: `${notice}\n\n${entry.text}`,
+    })),
+  };
+};
+
 const compileFrontendDesignSpec: McpToolHandler = async (args) => {
   const brief = args.brief as DesignBrief;
   const direction = args.direction as DesignDirection;
@@ -270,7 +288,7 @@ export const domainToolHandlers: Record<string, McpToolHandler> = {
   recommend_frontend_recipe: recommendFrontendRecipeTool,
   validate_frontend_result: validateFrontendResult,
   compile_frontend_design_spec: compileFrontendDesignSpec,
-  verify_frontend_result: validateFrontendResult,
+  verify_frontend_result: verifyFrontendResult,
   repair_frontend_result: repairFrontendResult,
   run_domain_eval: runDomainEval,
 };

@@ -34,6 +34,11 @@ Extended UI evidence capture also requires:
 ```json
 {
   "stateRendered": true,
+  "stateSynchronization": {
+    "status": "verified",
+    "path": "variant-control[Ink] -> preview.alt -> summary.variant",
+    "observations": ["preview.alt=Ink", "summary.variant=Ink"]
+  },
   "overlaps": [],
   "focusOrderViolations": [],
   "contrastViolations": [
@@ -56,7 +61,9 @@ Extended UI evidence capture also requires:
 
 The adapter must exercise sequential `Tab` and `Shift+Tab` navigation, plus `Escape` behavior for dismissible or modal UI, to populate keyboard, focus-order, reachability, and visible-focus results. It must emulate the `prefers-reduced-motion: reduce` media feature and verify the resulting behavior before setting `reducedMotionVerified: true`.
 
-The host adapter owns state setup. For example, `loading`, `empty`, and `error` may require route interception, fixture data, query parameters, or application test hooks. It must fail rather than report an unrendered state as verified. Browser engines, axe integration, focus checks, state setup, and screenshot capture can use the project's existing Playwright installation; SkillRanger does not install or execute a hidden browser dependency.
+For one primary state-changing action in an applicable capture, record the initial state, perform the action, and observe at least two dependent representations such as control → preview → summary or filter → result list → result count. Return `verified` only after the action was performed and all observed values agree; return `mismatch` when any representation remains inconsistent. Use only observed values, not assumptions about internal implementation. Return `not-applicable` with a non-empty path and a concrete reason only when the surface has no state-changing primary action; it is not a silent fallback for setup failure.
+
+The host adapter owns state setup. For example, `loading`, `empty`, and `error` may require route interception, fixture data, query parameters, or application test hooks. Set `stateRendered: false` when the requested primary state or main content is absent, even if a screenshot file exists. `clippedControls` includes clipping inside scroll containers, cards, panels, and modals. The adapter must fail rather than report an unrendered state or an unperformed action as verified. Browser engines, axe integration, focus checks, state setup, and screenshot capture can use the project's existing Playwright installation; SkillRanger does not install or execute a hidden browser dependency.
 
 Example:
 

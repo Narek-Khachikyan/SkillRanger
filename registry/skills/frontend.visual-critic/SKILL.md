@@ -16,6 +16,7 @@ Own evidence-based visual comparison and selection only. Refuse implementation r
 1. Validate input artifact ids: actor ids, policy id, variant ids, direction paths, evidence ids, and screenshot paths must be present and internally consistent. Stop if critic and generator actors match.
 2. Inspect every declared viewport and state screenshot. Stop if any candidate lacks its declared evidence; do not infer unseen states.
 3. Score all ten criteria for every candidate: product specificity, hierarchy, composition, typography, color roles, state quality, responsive transformation, accessibility, implementation coherence, and AI-slop risk.
+   Treat every score as quality-oriented: `0` means absent or broken, `0.50` means minimally acceptable, and `1` means excellent. For the compatibility field `ai-slop-risk`, `0` means high AI-slop risk and `1` means the risk is absent or well-contained.
 4. Flag AI slop with evidence tied to that candidate's evidence id or screenshot path. Prefer product-specific structures and semantic visual choices over interchangeable SaaS patterns.
 5. Compare variants using complete scorecards, strengths, weaknesses, and evidence. Do not rank candidates with incomplete coverage.
 6. Select one or reject all. Select only a supplied candidate; reject all when every candidate fails a hard visual requirement.

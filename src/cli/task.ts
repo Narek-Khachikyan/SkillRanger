@@ -2,8 +2,8 @@ import { constants } from "node:fs";
 import { open } from "node:fs/promises";
 import path from "node:path";
 import { loadRouterConfig } from "../config/index.ts";
-import { loadLocalRegistry } from "../registry/index.ts";
 import { createRouterReader, prepareTask, RouterPrepareError } from "../router/index.ts";
+import { SkillInputsError, validateSkillInputs } from "../router/skill-inputs.ts";
 import type { PrepareTaskCoreInput, PrepareTaskResult, ReadRunSkillFileInput, RouterExplanation, RouterSkillRole } from "../router/types.ts";
 import { RouterReaderError } from "../router/reader.ts";
 
@@ -62,15 +62,13 @@ const record = (value: unknown, label: string): Record<string, unknown> => {
 };
 
 const parseSkillInputs = async (filePath: string, registryRoot: string) => {
-  const value = record(await jsonFile(filePath, "skill inputs"), "skill inputs");
-  const entries = Object.entries(value);
-  if (entries.length > 32) invalid("skill inputs contain too many skill IDs.");
-  const registryIds = new Set((await loadLocalRegistry(registryRoot)).map(({ manifest }) => manifest.id));
-  for (const [skillId, skillInput] of entries) {
-    if (!canonicalId.test(skillId) || !registryIds.has(skillId)) invalid(`skill inputs contain an unknown bundled skill ID: ${skillId}.`);
-    record(skillInput, `skill input for ${skillId}`);
+  const value = await jsonFile(filePath, "skill inputs");
+  try {
+    return await validateSkillInputs(value, registryRoot);
+  } catch (error) {
+    if (error instanceof SkillInputsError) invalid(error.message);
+    throw error;
   }
-  return value as Record<string, Record<string, unknown>>;
 };
 
 const parseAnswers = async (filePath: string) => {

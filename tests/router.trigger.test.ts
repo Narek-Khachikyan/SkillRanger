@@ -123,12 +123,54 @@ test("direct core mode does not require or remove a trigger", () => {
   });
 });
 
-test("explicit mode always requires a terminal trigger", () => {
+test("explicit mode requires a leading or terminal trigger", () => {
   assert.deepEqual(explicit("Fix the tests"), {
     activated: false,
     mode: "explicit",
     originalPrompt: "Fix the tests",
     reason: "trigger-required",
+  });
+});
+
+test("explicit mode recognizes a leading mention or command alias", () => {
+  for (const [prompt, trigger, normalizedIntent] of [
+    ["@skillranger Fix the tests", "@skillranger", "Fix the tests"],
+    ["@SkillRanger Fix the tests", "@skillranger", "Fix the tests"],
+    ["  @skillranger\nFix the tests", "@skillranger", "Fix the tests"],
+    ["/sr Fix the tests", "/sr", "Fix the tests"],
+    ["@skillranger: Fix the tests", "@skillranger", ": Fix the tests"],
+  ] as const) {
+    assert.deepEqual(explicit(prompt), {
+      activated: true,
+      mode: "explicit",
+      trigger,
+      originalPrompt: prompt,
+      normalizedIntent,
+    }, prompt);
+  }
+});
+
+test("a leading bare product name is not a trigger", () => {
+  for (const prompt of [
+    "skillranger не работает, почини",
+    "SkillRanger crashes on startup, fix it",
+    "@skillrangerbot fix the tests",
+    "@skillranger-extra fix the tests",
+    "@skillranger.com is down",
+    "/srv reboot the box",
+    "/sr/foo fix the tests",
+  ]) {
+    assert.equal(explicit(prompt).activated, false, prompt);
+  }
+});
+
+test("a terminal trigger still wins over a leading one", () => {
+  assert.deepEqual(explicit("@skillranger Fix the tests skillranger"), {
+    activated: true,
+    mode: "explicit",
+    trigger: "skillranger",
+    originalPrompt: "@skillranger Fix the tests skillranger",
+    normalizedIntent: "@skillranger Fix the tests",
   });
 });
 

@@ -42,7 +42,7 @@
       "type": "object",
       "required": ["code", "severity", "gate", "viewport", "state", "locator", "expected", "evidence", "remediation"],
       "properties": {
-        "code": { "enum": ["horizontal-overflow", "clipped-content", "element-overlap", "sticky-overlap", "console-error", "unreachable-action", "keyboard-trap", "focus-order", "invisible-focus", "contrast", "critical-axe", "reduced-motion", "state-not-rendered", "inconsistent-spacing", "random-color", "excessive-radii", "excessive-shadows", "generic-card-repetition", "weak-typography-hierarchy", "text-measure", "touch-target"] },
+        "code": { "enum": ["horizontal-overflow", "clipped-content", "element-overlap", "sticky-overlap", "console-error", "unreachable-action", "keyboard-trap", "focus-order", "invisible-focus", "contrast", "critical-axe", "reduced-motion", "state-not-rendered", "state-mismatch", "inconsistent-spacing", "random-color", "excessive-radii", "excessive-shadows", "generic-card-repetition", "weak-typography-hierarchy", "text-measure", "touch-target"] },
         "severity": { "enum": ["critical", "high", "medium", "low"] }, "gate": { "enum": ["hard", "soft"] },
         "viewport": { "type": "integer" }, "state": { "type": "string" }, "locator": { "type": "string" },
         "measured": { "type": "string" }, "expected": { "type": "string" },
@@ -50,11 +50,29 @@
       },
       "additionalProperties": false
     },
+    "stateSynchronization": {
+      "type": "object",
+      "required": ["status", "path", "observations"],
+      "properties": {
+        "status": { "enum": ["verified", "mismatch", "not-applicable"] },
+        "path": { "type": "string", "minLength": 1 },
+        "observations": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "enum": ["verified", "mismatch"] } }, "required": ["status"] },
+          "then": { "properties": { "observations": { "minItems": 2 } } }
+        }
+      ],
+      "additionalProperties": false
+    },
     "capture": {
-      "type": "object", "required": ["viewport", "state", "screenshotPath", "observation", "checks"],
+      "type": "object", "required": ["viewport", "state", "screenshotPath", "observation", "stateSynchronization", "checks"],
       "properties": {
         "viewport": { "$ref": "#/$defs/viewport" }, "state": { "type": "string" }, "screenshotPath": { "type": "string" },
-        "observation": { "$ref": "#/$defs/observation" }, "checks": { "type": "array", "items": { "$ref": "#/$defs/check" } }
+        "observation": { "$ref": "#/$defs/observation" },
+        "stateSynchronization": { "$ref": "#/$defs/stateSynchronization" },
+        "checks": { "type": "array", "items": { "$ref": "#/$defs/check" } }
       },
       "additionalProperties": false
     }

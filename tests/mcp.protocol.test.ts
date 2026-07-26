@@ -29,6 +29,40 @@ test("MCP protocol initializes with tool capability", async () => {
     (response?.result as { serverInfo?: { version?: string } })?.serverInfo?.version,
     packageJson.version,
   );
+  const instructions = (response?.result as { instructions?: string })?.instructions ?? "";
+  for (const requiredInstruction of [
+    "do not call the low-level start_skill_run after prepare_task",
+    "capture_ui_evidence",
+    "compare_design_variants",
+    "verify_visual_result",
+    "inspect_skill_run",
+    "Never report that SkillRanger or strict visual verification passed unless the persisted run is verified",
+  ]) {
+    assert.match(instructions, new RegExp(requiredInstruction));
+  }
+  // prepare_task creates a strict-v2 runtime for strict tasks, so the lifecycle-v1 transition
+  // tools must never be named as the unconditional continuation of a prepared run.
+  assert.match(instructions, /branch on run\.runtime/);
+  const lifecycleSentence = instructions.match(/For lifecycle-v1[^.]*\./)?.[0] ?? "";
+  const strictSentence = instructions.match(/For strict-v2[^.;]*/)?.[0] ?? "";
+  for (const tool of ["begin_skill_run_execution", "complete_skill_run", "verify_skill_run"]) {
+    assert.match(lifecycleSentence, new RegExp(tool));
+    assert.doesNotMatch(strictSentence, new RegExp(tool));
+  }
+  for (const tool of ["begin_skill_step", "add_skill_evidence", "complete_skill_step", "verify_skill", "finalize_skill_run"]) {
+    assert.match(strictSentence, new RegExp(tool));
+  }
+});
+
+test("lifecycle-v1 transition tools are labelled as incompatible with a strict-v2 run", async () => {
+  const listed = await handleJsonRpcRequest({ jsonrpc: "2.0", id: "runtime-family", method: "tools/list", params: {} });
+  const tools = (listed?.result as { tools: Array<{ name: string; description: string }> }).tools;
+  const byName = new Map(tools.map((tool) => [tool.name, tool.description]));
+  for (const tool of ["begin_skill_run_execution", "complete_skill_run", "verify_skill_run"]) {
+    assert.match(byName.get(tool) ?? "", /Lifecycle-v1 only/, tool);
+    assert.match(byName.get(tool) ?? "", /strict-v2 run is rejected/, tool);
+  }
+  assert.match(byName.get("inspect_skill_run") ?? "", /both lifecycle-v1 and strict-v2/);
 });
 
 test("MCP protocol ignores notifications", async () => {
@@ -87,6 +121,58 @@ test("MCP protocol lists tools", async () => {
     recommendSkillsTool?.inputSchema.properties?.hostCapabilities?.items?.type,
     "string",
   );
+});
+
+test("MCP publishes the strict skillInputs argument on prepare_task", async () => {
+  const listed = await handleJsonRpcRequest({
+    jsonrpc: "2.0",
+    id: "skill-inputs-schema",
+    method: "tools/list",
+    params: {},
+  });
+  const tools = (listed?.result as { tools: Array<{ name: string; inputSchema: Record<string, unknown> }> }).tools;
+  const schema = tools.find(({ name }) => name === "prepare_task")?.inputSchema;
+  // additionalProperties is false, so an argument the handler accepts but the schema omits
+  // would be stripped by a strictly validating host before it reaches the server.
+  assert.equal(schema?.additionalProperties, false);
+  const skillInputs = (schema?.properties as Record<string, Record<string, unknown>>)?.skillInputs;
+  assert.equal(skillInputs?.type, "object");
+  assert.deepEqual(skillInputs?.additionalProperties, { type: "object" });
+});
+
+test("MCP descriptions and stateless frontend verification prevent strict completion claims", async () => {
+  const listed = await handleJsonRpcRequest({
+    jsonrpc: "2.0",
+    id: "strict-guidance",
+    method: "tools/list",
+    params: {},
+  });
+  const tools = (listed?.result as {
+    tools: Array<{ name: string; title: string; description: string }>;
+  }).tools;
+  const byName = new Map(tools.map((tool) => [tool.name, tool]));
+
+  assert.match(byName.get("recommend_skills")?.title ?? "", /Advisory Only/);
+  assert.match(byName.get("recommend_skills")?.description ?? "", /use prepare_task instead/);
+  assert.match(byName.get("verify_frontend_result")?.title ?? "", /Stateless, Not Strict/);
+  assert.match(byName.get("verify_frontend_result")?.description ?? "", /Never report this result as strict SkillRanger completion/);
+
+  const verified = await handleJsonRpcRequest({
+    jsonrpc: "2.0",
+    id: "stateless-result",
+    method: "tools/call",
+    params: {
+      name: "verify_frontend_result",
+      arguments: { brief: {}, direction: {} },
+    },
+  });
+  const result = verified?.result as {
+    content?: Array<{ text?: string }>;
+    structuredContent?: unknown;
+  };
+  assert.match(result.content?.[0]?.text ?? "", /NON-CERTIFYING STATELESS RESULT/);
+  assert.match(result.content?.[0]?.text ?? "", /Do not report strict verification as passed/);
+  assert.equal(typeof result.structuredContent, "object");
 });
 
 test("MCP tools publish complete effect and confirmation metadata", async () => {

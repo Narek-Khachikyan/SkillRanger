@@ -4,7 +4,7 @@ export type UiCheckCode =
   | "horizontal-overflow" | "clipped-content" | "element-overlap" | "sticky-overlap"
   | "console-error" | "unreachable-action" | "keyboard-trap" | "focus-order"
   | "invisible-focus" | "contrast" | "critical-axe" | "reduced-motion"
-  | "state-not-rendered" | "inconsistent-spacing" | "random-color"
+  | "state-not-rendered" | "state-mismatch" | "inconsistent-spacing" | "random-color"
   | "excessive-radii" | "excessive-shadows" | "generic-card-repetition"
   | "weak-typography-hierarchy" | "text-measure" | "touch-target";
 
@@ -32,11 +32,18 @@ export type MechanicalSnapshot = {
   touchTargets: Array<{ locator: string; widthPx: number; heightPx: number; interactive: boolean }>;
 };
 
+export type StateSynchronization = {
+  status: "verified" | "mismatch" | "not-applicable";
+  path: string;
+  observations: string[];
+};
+
 export type UiCaptureEntry = {
   viewport: { width: number; height: number };
   state: string;
   screenshotPath: string;
   observation: BrowserObservation;
+  stateSynchronization: StateSynchronization;
   checks: UiCheckResult[];
 };
 

@@ -1,4 +1,4 @@
-import type { UiCheckCode, UiCheckResult } from "./evidence-types.ts";
+import type { StateSynchronization, UiCheckCode, UiCheckResult } from "./evidence-types.ts";
 import { defaultMechanicalCheckPolicy, sortUiCheckResults } from "./mechanical.ts";
 
 export type BrowserCheckPayload = {
@@ -15,6 +15,7 @@ export type BrowserCheckPayload = {
   overlaps: string[];
   focusOrderViolations: string[];
   contrastViolations: Array<{ locator: string; ratio: number; largeText: boolean }>;
+  stateSynchronization: StateSynchronization;
 };
 
 const check = (input: {
@@ -61,5 +62,16 @@ export const evaluateBrowserPayload = (input: {
   addStrings(payload.criticalAxeViolations, "critical-axe", "critical", "no critical accessibility violations", "Resolve the critical accessibility violation and rerun the adapter checks.");
   if (!payload.reducedMotionVerified) checks.push(check({ code: "reduced-motion", severity: "high", viewport, state, locator: "document", measured: "prefers-reduced-motion not verified", expected: "motion is removed or reduced under reduced-motion emulation", screenshotPath, remediation: "Implement and verify the reduced-motion behavior." }));
   if (!payload.stateRendered) checks.push(check({ code: "state-not-rendered", severity: "high", viewport, state, locator: "document", measured: `${state} state absent`, expected: `the ${state} state is rendered`, screenshotPath, remediation: "Exercise and render the requested state before capture." }));
+  if (payload.stateSynchronization.status === "mismatch") checks.push(check({
+    code: "state-mismatch",
+    severity: "high",
+    viewport,
+    state,
+    locator: payload.stateSynchronization.path,
+    measured: payload.stateSynchronization.observations.join("; "),
+    expected: "the primary action updates every dependent representation consistently",
+    screenshotPath,
+    remediation: "Repair the causal state path and recapture observed values after performing the primary action.",
+  }));
   return sortUiCheckResults(checks);
 };
