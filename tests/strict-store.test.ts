@@ -224,6 +224,9 @@ const browserObservation = (width: number) => ({
   invisibleFocus: [],
   criticalAxeViolations: [],
   reducedMotionVerified: true,
+  stateRendered: true,
+  action: "Select the captured state",
+  changes: [{ locator: "#active-state", before: "previous", after: `viewport-${width}` }],
 });
 const browserArtifacts = [390, 768, 1440].map((width) => ({
   kind: `browser-screenshot-${width}`,
@@ -254,6 +257,20 @@ test("derives browser gates only from closed observations bound to screenshot ev
 
   const openShape = deriveBrowserGateResults({ observations: [{ ...observations[0], callerApproved: true }, ...observations.slice(1)] }, browserArtifacts);
   assert.ok(Object.values(openShape).every(({ passed }) => !passed));
+});
+
+test("strict browser gates require rendered action and observed change evidence", () => {
+  const valid = [390, 768, 1440].map(browserObservation);
+  for (const observations of [
+    valid.map((item, index) => index === 0 ? { ...item, stateRendered: false } : item),
+    valid.map((item, index) => index === 0 ? { ...item, action: "" } : item),
+    valid.map((item, index) => index === 0
+      ? { ...item, changes: [{ locator: "#active-state", before: "same", after: "same" }] }
+      : item),
+  ]) {
+    const results = deriveBrowserGateResults({ observations }, browserArtifacts);
+    assert.ok(Object.values(results).every(({ passed }) => !passed));
+  }
 });
 
 test("rejects root checks beside otherwise valid browser observations", () => {

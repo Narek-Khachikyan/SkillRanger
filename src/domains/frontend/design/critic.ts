@@ -160,7 +160,7 @@ export const createVisualCriticInput = (
     throw new Error("Visual critic input requires non-empty policy, actors, and candidates.");
   }
   if (input.generatorActorId === input.criticActorId) {
-    throw new Error("Visual comparison requires an independent critic actor.");
+    throw new Error("Visual comparison requires distinct generator and critic actor IDs for host-attested actor separation.");
   }
   const variantIds = new Set<string>();
   const evidenceIds = new Set<string>();
@@ -310,8 +310,8 @@ export const validateVisualCriticReport = (
   if (report.generatorActorId === report.criticActorId) {
     findings.push(hardFinding(
       "critic-not-independent",
-      "The visual critic must be independent from the generator.",
-      "Produce the report with a critic actor different from the generator actor.",
+      "The visual critic report lacks host-attested actor separation.",
+      "Provide distinct generator and critic actor IDs. This attests host-reported separation; it does not technically prove independent execution.",
       [report.criticActorId],
     ));
   }

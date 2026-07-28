@@ -3,6 +3,7 @@ import { createVerificationReport } from "../../../runtime/verification.ts";
 import type { VerificationFinding } from "../../../runtime/types.ts";
 import type { BoundedRepairRequest, DesignExecutionPolicy } from "./policy-types.ts";
 import { isValidStateSynchronization, type UiCheckResult, type UiEvidenceBundle } from "./evidence-types.ts";
+import { evaluateUiStatePayload, uiStateCheckCodes } from "./browser-checks.ts";
 import { visualCriticQualityFloorFindings } from "./critic.ts";
 import type { DesignBrief, DesignDirection, DesignValidationResult } from "./types.ts";
 import type { DesignVariantMetadata, VisualCriticReport, VisualRun, VisualRunState } from "./visual-loop-types.ts";
@@ -138,6 +139,9 @@ const evidenceMatrixIssues = (
   if (!bundle.captures.every(({ stateSynchronization }) => isValidStateSynchronization(stateSynchronization))) {
     issues.push(`${label}:capture state synchronization missing or malformed`);
   }
+  if (!bundle.captures.every(({ stateRendered }) => typeof stateRendered === "boolean")) {
+    issues.push(`${label}:capture rendered-state evidence missing or malformed`);
+  }
   return issues;
 };
 
@@ -197,28 +201,13 @@ export const verifyVisualResult = (input: {
   ) {
     findings.push(hardFinding(
       "visual-critic-selection-invalid",
-      "An independent critic did not select the final variant with matching artifact identity.",
+      "A critic with host-attested actor separation did not select the final variant with matching artifact identity.",
       [input.criticReport.id, input.criticReport.generatorActorId, input.criticReport.criticActorId],
-      "Run an independent critic against the initial evidence and persist its selected variant.",
+      "Use distinct host-reported producer and critic actor IDs, run the critic against initial evidence, and persist its selected variant.",
       selectedVariantId,
     ));
   }
   findings.push(...visualCriticQualityFloorFindings(input.criticReport, input.initialEvidence.id));
-  // The recorded status is the primary fact. Its generated state-mismatch check lives in the
-  // caller-supplied checks array and can simply be deleted, so post-correction evidence that still
-  // reports a broken causal path has to fail from the status itself.
-  const desynchronized = input.recheckEvidence.captures
-    .filter(({ stateSynchronization }) => stateSynchronization?.status === "mismatch")
-    .map(({ viewport, state }) => `${viewport.width}px:${state}`);
-  if (desynchronized.length > 0) {
-    findings.push(hardFinding(
-      "visual-recheck-state-desynchronized",
-      "Recheck evidence records a causal state mismatch after correction.",
-      desynchronized,
-      "Repair the causal state path and recapture the affected states before final verification.",
-      input.recheckEvidence.route,
-    ));
-  }
   if (input.initialEvidence.id === input.recheckEvidence.id) {
     findings.push(hardFinding(
       "visual-evidence-stale",
@@ -298,7 +287,22 @@ export const verifyVisualResult = (input: {
     ));
   }
   findings.push(...input.boundedRepairFindings);
-  findings.push(...input.recheckEvidence.captures.flatMap(({ checks }) => checks.map(checkFinding)));
+  findings.push(...input.recheckEvidence.captures.flatMap((capture) => {
+    const persistedStateChecks = isValidStateSynchronization(capture.stateSynchronization)
+      && typeof capture.stateRendered === "boolean"
+      ? evaluateUiStatePayload({
+        stateRendered: capture.stateRendered,
+        stateSynchronization: capture.stateSynchronization,
+        viewport: capture.viewport.width,
+        state: capture.state,
+        screenshotPath: capture.screenshotPath,
+      })
+      : [];
+    return [
+      ...capture.checks.filter(({ code }) => !uiStateCheckCodes.has(code)).map(checkFinding),
+      ...persistedStateChecks.map(checkFinding),
+    ];
+  }));
 
   const capabilities = new Set(input.recheckEvidence.adapterCapabilities);
   const capabilityStatus = capabilities.has("browser") && capabilities.has("screenshots") ? "ready" : "degraded";
@@ -316,7 +320,7 @@ export const verifyVisualResult = (input: {
       ...input.recheckEvidence.captures.flatMap((capture) => artifactExists(capture.screenshotPath)
         ? [{ kind: "screenshot", path: capture.screenshotPath, description: `${input.recheckEvidence.route} at ${capture.viewport.width}px in ${capture.state}` }]
         : []),
-      { kind: "visual-critique", description: `Critique ${input.criticReport.id}` },
+      { kind: "visual-critique", description: `Critique ${input.criticReport.id} with host-attested actor separation` },
       ...(input.boundedRepairRequest ? [{ kind: "bounded-repair", description: `Repair ${input.boundedRepairRequest.id}` }] : []),
       { kind: "ui-evidence", path: `.design/evidence/${input.initialEvidence.id}/bundle.json`, description: `Initial evidence ${input.initialEvidence.id}` },
       { kind: "ui-evidence", path: `.design/evidence/${input.recheckEvidence.id}/bundle.json`, description: `Recheck evidence ${input.recheckEvidence.id}` },

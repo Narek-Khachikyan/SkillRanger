@@ -60,12 +60,19 @@ const findingCodes = (report: VisualCriticReport) =>
 const asHostReport = (report: VisualCriticReport) =>
   report as unknown as Record<string, unknown>;
 
-test("requires an actor independent from the generator", () => {
-  assert.throws(() => createVisualCriticInput({ ...input, criticActorId: "generator-a" }), /independent critic/);
+test("requires host-attested actor separation without claiming proven independence", () => {
+  assert.throws(
+    () => createVisualCriticInput({ ...input, criticActorId: "generator-a" }),
+    /host-attested actor separation/,
+  );
 
   const report = makeCriticReport({ selectedVariantId: "v1" });
   report.criticActorId = report.generatorActorId;
-  assert.ok(findingCodes(report).includes("critic-not-independent"));
+  const findings = validateVisualCriticReport(input, report);
+  assert.ok(findings.some(({ code }) => code === "critic-not-independent"));
+  assert.ok(findings.some(({ message, remediation }) =>
+    message.includes("host-attested actor separation")
+    && remediation.includes("does not technically prove independent execution")));
 });
 
 test("rejects candidate and evidence mismatches deterministically", () => {

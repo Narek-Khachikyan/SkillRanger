@@ -34,6 +34,84 @@ const check = (input: {
   evidence: [input.screenshotPath, input.locator],
 });
 
+export const uiStateCheckCodes = new Set<UiCheckCode>([
+  "ui-state-not-rendered",
+  "ui-state-action-missing",
+  "ui-state-change-missing",
+  "ui-state-desynchronized",
+  "state-not-rendered",
+  "state-mismatch",
+]);
+
+export const evaluateUiStatePayload = (input: {
+  stateRendered: boolean;
+  stateSynchronization: StateSynchronization;
+  viewport: number;
+  state: string;
+  screenshotPath: string;
+}): UiCheckResult[] => {
+  const { stateRendered, stateSynchronization, viewport, state, screenshotPath } = input;
+  const checks: UiCheckResult[] = [];
+  if (!stateRendered) checks.push(check({
+    code: "ui-state-not-rendered",
+    severity: "high",
+    viewport,
+    state,
+    locator: "document",
+    measured: `${state} state absent`,
+    expected: `the ${state} state is rendered`,
+    screenshotPath,
+    remediation: "Exercise and render the requested state before capture.",
+  }));
+  if (stateSynchronization.status === "verified") {
+    if (!stateSynchronization.action?.trim()) checks.push(check({
+      code: "ui-state-action-missing",
+      severity: "high",
+      viewport,
+      state,
+      locator: stateSynchronization.path,
+      measured: "no performed action recorded",
+      expected: "a concrete state-changing action is performed and recorded",
+      screenshotPath,
+      remediation: "Perform the primary action and record the concrete interaction before claiming verified synchronization.",
+    }));
+    if (!stateSynchronization.changes?.some(({ before, after }) => before !== after)) checks.push(check({
+      code: "ui-state-change-missing",
+      severity: "high",
+      viewport,
+      state,
+      locator: stateSynchronization.path,
+      measured: "no observed before/after value changed",
+      expected: "at least one observed locator changes value after the recorded action",
+      screenshotPath,
+      remediation: "Record locator-level values before and after the action, including at least one actual change.",
+    }));
+  }
+  if (stateSynchronization.status === "not-applicable") checks.push(check({
+    code: "ui-state-action-missing",
+    severity: "high",
+    viewport,
+    state,
+    locator: stateSynchronization.path,
+    measured: stateSynchronization.reason,
+    expected: "a concrete state-changing action with observable before/after evidence",
+    screenshotPath,
+    remediation: "Capture an applicable interactive state and perform its primary action before requesting a verified outcome.",
+  }));
+  if (stateSynchronization.status === "mismatch") checks.push(check({
+    code: "ui-state-desynchronized",
+    severity: "high",
+    viewport,
+    state,
+    locator: stateSynchronization.path,
+    measured: stateSynchronization.observations.join("; "),
+    expected: "the primary action updates every dependent representation consistently",
+    screenshotPath,
+    remediation: "Repair the causal state path and recapture observed values after performing the primary action.",
+  }));
+  return sortUiCheckResults(checks);
+};
+
 export const evaluateBrowserPayload = (input: {
   payload: BrowserCheckPayload;
   viewport: number;
@@ -61,17 +139,12 @@ export const evaluateBrowserPayload = (input: {
   }
   addStrings(payload.criticalAxeViolations, "critical-axe", "critical", "no critical accessibility violations", "Resolve the critical accessibility violation and rerun the adapter checks.");
   if (!payload.reducedMotionVerified) checks.push(check({ code: "reduced-motion", severity: "high", viewport, state, locator: "document", measured: "prefers-reduced-motion not verified", expected: "motion is removed or reduced under reduced-motion emulation", screenshotPath, remediation: "Implement and verify the reduced-motion behavior." }));
-  if (!payload.stateRendered) checks.push(check({ code: "state-not-rendered", severity: "high", viewport, state, locator: "document", measured: `${state} state absent`, expected: `the ${state} state is rendered`, screenshotPath, remediation: "Exercise and render the requested state before capture." }));
-  if (payload.stateSynchronization.status === "mismatch") checks.push(check({
-    code: "state-mismatch",
-    severity: "high",
+  checks.push(...evaluateUiStatePayload({
+    stateRendered: payload.stateRendered,
+    stateSynchronization: payload.stateSynchronization,
     viewport,
     state,
-    locator: payload.stateSynchronization.path,
-    measured: payload.stateSynchronization.observations.join("; "),
-    expected: "the primary action updates every dependent representation consistently",
     screenshotPath,
-    remediation: "Repair the causal state path and recapture observed values after performing the primary action.",
   }));
   return sortUiCheckResults(checks);
 };

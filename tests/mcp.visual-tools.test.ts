@@ -25,6 +25,7 @@ const captureArgs = async (projectRoot: string, outputDir: string) => {
         status: "not-applicable",
         path: "requested capture state",
         observations: ["This fixture has no state-changing primary action."],
+        reason: "This fixture has no state-changing primary action.",
       },
       mechanicalSnapshot: {
         spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [],
@@ -78,9 +79,18 @@ test("visual MCP array inputs publish item schemas",()=>{
   assert.equal(requiredStates.minItems, 1);
   assert.equal(requiredStates.items.minLength, 1);
   assert.match(requiredStates.description, /evidence at every supported viewport/);
+  const verifiedCapture = (byName.get("verify_visual_result")?.inputSchema.properties as any)
+    .recheckEvidence.properties.captures.items;
+  assert.equal(verifiedCapture.required.includes("stateRendered"), false);
   assert.deepEqual((byName.get("verify_visual_result")?.inputSchema.properties as any).boundedRepairFindings.items,{type:"object"});
 });
 test("compare tool returns a critic exchange before validation",async()=>{const result=await callMcpTool("compare_design_variants",{policyId:"p1",generatorActorId:"g1",criticActorId:"c1",candidates:[{variantId:"v1",directionPath:"v1.json",evidenceId:"e1",screenshotPaths:["v1.png"]}]});assert.equal(result.isError,false);assert.equal((result.structuredContent as any).status,"critic-required");});
+
+test("compare tool describes actor separation as host-attested, not proven independence", () => {
+  const description = mcpTools.find(({ name }) => name === "compare_design_variants")?.description ?? "";
+  assert.match(description, /host-attested actor-separated/);
+  assert.match(description, /do not technically prove independent execution/);
+});
 
 test("visual contract violations surface as tool-level codes, not internal errors", async () => {
   // Real host traffic hit both of these as JSON-RPC -32603, which a host cannot branch on.

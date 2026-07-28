@@ -15,6 +15,9 @@ type Observation = {
   invisibleFocus: string[];
   criticalAxeViolations: string[];
   reducedMotionVerified: boolean;
+  stateRendered: boolean;
+  action: string;
+  changes: Array<{ locator: string; before: string; after: string }>;
 };
 
 const browserGateSlugs = [
@@ -39,6 +42,9 @@ const observationKeys = [
   "invisibleFocus",
   "criticalAxeViolations",
   "reducedMotionVerified",
+  "stateRendered",
+  "action",
+  "changes",
 ] as const;
 const stringArrayKeys = [
   "clippedControls",
@@ -78,6 +84,24 @@ const parseObservation = (value: unknown, index: number): Observation => {
   if (typeof value.reducedMotionVerified !== "boolean") {
     throw new Error(`Browser observation ${index} reducedMotionVerified must be boolean.`);
   }
+  if (value.stateRendered !== true) {
+    throw new Error(`Browser observation ${index} must record stateRendered: true for the requested state.`);
+  }
+  if (typeof value.action !== "string" || value.action.trim() === "") {
+    throw new Error(`Browser observation ${index} must record a concrete performed action.`);
+  }
+  if (!Array.isArray(value.changes) || !value.changes.every((change) =>
+    record(change)
+    && exactKeys(change, ["locator", "before", "after"])
+    && typeof change.locator === "string"
+    && change.locator.trim() !== ""
+    && typeof change.before === "string"
+    && typeof change.after === "string")) {
+    throw new Error(`Browser observation ${index} changes must contain closed locator, before, and after records.`);
+  }
+  if (!value.changes.some((change) => (change as Record<string, unknown>).before !== (change as Record<string, unknown>).after)) {
+    throw new Error(`Browser observation ${index} must record at least one observed change where before differs from after.`);
+  }
   for (const key of stringArrayKeys) {
     if (!Array.isArray(value[key]) || !value[key].every((item) => typeof item === "string")) {
       throw new Error(`Browser observation ${index} ${key} must be an array of strings.`);
@@ -99,7 +123,8 @@ export const deriveBrowserGateResults = (
     return failed(
       "verification-input for frontend/browser-hard-gates must be exactly { observations: [...] }, "
       + `where every observation has the closed shape: ${observationKeys.join(", ")}. `
-      + "Self-declared pass flags are not accepted; observations must come from a real browser capture.",
+      + "Self-declared pass flags are not accepted; observations must include a rendered state, "
+      + "a concrete action, and an observed before/after change bound to real browser capture evidence.",
     );
   }
   let observations: Observation[];

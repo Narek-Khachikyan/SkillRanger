@@ -54,8 +54,21 @@ test("captures observations and extended mechanical evidence", async () => {
       keyboardTraps: [], invisibleFocus: [], criticalAxeViolations: [], reducedMotionVerified: true,
       stateRendered: true, overlaps: [], focusOrderViolations: [], contrastViolations: [],
       stateSynchronization: state === "success"
-        ? { status: "verified", path: "run[failed] -> log -> recovery", observations: ["log=failed", "recovery=retry"], adapterInternalId: "leak" }
-        : { status: "not-applicable", path: state + " capture", observations: ["No state-changing primary action is available in this requested state."], adapterInternalId: "leak" },
+        ? {
+            status: "verified",
+            path: "run[failed] -> log -> recovery",
+            observations: ["log=failed", "recovery=retry"],
+            action: "Select the failed run",
+            changes: [{ locator: "#run-status", before: "pending", after: "failed" }],
+            adapterInternalId: "leak",
+          }
+        : {
+            status: "not-applicable",
+            path: state + " capture",
+            observations: ["No state-changing primary action is available in this requested state."],
+            reason: "The requested state exposes no state-changing primary action.",
+            adapterInternalId: "leak",
+          },
       mechanicalSnapshot: {
         spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [], textBlocks: [],
         touchTargets: [{ locator: "button.icon", widthPx: 28, heightPx: 28, interactive: true }],
@@ -83,15 +96,18 @@ test("captures observations and extended mechanical evidence", async () => {
   assert.ok(bundle.captures.some(({ checks }) => checks.some(({ code }) => code === "touch-target")));
   assert.ok(bundle.captures.some(({ stateSynchronization }) =>
     stateSynchronization.status === "verified"
-    && stateSynchronization.observations.length === 2));
+    && stateSynchronization.action === "Select the failed run"
+    && stateSynchronization.changes?.some(({ before, after }) => before !== after)));
   assert.ok(bundle.captures.some(({ stateSynchronization, checks }) =>
     stateSynchronization.status === "not-applicable"
-    && stateSynchronization.observations.length === 1
-    && !checks.some(({ code }) => code === "state-mismatch")));
+    && stateSynchronization.reason?.includes("no state-changing")
+    && checks.some(({ code }) => code === "ui-state-action-missing")
+    && !checks.some(({ code }) => code === "ui-state-desynchronized")));
   // The adapter leaks an extra key; the published bundle schema forbids additional properties here,
   // so it must survive neither into the returned bundle nor into the persisted one.
   assert.ok(bundle.captures.every(({ stateSynchronization }) =>
-    Object.keys(stateSynchronization).sort().join(",") === "observations,path,status"));
+    Object.keys(stateSynchronization).every((key) =>
+      ["action", "changes", "observations", "path", "reason", "status"].includes(key))));
   assert.deepEqual(JSON.parse(await readFile(path.join(root, "e1", "bundle.json"), "utf8")), bundle);
   await assert.rejects(() => executeUiEvidenceCapture({ plan, commandTemplate: `node ${adapter}`, projectRoot: root }), /already exists/);
 });
@@ -141,4 +157,9 @@ test("rejects missing or empty state synchronization evidence", async () => {
 test("publishes the UI evidence bundle schema", async () => {
   const manifest = JSON.parse(await readFile("domains/frontend/domain.manifest.json", "utf8"));
   assert.ok(manifest.artifacts.schemas.includes("schemas/ui-evidence-bundle.schema.json"));
+  const schema = JSON.parse(await readFile("domains/frontend/schemas/ui-evidence-bundle.schema.json", "utf8"));
+  assert.equal(schema.$defs.capture.required.includes("stateRendered"), false);
+  assert.ok(schema.$defs.check.properties.code.enum.includes("state-not-rendered"));
+  assert.ok(schema.$defs.check.properties.code.enum.includes("state-mismatch"));
+  assert.equal(schema.$defs.stateSynchronization.allOf.length, 1);
 });

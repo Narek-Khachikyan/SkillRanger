@@ -379,7 +379,12 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
     ...(input.capabilities ?? []).filter(({ id }) => canonical(id) !== "filesystem"),
   ]);
   const parsed = parseTrigger({ prompt: input.prompt, mode: input.activation.mode, maxIntentBytes: Math.min(config.router.maxIntentBytes, 64_000) });
-  if (!parsed.activated) throw new RouterPrepareError(parsed.reason, parsed.reason === "trigger-required" ? "The explicit @skillranger, skillranger, or /sr trigger is required." : `Cannot prepare task: ${parsed.reason}.`);
+  if (!parsed.activated) throw new RouterPrepareError(
+    parsed.reason,
+    parsed.reason === "trigger-required"
+      ? "Start the prompt with @skillranger or /sr.\nExample: @skillranger проверь мобильное управление"
+      : `Cannot prepare task: ${parsed.reason}.`,
+  );
   if (Boolean(input.continuationToken) !== Boolean(input.clarificationAnswers)) {
     throw new RouterPrepareError("continuation-invalid", "Continuation token and clarification answers must be supplied together.");
   }

@@ -93,12 +93,17 @@ The strict Tailwind workflow derives browser gates from measurements in `verific
     "keyboardTraps": [],
     "invisibleFocus": [],
     "criticalAxeViolations": [],
-    "reducedMotionVerified": true
+    "reducedMotionVerified": true,
+    "stateRendered": true,
+    "action": "Select the captured state",
+    "changes": [
+      { "locator": "#active-state", "before": "previous", "after": "default" }
+    ]
   }]
 }
 ```
 
-`checks` maps and other caller-authored approval fields are rejected: the root object may contain only `observations`, and every observation has the closed shape shown above. Every `screenshotPath` must reference separately ingested screenshot evidence for that viewport; one screenshot cannot stand in for multiple observations. The runtime requires viewport coverage at widths 390, 768, and 1440 and a non-empty `state` label on each observation; it does not prescribe a set of state names. It derives overflow, clipped or unreachable controls, sticky overlap, focus, keyboard, and critical axe accessibility results, console errors, and reduced-motion results from those observations. Any `criticalAxeViolations` entry fails the existing `focus-visible` accessibility hard gate.
+`checks` maps and other caller-authored approval fields are rejected: the root object may contain only `observations`, and every observation has the closed shape shown above. Every `screenshotPath` must reference separately ingested screenshot evidence for that viewport; one screenshot cannot stand in for multiple observations. The runtime requires viewport coverage at widths 390, 768, and 1440, a non-empty `state` label, `stateRendered: true`, a concrete `action`, and at least one locator-level change where `before !== after`. It does not prescribe a set of state names. It derives overflow, clipped or unreachable controls, sticky overlap, focus, keyboard, and critical axe accessibility results, console errors, and reduced-motion results from those observations. Any `criticalAxeViolations` entry fails the existing `focus-visible` accessibility hard gate.
 
 `implementation-diff` evidence is diff/source text, not JSON gate decisions. The runtime validates added lines from a structurally valid unified diff, or the complete content when it is not a diff, and derives the Tailwind source gates from the resulting findings. Embedded `checks` properties have no authority.
 

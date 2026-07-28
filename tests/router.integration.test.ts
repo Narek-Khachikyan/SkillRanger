@@ -90,6 +90,10 @@ test("MCP router rejects missing trigger without creating a run", async () => {
   const result = await callMcpTool("prepare_task", { prompt: "Create a page" });
   assert.equal(result.isError, true);
   assert.equal((result.structuredContent as { code: string }).code, "trigger-required");
+  assert.equal(
+    (result.structuredContent as { message: string }).message,
+    "Start the prompt with @skillranger or /sr.\nExample: @skillranger проверь мобильное управление",
+  );
   assert.deepEqual(await readdir(path.join(root, ".skillranger")).catch(() => []), []);
 });
 

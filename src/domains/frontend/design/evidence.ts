@@ -41,13 +41,22 @@ const stateSynchronization = (value: unknown): BrowserCheckPayload["stateSynchro
   if (!isValidStateSynchronization(value)) {
     throw new Error(
       "Browser observation stateSynchronization must be { status: verified | mismatch | not-applicable, "
-      + "path: non-empty string, observations: array of non-empty strings }, with at least two observations "
-      + "unless status is not-applicable.",
+      + "path: non-empty string, observations: array of non-empty strings, optional action and changes, "
+      + "and a concrete reason when status is not-applicable }.",
     );
   }
   // Rebuilt rather than passed through: this object lands verbatim in captures[].stateSynchronization,
   // and the published bundle schema forbids additional properties.
-  return { status: value.status, path: value.path, observations: value.observations };
+  return {
+    status: value.status,
+    path: value.path,
+    observations: [...value.observations],
+    ...(value.action !== undefined ? { action: value.action } : {}),
+    ...(value.changes !== undefined
+      ? { changes: value.changes.map((change) => ({ ...change })) }
+      : {}),
+    ...(value.reason !== undefined ? { reason: value.reason } : {}),
+  };
 };
 
 const parsePayload = (value: unknown) => {
@@ -149,6 +158,7 @@ export const executeUiEvidenceCapture = async (input: {
       captures.push({
         ...entry,
         observation: observationFor(parsed.browser, entry, input.plan.route),
+        stateRendered: parsed.browser.stateRendered,
         stateSynchronization: parsed.browser.stateSynchronization,
         checks,
       });

@@ -58,6 +58,8 @@ test("reports every extended browser failure deterministically", () => {
         status: "mismatch",
         path: "filter[failed] -> run-list -> result-count",
         observations: ["run-list=failed-only", "result-count=all-runs"],
+        action: "Select the failed filter",
+        changes: [{ locator: "#run-list", before: "all-runs", after: "failed-only" }],
       },
     },
     viewport: 390,
@@ -67,28 +69,62 @@ test("reports every extended browser failure deterministically", () => {
   assert.deepEqual([...new Set(checks.map(({ code }) => code))].sort(), [
     "clipped-content", "console-error", "contrast", "critical-axe", "element-overlap",
     "focus-order", "horizontal-overflow", "invisible-focus", "keyboard-trap", "reduced-motion",
-    "state-mismatch", "state-not-rendered", "sticky-overlap", "unreachable-action",
+    "sticky-overlap", "ui-state-desynchronized", "ui-state-not-rendered", "unreachable-action",
   ]);
   assert.ok(checks.every(({ gate }) => gate === "hard"));
-  const mismatch = checks.find(({ code }) => code === "state-mismatch");
+  const mismatch = checks.find(({ code }) => code === "ui-state-desynchronized");
   assert.equal(mismatch?.severity, "high");
   assert.equal(mismatch?.locator, "filter[failed] -> run-list -> result-count");
 });
 
-test("verified state synchronization does not create a finding", () => {
-  const checks = evaluateBrowserPayload({
+test("verified state synchronization requires an action and an observed change", () => {
+  const base = {
+    horizontalOverflow: false, clippedControls: [], unreachableActions: [], stickyOverlaps: [],
+    consoleErrors: [], keyboardTraps: [], invisibleFocus: [], criticalAxeViolations: [],
+    reducedMotionVerified: true, stateRendered: true, overlaps: [], focusOrderViolations: [],
+    contrastViolations: [],
+  };
+  const withoutAction = evaluateBrowserPayload({
     payload: {
-      horizontalOverflow: false, clippedControls: [], unreachableActions: [], stickyOverlaps: [],
-      consoleErrors: [], keyboardTraps: [], invisibleFocus: [], criticalAxeViolations: [],
-      reducedMotionVerified: true, stateRendered: true, overlaps: [], focusOrderViolations: [],
-      contrastViolations: [],
+      ...base,
       stateSynchronization: {
         status: "verified",
         path: "variant[Ink] -> preview -> summary",
         observations: ["preview=Ink", "summary=Ink"],
+        changes: [{ locator: "#preview", before: "Paper", after: "Ink" }],
       },
     },
     viewport: 1440, state: "success", screenshotPath: "1440-success.png",
   });
-  assert.ok(!checks.some(({ code }) => code === "state-mismatch"));
+  assert.deepEqual(withoutAction.map(({ code }) => code), ["ui-state-action-missing"]);
+
+  const withoutChange = evaluateBrowserPayload({
+    payload: {
+      ...base,
+      stateSynchronization: {
+        status: "verified",
+        path: "variant[Ink] -> preview -> summary",
+        observations: ["preview=Ink", "summary=Ink"],
+        action: "Choose Ink",
+        changes: [{ locator: "#preview", before: "Ink", after: "Ink" }],
+      },
+    },
+    viewport: 1440, state: "success", screenshotPath: "1440-success.png",
+  });
+  assert.deepEqual(withoutChange.map(({ code }) => code), ["ui-state-change-missing"]);
+
+  const verified = evaluateBrowserPayload({
+    payload: {
+      ...base,
+      stateSynchronization: {
+        status: "verified",
+        path: "variant[Ink] -> preview -> summary",
+        observations: ["preview=Ink", "summary=Ink"],
+        action: "Choose Ink",
+        changes: [{ locator: "#preview", before: "Paper", after: "Ink" }],
+      },
+    },
+    viewport: 1440, state: "success", screenshotPath: "1440-success.png",
+  });
+  assert.deepEqual(verified, []);
 });

@@ -89,7 +89,7 @@ test("publishes closed run, critic, verification, and repair schemas", async () 
   assert.doesNotThrow(() => assertValidCriticReportV2(report, contract()));
   assert.throws(
     () => assertValidCriticReportV2({ ...report, criticInvocationId: report.executorInvocationId }, contract()),
-    /independent/i,
+    /host-attested critic\/executor invocation separation/i,
   );
 });
 

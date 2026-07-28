@@ -280,7 +280,13 @@ export const deriveStrictValidatorResults = async (
     let result: Result = { passed: false, message: `Runtime validator ${gate.evaluator.validatorId} found no valid evidence.` };
     if (gate.evaluator.validatorId === "core/artifact-integrity") result = { passed: true };
     else if (gate.evaluator.validatorId === "core/critic-independence") {
-      try { assertValidCriticReportV2(criticReport, ledger.contract); result = { passed: true }; }
+      try {
+        assertValidCriticReportV2(criticReport, ledger.contract);
+        result = {
+          passed: true,
+          message: "Distinct invocation IDs provide host-attested critic/executor separation; they do not technically prove independent execution.",
+        };
+      }
       catch (error) { result = { passed: false, message: (error as Error).message }; }
     } else if (gate.evaluator.validatorId === "frontend/performance-claims") {
       const report = record(output) ? output : undefined;

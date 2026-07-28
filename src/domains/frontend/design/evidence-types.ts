@@ -4,7 +4,9 @@ export type UiCheckCode =
   | "horizontal-overflow" | "clipped-content" | "element-overlap" | "sticky-overlap"
   | "console-error" | "unreachable-action" | "keyboard-trap" | "focus-order"
   | "invisible-focus" | "contrast" | "critical-axe" | "reduced-motion"
-  | "state-not-rendered" | "state-mismatch" | "inconsistent-spacing" | "random-color"
+  | "ui-state-not-rendered" | "ui-state-action-missing" | "ui-state-change-missing"
+  | "ui-state-desynchronized" | "state-not-rendered" | "state-mismatch"
+  | "inconsistent-spacing" | "random-color"
   | "excessive-radii" | "excessive-shadows" | "generic-card-repetition"
   | "weak-typography-hierarchy" | "text-measure" | "touch-target";
 
@@ -36,6 +38,13 @@ export type StateSynchronization = {
   status: "verified" | "mismatch" | "not-applicable";
   path: string;
   observations: string[];
+  action?: string;
+  changes?: Array<{
+    locator: string;
+    before: string;
+    after: string;
+  }>;
+  reason?: string;
 };
 
 const stateSynchronizationStatuses = ["verified", "mismatch", "not-applicable"];
@@ -50,12 +59,21 @@ const stateSynchronizationStatuses = ["verified", "mismatch", "not-applicable"];
  */
 export const isValidStateSynchronization = (value: unknown): value is StateSynchronization => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const { status, path, observations } = value as Record<string, unknown>;
+  const { status, path, observations, action, changes, reason } = value as Record<string, unknown>;
   if (!stateSynchronizationStatuses.includes(status as string)) return false;
   if (typeof path !== "string" || path.trim().length === 0) return false;
   if (!Array.isArray(observations)
     || !observations.every((entry) => typeof entry === "string" && entry.trim().length > 0)) return false;
-  return observations.length >= (status === "not-applicable" ? 1 : 2);
+  if (observations.length < (status === "not-applicable" ? 1 : 2)) return false;
+  if (action !== undefined && typeof action !== "string") return false;
+  if (reason !== undefined && typeof reason !== "string") return false;
+  if (changes !== undefined && (!Array.isArray(changes) || !changes.every((change) =>
+    typeof change === "object" && change !== null && !Array.isArray(change)
+    && typeof (change as Record<string, unknown>).locator === "string"
+    && ((change as Record<string, unknown>).locator as string).trim().length > 0
+    && typeof (change as Record<string, unknown>).before === "string"
+    && typeof (change as Record<string, unknown>).after === "string"))) return false;
+  return status !== "not-applicable" || (typeof reason === "string" && reason.trim().length > 0);
 };
 
 export type UiCaptureEntry = {
@@ -63,6 +81,7 @@ export type UiCaptureEntry = {
   state: string;
   screenshotPath: string;
   observation: BrowserObservation;
+  stateRendered?: boolean;
   stateSynchronization: StateSynchronization;
   checks: UiCheckResult[];
 };

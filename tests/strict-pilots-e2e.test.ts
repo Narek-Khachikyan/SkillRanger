@@ -128,6 +128,9 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
     invisibleFocus: [],
     criticalAxeViolations: index === 0 ? ["button-name"] : [],
     reducedMotionVerified: true,
+    stateRendered: true,
+    action: "Select the captured state",
+    changes: [{ locator: "#active-state", before: "previous", after: `viewport-${width}` }],
   }));
   run = await step(root, store, run, skillId, [{ kind: "verification-input", value: { observations: initialObservations } }]);
   run = await step(root, store, run, skillId, [{ kind: "skill-output", validatedAs: "output", value: { outcome: "verified", classification: "hierarchy", changes: ["polished"], verification: {}, residualRisks: [] } }]);
@@ -171,6 +174,9 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
     invisibleFocus: [],
     criticalAxeViolations: [],
     reducedMotionVerified: true,
+    stateRendered: true,
+    action: "Select the captured state",
+    changes: [{ locator: "#active-state", before: "previous", after: `viewport-${width}` }],
   }));
   run = await step(root, store, run, skillId, [
     { kind: "verification-input", value: { observations } },
@@ -317,6 +323,9 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
     invisibleFocus: [],
     criticalAxeViolations: [],
     reducedMotionVerified: true,
+    stateRendered: true,
+    action: "Select the captured state",
+    changes: [{ locator: "#active-state", before: "previous", after: `viewport-${width}` }],
   }));
 
   run = await step(root, store, run, skillId, [{ kind: "verification-input", value: { observations: initialObservations } }]);
@@ -337,6 +346,11 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
   assert.equal(run.state, "repair-required");
   assert.equal(run.skillLedgers[0].repairRequests.length, 1);
   assert.ok(run.skillLedgers[0].repairRequests[0].gateIds.includes("core/gate/critic-findings"));
+  assert.match(
+    run.skillLedgers[0].verificationReports.at(-1)!.gateResults
+      .find(({ gateId }) => gateId.endsWith("/critic-independent"))?.message ?? "",
+    /host-attested critic\/executor separation.*do not technically prove independent execution/i,
+  );
   await assert.rejects(store.finalizeRun(run.runId), (error: unknown) => error instanceof Error && "code" in error && (error as { code: string }).code === "run-not-finalizable");
 
   run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: '+ <div className="domain-aquaculture">Fresh Hero</div>\n' }]);
@@ -380,6 +394,9 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
     invisibleFocus: [],
     criticalAxeViolations: [],
     reducedMotionVerified: true,
+    stateRendered: true,
+    action: "Select the captured state",
+    changes: [{ locator: "#active-state", before: "previous", after: `viewport-${width}` }],
   }));
   run = await step(root, store, run, skillId, [{ kind: "verification-input", value: { observations: freshObservations } }]);
 
@@ -431,6 +448,8 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
     state: "default",
     screenshotPath: `evidence/tw-initial-${width}.png`,
     horizontalOverflow: false, clippedControls: [], unreachableActions: [], stickyOverlaps: [], consoleErrors: [], keyboardTraps: [], invisibleFocus: [], criticalAxeViolations: [], reducedMotionVerified: true,
+    stateRendered: true, action: "Select the captured state",
+    changes: [{ locator: "#active-state", before: "previous", after: `viewport-${width}` }],
   }));
   run = await step(root, store, run, twId, [{ kind: "verification-input", value: { observations: twObservations } }]);
   run = await step(root, store, run, twId, [{ kind: "skill-output", validatedAs: "output", value: { outcome: "verified", classification: "hierarchy", changes: ["polished"], verification: {}, residualRisks: [] } }]);
@@ -487,7 +506,7 @@ test("Visual design strict run rejects same-actor critic report", async () => {
         findings: [],
       },
     }]),
-    (error: unknown) => error instanceof Error && error.message.includes("Critic invocation must be independent"),
+    (error: unknown) => error instanceof Error && error.message.includes("Host-attested critic/executor invocation separation"),
   );
 });
 

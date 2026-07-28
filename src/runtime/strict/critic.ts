@@ -20,7 +20,9 @@ export const assertValidCriticReportV2: (input: unknown, contract: ExecutionCont
   const unknown = Object.keys(input).find((key) => !required.includes(key));
   if (unknown || required.some((key) => !Object.hasOwn(input, key))) throw new Error(`Critic report must use the closed v2 shape. ${contractHint}`);
   if (input.schemaVersion !== "2.0" || input.skillId !== contract.skillId) throw new Error("Critic report identity does not match the skill contract.");
-  if (!nonEmpty(input.criticInvocationId) || !nonEmpty(input.executorInvocationId) || input.criticInvocationId === input.executorInvocationId) throw new Error("Critic invocation must be independent from the executor invocation.");
+  if (!nonEmpty(input.criticInvocationId) || !nonEmpty(input.executorInvocationId) || input.criticInvocationId === input.executorInvocationId) {
+    throw new Error("Host-attested critic/executor invocation separation requires distinct invocation IDs; this does not technically prove independent execution.");
+  }
   if (input.outcome !== "clean" && input.outcome !== "findings") throw new Error("Critic outcome is invalid.");
   if (!Array.isArray(input.evidenceArtifactIds) || input.evidenceArtifactIds.length === 0 || !input.evidenceArtifactIds.every(nonEmpty)) throw new Error("Critic report evidenceArtifactIds must be a non-empty array of artifact IDs.");
   if (!Array.isArray(input.findings) || (input.outcome === "clean" && input.findings.length !== 0) || (input.outcome === "findings" && input.findings.length === 0)) throw new Error("Critic findings do not match the outcome.");

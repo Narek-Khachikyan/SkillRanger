@@ -92,7 +92,7 @@ SkillRanger exposes 33 tools in four effect classes, each with a distinct host a
 - `repair_frontend_result` prepares a bounded frontend repair request without applying it.
 - `run_domain_eval` evaluates a domain workflow from supplied inputs.
 - `inspect_skill_run` reads the current persisted skill-run state without changing it.
-- `compare_design_variants` prepares an independent critic exchange or validates its returned report.
+- `compare_design_variants` prepares a critic exchange with host-attested actor separation or validates its returned report. Distinct actor IDs do not technically prove independent execution.
 - `verify_visual_result` runs the canonical strict final visual verifier.
 
 ### Exact-plan install (1)
@@ -189,8 +189,8 @@ If the current plan differs from the expected paths, installation is rejected. I
 Three distinct contracts share similar names. Submitting one where another is expected is rejected.
 
 - **`VisualCriticReport` v1** (`schemaVersion` `1.0`) is the `criticReport` argument of `compare_design_variants` and `verify_visual_result`. Its full JSON Schema is published on both tools and ships at `registry/skills/frontend.visual-critic/output.schema.json`.
-- **`CriticReportV2`** (`schemaVersion` `2.0`) is the strict-run evidence submitted with `add_skill_evidence` as `critic-report`. It is a closed shape: `schemaVersion`, `skillId`, `criticInvocationId`, `executorInvocationId`, `outcome`, `evidenceArtifactIds`, `findings`. Its `criticInvocationId` must differ from `executorInvocationId`. Rejections carry `requiredFields` in the error details.
-- **Browser verification input** is the strict-run evidence submitted as `verification-input` for skills whose gates use the `frontend/browser-hard-gates` validator. It must be exactly `{ "observations": [...] }` with real captured observations; self-declared pass flags are rejected. Other skills use a different `verification-input` shape, so this contract applies only to that validator.
+- **`CriticReportV2`** (`schemaVersion` `2.0`) is the strict-run evidence submitted with `add_skill_evidence` as `critic-report`. It is a closed shape: `schemaVersion`, `skillId`, `criticInvocationId`, `executorInvocationId`, `outcome`, `evidenceArtifactIds`, `findings`. Its invocation IDs must differ as a host attestation of separation; this is not technical proof of independent execution. Rejections carry `requiredFields` in the error details.
+- **Browser verification input** is the strict-run evidence submitted as `verification-input` for skills whose gates use the `frontend/browser-hard-gates` validator. It must be exactly `{ "observations": [...] }` with real captured observations. Each closed observation requires `stateRendered: true`, a non-empty `action`, and `changes` containing at least one locator whose `before` and `after` values differ. Self-declared pass flags are rejected. Other skills use a different `verification-input` shape, so this contract applies only to that validator.
 
 ## Tool Error Codes
 

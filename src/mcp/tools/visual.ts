@@ -51,6 +51,29 @@ const criticCandidateSchema = {
     screenshotPaths: { type: "array", minItems: 1, items: { type: "string", minLength: 1 } },
   },
 } as const;
+const stateSynchronizationSchema = {
+  type: "object",
+  required: ["status", "path", "observations"],
+  properties: {
+    status: { type: "string", enum: ["verified", "mismatch", "not-applicable"] },
+    path: { type: "string", minLength: 1 },
+    observations: { type: "array", minItems: 1, items: { type: "string", minLength: 1 } },
+    action: { type: "string" },
+    changes: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["locator", "before", "after"],
+        properties: {
+          locator: { type: "string", minLength: 1 },
+          before: { type: "string" },
+          after: { type: "string" },
+        },
+      },
+    },
+    reason: { type: "string" },
+  },
+} as const;
 // The capture plan spreads both required-state lists, so omitting either one used to surface as an
 // unexpected internal error. Publishing them lets the schema reject the call before dispatch.
 const capturePolicySchema = { type: "object", required: ["requiredStates"], properties: { requiredStates: stateListSchema } } as const;
@@ -69,7 +92,14 @@ const verifiedEvidenceSchema = {
   properties: {
     captures: {
       type: "array",
-      items: { type: "object", required: ["stateSynchronization"] },
+      items: {
+        type: "object",
+        required: ["stateSynchronization"],
+        properties: {
+          stateRendered: { type: "boolean" },
+          stateSynchronization: stateSynchronizationSchema,
+        },
+      },
     },
     requiredViewports: { type: "array" },
     requiredStates: stateListSchema,
@@ -101,7 +131,7 @@ export const visualToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.readOnly,
     name: "compare_design_variants",
     title: "Compare design variants",
-    description: "Prepare an independent critic review for one candidate, or a comparative critic review for two or three candidates. For one candidate, the critic must return a full scorecard, strengths, weaknesses, AI-slop findings, and either selected or no-acceptable-variant using only that candidate's evidence and no implementation code. criticActorId must represent a genuinely separate critic execution. Renaming the same generator actor does not constitute independence. criticReport must be a VisualCriticReport v1 (schemaVersion 1.0); the strict-run critic-report evidence contract is the different CriticReportV2 (schemaVersion 2.0).",
+    description: "Prepare a host-attested actor-separated critic review for one candidate, or a comparative critic review for two or three candidates. Distinct generatorActorId and criticActorId values record only the host's assertion of actor separation; they do not technically prove independent execution. For one candidate, the critic must return a full scorecard, strengths, weaknesses, AI-slop findings, and either selected or no-acceptable-variant using only that candidate's evidence and no implementation code. criticReport must be a VisualCriticReport v1 (schemaVersion 1.0); the strict-run critic-report evidence contract is the different CriticReportV2 (schemaVersion 2.0).",
     inputSchema: { type: "object", required: ["policyId", "generatorActorId", "criticActorId", "candidates"], properties: { policyId: { type: "string" }, generatorActorId: { type: "string" }, criticActorId: { type: "string" }, candidates: { type: "array", minItems: 1, maxItems: 3, items: criticCandidateSchema }, criticReport: visualCriticReportSchema } },
   },
   {

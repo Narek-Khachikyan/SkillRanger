@@ -45,21 +45,42 @@ test("requires exactly one scorecard for the selected variant", () => {
   }
 });
 
-test("rejects recheck evidence that still records a causal state mismatch", () => {
-  // checks is caller-supplied, so the generated state-mismatch check is deleted here too.
+test("recomputes rendered and synchronized state findings at the final boundary", () => {
+  // checks is caller-supplied, so the capture-generated findings are deleted here.
   const input = freshCycle();
   for (const capture of input.recheckEvidence.captures) {
+    capture.stateRendered = false;
     capture.stateSynchronization = {
       status: "mismatch",
       path: "run selection -> log -> recovery",
       observations: ["log=run-7", "recovery=run-3"],
+      action: "Select run-7",
+      changes: [{ locator: "#log-run", before: "run-3", after: "run-7" }],
     };
     capture.checks = [];
   }
 
   const result = verifyVisualResult(input);
   assert.equal(result.report.outcome, "failed");
-  assert.ok(result.findings.some(({ code }) => code === "visual-recheck-state-desynchronized"));
+  assert.ok(result.findings.some(({ code }) => code === "ui-state-not-rendered"));
+  assert.ok(result.findings.some(({ code }) => code === "ui-state-desynchronized"));
+});
+
+test("treats not-applicable interaction evidence as non-certifying", () => {
+  const input = freshCycle();
+  for (const capture of input.recheckEvidence.captures) {
+    capture.stateSynchronization = {
+      status: "not-applicable",
+      path: "game controls",
+      observations: ["The host reported the controls as not applicable."],
+      reason: "The host did not exercise the interactive controls.",
+    };
+    capture.checks = [];
+  }
+
+  const result = verifyVisualResult(input);
+  assert.equal(result.report.outcome, "failed");
+  assert.ok(result.findings.some(({ code }) => code === "ui-state-action-missing"));
 });
 
 test("rejects evidence whose captures lost the required state synchronization", () => {
@@ -100,6 +121,9 @@ test("verifies only a complete fresh correction cycle", () => {
   assert.equal(result.findings.length, 0);
   assert.equal(result.report.outcome, "verified");
   assert.equal(result.report.evidence.filter(({ kind }) => kind === "screenshot").length, 12);
+  assert.ok(result.report.evidence.some(({ kind, description }) =>
+    kind === "visual-critique" && description.includes("host-attested actor separation")));
+  assert.ok(!JSON.stringify(result).includes("independent critic"));
 });
 
 
