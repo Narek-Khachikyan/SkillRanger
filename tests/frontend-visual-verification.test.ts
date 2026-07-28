@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { verifyVisualResult } from "../src/domains/frontend/design/index.ts";
+import { digestDesignExecutionPolicy, verifyVisualResult } from "../src/domains/frontend/design/index.ts";
 import type { UiCaptureEntry, VisualCriterion, VisualCriticReport } from "../src/domains/frontend/design/index.ts";
 import { makeBundle, makeVerificationInput } from "./helpers/frontend-visual-fixtures.ts";
 
@@ -76,10 +76,13 @@ test("rejects evidence whose captures lost the required state synchronization", 
 });
 
 test("fails stale, incomplete, or mismatched evidence", () => {
-  const result = verifyVisualResult(makeVerificationInput({
+  const input = makeVerificationInput({
     initialEvidence: makeBundle({ id: "e1", variantId: "v1", sourceIdentity: "git:abc" }),
     recheckEvidence: makeBundle({ id: "e1", variantId: "v2", sourceIdentity: "git:abc", captures: [] }),
-  }));
+  });
+  input.policy.requiredStates = ["success"];
+  input.visualRun.policyDigest = digestDesignExecutionPolicy(input.policy);
+  const result = verifyVisualResult(input);
   assert.deepEqual(result.findings.map(({ code }) => code), [
     "visual-evidence-stale",
     "visual-variant-evidence-mismatch",
@@ -128,12 +131,32 @@ test("requires a completed repair path when the critic requests repair", () => {
 });
 
 test("requires complete initial evidence before critique", () => {
-  const result = verifyVisualResult(makeVerificationInput({
+  const input = makeVerificationInput({
     initialEvidence: makeBundle({ id: "e1", variantId: "v1", sourceIdentity: "git:abc", captures: [] }),
     recheckEvidence: makeBundle({ id: "e2", variantId: "v1", sourceIdentity: "git:def" }),
-  }));
+  });
+  input.policy.requiredStates = ["success"];
+  input.visualRun.policyDigest = digestDesignExecutionPolicy(input.policy);
+  const result = verifyVisualResult(input);
   assert.ok(result.findings.some(({ code }) => code === "visual-evidence-matrix-incomplete"));
   assert.equal(result.report.outcome, "failed");
+});
+
+test("rejects empty required states and empty evidence bundles", () => {
+  const input = makeVerificationInput({
+    initialEvidence: makeBundle({ id: "e1", variantId: "v1", sourceIdentity: "git:abc", captures: [] }),
+    recheckEvidence: makeBundle({ id: "e2", variantId: "v1", sourceIdentity: "git:def", captures: [] }),
+  });
+  input.policy.requiredStates = [];
+  input.visualRun.policyDigest = digestDesignExecutionPolicy(input.policy);
+  input.initialEvidence.requiredStates = [];
+  input.recheckEvidence.requiredStates = [];
+
+  const result = verifyVisualResult(input);
+  assert.equal(result.report.outcome, "failed");
+  assert.equal(result.report.verificationStatus, "failed");
+  assert.ok(result.findings.some(({ code }) => code === "visual-evidence-matrix-incomplete"));
+  assert.equal(result.report.evidence.filter(({ kind }) => kind === "screenshot").length, 0);
 });
 
 

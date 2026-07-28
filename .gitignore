@@ -20,6 +20,8 @@ out/
 skillranger.lock.json
 .agents/skills/
 .claude/skills/
+/AGENTS.md
+/CLAUDE.md
 
 # Git Worktrees
 .worktree/

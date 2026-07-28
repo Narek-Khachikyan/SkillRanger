@@ -119,10 +119,15 @@ const evidenceMatrixIssues = (
     && observation.route === bundle.route
     && observation.screenshotPath === screenshotPath);
   const matrix = new Set(validCaptures.map(({ viewport, state }) => `${viewport.width}::${state}`));
-  const issues = policy.requiredViewports.flatMap((viewport) =>
+  const issues: string[] = [];
+  if (policy.requiredStates.length === 0 || policy.requiredStates.some((state) => state.trim() === "")) {
+    issues.push(`${label}:at least one non-empty required state is required`);
+  }
+  if (bundle.captures.length === 0) issues.push(`${label}:no captures`);
+  issues.push(...policy.requiredViewports.flatMap((viewport) =>
     policy.requiredStates
       .filter((state) => !matrix.has(`${viewport}::${state}`))
-      .map((state) => `${label}:${viewport}px:${state}`));
+      .map((state) => `${label}:${viewport}px:${state}`)));
   const metadataMatches = bundle.requiredViewports.length === policy.requiredViewports.length
     && bundle.requiredViewports.every((viewport, index) => viewport === policy.requiredViewports[index])
     && policy.requiredStates.every((state) => bundle.requiredStates.includes(state));

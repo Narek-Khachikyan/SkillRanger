@@ -95,12 +95,18 @@ const hasTokenBoundary = (source: string, start: number) => {
 // possessive mention ("@skillranger's tests are failing") into a command with a mangled intent.
 const leadingSeparator = /^[\s:,;]+/u;
 
+// A terminal trigger normally ends the sentence that asks for it ("Используй SkillRanger."), so the
+// sentence-final punctuation belongs to the request rather than to the alias. Requiring the alias to
+// be the literal last characters rejected the most common way a user asks for an explicit run.
+const terminalPunctuation = /[.!?…,;:]+$/u;
+
 const explicitTrigger = (source: string) => {
-  const lower = source.toLowerCase();
+  const trimmed = source.replace(terminalPunctuation, "");
+  const lower = trimmed.toLowerCase();
   for (const alias of aliases) {
     if (!lower.endsWith(alias)) continue;
-    const start = source.length - alias.length;
-    if (hasTokenBoundary(source, start) && !isInsideCode(source, start)) return { alias, intent: source.slice(0, start) };
+    const start = trimmed.length - alias.length;
+    if (hasTokenBoundary(trimmed, start) && !isInsideCode(trimmed, start)) return { alias, intent: trimmed.slice(0, start) };
   }
   return undefined;
 };

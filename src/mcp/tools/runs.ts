@@ -417,21 +417,30 @@ export const runToolDefinitions: McpToolDefinition[] = [
       additionalProperties: false,
     },
   },
+  // This family is the only path that can certify a strict run, so each description states what the
+  // tool does and where it sits in the sequence. A generated "<Title> for a strict v2 run." left the
+  // certifying path indistinguishable from boilerplate in a tools/list a host model has to choose from.
   ...[
-    ["read_next_skill_chunk", "Read Next Skill Chunk", { skillId: { type: "string" } }, ["skillId"]],
-    ["begin_skill_step", "Begin Skill Step", { skillId: { type: "string" }, stepId: { type: "string" } }, ["skillId", "stepId"]],
+    ["read_next_skill_chunk", "Read Next Skill Chunk", { skillId: { type: "string" } }, ["skillId"],
+      "Deliver the next mandatory chunk of one selected skill in a strict v2 run. Call it repeatedly until the skill reports no remaining chunks; a skill that is not fully delivered cannot be stepped or verified."],
+    ["begin_skill_step", "Begin Skill Step", { skillId: { type: "string" }, stepId: { type: "string" } }, ["skillId", "stepId"],
+      "Open one declared step of a delivered skill in a strict v2 run. Exactly one step at a time carries evidence, and the step must be opened before add_skill_evidence accepts anything for it."],
     ["add_skill_evidence", "Add Skill Evidence", {
       skillId: { type: "string" }, stepId: { type: "string" }, sourcePath: { type: "string" }, kind: { type: "string" },
       validatedAs: { type: "string", description: "Inferred from kind for the artifacts verification looks up by validatedAs: critic-report is validated as a CriticReportV2, and skill-output against the skill output schema. Sending this field for those kinds is optional; sending a conflicting value is rejected." },
       relation: { type: "string", enum: ["produced", "informed", "verified"] },
       ruleIds: { type: "array", items: { type: "string" } },
-    }, ["skillId", "stepId", "sourcePath", "kind", "ruleIds"]],
-    ["complete_skill_step", "Complete Skill Step", { skillId: { type: "string" }, stepId: { type: "string" } }, ["skillId", "stepId"]],
-    ["verify_skill", "Verify Skill", { skillId: { type: "string" } }, ["skillId"]],
-    ["finalize_skill_run", "Finalize Skill Run", {}, []],
-  ].map(([name, title, properties, required]) => ({
+    }, ["skillId", "stepId", "sourcePath", "kind", "ruleIds"],
+      "Attach one attributed, project-contained evidence artifact to the open strict v2 step, naming the rule ids it satisfies. Evidence is what verify_skill checks; a step without it cannot support a verified run."],
+    ["complete_skill_step", "Complete Skill Step", { skillId: { type: "string" }, stepId: { type: "string" } }, ["skillId", "stepId"],
+      "Close the open strict v2 step once its evidence is attached. Every declared step of a skill must be closed before that skill can be verified."],
+    ["verify_skill", "Verify Skill", { skillId: { type: "string" } }, ["skillId"],
+      "Verify one skill of a strict v2 run against its declared steps, attached evidence, and output schema. A failed verification leaves the run unverified: report the failed state rather than describing the work as done."],
+    ["finalize_skill_run", "Finalize Skill Run", {}, [],
+      "Finalize a strict v2 run after every selected skill is verified. This is the only call that can produce a certifying result. A run-blocked error means no verified result exists: report its userMessage and blockedSkills verbatim and never describe the run as passed, processed, or complete."],
+  ].map(([name, title, properties, required, description]) => ({
     ...mcpToolEffects.runStateWrite,
-    name: name as string, title: title as string, description: `${title as string} for a strict v2 run.`,
+    name: name as string, title: title as string, description: description as string,
     inputSchema: { type: "object", properties: { ...runIdProperties, ...(properties as JsonObject) }, required: ["runId", ...(required as string[])], additionalProperties: false },
   })),
 ];

@@ -59,7 +59,9 @@ const inputSchema = {
   type: "object",
   properties: {
     prompt: { type: "string", minLength: 1, maxLength: 64000 },
-    targetAgent: { type: "string", minLength: 1, maxLength: 128 },
+    // Named rather than enumerated: the value is NFKC-lowercased before lookup, so an enum would
+    // reject case variants that resolve today. Publishing the IDs stops a host from guessing.
+    targetAgent: { type: "string", minLength: 1, maxLength: 128, description: "Canonical target agent ID, case-insensitive. Supported: claude-code, codex, cursor, gemini-cli, generic-agent-skills, opencode, universal. Omit to use the project default." },
     hostCapabilities: { type: "array", maxItems: 64, uniqueItems: true, items: { type: "string", minLength: 1, maxLength: 128 } },
     strict: { type: "boolean" },
     continuationToken: { type: "string", minLength: 1, maxLength: 4096 },

@@ -33,7 +33,12 @@ const visualCriticReportSchema = JSON.parse(readFileSync(
   new URL("../../../registry/skills/frontend.visual-critic/output.schema.json", import.meta.url),
   "utf8",
 )) as JsonObject;
-const stateListSchema = { type: "array", items: { type: "string" } } as const;
+const stateListSchema = {
+  type: "array",
+  minItems: 1,
+  description: "States listed here require browser evidence at every supported viewport. Do not list viewport-specific interaction states unless they must be verified at every supported width.",
+  items: { type: "string", minLength: 1 },
+} as const;
 // An empty item schema left agents guessing field names from the rejection text and retrying
 // forever, so the critic candidate contract is published rather than only enforced.
 const criticCandidateSchema = {
@@ -67,7 +72,7 @@ const verifiedEvidenceSchema = {
       items: { type: "object", required: ["stateSynchronization"] },
     },
     requiredViewports: { type: "array" },
-    requiredStates: { type: "array" },
+    requiredStates: stateListSchema,
   },
 } as const;
 // The final verifier dereferences these containers before its lifecycle guards can turn their
@@ -76,7 +81,7 @@ const verifiedEvidenceSchema = {
 const verifyPolicySchema = {
   type: "object",
   required: ["requiredViewports", "requiredStates"],
-  properties: { requiredViewports: { type: "array" }, requiredStates: { type: "array" } },
+  properties: { requiredViewports: { type: "array" }, requiredStates: stateListSchema },
 } as const;
 const verifyVisualRunSchema = {
   type: "object",
@@ -96,8 +101,8 @@ export const visualToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.readOnly,
     name: "compare_design_variants",
     title: "Compare design variants",
-    description: "Prepare an independent critic exchange or validate its returned report. criticReport must be a VisualCriticReport v1 (schemaVersion 1.0); the strict-run critic-report evidence contract is the different CriticReportV2 (schemaVersion 2.0).",
-    inputSchema: { type: "object", required: ["policyId", "generatorActorId", "criticActorId", "candidates"], properties: { policyId: { type: "string" }, generatorActorId: { type: "string" }, criticActorId: { type: "string" }, candidates: { type: "array", minItems: 2, maxItems: 3, items: criticCandidateSchema }, criticReport: visualCriticReportSchema } },
+    description: "Prepare an independent critic review for one candidate, or a comparative critic review for two or three candidates. For one candidate, the critic must return a full scorecard, strengths, weaknesses, AI-slop findings, and either selected or no-acceptable-variant using only that candidate's evidence and no implementation code. criticActorId must represent a genuinely separate critic execution. Renaming the same generator actor does not constitute independence. criticReport must be a VisualCriticReport v1 (schemaVersion 1.0); the strict-run critic-report evidence contract is the different CriticReportV2 (schemaVersion 2.0).",
+    inputSchema: { type: "object", required: ["policyId", "generatorActorId", "criticActorId", "candidates"], properties: { policyId: { type: "string" }, generatorActorId: { type: "string" }, criticActorId: { type: "string" }, candidates: { type: "array", minItems: 1, maxItems: 3, items: criticCandidateSchema }, criticReport: visualCriticReportSchema } },
   },
   {
     ...mcpToolEffects.readOnly,
@@ -229,8 +234,8 @@ const capture: McpToolHandler = async (args) => {
 };
 
 const compare: McpToolHandler = async (args) => {
-  if (!Array.isArray(args.candidates) || args.candidates.length < 2 || args.candidates.length > 3) {
-    throw new McpToolError("invalid-arguments", "compare_design_variants requires two or three candidates.", { argument: "candidates" });
+  if (!Array.isArray(args.candidates) || args.candidates.length < 1 || args.candidates.length > 3) {
+    throw new McpToolError("invalid-arguments", "compare_design_variants requires one, two, or three candidates.", { argument: "candidates" });
   }
   const criticInput = await asToolFailure("invalid-arguments", () => createVisualCriticInput({
     policyId: requireString(args.policyId, "policyId"),

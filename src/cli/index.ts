@@ -517,10 +517,15 @@ const run = async () => {
     const briefPath = requiredFlag(args.flags.brief, "--brief");
     const brief = await readJsonArtifact<DesignBrief>(briefPath);
     const findings = validateDesignBrief(brief);
-    const recommendations = recommendFrontendRecipe(brief, await loadFrontendRecipes());
-    const report = { ok: !findings.some((finding) => finding.gate === "hard"), findings, recommendations };
+    const ok = !findings.some((finding) => finding.gate === "hard");
+    const recommendations = ok ? recommendFrontendRecipe(brief, await loadFrontendRecipes()) : [];
+    const report = { ok, findings, recommendations };
     if (args.flags.json) printJson(report);
-    else {
+    else if (!ok) {
+      for (const finding of findings.filter((entry) => entry.gate === "hard")) {
+        console.log(`${finding.code}: ${finding.message} ${finding.remediation}`);
+      }
+    } else {
       for (const [index, recommendation] of recommendations.entries()) {
         console.log(`${index + 1}. ${recommendation.recipe.id}  score ${recommendation.score.toFixed(3)}  ${recommendation.reasons.join("; ")}`);
       }
@@ -590,9 +595,13 @@ const run = async () => {
   if (command === "design:verify") {
     const brief = await readJsonArtifact<DesignBrief>(requiredFlag(args.flags.brief, "--brief"));
     const direction = await readJsonArtifact<DesignDirection>(requiredFlag(args.flags.direction, "--direction"));
-    const observations = typeof args.flags.observations === "string"
-      ? await readJsonArtifact<BrowserObservation[]>(path.resolve(args.flags.observations))
+    const observationsArtifact: unknown = typeof args.flags.observations === "string"
+      ? await readJsonArtifact<unknown>(path.resolve(args.flags.observations))
       : [];
+    if (!Array.isArray(observationsArtifact)) {
+      throw new Error("--observations must contain a JSON array of BrowserObservation objects. UiEvidenceBundle is consumed by verify_visual_result, not design:verify.");
+    }
+    const observations = observationsArtifact as BrowserObservation[];
     const capabilities = asCapabilities(args.flags.capabilities);
     const iteration = asPositiveInteger(args.flags.iteration, "--iteration") ?? 0;
     const result = validateDesignResult({

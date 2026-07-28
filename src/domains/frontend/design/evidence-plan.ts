@@ -3,7 +3,6 @@ import type { DesignExecutionPolicy } from "./policy-types.ts";
 import type { DesignBrief } from "./types.ts";
 
 const requiredViewports = [390, 768, 1440] as const;
-const baselineStates = ["loading", "empty", "error", "success"] as const;
 const safePathSegment = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 export type UiEvidenceCapturePlan = {
@@ -47,7 +46,6 @@ export const createUiEvidenceCapturePlan = (input: {
   assertSafePathSegment("Variant id", input.variantId);
   const outputDir = path.resolve(input.outputDir);
   const requiredStates = [...new Set([
-    ...baselineStates,
     ...input.policy.requiredStates,
     ...input.brief.surface.requiredStates,
   ])];

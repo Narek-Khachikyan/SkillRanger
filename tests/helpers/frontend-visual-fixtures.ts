@@ -77,8 +77,10 @@ export const makeVerificationInput = (overrides: {
   initialEvidence: UiEvidenceBundle;
   recheckEvidence: UiEvidenceBundle;
 }) => {
+  const brief = makeBrief();
   const policy = resolveDesignExecutionPolicy({
     mode: "refine", profile: "standard", rankedRecipeIds: ["developer-tool"],
+    requiredStates: brief.surface.requiredStates,
   });
   const criticReport: VisualCriticReport = {
     schemaVersion: "1.0", id: "c1", generatorActorId: "g1", criticActorId: "c1",
@@ -126,7 +128,7 @@ export const makeVerificationInput = (overrides: {
       createdOrder: 1, generatorActorId: "g1", implementationArtifact: "git-diff:abc",
       evidenceIds: [overrides.initialEvidence.id, overrides.recheckEvidence.id],
     } as DesignVariantMetadata,
-    brief: makeBrief(),
+    brief,
     direction: {
       schemaVersion: "1.0", recipeId: "developer-tool", thesis: "Run state leads the diagnostic flow.",
       productReason: "Maintainers must find the failing step before copying a command.",

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { handleJsonRpcLine, handleJsonRpcRequest } from "../src/mcp/protocol.ts";
+import { routerContext } from "../src/mcp/router-context.ts";
 import { skillLanes } from "../src/types.ts";
 
 test("MCP protocol initializes with tool capability", async () => {
@@ -31,6 +32,13 @@ test("MCP protocol initializes with tool capability", async () => {
   );
   const instructions = (response?.result as { instructions?: string })?.instructions ?? "";
   for (const requiredInstruction of [
+    routerContext().projectRoot,
+    "fixed for the lifetime",
+    "restart Codex from the target directory",
+    "do not fall back to a local SkillRanger CLI",
+    "call prepare_task again",
+    "use repo scope unless the user explicitly requests user scope",
+    "Do not call run:start or start_skill_run as a fallback",
     "do not call the low-level start_skill_run after prepare_task",
     "capture_ui_evidence",
     "compare_design_variants",
@@ -140,6 +148,183 @@ test("MCP publishes the strict skillInputs argument on prepare_task", async () =
   assert.deepEqual(skillInputs?.additionalProperties, { type: "object" });
 });
 
+// The frontend tools publish the brief contract, so a stub brief is now rejected before dispatch and
+// never reaches the handlers these tests exercise.
+type EvidenceEntry = { statement: string; source?: string };
+
+const schemaValidBrief = () => ({
+  schemaVersion: "1.0",
+  product: {
+    domain: "developer tooling",
+    primaryUserOrActor: "Skill author",
+    primaryTask: "Review lifecycle state",
+    contentTypes: [],
+    usageFrequency: "frequent",
+    stakes: [],
+  },
+  surface: {
+    type: "landing page",
+    primaryAction: "Start a verified run",
+    supportedViewports: [390, 1440],
+    requiredStates: ["loading", "empty", "error", "success"],
+  },
+  direction: { requestedTone: [], antiGoals: [], existingDirection: "existing" },
+  // Annotated so a test can add a contradictory statement: bare [] infers never[].
+  evidence: {
+    observed: [] as EvidenceEntry[],
+    inferred: [] as EvidenceEntry[],
+    assumed: [] as EvidenceEntry[],
+    unknown: [] as EvidenceEntry[],
+  },
+});
+
+const schemaValidDirection = () => ({
+  schemaVersion: "1.0",
+  recipeId: "developer-tool",
+  thesis: "An evidence-first workspace for reviewing lifecycle state.",
+  productReason: "Skill authors repeatedly inspect evidence and verification outcomes.",
+  axes: {
+    density: "compact",
+    hierarchy: "exception-first",
+    composition: "split-pane",
+    material: "bordered",
+    motionIntensity: "low",
+    expressionLevel: "restrained",
+  },
+  typographyRoles: { body: "UI sans" },
+  colorRoles: { accent: "selected evidence" },
+  signatureMove: "Keep verification evidence beside the selected lifecycle step.",
+  rejectedDefaults: ["decorative metric cards"],
+  destructiveCritique: "A split pane must collapse into a list-detail flow on mobile.",
+});
+
+test("a brief that violates the published contract is rejected before dispatch and names every missing field", async () => {
+  const response = await handleJsonRpcRequest({
+    jsonrpc: "2.0",
+    id: "brief-contract",
+    method: "tools/call",
+    params: { name: "recommend_frontend_recipe", arguments: { brief: { product: { domain: "bookstore" } } } },
+  });
+  const result = response?.result as { isError?: boolean; structuredContent?: { code?: string; message?: string } };
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent?.code, "invalid-arguments");
+  assert.match(result.structuredContent?.message ?? "", /\$\.brief\.product: required property is missing|contentTypes/);
+});
+
+test("a schema-valid brief that fails a hard gate returns its findings instead of throwing", async () => {
+  // Schema-valid but contradictory: the same statement cannot be both observed and assumed, which is a
+  // hard gate the published schema cannot express.
+  const brief = schemaValidBrief();
+  brief.evidence.observed = [{ statement: "Framework: next", source: "package.json" }];
+  brief.evidence.assumed = [{ statement: "Framework: next" }];
+  const response = await handleJsonRpcRequest({
+    jsonrpc: "2.0",
+    id: "hard-gate-brief",
+    method: "tools/call",
+    params: { name: "recommend_frontend_recipe", arguments: { brief } },
+  });
+  const result = response?.result as {
+    isError?: boolean;
+    structuredContent?: { ok?: boolean; findings?: Array<{ gate?: string; remediation?: string }>; recommendations?: unknown[] };
+  };
+  assert.equal(result.isError, false);
+  assert.equal(result.structuredContent?.ok, false);
+  assert.deepEqual(result.structuredContent?.recommendations, []);
+  const hard = result.structuredContent?.findings?.filter((finding) => finding.gate === "hard") ?? [];
+  assert.ok(hard.length > 0);
+  assert.ok(hard.every((finding) => (finding.remediation ?? "").length > 0));
+});
+
+test("every tool that consumes a caller-supplied report rejects a malformed one as invalid arguments", async () => {
+  const malformed = [
+    { workflowId: "w", iteration: 0, outcome: "failed", gates: { hardPassed: false }, findings: [null] },
+    { workflowId: "w", iteration: 0, outcome: "failed", findings: [] },
+    { gates: null },
+    {},
+  ];
+  for (const report of malformed) {
+    for (const name of ["repair_frontend_result", "compile_frontend_design_spec"]) {
+      const args = name === "repair_frontend_result"
+        ? { report }
+        : { brief: schemaValidBrief(), direction: schemaValidDirection(), report };
+      const response = await handleJsonRpcRequest({
+        jsonrpc: "2.0",
+        id: `report-guard-${name}-${JSON.stringify(report).length}`,
+        method: "tools/call",
+        params: { name, arguments: args },
+      });
+      const result = response?.result as { isError?: boolean; structuredContent?: { code?: string } };
+      assert.equal(result.isError, true, `${name} ${JSON.stringify(report)}`);
+      assert.equal(result.structuredContent?.code, "invalid-arguments", `${name} ${JSON.stringify(report)}`);
+    }
+  }
+});
+
+test("a stateless frontend report can flow directly into repair and compilation", async () => {
+  const brief = schemaValidBrief();
+  const direction = schemaValidDirection();
+  const validated = await handleJsonRpcRequest({
+    jsonrpc: "2.0",
+    id: "frontend-report-producer",
+    method: "tools/call",
+    params: {
+      name: "validate_frontend_result",
+      arguments: { brief, direction },
+    },
+  });
+  const report = (validated?.result as { structuredContent?: unknown }).structuredContent;
+
+  for (const [name, arguments_] of [
+    ["repair_frontend_result", { report }],
+    ["compile_frontend_design_spec", { brief, direction, report }],
+  ] as const) {
+    const response = await handleJsonRpcRequest({
+      jsonrpc: "2.0",
+      id: `frontend-report-consumer-${name}`,
+      method: "tools/call",
+      params: { name, arguments: arguments_ },
+    });
+    assert.equal((response?.result as { isError?: boolean }).isError, false, name);
+  }
+});
+
+test("a capabilities superset is accepted rather than rejected before dispatch", async () => {
+  const response = await handleJsonRpcRequest({
+    jsonrpc: "2.0",
+    id: "capability-superset",
+    method: "tools/call",
+    params: {
+      name: "validate_frontend_result",
+      arguments: { brief: schemaValidBrief(), direction: {}, capabilities: ["browser", "screenshots", "filesystem"] },
+    },
+  });
+  const result = response?.result as { isError?: boolean; structuredContent?: { capabilityStatus?: string } };
+  assert.equal(result.isError, false);
+  assert.equal(result.structuredContent?.capabilityStatus, "ready");
+});
+
+test("both stateless frontend validators carry the non-certifying notice", async () => {
+  for (const name of ["validate_frontend_result", "verify_frontend_result"]) {
+    const response = await handleJsonRpcRequest({
+      jsonrpc: "2.0",
+      id: `notice-${name}`,
+      method: "tools/call",
+      params: { name, arguments: { brief: schemaValidBrief(), direction: {} } },
+    });
+    const result = response?.result as {
+      content?: Array<{ text?: string }>;
+      structuredContent?: Record<string, unknown>;
+    };
+    const notice = result.content?.[1]?.text ?? "";
+    assert.equal(result.structuredContent?.notice, undefined, name);
+    assert.deepEqual(JSON.parse(result.content?.[0]?.text ?? ""), result.structuredContent, name);
+    assert.match(notice, /NON-CERTIFYING STATELESS RESULT/, name);
+    assert.match(notice, /Do not report strict verification as passed/, name);
+    assert.match(notice, /finalize_skill_run/, name);
+    assert.doesNotMatch(notice, /\b(?:complete_skill_run|verify_skill_run)\b/, name);
+  }
+});
+
 test("MCP descriptions and stateless frontend verification prevent strict completion claims", async () => {
   const listed = await handleJsonRpcRequest({
     jsonrpc: "2.0",
@@ -156,25 +341,30 @@ test("MCP descriptions and stateless frontend verification prevent strict comple
   assert.match(byName.get("recommend_skills")?.description ?? "", /use prepare_task instead/);
   assert.match(byName.get("verify_frontend_result")?.title ?? "", /Stateless, Not Strict/);
   assert.match(byName.get("verify_frontend_result")?.description ?? "", /Never report this result as strict SkillRanger completion/);
+  for (const name of ["validate_frontend_result", "verify_frontend_result"]) {
+    const description = byName.get(name)?.description ?? "";
+    assert.match(description, /finalize_skill_run/, name);
+    assert.doesNotMatch(description, /\b(?:complete_skill_run|verify_skill_run)\b/, name);
+  }
 
+  const brief = schemaValidBrief();
   const verified = await handleJsonRpcRequest({
     jsonrpc: "2.0",
     id: "stateless-result",
     method: "tools/call",
     params: {
       name: "verify_frontend_result",
-      arguments: { brief: {}, direction: {} },
+      arguments: { brief, direction: {} },
     },
   });
   const result = verified?.result as {
     content?: Array<{ text?: string }>;
     structuredContent?: unknown;
   };
-  assert.match(result.content?.[0]?.text ?? "", /NON-CERTIFYING STATELESS RESULT/);
-  assert.match(result.content?.[0]?.text ?? "", /Do not report strict verification as passed/);
+  assert.match(result.content?.[1]?.text ?? "", /NON-CERTIFYING STATELESS RESULT/);
+  assert.match(result.content?.[1]?.text ?? "", /Do not report strict verification as passed/);
   assert.equal(typeof result.structuredContent, "object");
-  // The notice must not cost a host the ability to parse the text, which is the JSON of
-  // structuredContent for every other tool.
+  // The notice must not cost a host the canonical report in content[0] and structuredContent.
   assert.deepEqual(JSON.parse(result.content?.[0]?.text ?? ""), result.structuredContent);
 });
 

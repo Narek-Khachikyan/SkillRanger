@@ -43,12 +43,40 @@ test("punctuation may precede an explicit trigger", () => {
   assert.equal(explicit("Fix the tests. @skillranger").activated, true);
 });
 
-test("punctuation after a trigger prevents activation", () => {
-  assert.deepEqual(explicit("Fix the tests @skillranger."), {
+test("sentence-final punctuation after a trigger still activates and stays out of the intent", () => {
+  for (const [prompt, trigger] of [
+    ["Fix the tests @skillranger.", "@skillranger"],
+    ["Fix the tests skillranger!", "skillranger"],
+    ["Fix the tests /sr?", "/sr"],
+    ["Fix the tests @skillranger...", "@skillranger"],
+  ] as const) {
+    assert.deepEqual(explicit(prompt), {
+      activated: true,
+      mode: "explicit",
+      trigger,
+      originalPrompt: prompt,
+      normalizedIntent: "Fix the tests",
+    });
+  }
+});
+
+test("a terminal trigger inside an ordinary sentence activates", () => {
+  const prompt = "Сделай сайт книжного магазина. Используй SkillRanger.";
+  assert.deepEqual(explicit(prompt), {
+    activated: true,
+    mode: "explicit",
+    trigger: "skillranger",
+    originalPrompt: prompt,
+    normalizedIntent: "Сделай сайт книжного магазина. Используй",
+  });
+});
+
+test("punctuation alone cannot supply the intent", () => {
+  assert.deepEqual(explicit("@skillranger."), {
     activated: false,
     mode: "explicit",
-    originalPrompt: "Fix the tests @skillranger.",
-    reason: "trigger-required",
+    originalPrompt: "@skillranger.",
+    reason: "empty-intent",
   });
 });
 

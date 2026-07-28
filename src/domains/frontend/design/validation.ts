@@ -348,6 +348,28 @@ export const validateDesignDirection = (
   return findings;
 };
 
+const browserObservationArrayKeys = [
+  "clippedControls",
+  "unreachableActions",
+  "stickyOverlaps",
+  "consoleErrors",
+  "keyboardTraps",
+  "invisibleFocus",
+  "criticalAxeViolations",
+] as const;
+
+const isValidBrowserObservation = (observation: unknown): observation is BrowserObservation =>
+  isRecord(observation)
+  && observation.schemaVersion === "1.0"
+  && isRecord(observation.viewport)
+  && Number.isInteger(observation.viewport.width)
+  && Number.isInteger(observation.viewport.height)
+  && nonEmpty(observation.route)
+  && nonEmpty(observation.state)
+  && typeof observation.horizontalOverflow === "boolean"
+  && typeof observation.reducedMotionVerified === "boolean"
+  && browserObservationArrayKeys.every((key) => isStringArray(observation[key]));
+
 export const validateBrowserObservations = (
   brief: unknown,
   observations: unknown[],
@@ -366,31 +388,9 @@ export const validateBrowserObservations = (
   const requiredSurfaceStates = isStringArray(surfaceContract?.requiredStates)
     ? surfaceContract.requiredStates
     : [];
-  const validObservations: Array<Record<string, unknown> & { viewport: Record<string, unknown> }> = [];
+  const validObservations: BrowserObservation[] = [];
   for (const observation of observations) {
-    const viewport = isRecord(observation) && isRecord(observation.viewport)
-      ? observation.viewport
-      : undefined;
-    const arraysValid = isRecord(observation) && [
-      "clippedControls",
-      "unreachableActions",
-      "stickyOverlaps",
-      "consoleErrors",
-      "keyboardTraps",
-      "invisibleFocus",
-      "criticalAxeViolations",
-    ].every((key) => isStringArray(observation[key]));
-    if (
-      !isRecord(observation) ||
-      !viewport ||
-      !Number.isInteger(viewport.width) ||
-      !Number.isInteger(viewport.height) ||
-      !nonEmpty(observation.route) ||
-      !nonEmpty(observation.state) ||
-      typeof observation.horizontalOverflow !== "boolean" ||
-      typeof observation.reducedMotionVerified !== "boolean" ||
-      !arraysValid
-    ) {
+    if (!isValidBrowserObservation(observation)) {
       findings.push(finding(
         "browser-observation-contract",
         "critical",
@@ -400,7 +400,7 @@ export const validateBrowserObservations = (
       ));
       continue;
     }
-    validObservations.push({ ...observation, viewport });
+    validObservations.push(observation);
   }
   const matrix = new Set(
     validObservations.map((observation) => `${observation.viewport.width}::${observation.state}`),
@@ -413,7 +413,7 @@ export const validateBrowserObservations = (
           "high",
           "hard",
           `No browser evidence exists for ${viewport}px in the ${state} state.`,
-          `Render and inspect the ${state} state at ${viewport}px.`,
+          "Render and inspect the state at this viewport. If the state is intentionally viewport-specific, remove it from surface.requiredStates instead of fabricating evidence for unsupported viewports.",
         ));
       }
     }
@@ -472,13 +472,40 @@ export const validateDesignResult = (input: {
   const capabilities = new Set(input.capabilities ?? []);
   const browserReady = capabilities.has("browser") && capabilities.has("screenshots");
   const artifactExists = input.artifactExists ?? defaultArtifactExists;
+  const observations = input.observations ?? [];
+  // An undeclared capability used to skip every browser gate and report zero findings, so the quietest
+  // possible result was the least verified one. Name the skipped gate instead, and never drop supplied
+  // observations in silence.
+  const capabilityFindings = browserReady ? [] : [
+    finding(
+      "browser-capability-undeclared",
+      "high",
+      "soft",
+      "Browser and screenshot capability was not declared, so no browser gate ran: responsiveness, required states, and accessibility are unchecked.",
+      "Declare capabilities browser and screenshots, then supply observations captured with capture_ui_evidence.",
+    ),
+    ...(observations.length > 0
+      ? [finding(
+          "browser-observations-discarded",
+          "high",
+          "soft",
+          `${observations.length} browser observation(s) were supplied but ignored because browser and screenshot capability was not declared.`,
+          "Declare capabilities browser and screenshots so the supplied observations are validated instead of discarded.",
+        )]
+      : []),
+  ];
   const findings = [
     ...validateDesignBrief(input.brief),
     ...validateDesignDirection(input.brief, input.direction),
+    ...capabilityFindings,
     ...(browserReady
-      ? validateBrowserObservations(input.brief, input.observations ?? [], { artifactExists })
+      ? validateBrowserObservations(input.brief, observations, { artifactExists })
       : []),
   ];
+  // Evidence may only be built from the same observations accepted by the browser contract.
+  const evidenceObservations = browserReady
+    ? observations.filter(isValidBrowserObservation)
+    : [];
   const hardFailures = findings.some(
     (finding) => finding.gate === "hard" && ["critical", "high"].includes(finding.severity),
   );
@@ -490,7 +517,7 @@ export const validateDesignResult = (input: {
     executionStatus: "implemented",
     verificationStatus: browserReady ? (hardFailures ? "failed" : "passed") : "not-run",
     findings,
-    evidence: (input.observations ?? []).flatMap((observation) =>
+    evidence: evidenceObservations.flatMap((observation) =>
       observation.screenshotPath && artifactExists(observation.screenshotPath)
         ? [{ kind: "screenshot", path: observation.screenshotPath, description: `${observation.route} at ${observation.viewport.width}px in ${observation.state}` }]
         : [],

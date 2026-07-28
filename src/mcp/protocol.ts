@@ -1,5 +1,6 @@
 import { callMcpTool, mcpTools } from "./tools.ts";
 import { readSkillRangerVersion } from "../version.ts";
+import { routerContext } from "./router-context.ts";
 
 const protocolVersion = "2025-06-18";
 
@@ -53,6 +54,7 @@ export const handleJsonRpcRequest = async (request: JsonRpcRequest): Promise<Jso
 
   if (method === "initialize") {
     const version = await readSkillRangerVersion();
+    const { projectRoot } = routerContext();
     return success(id, {
       protocolVersion,
       capabilities: {
@@ -65,8 +67,27 @@ export const handleJsonRpcRequest = async (request: JsonRpcRequest): Promise<Jso
         title: "SkillRanger",
         version
       },
-      instructions:
-        "For an explicit SkillRanger task, call prepare_task with the full prompt (including the @skillranger, skillranger, or /sr trigger) and requested strict mode. Strict mode also requires hostCapabilities and a skillInputs entry for every selected skill; each skill declares its required input object in input.schema.json inside its installed skill directory. Treat its runtime run ID as authoritative; do not call the low-level start_skill_run after prepare_task. Deliver every mandatory skill file with read_run_skill_file, then branch on run.runtime before implementation. For lifecycle-v1, resolve any required clarifications, call begin_skill_run_execution, and persist results with complete_skill_run and verify_skill_run. For strict-v2, use read_next_skill_chunk, begin_skill_step, add_skill_evidence, complete_skill_step, verify_skill, and finalize_skill_run; the lifecycle-v1 transition tools reject a strict-v2 run, so never mix the two families on one run. For material frontend work in strict mode, complete the returned frontend design workflow, capture real browser evidence with capture_ui_evidence, run an independent compare_design_variants critic exchange, recheck after any repair, and call verify_visual_result. Read persisted state of either runtime with inspect_skill_run. Never report that SkillRanger or strict visual verification passed unless the persisted run is verified with a passed verification status; otherwise report the exact failed or incomplete state. A finalize_skill_run that returns the run-blocked error means no verified result exists: report its userMessage and blockedSkills verbatim and do not describe the run as passed, processed, or complete. Skill installation requires an exact confirmed plan. UI capture requires explicit confirmation and constrains its declared output directory to the project, while the host-reviewed command remains open-world."
+      instructions: [
+        `Effective SkillRanger project root: ${projectRoot}.`,
+        "This root is fixed for the lifetime of this MCP server.",
+        "If it is not the intended project, stop and restart Codex from the target directory.",
+        "Do not pass projectRoot to router tools and do not fall back to a local SkillRanger CLI.",
+        "For an explicit SkillRanger task, call prepare_task with the full prompt (including the @skillranger, skillranger, or /sr trigger) and requested strict mode.",
+        "Strict mode also requires hostCapabilities and a skillInputs entry for every selected skill; each skill declares its required input object in input.schema.json inside its installed skill directory.",
+        "Treat its runtime run ID as authoritative; do not call the low-level start_skill_run after prepare_task.",
+        "Deliver every mandatory skill file with read_run_skill_file, then branch on run.runtime before implementation.",
+        "For lifecycle-v1, resolve any required clarifications, call begin_skill_run_execution, and persist results with complete_skill_run and verify_skill_run.",
+        "For strict-v2, use read_next_skill_chunk, begin_skill_step, add_skill_evidence, complete_skill_step, verify_skill, and finalize_skill_run; the lifecycle-v1 transition tools reject a strict-v2 run, so never mix the two families on one run.",
+        "For material frontend work in strict mode, complete the returned frontend design workflow, capture real browser evidence with capture_ui_evidence, run an independent compare_design_variants critic exchange, recheck after any repair, and call verify_visual_result.",
+        "Read persisted state of either runtime with inspect_skill_run.",
+        "Never report that SkillRanger or strict visual verification passed unless the persisted run is verified with a passed verification status; otherwise report the exact failed or incomplete state.",
+        "A finalize_skill_run that returns the run-blocked error means no verified result exists: report its userMessage and blockedSkills verbatim and do not describe the run as passed, processed, or complete.",
+        "For project work, use repo scope unless the user explicitly requests user scope.",
+        "Skill installation requires an exact confirmed plan.",
+        "After strict_requirements_unmet, use the returned installation suggestion: plan the exact install, obtain confirmation, apply that exact plan, then call prepare_task again.",
+        "Do not call run:start or start_skill_run as a fallback.",
+        "UI capture requires explicit confirmation and constrains its declared output directory to the project, while the host-reviewed command remains open-world.",
+      ].join(" ")
     });
   }
 

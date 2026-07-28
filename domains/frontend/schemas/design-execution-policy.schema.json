@@ -41,7 +41,7 @@
       "minItems": 3,
       "maxItems": 3
     },
-    "requiredStates": { "type": "array", "items": { "type": "string" } }
+    "requiredStates": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
   },
   "additionalProperties": false
 }

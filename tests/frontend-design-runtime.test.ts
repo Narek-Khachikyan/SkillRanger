@@ -227,6 +227,92 @@ test("browser hard gates produce failed and verified outcomes deterministically"
   assert.equal(failed.report.findings[0]?.code, "horizontal-overflow");
 });
 
+test("an undeclared browser capability is named instead of silently skipping the gate", () => {
+  const result = validateDesignResult({
+    workflowId: "frontend.design-generation",
+    brief: brief(),
+    direction: direction(),
+    artifactExists: () => true,
+  });
+  assert.ok(result.findings.some((finding) => finding.code === "browser-capability-undeclared"));
+  assert.ok(!result.findings.some((finding) => finding.code === "browser-observations-discarded"));
+  assert.equal(result.report.capabilityStatus, "degraded");
+  assert.equal(result.report.verificationStatus, "not-run");
+  assert.equal(result.report.outcome, "implemented-unverified");
+});
+
+test("observations supplied without the capability are reported as discarded", () => {
+  const result = validateDesignResult({
+    workflowId: "frontend.design-generation",
+    brief: brief(),
+    direction: direction(),
+    observations: [observation(390, "success"), observation(1440, "success")],
+    artifactExists: () => true,
+  });
+  const discarded = result.findings.find((finding) => finding.code === "browser-observations-discarded");
+  assert.ok(discarded);
+  assert.match(discarded.message, /2 browser observation/);
+  assert.equal(result.report.outcome, "implemented-unverified");
+});
+
+test("a structurally malformed observation is reported instead of throwing, and never becomes evidence", () => {
+  for (const capabilities of [undefined, ["browser", "screenshots"]]) {
+    const malformed = observation(390, "success") as BrowserObservation & {
+      viewport: { width: number; height?: number };
+    };
+    delete malformed.viewport.height;
+    const result = validateDesignResult({
+      workflowId: "frontend.design-generation",
+      brief: brief(),
+      direction: direction(),
+      observations: [malformed as BrowserObservation],
+      ...(capabilities ? { capabilities } : {}),
+      artifactExists: () => true,
+    });
+    assert.deepEqual(result.report.evidence, [], JSON.stringify(capabilities));
+    const codes = result.findings.map((entry) => entry.code);
+    assert.ok(
+      codes.includes(capabilities ? "browser-observation-contract" : "browser-observations-discarded"),
+      codes.join(","),
+    );
+  }
+});
+
+test("an observation without schemaVersion cannot produce verified evidence", () => {
+  const observations = ["loading", "empty", "error", "success"].flatMap((state) => [
+    observation(390, state),
+    observation(1440, state),
+  ]);
+  const malformed = observations[0] as BrowserObservation & { schemaVersion?: "1.0" };
+  delete malformed.schemaVersion;
+
+  const result = validateDesignResult({
+    workflowId: "frontend.design-generation",
+    brief: brief(),
+    direction: direction(),
+    observations,
+    capabilities: ["browser", "screenshots"],
+    artifactExists: () => true,
+  });
+
+  assert.ok(result.findings.some((finding) => finding.code === "browser-observation-contract"));
+  assert.equal(result.report.outcome, "failed");
+  assert.ok(!result.report.evidence.some((entry) => entry.path === malformed.screenshotPath));
+});
+
+test("a capability superset still enables the browser gate", () => {
+  const result = validateDesignResult({
+    workflowId: "frontend.design-generation",
+    brief: brief(),
+    direction: direction(),
+    observations: ["loading", "empty", "error", "success"].flatMap((state) => [observation(390, state), observation(1440, state)]),
+    capabilities: ["filesystem", "browser", "screenshots", "network"],
+    artifactExists: () => true,
+  });
+  assert.equal(result.report.capabilityStatus, "ready");
+  assert.equal(result.report.outcome, "verified");
+});
+
 test("soft design findings remain verified when every hard gate passes", () => {
   const softBrief = brief();
   softBrief.surface.requiredStates = ["success"];

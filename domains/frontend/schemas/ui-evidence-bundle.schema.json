@@ -12,7 +12,7 @@
     "route": { "type": "string", "minLength": 1 },
     "capturedAt": { "type": "string", "format": "date-time" },
     "requiredViewports": { "type": "array", "prefixItems": [{ "const": 390 }, { "const": 768 }, { "const": 1440 }], "items": false, "minItems": 3, "maxItems": 3 },
-    "requiredStates": { "type": "array", "minItems": 4, "items": { "type": "string", "minLength": 1 } },
+    "requiredStates": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
     "captures": { "type": "array", "items": { "$ref": "#/$defs/capture" } },
     "adapterCapabilities": { "type": "array", "items": { "type": "string", "minLength": 1 } }
   },

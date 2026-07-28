@@ -16,14 +16,14 @@ const policy = resolveDesignExecutionPolicy({
   mode: "refine", profile: "standard", rankedRecipeIds: ["mobile-consumer-app"], requiredStates: brief.surface.requiredStates,
 });
 
-test("expands the fixed viewport and baseline-state matrix", () => {
+test("expands the fixed viewport and explicitly required state matrix", () => {
   const plan = createUiEvidenceCapturePlan({
     evidenceId: "evidence-1", brief, policy, variantId: "v1",
     sourceIdentity: "git:abc", baseUrl: "http://127.0.0.1:3000", route: "/app", outputDir: ".design/evidence/evidence-1",
   });
   assert.deepEqual([...new Set(plan.entries.map(({ viewport }) => viewport.width))], [390, 768, 1440]);
-  assert.deepEqual([...new Set(plan.entries.map(({ state }) => state))], ["loading", "empty", "error", "success", "offline"]);
-  assert.equal(plan.entries.length, 15);
+  assert.deepEqual([...new Set(plan.entries.map(({ state }) => state))], ["success", "offline"]);
+  assert.equal(plan.entries.length, 6);
   assert.ok(plan.entries.every(({ screenshotPath }) => path.resolve(screenshotPath).startsWith(path.resolve(plan.outputDir) + path.sep)));
 });
 
@@ -64,7 +64,7 @@ test("captures observations and extended mechanical evidence", async () => {
     }));
   `;
   await writeFile(adapter, adapterFixtureSource);
-  const captureBrief = makeBrief({ requiredStates: ["success"] });
+  const captureBrief = makeBrief({ requiredStates: ["success", "offline"] });
   const capturePolicy = resolveDesignExecutionPolicy({
     mode: "refine", profile: "standard", rankedRecipeIds: ["developer-tool"], requiredStates: captureBrief.surface.requiredStates,
   });
@@ -78,7 +78,7 @@ test("captures observations and extended mechanical evidence", async () => {
     commandTemplate: `node ${adapter} "{{width}}" "{{state}}" "{{screenshotPath}}"`,
     projectRoot: root,
   });
-  assert.equal(bundle.captures.length, 12);
+  assert.equal(bundle.captures.length, 6);
   assert.ok(bundle.captures.every(({ screenshotPath }) => existsSync(screenshotPath)));
   assert.ok(bundle.captures.some(({ checks }) => checks.some(({ code }) => code === "touch-target")));
   assert.ok(bundle.captures.some(({ stateSynchronization }) =>

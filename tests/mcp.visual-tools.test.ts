@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { resolveDesignExecutionPolicy } from "../src/domains/frontend/design/index.ts";
+import { digestDesignExecutionPolicy, resolveDesignExecutionPolicy } from "../src/domains/frontend/design/index.ts";
 import { callMcpTool, mcpTools } from "../src/mcp/tools.ts";
 import { makeBrief, makeBundle, makeVerificationInput } from "./helpers/frontend-visual-fixtures.ts";
 
@@ -69,11 +69,18 @@ test("visual MCP array inputs publish item schemas",()=>{
   // A bare {type:"object"} item left agents guessing candidate field names from the rejection
   // text; the required contract is published so a host can see and pre-validate it.
   const candidates = (byName.get("compare_design_variants")?.inputSchema.properties as any).candidates;
+  assert.equal(candidates.minItems, 1);
+  assert.equal(candidates.maxItems, 3);
   assert.deepEqual(candidates.items.required, ["variantId", "directionPath", "evidenceId", "screenshotPaths"]);
   assert.equal(candidates.items.properties.screenshotPaths.minItems, 1);
+  const requiredStates = (byName.get("capture_ui_evidence")?.inputSchema.properties as any)
+    .brief.properties.surface.properties.requiredStates;
+  assert.equal(requiredStates.minItems, 1);
+  assert.equal(requiredStates.items.minLength, 1);
+  assert.match(requiredStates.description, /evidence at every supported viewport/);
   assert.deepEqual((byName.get("verify_visual_result")?.inputSchema.properties as any).boundedRepairFindings.items,{type:"object"});
 });
-test("compare tool returns a critic exchange before validation",async()=>{const result=await callMcpTool("compare_design_variants",{policyId:"p1",generatorActorId:"g1",criticActorId:"c1",candidates:[{variantId:"v1",directionPath:"v1.json",evidenceId:"e1",screenshotPaths:["v1.png"]},{variantId:"v2",directionPath:"v2.json",evidenceId:"e2",screenshotPaths:["v2.png"]}]});assert.equal(result.isError,false);assert.equal((result.structuredContent as any).status,"critic-required");});
+test("compare tool returns a critic exchange before validation",async()=>{const result=await callMcpTool("compare_design_variants",{policyId:"p1",generatorActorId:"g1",criticActorId:"c1",candidates:[{variantId:"v1",directionPath:"v1.json",evidenceId:"e1",screenshotPaths:["v1.png"]}]});assert.equal(result.isError,false);assert.equal((result.structuredContent as any).status,"critic-required");});
 
 test("visual contract violations surface as tool-level codes, not internal errors", async () => {
   // Real host traffic hit both of these as JSON-RPC -32603, which a host cannot branch on.
@@ -168,7 +175,7 @@ test("capture rejects a dangling screenshot symlink that points outside projectR
   const outsideScreenshot = path.join(outsideOutputDir, "escaped.png");
   try {
     await mkdir(path.join(outputDir, "screenshots"), { recursive: true });
-    await symlink(outsideScreenshot, path.join(outputDir, "screenshots", "390-loading.png"));
+    await symlink(outsideScreenshot, path.join(outputDir, "screenshots", "390-success.png"));
     const result = await callMcpTool("capture_ui_evidence", {
       ...await captureArgs(projectRoot, outputDir),
       confirm: true,
@@ -243,4 +250,4 @@ test("verify_visual_result rejects missing dereferenced containers as invalid-ar
   assert.equal((brokenCapture.structuredContent as { code?: string }).code, "invalid-arguments");
 });
 
-test("visual verification delegates stale and mismatched evidence to the strict verifier",async()=>{const args=makeVerificationInput({initialEvidence:makeBundle({id:"e1",variantId:"v1",sourceIdentity:"git:abc"}),recheckEvidence:makeBundle({id:"e1",variantId:"v2",sourceIdentity:"git:abc",captures:[]})});const {artifactExists:_artifactExists,...serializable}=args;const result=await callMcpTool("verify_visual_result",serializable as any);assert.equal(result.isError,false);const report=result.structuredContent as any;assert.equal(report.outcome,"failed");assert.ok(report.findings.some((finding:any)=>finding.code==="visual-evidence-stale"));assert.ok(report.findings.some((finding:any)=>finding.code==="visual-evidence-matrix-incomplete"));});
+test("visual verification delegates stale and mismatched evidence to the strict verifier",async()=>{const args=makeVerificationInput({initialEvidence:makeBundle({id:"e1",variantId:"v1",sourceIdentity:"git:abc"}),recheckEvidence:makeBundle({id:"e1",variantId:"v2",sourceIdentity:"git:abc",captures:[]})});args.policy.requiredStates=["success"];args.visualRun.policyDigest=digestDesignExecutionPolicy(args.policy);const {artifactExists:_artifactExists,...serializable}=args;const result=await callMcpTool("verify_visual_result",serializable as any);assert.equal(result.isError,false);const report=result.structuredContent as any;assert.equal(report.outcome,"failed");assert.ok(report.findings.some((finding:any)=>finding.code==="visual-evidence-stale"));assert.ok(report.findings.some((finding:any)=>finding.code==="visual-evidence-matrix-incomplete"));});

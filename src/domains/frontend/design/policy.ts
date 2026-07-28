@@ -108,7 +108,7 @@ export const resolveDesignExecutionPolicy = (input: {
     repairRequired: true,
     maxRepairIterations: 3,
     requiredViewports: [390, 768, 1440],
-    requiredStates: [...new Set(["loading", "empty", "error", "success", ...(input.requiredStates ?? [])])],
+    requiredStates: [...new Set(input.requiredStates ?? [])],
   };
 };
 

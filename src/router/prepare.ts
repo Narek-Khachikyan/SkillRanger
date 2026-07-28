@@ -365,7 +365,14 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
   const config: RouterConfig = configResult.config;
   if (!config.router.enabled) throw new RouterPrepareError("router-disabled", "Universal Prompt Router is disabled by project configuration.");
   const targetAgent = canonical(input.targetAgent?.trim() || config.defaultTargetAgent);
-  if (!targetPattern.test(targetAgent) || !Object.hasOwn(agents, targetAgent)) throw new RouterPrepareError("target-agent-unresolved", "Target agent is not a supported canonical ID.");
+  // Naming the accepted IDs here is the difference between a caller correcting itself and a caller
+  // guessing again: "gemini" and "claude" are the obvious wrong guesses for gemini-cli and claude-code.
+  if (!targetPattern.test(targetAgent) || !Object.hasOwn(agents, targetAgent)) {
+    throw new RouterPrepareError(
+      "target-agent-unresolved",
+      `Target agent is not a supported canonical ID. Supported IDs: ${Object.keys(agents).sort().join(", ")}.`,
+    );
+  }
   const strict = input.strict ?? config.router.strictByDefault;
   const capabilities = capabilityIds([
     { id: "filesystem", source: "server-observed" as const },

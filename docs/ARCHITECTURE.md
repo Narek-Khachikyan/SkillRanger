@@ -1,802 +1,680 @@
 # Architecture
 
-This document describes the core system design, scanner, ranking, CLI/MCP surfaces, installer targets, recommended stack, and project layout.
+This document describes SkillRanger as it is implemented today. Every claim is anchored to a real
+file or directory. Where the code and an older design intent diverge, the current behaviour is
+described first and the divergence is noted separately in
+[Known divergences](#17-known-divergences).
 
-## 3. Архитектура
+For a short project orientation, read [`../README.md`](../README.md).
 
-Компоненты:
+---
+
+## 1. Purpose and boundaries
+
+SkillRanger is a local-first router and package manager for AI agent skills. Given a repository and
+a task, it:
+
+1. fingerprints the project (`src/scanner/`),
+2. selects a small, compatible skill set (`src/recommender/`, `src/router/`),
+3. audits the skill packages (`src/audit/`),
+4. installs them behind a reviewable plan and a checksum lockfile (`src/installers/`, `src/lockfile/`),
+5. serves their instructions to the host agent under a persisted run (`src/runtime/`, `src/router/reader.ts`).
+
+**What it does not do.** SkillRanger never calls a model, never executes a skill's code, and never
+edits application source. Installed skill packages are static instruction files. The host agent —
+Codex, Claude Code, Cursor, OpenCode, Gemini CLI, or any MCP host — owns all model calls and all code
+changes. This boundary is stated in [`workflow-runtime.md`](workflow-runtime.md) and enforced
+structurally: nothing in `src/` spawns a child process except the eval harnesses
+(`src/evals/process.ts`, `src/evals/runner.ts`), the optional host browser adapter
+(`src/domains/frontend/design/adapter.ts`), and strict source-control snapshots
+(`src/runtime/strict/git.ts`), which run read-only `git rev-parse` and `git diff` commands.
+
+**Zero runtime dependencies.** `package.json` declares no `dependencies`; devDependencies are only
+`@types/node` and `typescript`. The CLI parser (`src/cli/commands.ts`), the JSON-RPC layer
+(`src/mcp/protocol.ts`), the manifest validator (`src/registry/validation.ts`), and the JSON-Schema
+validator (`src/runtime/strict/json-schema.ts`) are all hand-written.
+
+**Two entry points**, both declared in `package.json:bin`:
+
+| Binary | Source | Compiled |
+| :--- | :--- | :--- |
+| `skillranger` | `src/cli/index.ts` | `dist/cli/index.js` |
+| `skillranger-mcp` | `src/mcp/server.ts` | `dist/mcp/server.js` |
+
+Source files run directly on Node 22+ through native TypeScript type-stripping. Node 20 is supported
+only through the compiled `dist/` output, which is why CI has a dedicated `node20-compiled-smoke` job.
+
+---
+
+## 2. Component map
+
+```mermaid
+graph TD
+  subgraph Surfaces
+    CLI["src/cli/<br/>41 commands"]
+    MCP["src/mcp/<br/>33 tools"]
+  end
+  subgraph Orchestration
+    ROUTER["src/router/<br/>prepareTask + reader + store"]
+    RUNTIME["src/runtime/<br/>lifecycle v1 · strict v2"]
+  end
+  subgraph "Core services"
+    SCAN["src/scanner/"]
+    REC["src/recommender/"]
+    REG["src/registry/"]
+    AUDIT["src/audit/"]
+    INST["src/installers/"]
+    LOCK["src/lockfile/"]
+    CONF["src/config/"]
+  end
+  DOM["src/domains/<br/>domain packs"]
+
+  CLI --> ROUTER
+  CLI --> RUNTIME
+  CLI --> INST
+  CLI --> REC
+  MCP --> ROUTER
+  MCP --> RUNTIME
+  MCP --> INST
+  MCP --> REC
+  ROUTER --> RUNTIME
+  ROUTER --> REC
+  ROUTER --> AUDIT
+  ROUTER --> CONF
+  ROUTER --> LOCK
+  REC --> SCAN
+  REC --> REG
+  AUDIT --> REG
+  INST --> AUDIT
+  INST --> LOCK
+  DOM -.->|registers into| SCAN
+  DOM -.->|registers into| ROUTER
+  DOM -.->|registers into| REC
+```
+
+---
+
+## 3. Directories and responsibilities
+
+### `src/`
+
+| Path | Responsibility |
+| :--- | :--- |
+| `cli/index.ts` | Command dispatch and human-facing output (~1.3k lines, a single `run()` function) |
+| `cli/commands.ts` | Declarative command schema; `parseCliInvocation`, help rendering |
+| `cli/task.ts` | `task` / `task:read` handlers over the router |
+| `cli/runs.ts` | The 13 `run:*` handlers over both runtimes, with per-error-code remediation text |
+| `cli/visual-eval.ts` | `eval:visual` handler |
+| `cli/setup-recommendations.ts` | Pure helper that dedupes recommendations across target agents |
+| `mcp/server.ts` | stdio readline loop |
+| `mcp/protocol.ts` | JSON-RPC 2.0 framing, `initialize` / `tools/list` / `tools/call` |
+| `mcp/tools.ts` | Tool aggregation and `callMcpTool` dispatch with argument validation |
+| `mcp/tools/*.ts` | The seven tool groups plus shared `types.ts` / `utils.ts` |
+| `mcp/router-context.ts` | The fixed, canonicalized project root for router tools |
+| `router/` | 25 modules; see [§7](#7-router-lifecycle) |
+| `runtime/skill-run/` | Lifecycle v1 state machine, store, verification |
+| `runtime/strict/` | Strict v2 state machine, contracts, evidence, certification |
+| `runtime/run-lock.ts` | The file lock shared by every store |
+| `runtime/verification.ts` | Runtime-agnostic report construction and outcome resolution |
+| `registry/` | `index.ts` loads and checksums packages; `validation.ts` validates manifests and content |
+| `scanner/` | `index.ts:scanProject`; `providers.ts` holds the pluggable signal-provider registry |
+| `recommender/` | `index.ts:recommendSkills`; `scoring.ts` holds feature vectors and weights |
+| `installers/` | `agents.ts` (targets), `codex.ts` (the single adapter factory), `installed-path.ts`, `verify.ts`, `uninstall.ts`, `agent-context.ts` |
+| `audit/index.ts` | `auditSkill` — static pattern scan over a package |
+| `lockfile/index.ts` | `skillranger.lock.json` read/validate/write |
+| `config/` | `skillranger.config.json` defaults, exact-key validation, canonical digest |
+| `domains/` | `types.ts` (pack contract), `registry.ts` (validation + in-memory registry), `bundled.ts` (side-effect registration), `frontend/` |
+| `evals/` | `frontend.ts`, `router/index.ts`, `visual/`, plus the generic `runner.ts` |
+| `paths.ts`, `types.ts`, `version.ts` | Leaf modules; `paths.ts` resolves package-relative roots only |
+
+### Data directories (shipped in the npm package)
+
+| Path | Contents |
+| :--- | :--- |
+| `registry/skills/` | 18 skill packages, all `frontend.*` |
+| `registry/contracts/frontend/` | 3 shared contracts, materialized into installs as `references/shared/frontend--<name>.md` |
+| `domains/frontend/` | Domain manifest, routing vocabulary, 12 schemas, rules, 8 recipes, 8 example packs, workflows, validators |
+| `schemas/` | 16 published JSON Schemas |
+| `evals/frontend/` | Frozen eval suite, promotion slices, visual benchmark |
+| `fixtures/` | `next-react-ts`, `vite-react-ts`, `backend-node`, `malicious-skill` |
+
+---
+
+## 4. Dependency direction
+
+Dependencies flow one way; no cycles.
+
+- `src/types.ts` and `src/paths.ts` are leaves.
+- `recommender` → `scanner` and `registry`.
+- `audit` → `registry`. `installers` → `audit` and `lockfile`.
+- `router` → `config` and `runtime` (creation and reads).
+- `router` and `runtime` are consumed by both surfaces (`src/mcp/tools/*`, `src/cli/*`).
+
+Two deliberate exceptions worth knowing:
+
+- `src/runtime/strict/service.ts` imports `PreparedSelections` from `src/router/types.ts` — **type-only**.
+  There is no value-level edge from runtime back to router.
+- `src/cli/index.ts` reaches the MCP server through a single lazy `await import("../mcp/server.ts")`
+  for the `mcp` command. That is the only CLI → MCP edge.
+
+`src/domains/bundled.ts` is an eight-line side-effect module imported by `src/recommender/index.ts`,
+`src/cli/index.ts`, and `src/mcp/tools/domains.ts`. Importing it is what populates both the
+domain-pack registry and the scanner's signal-provider registry.
+
+---
+
+## 5. CLI flow
+
+`src/cli/commands.ts` holds `cliCommandDefinitions` — a frozen array of 41 commands, each declaring
+its `booleanOptions` and `valueOptions`. `parseCliInvocation(argv)` rejects single-dash flags and any
+undeclared flag, and returns a `help` / `version` / `command` invocation.
+
+`run()` in `src/cli/index.ts` offers the invocation to three sub-handlers in order — each returns
+whether it claimed the command — and then falls through to its own dispatch chain:
 
 ```text
-User / AI Agent
-   |
-   | CLI or MCP tool call
-   v
-SkillRanger Core
-   |
-   |-- Project Scanner
-   |-- Skill Registry
-   |-- Recommender / Ranker
-   |-- Skill Auditor
-   |-- Installer Adapters
-   |-- Lockfile Manager
-   |-- Skill Generator Pipeline
-   |-- Config / Policy Engine
+parseCliInvocation
+  → handleVisualEvalCommand   (eval:visual)
+  → handleTaskCliCommand      (task, task:read)
+  → handleRunCliCommand       (13 run:* commands)
+  → inline dispatch           (scan, recommend, setup, install, audit, domain:*, design:*, …)
 ```
 
-### Universal Prompt Router
+The registry root is always `defaultRegistryRoot` from `src/paths.ts` — the CLI never accepts an
+arbitrary registry path.
 
-The opt-in router is an orchestration layer over existing core services, not a second recommender or runtime:
+Command groups: `task*`, `scan`, `recommend`, `setup`, `install` / `installed` / `verify` /
+`uninstall`, `audit` / `validate:registry` / `lint:skills` / `audit:registry` / `publish:check`,
+`domain:*`, `design:*` (8 frontend design-pipeline commands), `run:*` (7 lifecycle-v1 + 6 strict),
+`eval:frontend` / `eval:visual`, `mcp`, `doctor`.
+
+`src/cli/task.ts` maps router outcomes to distinct process exit codes so scripts can branch without
+parsing text: `2` clarification required, `3` decomposition required, `4` no matching skills,
+`5` strict requirements unmet, `6` context budget exceeded, `1` any other error.
+
+---
+
+## 6. MCP request flow
+
+Transport is **newline-delimited JSON-RPC 2.0 over stdio** — one JSON object per line, no
+`Content-Length` framing and no MCP SDK. Protocol version `2025-06-18`; capabilities are
+`{ tools: { listChanged: false } }`.
 
 ```text
-explicit MCP trigger or direct CLI task
--> trigger parser, Unicode normalization, and owner-scoped vocabulary matching
--> privacy-safe canonical task signals and task-head segmentation
--> project fingerprint and bundled domain metadata
--> shared scorer, domain resolver, and bounded composer
--> clarification / decomposition / no-match, or atomic prepared run
--> integrity-pinned progressive skill reads
--> lifecycle v1 or strict v2 runtime
+stdin line
+  → src/mcp/server.ts        readline, one object per line
+  → src/mcp/protocol.ts      handleJsonRpcLine → handleJsonRpcRequest
+  → src/mcp/tools.ts         callMcpTool(name, args)
+       ├─ unknown name  → coded "unknown-tool" result
+       ├─ validateJsonSchema(definition.inputSchema, args)   [non-router tools only]
+       └─ handler → core service (router / runtime / registry / installers / domains)
 ```
 
-Production CLI and MCP flows use the bundled trusted registry. Synthetic packs are dependency-injected data fixtures for tests and evals only. Routing performs no network calls, package installation, scripts, child processes, or application edits.
+`startMcpServer()` calls `initializeRouterContext()` first. That canonicalizes
+`SKILLRANGER_PROJECT_ROOT ?? process.cwd()` through `realpathSync` and freezes it for the process
+lifetime. Router tools therefore take **no** `projectRoot` argument; supplying one returns
+`project-root-unauthorized`.
 
-Router v2 compiles one deterministic vocabulary from typed core claims and optional Domain Pack `routingVocabulary` files. Claims are validated against the owner's domain and skill metadata before compilation; cross-owner collisions and undeclared IDs fail loading. Exact normalized matches, explicit request-frame inference, and bounded host semantic hints become canonical signals. Only direct prompt evidence can satisfy an ownership rule's required evidence. The analyzer segments independent task heads, the resolver decomposes only when at least two distinct primary domains remain, and the composer selects one primary plus companions that add explicit requirement coverage.
+The 33 tools, by group:
 
-MCP fixes one canonical project root at server startup from `SKILLRANGER_PROJECT_ROOT` or `cwd`; router tool inputs cannot override it. CLI `task` uses direct activation and a positional root. MCP `prepare_task` requires an explicit trigger: any alias at the end of the prompt, or `@skillranger` / `/sr` at the start. Both surfaces call the same `prepareTask()` core service.
+| Group (`src/mcp/tools/…`) | Tools |
+| :--- | :--- |
+| `project.ts` | `analyze_project`, `recommend_skills` |
+| `registry.ts` | `audit_skill` |
+| `install.ts` | `list_installed_skills`, `plan_skill_install`, `install_skill` |
+| `domains.ts` | `list_domains`, `inspect_domain`, `create_frontend_design_brief`, `recommend_frontend_recipe`, `validate_frontend_result`, `compile_frontend_design_spec`, `verify_frontend_result`, `repair_frontend_result`, `run_domain_eval` |
+| `runs.ts` | lifecycle v1: `start_skill_run`, `record_skill_read`, `resolve_skill_run_clarifications`, `begin_skill_run_execution`, `complete_skill_run`, `verify_skill_run`, `inspect_skill_run` · strict v2: `read_next_skill_chunk`, `begin_skill_step`, `add_skill_evidence`, `complete_skill_step`, `verify_skill`, `finalize_skill_run` |
+| `visual.ts` | `capture_ui_evidence`, `compare_design_variants`, `verify_visual_result` |
+| `router.ts` | `prepare_task`, `read_run_skill_file` |
 
-A successful preparation atomically writes a router sidecar at `.skillranger/runs/router/<router-run-id>.json` and one existing runtime record. A write-ahead journal recovers interrupted cross-store creates and read-ledger bridges. Clarification, decomposition, no-match, strict failure, and budget failure create no partial run.
+`mcpTools.length` is the authoritative count — re-derive it rather than trusting this table.
 
-The source inventory pins package, root, file, and chunk checksums. `mandatory-next` controls order and bridges completed reads into the authoritative runtime ledger; optional files are selected only from the persisted inventory after mandatory reads and within a separate byte budget. Strict routing is installed-only and retains strict v2 evidence and finalization guarantees.
+Every definition carries effect metadata from `src/mcp/tools/types.ts`: an `McpToolEffect` of
+`read-only`, `exact-install-plan`, `run-state-write`, or `command-and-artifact-write`, surfaced to
+hosts as MCP `annotations` plus `_meta["skillranger/effect"]` and `_meta["skillranger/confirmation"]`
+(`none` | `host-managed` | `required`). `capture_ui_evidence` is the only tool that runs a host
+command, and it requires an explicit `confirm: true`. See [`mcp-host-config.md`](mcp-host-config.md).
 
-### CLI
+**Router tools are excluded from central argument validation on purpose.** They enforce their own
+argument contract so that an injected `projectRoot` maps to the trust-boundary error code rather than
+a generic schema error — the reasoning is in the comment at `src/mcp/tools.ts` and in
+[ADR 0001](adr/0001-universal-prompt-router-boundaries.md).
 
-Human-facing interface:
+---
 
-- first run;
-- scan;
-- recommendations;
-- install dry-run;
-- audit;
-- doctor;
-- update registry.
+## 7. Router lifecycle
 
-### MCP server
+`prepareTask` in `src/router/prepare.ts` is the single core service behind both CLI `task` and MCP
+`prepare_task`. Algorithm version is pinned as `routerAlgorithmVersion = "router/2.0"`.
 
-Agent-facing interface. Its 33 tools cover project analysis and recommendation, audited install planning and confirmed application, domain/design workflows, lifecycle v1, strict v2, visual evidence, and the Universal Router tools `prepare_task` and `read_run_skill_file`.
+```mermaid
+sequenceDiagram
+  participant H as Host (CLI or MCP)
+  participant P as prepareTask
+  participant A as analyzer + vocabulary
+  participant C as resolver + composer
+  participant S as RouterStore
+  participant R as RouterSourceReader
 
-MCP tools should call the same core modules as CLI. Do not duplicate logic.
-
-### Local skill registry
-
-For MVP:
-
-- local JSON files;
-- curated skill manifests;
-- skill source folders;
-- checksums;
-- registry schema validation.
-
-Later:
-
-- SQLite;
-- remote sync;
-- signed registry snapshots;
-- private team registry.
-
-### Remote / curated registry
-
-Not in MVP as a dependency. Add later as optional:
-
-- pinned registry version;
-- HTTPS;
-- signed metadata;
-- content-addressed skill archives;
-- provenance and publisher identity.
-
-### Project scanner
-
-Reads project files, computes fingerprint and evidence.
-
-### Recommender / ranker
-
-Scores skills against:
-
-- project stack;
-- user intent;
-- task tags;
-- compatibility;
-- quality;
-- security;
-- freshness;
-- conflicts;
-- duplicates.
-
-### Skill installer
-
-Adapter-based:
-
-- Codex;
-- Claude Code;
-- Cursor;
-- OpenCode;
-- generic `.agents/skills`;
-- project-local vs user-global.
-
-### Skill auditor
-
-Static analysis and policy evaluation:
-
-- hidden files;
-- binary files;
-- script commands;
-- network calls;
-- secret-looking strings;
-- dangerous shell patterns;
-- unexpected install paths;
-- permissions declared vs actual content.
-
-### Skill generator
-
-Later phase. Creates drafts only:
-
-- no trusted status;
-- no auto-install as trusted;
-- must pass audit/eval/human review.
-
-### Config system
-
-`skillranger.config.json`:
-
-- registry sources;
-- default target agent;
-- install scope;
-- allowed risk levels;
-- allowlist/denylist;
-- policy gates.
-
-### Lockfile / manifest
-
-`skillranger.lock.json` records:
-
-- installed skill id;
-- version;
-- checksum;
-- source;
-- install target;
-- installed path;
-- audit result;
-- timestamp;
-- installer adapter.
-
-### Optional UI/dashboard
-
-Not MVP. Later:
-
-- browse installed skills;
-- compare recommendations;
-- visualize project fingerprint;
-- inspect risk findings;
-- manage registry policies.
-
-## 4. Project scanner
-
-The scanner should be deterministic and evidence-based. It should not merely ask an LLM to guess.
-
-Inputs to inspect:
-
-- `package.json`
-- package manager lockfiles: `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lockb`
-- `tsconfig.json`
-- `next.config.js/ts/mjs`
-- `vite.config.js/ts`
-- `tailwind.config.js/ts`
-- `postcss.config.*`
-- ESLint config
-- Prettier config
-- test config: Vitest, Jest, Playwright, Cypress
-- folder structure: `app/`, `pages/`, `src/`, `components/`, `server/`, `api/`, `packages/`
-- `AGENTS.md`
-- `CLAUDE.md`
-- `.agents/skills`
-- `.claude/skills`
-- `.cursor/rules` or equivalent Cursor config if present
-- `README.md`
-- CI workflows
-- dependencies and devDependencies
-
-Detection categories:
-
-- project type: frontend, backend, fullstack, mobile, desktop, data, ML/AI, DevOps, security, QA, docs, game, embedded, library, CLI, monorepo
-- frameworks: Next.js, Vite, Remix, Astro, Expo, React Native, Express, Fastify, NestJS
-- language: TypeScript, JavaScript, Python, Go, Rust, Swift, Kotlin, Java, C#, C/C++, Ruby, PHP, SQL, shell
-- styling: Tailwind, CSS modules, styled-components, shadcn/ui, MUI
-- testing: Vitest, Jest, Playwright, Cypress, Testing Library
-- infrastructure: Docker, Kubernetes, Terraform, Pulumi, CI/CD, cloud provider configs
-- data systems: Postgres, MySQL, SQLite, MongoDB, Redis, dbt, Airflow
-- AI/ML systems: OpenAI/Anthropic SDKs, LangChain/LlamaIndex, evals, RAG, vector DBs
-- security posture: auth, secrets, dependency audit, SAST config, threat-model docs
-- design system: known component library or custom
-- agent context: AGENTS.md, skills, rules, MCP configs
-- maturity: tests present, CI present, docs present
-
-Example JSON fingerprint for Next.js + React + TypeScript:
-
-```json
-{
-  "schemaVersion": "1.0",
-  "root": "/path/to/project",
-  "packageManager": {
-    "name": "pnpm",
-    "confidence": 0.92,
-    "evidence": ["pnpm-lock.yaml"]
-  },
-  "projectTypes": [
-    { "type": "frontend", "confidence": 0.96 },
-    { "type": "web-app", "confidence": 0.94 },
-    { "type": "fullstack", "confidence": 0.55 }
-  ],
-  "languages": [
-    { "name": "typescript", "confidence": 0.98, "evidence": ["tsconfig.json", "*.tsx"] }
-  ],
-  "frameworks": [
-    {
-      "name": "nextjs",
-      "versionRange": "15.x",
-      "confidence": 0.96,
-      "evidence": ["next.config.ts", "dependencies.next"]
-    },
-    {
-      "name": "react",
-      "versionRange": "19.x",
-      "confidence": 0.98,
-      "evidence": ["dependencies.react"]
-    }
-  ],
-  "styling": [
-    {
-      "name": "tailwindcss",
-      "confidence": 0.88,
-      "evidence": ["tailwind.config.ts", "dependencies.tailwindcss"]
-    }
-  ],
-  "testing": [
-    {
-      "name": "vitest",
-      "type": "unit",
-      "confidence": 0.76,
-      "evidence": ["devDependencies.vitest"]
-    },
-    {
-      "name": "playwright",
-      "type": "e2e",
-      "confidence": 0.7,
-      "evidence": ["playwright.config.ts"]
-    }
-  ],
-  "agentContext": {
-    "agentsMd": {
-      "present": true,
-      "paths": ["AGENTS.md"]
-    },
-    "codexSkills": {
-      "present": false,
-      "paths": []
-    },
-    "claudeSkills": {
-      "present": false,
-      "paths": []
-    }
-  },
-  "signals": [
-    "package.json",
-    "next.config.ts",
-    "tsconfig.json",
-    "app/",
-    "components/",
-    "tailwind.config.ts"
-  ],
-  "warnings": [
-    "No repo-local frontend review skill found",
-    "No explicit accessibility workflow found"
-  ]
-}
+  H->>P: prompt + target agent + capabilities
+  P->>P: loadRouterConfig · parseTrigger
+  P->>P: scanProject · load packs · load registry · per-skill metadata
+  P->>A: analyzeTask (normalize → match → frame → requirements → segments)
+  A-->>P: TaskProfile + canonical requirements
+  P->>C: resolveDomains → composeSkillSet
+  C-->>P: prepared | clarification | decomposition | no-match | budget/strict failure
+  P->>S: journaledCreate(routerRun + runtime run)
+  S-->>H: router run id + mandatory read plan
+  H->>R: read_run_skill_file / task:read
+  R->>S: journaledUpdate (receipt + runtime bridge)
+  R-->>H: instruction chunk
 ```
 
-## 6. Skill recommendation algorithm
+Ordered stages inside `prepareTask`:
 
-Initial ranking formula:
+1. **Config** — `loadRouterConfig(projectRoot)`; a disabled router fails with `router-disabled`.
+2. **Trigger** — `parseTrigger` (`src/router/trigger.ts`). Aliases `@skillranger`, `skillranger`,
+   `/sr` at the end of the prompt; `@skillranger` and `/sr` also at the start. Matches inside code
+   spans or URLs are rejected. CLI `task` uses direct activation instead.
+3. **Context gathering** — `scanProject`, bundled domain packs (or fixture packs in tests), and the
+   local registry, in parallel.
+4. **Per-skill metadata** — for each registry skill: `auditSkill`, the matching lockfile entry, the
+   resolved installed root, and `assertInstalledMatches`. A skill is `installed` only when all three
+   agree.
+5. **Routing context** — `buildRoutingContext` (`src/router/context.ts`) compiles one deterministic
+   vocabulary from `src/router/vocabulary/core.ts` plus each pack's `routingVocabulary`. Cross-owner
+   collisions and undeclared IDs fail loading; every failure collapses to `routing-integrity`.
+6. **Analysis** — `analyzeTask`: Unicode normalization → owner-scoped vocabulary matching → request-frame
+   inference → bounded host semantic hints → canonical requirements → `TaskProfile` → task-head
+   segmentation.
+7. **Resolution** — `resolveDomains`. Ambiguity requires incompatible target surfaces, a score delta
+   within the threshold, and no project evidence; only then does the router ask a clarification.
+8. **Branch** — clarification (returns a signed continuation token, HMAC-SHA256, 15-minute TTL) /
+   decomposition (two or more distinct primary domains) / no match / composition.
+9. **Composition** — `retrieveSkillCandidates` then `composeSkillSet` (`src/router/composer.ts`).
+   Candidates are filtered by role, domain, required evidence, risk, audit result, target
+   compatibility, strict eligibility, and capabilities. Roles are filled in order: `environment` →
+   `primary` → `companion` (marginal-coverage loop) → `verification` → `agent-context`, under the
+   skill-count and instruction-byte budgets from the config.
+10. **Snapshot** — `createSkillSourceSnapshots` (`src/router/reader.ts`) pins package, root, file, and
+    chunk checksums into a source inventory.
+11. **Runtime** — a strict run (`createPreparedStrictSkillRun`) or a lifecycle-v1 run
+    (`createSkillRun` + a `select-skills` reduction).
+12. **Persist** — `store.journaledCreate` writes the router sidecar and the runtime record atomically.
+
+Result statuses: `prepared`, `clarification_required`, `decomposition_required`,
+`no_matching_skills`, `strict_requirements_unmet`, `context_budget_exceeded`. Only `prepared` writes
+a run; the others create nothing partial.
+
+**Progressive reads.** `RouterSourceReader.read` serves one file at a time. It re-verifies the root
+identity, the package checksum, and the per-file checksum before returning bytes (`stale-skill-checksum`
+otherwise); requires reads in inventory order (`read-order-invalid` on a revision mismatch); and
+enforces a separate byte budget for optional files. Replaying a `readRequestId` is idempotent. When a
+skill's mandatory reads complete, the reader bridges into the runtime — lifecycle v1 gets a
+`record-skill-read` event with `source: "content-delivered"`, strict v2 drains `readNextStrictChunk`
+until every chunk has a receipt.
+
+Routing performs no network calls, no package installation, no child processes, and no application
+edits. Production flows use the bundled registry; the synthetic packs in `tests/fixtures/router-packs/`
+are dependency-injected data fixtures for tests and evals only (`src/router/fixtures.ts`).
+
+---
+
+## 8. Skill discovery, installation, and registry
+
+**Registry loading** — `loadLocalRegistry(registryRoot)` in `src/registry/index.ts`. The registry root
+may contain only `skills` and `contracts`; a skill directory may contain only an allowlisted set of
+entries (`SKILL.md`, `skill.manifest.json`, `references/`, `execution.contract.json`, …). Hidden files
+are rejected anywhere. Each package is validated (`assertValidSkillManifest`, then `validateSkillContent`),
+its shared contracts resolved, its execution contract cross-checked when `contractVersion` is `"2.0"`,
+and its checksum computed.
+
+`computeSkillChecksum` hashes `relative-path \0 bytes \0` for every file in sorted order, plus each
+shared contract under its install path, yielding `sha256:<hex>`. This value is the identity of a skill
+package everywhere else in the system.
+
+**Scanning** — `scanProject` (`src/scanner/index.ts`) produces a `ProjectFingerprint`
+(`schemaVersion: "1.0"`). Built-in detection is deliberately thin: package manifest, TypeScript /
+JavaScript / Python, test runners, Docker, package manager, folder signals, and agent context
+(`AGENTS.md`, `.agents/skills`, `.claude/skills`). Framework, styling, and project-type detection is
+delegated to signal providers registered through `src/scanner/providers.ts`. File scanning caps at 500
+entries and emits a truncation warning.
+
+**Recommendation** — `recommendSkills` (`src/recommender/index.ts`) filters by domain-pack
+`rejectIntent`, target-agent compatibility, stack-tag overlap, and `includeSkill`, then scores each
+candidate. Weights and the breakdown keys live in `src/recommender/scoring.ts` — read them there
+rather than restating them; the breakdown is surfaced verbatim so CLI and MCP hosts can explain a
+recommendation. Lanes are `framework`, `design`, `implementation`, `qa`, `agent-context`
+(`src/types.ts:skillLanes`), and callers can filter to one lane or cap each with `limitPerLane`.
+
+**Audit** — `auditSkill` (`src/audit/index.ts`) walks the package and its shared contracts. Findings
+are graded `low` / `medium` / `high` / `block`; the report's risk level is the maximum of the manifest
+risk and the findings. See [§12](#12-error-boundaries-and-security-sensitive-code).
+
+**Install** — target agents are declared in `src/installers/agents.ts`: `claude-code`, `codex`,
+`cursor`, `gemini-cli`, `generic-agent-skills`, `opencode`, `universal`. Despite its filename,
+`src/installers/codex.ts` is the **generic** adapter factory serving every target — `getAdapter(target)`
+returns an adapter built from the same code path.
+
+The install model is canonical-plus-link: files land in `.agents/skills/<slug>/`, and the agent's own
+directory (`.claude/skills/` for Claude Code, `.agents/skills/` for everything else) becomes a relative
+directory symlink to it — a junction on Windows, falling back to a copy with a plan warning. `--copy`
+writes directly instead. `applyInstall` re-audits, throws `InstallAuditBlockedError` when the risk is
+`block`, stages with backup and atomic swap, asserts package integrity before and after staging, and
+finally calls `upsertInstalledSkill`.
+
+`src/installers/agent-context.ts` maintains an idempotent block between `<!-- SKILLRANGER_START -->`
+and `<!-- SKILLRANGER_END -->` markers in the **target project's** `AGENTS.md`. Malformed or duplicated
+markers throw rather than guess. That block is the canonical statement of the trigger contract.
+
+`verifyInstalledSkills` (`src/installers/verify.ts`) reports `verified` / `missing` / `modified` /
+`invalid-path` per lockfile entry. `planUninstall` refuses to remove anything whose checksum has
+drifted or whose content was modified, and preserves the shared canonical package while another target
+still references it.
+
+---
+
+## 9. Runtimes
+
+A prepared run is one of two kinds, recorded in `routerRun.runtime.kind`.
+
+### Lifecycle v1 — `src/runtime/skill-run/`
+
+States (`types.ts:SkillRunState`):
 
 ```text
-score =
-  0.30 * stackMatch
-+ 0.20 * userIntentMatch
-+ 0.15 * qualityScore
-+ 0.15 * securityScore
-+ 0.08 * freshnessScore
-+ 0.07 * compatibilityScore
-- 0.02 * duplicatePenalty
-+ laneAdjustment
-+ skillAdjustment
+created → skills-selected → skills-read → clarified → running → implemented
+                                                                   ├→ verified
+                                                                   ├→ implemented-unverified
+                                                                   ├→ failed
+                                                                   └→ blocked
 ```
 
-Score details:
-
-- `stackMatch`: overlap between project fingerprint and skill `stackTags`.
-- `userIntentMatch`: match against query like "mobile development", "frontend polish", "security review".
-- `qualityScore`: manual/eval score.
-- `securityScore`: output of audit pipeline.
-- `freshnessScore`: last reviewed date and framework version support.
-- `compatibilityScore`: whether skill supports selected target agent.
-- `duplicatePenalty`: near-duplicate skill already installed or recommended.
-- `laneAdjustment`: small boost or penalty when user intent explicitly points to a lane such as design.
-- `skillAdjustment`: specialized intent boost or penalty for narrow skills such as Playwright debugging or visual design polish.
-
-Use different approaches at different maturity stages:
-
-- Rule-based matching for MVP. It is predictable and testable.
-- Embeddings later for fuzzy intent search.
-- LLM reranking only for explanation, ambiguity resolution, or generated packs.
-- Manual curated packs for high-confidence recommendations.
-
-MVP should prefer:
-
-- deterministic results;
-- golden tests;
-- clear explanation strings;
-- no opaque "AI magic" in install decisions.
-
-Recommendations carry routing metadata for lane-aware rendering. Current lanes are `framework`, `design`, `implementation`, `qa`, and `agent-context`. Callers can filter to one lane, such as design-only workflows, or cap each lane with `limitPerLane` to avoid one lane crowding out the rest. Each recommendation also carries `scoreBreakdown` so CLI, MCP hosts, and tests can explain stack match, intent match, quality, security, freshness, compatibility, duplicate penalty, and intent adjustments explicitly.
-
-## 7. MCP tools
-
-### `analyze_project(path)`
-
-Input:
-
-```json
-{ "path": "/path/to/project" }
-```
-
-Output:
-
-```json
-{
-  "fingerprint": {},
-  "warnings": [],
-  "evidence": []
-}
-```
-
-Side effects: none.
-
-Security concerns:
-
-- path traversal;
-- reading secrets accidentally;
-- scanning outside allowed root.
-
-User should see:
-
-- detected stack;
-- confidence;
-- evidence files;
-- warnings.
-
-### `recommend_skills(projectRoot, userIntent?)`
-
-Input:
-
-```json
-{
-  "projectRoot": "/path/to/project",
-  "registryRoot": "registry",
-  "userIntent": "visual design polish",
-  "targetAgent": "codex",
-  "lane": "design",
-  "limitPerLane": 2
-}
-```
-
-`lane` is optional and must be one of `framework`, `design`, `implementation`, `qa`, or `agent-context`. `limitPerLane` is optional and must be a positive integer.
-
-Output:
-
-```json
-{
-  "projectRoot": "/path/to/project",
-  "targetAgent": "codex",
-  "recommendations": [
-    {
-      "skillId": "frontend.visual-design-polish",
-      "displayName": "Visual Design Polish",
-      "lane": "design",
-      "category": "visual-design-polish",
-      "score": 0.825,
-      "riskLevel": "low",
-      "reasons": ["frontend detected", "react detected", "supports codex"]
-    }
-  ],
-  "recommendationGroups": [
-    {
-      "lane": "design",
-      "recommendations": [
-        { "skillId": "frontend.visual-design-polish", "lane": "design", "score": 0.825 }
-      ]
-    }
-  ]
-}
-```
-
-
-Side effects: none.
-
-Security concerns:
-
-- should not fetch/install silently;
-- should not trust remote registry by default.
-
-User should see:
-
-- ranked list;
-- short explanation;
-- risk;
-- install command.
-
-### `install_skills(skillIds, targetAgent, scope)`
-
-Input:
-
-```json
-{
-  "skillIds": ["frontend.next-app-router-review"],
-  "targetAgent": "codex",
-  "scope": "repo",
-  "dryRun": true
-}
-```
-
-Output:
-
-```json
-{
-  "plan": {
-    "writes": [".agents/skills/next-app-router-review/SKILL.md"],
-    "lockfileUpdates": ["skillranger.lock.json"],
-    "warnings": []
-  }
-}
-```
-
-Side effects:
-
-- dry-run: none;
-- apply: writes skill files and lockfile.
-
-Security concerns:
-
-- must require confirmation for third-party skills;
-- must verify checksum;
-- must not execute scripts;
-- must not write outside target scope.
-
-User should see:
-
-- exact files to be written;
-- source;
-- checksum;
-- risk;
-- confirmation prompt.
-
-### `audit_skill(skillId)`
-
-Input:
-
-```json
-{ "skillId": "frontend.next-app-router-review" }
-```
-
-Output:
-
-```json
-{
-  "riskLevel": "low",
-  "securityScore": 0.93,
-  "findings": [],
-  "checksum": "sha256:..."
-}
-```
-
-Side effects: none.
-
-Security concerns:
-
-- audit should inspect content, not only metadata;
-- false negatives must be treated seriously.
-
-User should see:
-
-- risk summary;
-- findings;
-- blocked conditions if any.
-
-### `generate_skill_from_goal(goal, targetAgent)`
-
-Input:
-
-```json
-{
-  "goal": "mobile development skills for React Native Expo",
-  "targetAgent": "codex"
-}
-```
-
-Output:
-
-```json
-{
-  "draftSkillPath": "./drafts/expo-mobile-workflow",
-  "status": "draft-untrusted",
-  "nextSteps": ["audit", "eval", "human-review"]
-}
-```
-
-Side effects:
-
-- writes draft files only if user requested generation.
-
-Security concerns:
-
-- generated content is untrusted;
-- no auto-publish;
-- no auto-install as trusted.
-
-User should see:
-
-- draft status;
-- audit warnings;
-- review checklist.
-
-### Other tools
-
-`list_installed_skills(targetAgent)`:
-
-- reads known agent locations;
-- returns installed skills and lockfile state.
-
-`update_registry()`:
-
-- for MVP local only;
-- later remote fetch with signature/checksum verification.
-
-`explain_recommendation(skillId)`:
-
-- returns matched tags, project signals, conflicts, risk notes.
-
-## 8. CLI commands
-
-Commands:
-
-```bash
-skillranger init
-skillranger scan
-skillranger recommend
-skillranger install
-skillranger audit
-skillranger generate
-skillranger list
-skillranger update
-skillranger doctor
-```
-
-Example UX flow for first run in Next.js project:
-
-```bash
-$ skillranger init
-Created skillranger.config.json
-Created registry cache at .skillranger/registry
-
-$ skillranger scan
-Detected:
-- Next.js: high confidence
-- React: high confidence
-- TypeScript: high confidence
-- Tailwind: medium confidence
-- Playwright: medium confidence
-
-$ skillranger recommend --target codex --lane design --limit-per-lane 2
-Recommended:
-
-design:
-1. frontend.tailwind-ui-polish      score 0.825  risk low
-2. frontend.visual-design-polish    score 0.825  risk low
-
-$ skillranger install frontend.next-app-router-review --target codex --scope repo --dry-run
-Would write:
-- .agents/skills/next-app-router-review/SKILL.md
-- skillranger.lock.json
-
-$ skillranger install frontend.next-app-router-review --target codex --scope repo
-Install? yes
-Installed and locked frontend.next-app-router-review@0.1.0
-```
-
-## 9. Installer targets
-
-Use adapter-based architecture.
-
-```ts
-interface AgentAdapter {
-  id: string;
-  detect(projectRoot: string): Promise<DetectionResult>;
-  planInstall(input: InstallInput): Promise<InstallPlan>;
-  applyInstall(plan: InstallPlan): Promise<InstallResult>;
-  listInstalled(scope: InstallScope): Promise<InstalledSkill[]>;
-  uninstall(skillId: string, scope: InstallScope): Promise<UninstallResult>;
-  validate(): Promise<AdapterHealth>;
-}
-```
-
-### Codex
-
-Targets:
-
-- repo scope: `.agents/skills/<skill-name>/SKILL.md`
-- user scope: `~/.agents/skills/<skill-name>/SKILL.md`
-- plugin distribution later via `.codex-plugin/plugin.json` and marketplace entries.
-
-Notes:
-
-- Codex supports Agent Skills with progressive disclosure.
-- Codex skills need `name` and `description`.
-- For reusable distribution, Codex plugins are the better package format.
-
-### Claude Code
-
-Targets:
-
-- project scope: `.claude/skills/<skill-name>/SKILL.md`
-- personal scope: `~/.claude/skills/<skill-name>/SKILL.md`
-- plugin scope: `<plugin>/skills/<skill-name>/SKILL.md`
-
-Notes:
-
-- Claude Code follows Agent Skills open standard but adds fields like invocation control, subagent execution, dynamic context injection, and tool controls.
-- Adapter must not blindly emit Claude-specific fields for Codex.
-
-### Cursor
-
-Targets depend on current Cursor support:
-
-- `.cursor/rules`
-- MCP config
-- project docs/rules
-- possible future Agent Skills-compatible target.
-
-MVP should not claim full Cursor skill installation unless verified. Treat Cursor as later adapter.
-
-### OpenCode
-
-Use official docs when implementing adapter. For MVP, only define adapter interface and leave implementation pending.
-
-### Generic `.agents/skills`
-
-Target:
-
-- `.agents/skills/<skill-name>/SKILL.md`
-- `~/.agents/skills/<skill-name>/SKILL.md`
-
-This is the best cross-agent baseline if the target agent supports the Agent Skills format.
-
-## 15. Recommended tech stack
-
-Recommended:
-
-- TypeScript / Node.js
-- pnpm
-- Zod
-- Commander or Clipanion
-- MCP TypeScript SDK
-- JSON registry for MVP
-- SQLite later
-- Vitest
-- tsup
-- npm package distribution
-
-Why:
-
-- TypeScript fits frontend-heavy target users.
-- Node makes project scanning of JS/TS repos easy.
-- Zod gives runtime schema validation.
-- JSON is enough for MVP and reviewable in git.
-- SQLite is useful later for search, indexing, cache, registry sync.
-- Vitest is fast and natural for TS.
-- MCP SDK makes server implementation straightforward.
-
-## 16. Folder structure
+`reduceSkillRun` (`reducer.ts`) is the only transition function. Notable checks: a recorded read's
+checksum must equal the selected snapshot's (`stale-skill-checksum`); read provenance is `attested` or
+`content-delivered` and upgrades monotonically; execution cannot start until clarifications are
+resolved or explicitly declined with an assumption, and every mandatory skill has been read.
+
+**What `verified` means here.** `record-verification` produces `verified` only when the verification
+status is `passed`, hard gates passed, there are no hard-gate findings, there is at least one evidence
+entry, evidence snapshots exist and match the evidence entries one-to-one, every snapshot path is
+project-relative with an integer byte length and a canonical sha256, and every mandatory skill was
+delivered as `content-delivered` — an attested read is not enough. Anything else is
+`verification-blocked`.
+
+`src/runtime/verification.ts` is runtime-agnostic: `resolveVerificationOutcome` short-circuits on
+blocked/failed, downgrades to `implemented-unverified` on degraded capability or partial verification,
+and `createRepairRequest` caps iterations at an integer 1–5.
+
+### Strict v2 — `src/runtime/strict/`
+
+States (`types.ts:StrictSkillRunState`):
 
 ```text
-skillranger/
-  package.json
-  tsconfig.json
-  README.md
-  PLAN.md
-  src/
-    cli/
-      index.ts
-      commands/
-        init.ts
-        scan.ts
-        recommend.ts
-        install.ts
-        audit.ts
-        list.ts
-        update.ts
-        doctor.ts
-    mcp/
-      server.ts
-      tools/
-        analyze-project.ts
-        recommend-skills.ts
-        install-skills.ts
-        audit-skill.ts
-    scanner/
-      index.ts
-      package-json.ts
-      config-files.ts
-      folders.ts
-      agents-context.ts
-    registry/
-      index.ts
-      schemas.ts
-      load-local-registry.ts
-      checksum.ts
-    recommender/
-      index.ts
-      score.ts
-      explain.ts
-    audit/
-      index.ts
-      scan-frontmatter.ts
-      scan-files.ts
-      scan-scripts.ts
-      risk.ts
-    installers/
-      types.ts
-      codex.ts
-      claude-code.ts
-      generic-agent-skills.ts
-      cursor.ts
-      opencode.ts
-    lockfile/
-      index.ts
-    config/
-      index.ts
-    generator/
-      draft.ts
-  registry/
-    skills/
-      frontend.next-app-router-review/
-        SKILL.md
-        skill.manifest.json
-      frontend.accessibility-review/
-        SKILL.md
-        skill.manifest.json
-  schemas/
-    registry.schema.json
-    fingerprint.schema.json
-    lockfile.schema.json
-  fixtures/
-    next-react-ts/
-    vite-react-ts/
-    expo-react-native/
-    malicious-skill/
-  tests/
-    scanner.test.ts
-    recommender.test.ts
-    audit.test.ts
-    installer.codex.test.ts
-  docs/
-    threat-model.md
-    adapter-design.md
-    registry-design.md
+planned → reading → ready → running → verifying → {repair-required ⇄ running} → verified | blocked | failed
 ```
+
+Each selected skill carries a ledger with an outcome of `used`, `no-op`, or `blocked`. Strict runs are
+installed-only: a skill qualifies only with a lockfile entry whose checksum matches the registry,
+`execution.contractVersion === "2.0"`, contained `inputSchema` / `outputSchema` / `mustRead` paths, and
+a passing input-schema validation (`assertInstalledMatches`, `installedSelection` in `service.ts`).
+
+Execution is step-wise: one active step run-wide, all content chunks read before the first step,
+evidence attributed to the active attempt with rule IDs that exist in the snapshotted contract, and
+`completeStrictStep` requiring every declared `requiredEvidenceKinds`. Verification re-reads every
+staged artifact and re-checks size and sha256 (`deriveStrictValidatorResults`); a mismatch fails
+`artifactIntegrity`. Failing a hard gate opens a bounded repair loop up to `maxRepairIterations`,
+after which the ledger is `blocked`.
+
+**Finalization is the integrity anchor.** Two invariants in `src/runtime/strict/store.ts`:
+
+- `update()` throws `run-integrity` if a caller tries to move a run into `verified`. Only
+  `finalizeRun` may mint that state.
+- `finalizeRun()` short-circuits on `current.state === "verified"` **only** — the verified state is the
+  sole proof that finalization completed. A blocked run stays re-finalizable, and a re-finalize that
+  produces the same state skips the write so revision and timestamps do not drift.
+
+Before finalizing, every `used` ledger is re-derived: artifact integrity must pass, and the stored
+verification report must equal a freshly computed certification projection. `assertFinalizedVerified`
+(`finalization.ts`) is shared by the CLI and MCP: the terminal state is still persisted, but a
+non-`verified` terminal state is reported as a `run-blocked` error carrying per-skill diagnostics
+(`unmet-prerequisites` vs `hard-gates-failed`).
+
+### Locking
+
+`RunFileLock` (`src/runtime/run-lock.ts`) guards `SkillRunStore`, `StrictSkillRunStore`,
+`RouterStore`, and the lockfile. It publishes a guard directory by atomic `rename` with dev/inode
+confirmation, records owner metadata including a process-identity token, reclaims stale locks after a
+bounded age, and times out acquisition. Release is deliberately deadline-free.
+
+---
+
+## 10. Domain packs
+
+The pack contract is `src/domains/types.ts`. `DomainPackManifest` is a discriminated union on
+`schemaVersion`: `"1.0"` or `"1.1"`. Version 1.1 adds `artifacts.routingVocabulary` and upgrades
+`requiresEvidence` from a string list to a typed `RequiredEvidenceRef { kind, id, allowedSources }`,
+where sources are restricted to `prompt-exact`, `prompt-normalized`, `prompt-inferred`. That
+restriction is the reason project fingerprints and host semantic hints can never, on their own,
+satisfy an ownership rule.
+
+A pack contributes: routing policy (`rejectIntent`, `laneAdjustment`, `skillAdjustment`,
+`includeSkill`, `compose`), a run policy, project signal providers, an ownership-intent list, a routing
+vocabulary, and optional schemas/rules/recipes. Core owns everything else.
+
+`src/domains/registry.ts` hand-validates manifests (unknown-property rejection, safe relative paths,
+`skillIdPrefix` must end with `.`, duplicate-intent and alias-collision detection), holds the in-memory
+registry, loads bundled packs from `domains/` with folder-name-equals-manifest-id enforcement, and
+confines `evalSuite` resolution to the package root.
+
+`domains/frontend/` is the only bundled pack and the reference implementation: `schemaVersion 1.1`,
+`skillIdPrefix "frontend."`, nine ownership intents, an owner-scoped routing vocabulary, 12 schemas,
+six rule families, eight recipes, and eight example packs. Its implementation lives in
+`src/domains/frontend/` — routing policy, phases, run policy, bilingual intent lexicons
+(`intents/en.ts`, `intents/ru.ts`), and the ~30-module `design/` pipeline. Executable third-party packs
+are not supported in v1.
+
+See [`domains/README.md`](domains/README.md) and
+[`domains/creating-a-domain-pack.md`](domains/creating-a-domain-pack.md).
+
+---
+
+## 11. Contracts, schemas, and validation
+
+`schemas/` holds 16 published JSON Schemas, all with `$id: https://skillranger.local/schemas/…`:
+
+| Schema | Describes |
+| :--- | :--- |
+| `registry.schema.json` | Skill manifest |
+| `lockfile.schema.json` | `skillranger.lock.json` |
+| `router-config.schema.json` | `skillranger.config.json` |
+| `fingerprint.schema.json` | Scanner `ProjectFingerprint` |
+| `task-profile.schema.json` | Normalized task profile |
+| `task-routing-result.schema.json` | Routing result envelope |
+| `router-run.schema.json` | Persisted router run |
+| `router-tool-result.schema.json` | Output union of `prepare_task` / `read_run_skill_file` |
+| `router-vocabulary.schema.json` | Routing vocabulary packs |
+| `skill-run.schema.json` | Lifecycle-v1 run |
+| `skill-run-v2.schema.json` | Strict-v2 run |
+| `execution-contract-v2.schema.json` | Per-skill `execution.contract.json` |
+| `critic-report-v2.schema.json` | Critic evidence |
+| `verification-report-v2.schema.json` | Strict gate results |
+| `repair-request-v2.schema.json` | Bounded repair request |
+| `domain-manifest.schema.json` | `domains/<id>/domain.manifest.json` |
+
+Two facts that are easy to get wrong:
+
+- **Validation is hand-written TypeScript, not schema-driven.** Skill manifests are validated by
+  `src/registry/validation.ts`; MCP tool arguments and strict contracts by
+  `src/runtime/strict/json-schema.ts`; router config by `src/config/validation.ts` (exact key match —
+  unknown *and* missing keys are both rejected). The schema files document the external contract for
+  hosts and tooling.
+- **`schemas/router-tool-result.schema.json` is the only schema file `src/` loads at runtime**
+  (`src/mcp/tools/router.ts`). Its `$id` is deliberately stripped when deriving the two router output
+  schemas, because host SDKs cache validators by `$id` and a shared id would bind one tool's validator
+  to the other.
+
+`domains/frontend/schemas/` holds 12 further domain-local schemas that are owned by the pack, not Core.
+
+---
+
+## 12. Lockfile, hashes, evidence, and integrity
+
+**`skillranger.lock.json`** (`src/lockfile/index.ts`, `schemaVersion: "1.0"`). Each `installed[]` entry
+records `skillId`, `version`, `checksum`, `targetAgent`, `scope`, `installedPath`, `source`, and the
+`audit` result. `assertValidLockfile` enforces id patterns, `sha256:<64 hex>` checksums, relative
+non-traversing paths, a valid risk level, a security score in `[0,1]`, and uniqueness of
+`(skillId, targetAgent, scope)`. Writes go through `withLockfileTransaction`: acquire the lock,
+re-read and re-validate, then `open(…, "wx")` a temp file and `rename` it into place. Malformed JSON
+produces an explicit "restore from version control" error rather than a silent reset.
+
+The lockfile is the integrity anchor for routing and strict execution — both `src/router/prepare.ts`
+and `src/runtime/strict/service.ts` require `entry.checksum === skill.checksum` before a skill counts
+as installed.
+
+**On-disk run state**, all relative to the project root:
+
+```text
+skillranger.lock.json
+.skillranger/runs/<runId>.json                      lifecycle-v1 and strict runs
+.skillranger/runs/<runId>/artifacts/<sha256-hex>    strict evidence blobs, content-addressed
+.skillranger/runs/router/<routerRunId>.json         router sidecar
+.skillranger/runs/router/<routerRunId>.journal.json write-ahead journal
+```
+
+`src/paths.ts` resolves **package-relative** roots only (`packageRoot`, `defaultRegistryRoot`,
+`defaultDomainsRoot`, `defaultFrontendEvalSuitePath`). It says nothing about run storage.
+
+**Router write-ahead journaling** — `journaledCreate` writes a journal, creates the runtime record,
+writes the router run, then unlinks the journal; `recover()` replays interrupted journals on the next
+open. `journaledUpdate` requires a strictly incrementing revision and verifies afterwards that the
+runtime side actually persisted the expected payload. Router directories are created with mode `0o700`
+and every path component is `lstat`-checked for symlinks; a per-project identity key detects a
+relocated or tampered run directory (`identity-integrity`).
+
+**Strict evidence ingestion** — `ingestEvidence` requires the source path to stay inside the project,
+stores the blob content-addressed by its sha256, infers `validatedAs` from the evidence kind and
+rejects a conflicting explicit value, validates JSON and schema before mutating the ledger, and unlinks
+the blob if the transactional update throws — so a failed ingest leaves no orphan artifact.
+
+---
+
+## 13. Error boundaries and security-sensitive code
+
+Treat these as the places where a careless change becomes a vulnerability:
+
+| Area | File | Guarantee |
+| :--- | :--- | :--- |
+| Package audit | `src/audit/index.ts` | Blocks remote-install pipes, destructive commands, SSH access, obfuscated execution, and secret-exfiltration instructions; flags privilege escalation, persistence mechanisms, hidden and binary files, and prompt injection. Text is NFKC-normalized and de-obfuscated first; patterns cover English and Russian |
+| Install paths | `src/installers/codex.ts`, `installed-path.ts` | `assertRepoPathSafe` and `resolveInstalledSkillRoot` reject symlinked path components and anything outside the canonical skills root; exactly one allowlisted leaf symlink is permitted |
+| File reads under a run | `src/runtime/strict/contained-file.ts` | Absolute and escaping paths refused for all evidence and verification reads |
+| Config read | `src/config/index.ts` | Realpathed root, `O_NOFOLLOW` reads, non-regular files refused, 256 KB cap, re-stat after open |
+| MCP trust boundary | `src/mcp/router-context.ts` | Project root fixed at startup; overrides return `project-root-unauthorized` |
+| Trigger parsing | `src/router/trigger.ts` | Explicit activation only; code-span and URL matches rejected; intent size bounded |
+| Raw intent | `src/cli/task.ts`, `src/config/` | Persisting a raw prompt requires both `privacy.allowRawIntentPersistence` and `--confirm-store-intent`; otherwise only a sha256 and a normalized goal are stored |
+| Blind review | `src/cli/visual-eval.ts` | `assertReviewOutputsSeparated` keeps the private mapping outside the public review tree |
+
+Error surfaces are typed, not stringly: `McpToolErrorCode` (`src/mcp/tools/types.ts`),
+`SkillRunErrorCode`, `StrictSkillRunErrorCode`, `RouterStoreErrorCode`, `RouterReaderErrorCode`. The
+CLI renders the same codes with remediation text (`remediationByCode` in `src/cli/runs.ts`) that MCP
+returns as structured error details.
+
+Further reading: [`SECURITY.md`](SECURITY.md), [`threat-model.md`](threat-model.md).
+
+---
+
+## 14. Tests
+
+74 files under `tests/`, run by `node --test tests/*.test.ts` with `node:assert/strict`. No Vitest,
+no Jest, no transpile step. The repository does not label test levels; in practice they fall into:
+
+| Level | Examples |
+| :--- | :--- |
+| Unit / pure logic | `router.{trigger,matching,segmentation,analyzer,resolver,composer,evidence,…}.test.ts`, `scanner`, `recommender`, `audit`, `lockfile`, `registry.validation`, `run-lock` |
+| Integration (in-process, tmpdir FS) | `mcp.test.ts`, `router.integration.test.ts`, `skill-run.test.ts`, `strict-{run,start,store,contract}.test.ts`, `installer.codex.test.ts` |
+| Subprocess E2E | `cli.*.test.ts`, `router.e2e.test.ts`, `strict-pilots-e2e.test.ts`, `mcp.protocol.test.ts` (raw JSON-RPC over stdio), `package-publication.test.ts` |
+| Contract | `shared-contracts`, `skill-content-contracts`, `design-skill-contracts`, `strict-contract`, `router.contracts` |
+| Eval harness | `frontend-eval.test.ts`, `frontend-visual-benchmark.test.ts`, `frontend-capability-calibration.test.ts` |
+| Hardening regression | `hardening-stage1`, `hardening-stages2-4`, `hardening-stages5-6`, `hardening-stage7` |
+
+Two separate fixture trees: `fixtures/` holds real project fixtures, and `tests/fixtures/` holds
+router case corpora plus `router-packs/` — 12 synthetic domain packs that are data-only and never
+registered as production packs.
+
+Evals run outside `node --test`: `pnpm eval:router`, `pnpm eval:frontend`, `pnpm eval:frontend:ru`,
+`pnpm eval:visual`. Only the routing modes of `eval:frontend` and `eval:router` are blocking gates
+inside `release:check`; task and visual evals need an external agent command and are run manually.
+See [`router-evals.md`](router-evals.md), [`evaluation-and-promotion.md`](evaluation-and-promotion.md),
+[`visual-benchmark.md`](visual-benchmark.md), [`TESTING.md`](TESTING.md).
+
+---
+
+## 15. Extending the system safely
+
+**A new MCP tool** — add the definition and handler to the right module in `src/mcp/tools/`, export
+them through that module's `…ToolDefinitions` / `…ToolHandlers` arrays, and give it a complete
+`inputSchema` plus an effect descriptor from `src/mcp/tools/types.ts`. Anything that writes must say
+so. Call an existing core service; do not implement logic in the tool layer.
+
+**A new CLI command** — add an entry to `cliCommandDefinitions` in `src/cli/commands.ts` declaring
+every flag, then handle it in `src/cli/index.ts` or a sub-handler. Undeclared flags are rejected by
+the parser, so the schema is the contract.
+
+**A new skill** — create `registry/skills/<id>/` with `skill.manifest.json` and `SKILL.md`, keeping to
+the allowlisted entries. The directory name must equal the manifest `id`, and the `SKILL.md`
+frontmatter `name` / `description` must match the manifest. Then run `pnpm validate:registry`,
+`pnpm audit:registry`, and `pnpm publish:check` — the last fails on any finding or any risk above `low`.
+
+**A new domain pack** — follow [`domains/creating-a-domain-pack.md`](domains/creating-a-domain-pack.md).
+Add `domains/<id>/domain.manifest.json` with a `skillIdPrefix` ending in `.`, register it from
+`src/domains/bundled.ts`, and keep pack-owned schemas under `domains/<id>/schemas/`.
+
+**Routing changes** — anything touching `src/router/vocabulary/` or a pack's `routing.vocabulary.json`
+must keep routing deterministic and bilingual. Re-run `pnpm eval:router` and `pnpm eval:frontend:ru`.
+
+**Runtime changes** — evidence, gates, and finalization carry the system's integrity guarantees. Pair
+any change with a test in `tests/strict-*.test.ts` or `tests/skill-run.test.ts`.
+
+Never add a runtime dependency.
+
+---
+
+## 16. What is not a public contract
+
+Public and stable — changing these is a breaking change for users and hosts:
+
+- CLI command names, flags, and the router exit codes 2–6.
+- MCP tool names, their `inputSchema`s, and the effect metadata.
+- `schemas/*.json`, `skillranger.lock.json`, `skillranger.config.json`.
+- Skill manifest shape and the shared contracts in `registry/contracts/`.
+- The trigger aliases `@skillranger`, `skillranger`, `/sr`.
+
+Internal — refactor freely with tests:
+
+- Module boundaries inside `src/router/` and `src/runtime/`; `src/router/index.ts` is a barrel, not an API.
+- Scoring weights and the composition heuristics in `src/recommender/scoring.ts` and `src/router/composer.ts`.
+- CLI remediation strings and human-readable output formatting.
+- The internal layout of `.skillranger/runs/**`, including journal files and the identity key.
+- Fixture packs under `tests/fixtures/router-packs/`.
+
+---
+
+## 17. Known divergences
+
+Recorded as observed, not repaired:
+
+- **This document was rewritten on 2026-07-27** from a pre-router MVP specification. The previous
+  version described a Zod / Commander / Vitest / tsup / MCP-SDK stack, a `src/generator/` module, five
+  installer adapters, and MCP tools named `install_skills`, `generate_skill_from_goal`,
+  `update_registry`, and `explain_recommendation`. None of those exist. If you find that shape quoted
+  elsewhere, it is stale.
+- [`TESTING.md`](TESTING.md) lists fixture projects `expo-react-native` and `monorepo`; neither exists,
+  and it does not mention the real `backend-node` fixture or `tests/fixtures/router-packs/`.
+- [`PRODUCT.md`](PRODUCT.md) links to a root `PLAN.md` that was replaced by `TASKS.md`. `TASKS.md`
+  itself is a stale day-one scaffolding checklist and should not be read as current scope.
+- [`threat-model.md`](threat-model.md) duplicates the opening section of [`SECURITY.md`](SECURITY.md)
+  verbatim.
+- [ADR 0001](adr/0001-universal-prompt-router-boundaries.md) cites
+  `SkillRanger-Universal-Prompt-Router-TZ-Plan.md`, which is not in the repository.
+- `README.md` lists seven MCP tools. That is a curated subset for readers, not the full surface of 33 —
+  it is a simplification, not an error.
