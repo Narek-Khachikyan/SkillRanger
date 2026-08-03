@@ -2,6 +2,8 @@
 
 `skillranger design:observe` and UI evidence capture execute a project- or host-supplied browser adapter once for every required viewport and state. SkillRanger invokes the command with Node.js `spawn`, `shell: false`, contained output paths, and a per-capture timeout. The adapter must write exactly one JSON object to stdout and create the requested non-empty screenshot.
 
+Both commands use the canonical frontend UI evidence capture flow. `design:observe` requests the compatibility observation level and projects the captured result back to the existing `BrowserObservation[]` output; UI evidence capture requests the stricter verifiable level. Matrix expansion, screenshot naming, replacement values, duplicate/containment checks, and screenshot failure handling are shared.
+
 Available placeholders:
 
 - `{{url}}`

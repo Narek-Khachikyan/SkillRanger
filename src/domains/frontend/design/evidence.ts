@@ -1,19 +1,19 @@
-import { mkdir, rename, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, realpath, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { executeAdapterJson } from "./adapter.ts";
 import { evaluateBrowserPayload, type BrowserCheckPayload } from "./browser-checks.ts";
-import type { UiEvidenceCapturePlan } from "./evidence-plan.ts";
+import {
+  isUiCapturePathWithin,
+  type BrowserObservationCapturePlan,
+  type UiCaptureMatrixEntry,
+  type UiEvidenceCapturePlan,
+} from "./evidence-plan.ts";
 import { isValidStateSynchronization, type MechanicalSnapshot, type UiEvidenceBundle } from "./evidence-types.ts";
 import { defaultMechanicalCheckPolicy, evaluateMechanicalSnapshot, sortUiCheckResults } from "./mechanical.ts";
 import type { BrowserObservation } from "./types.ts";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
-const isPathWithin = (root: string, target: string) => {
-  const relative = path.relative(path.resolve(root), path.resolve(target));
-  return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
-};
 
 const stringArray = (payload: Record<string, unknown>, field: string): string[] => {
   const value = payload[field];
@@ -27,6 +27,30 @@ const booleanField = (payload: Record<string, unknown>, field: string) => {
   if (typeof payload[field] !== "boolean") throw new Error(`Browser observation ${field} must be boolean.`);
   return payload[field] as boolean;
 };
+
+type LegacyBrowserObservation = Pick<BrowserCheckPayload,
+  | "horizontalOverflow"
+  | "clippedControls"
+  | "unreachableActions"
+  | "stickyOverlaps"
+  | "consoleErrors"
+  | "keyboardTraps"
+  | "invisibleFocus"
+  | "criticalAxeViolations"
+  | "reducedMotionVerified"
+>;
+
+const parseLegacyBrowserObservation = (value: Record<string, unknown>): LegacyBrowserObservation => ({
+  horizontalOverflow: booleanField(value, "horizontalOverflow"),
+  clippedControls: stringArray(value, "clippedControls"),
+  unreachableActions: stringArray(value, "unreachableActions"),
+  stickyOverlaps: stringArray(value, "stickyOverlaps"),
+  consoleErrors: stringArray(value, "consoleErrors"),
+  keyboardTraps: stringArray(value, "keyboardTraps"),
+  invisibleFocus: stringArray(value, "invisibleFocus"),
+  criticalAxeViolations: stringArray(value, "criticalAxeViolations"),
+  reducedMotionVerified: booleanField(value, "reducedMotionVerified"),
+});
 
 const mechanicalSnapshot = (value: unknown): MechanicalSnapshot => {
   if (!isRecord(value)) throw new Error("Browser observation mechanicalSnapshot must be an object.");
@@ -67,15 +91,7 @@ const parsePayload = (value: unknown) => {
     throw new Error("Browser observation contrastViolations must contain locator, ratio, and largeText values.");
   }
   const browser: BrowserCheckPayload = {
-    horizontalOverflow: booleanField(value, "horizontalOverflow"),
-    clippedControls: stringArray(value, "clippedControls"),
-    unreachableActions: stringArray(value, "unreachableActions"),
-    stickyOverlaps: stringArray(value, "stickyOverlaps"),
-    consoleErrors: stringArray(value, "consoleErrors"),
-    keyboardTraps: stringArray(value, "keyboardTraps"),
-    invisibleFocus: stringArray(value, "invisibleFocus"),
-    criticalAxeViolations: stringArray(value, "criticalAxeViolations"),
-    reducedMotionVerified: booleanField(value, "reducedMotionVerified"),
+    ...parseLegacyBrowserObservation(value),
     stateRendered: booleanField(value, "stateRendered"),
     overlaps: stringArray(value, "overlaps"),
     focusOrderViolations: stringArray(value, "focusOrderViolations"),
@@ -106,6 +122,191 @@ const observationFor = (
   screenshotPath: entry.screenshotPath,
 });
 
+type CaptureMatrixPlan = {
+  baseUrl: string;
+  route: string;
+  outputDir: string;
+  entries: UiCaptureMatrixEntry[];
+};
+
+type CaptureOutput = {
+  path: string;
+  kind: "screenshot" | "output";
+};
+
+const realpathFromExistingAncestor = async (value: string) => {
+  let ancestor = value;
+  const missingTail: string[] = [];
+  while (true) {
+    try {
+      await lstat(ancestor);
+    } catch (error) {
+      const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+      if (code !== "ENOENT") throw error;
+      const parent = path.dirname(ancestor);
+      if (parent === ancestor) throw error;
+      missingTail.unshift(path.basename(ancestor));
+      ancestor = parent;
+      continue;
+    }
+    return path.resolve(await realpath(ancestor), ...missingTail);
+  }
+};
+
+const assertCanonicalCapturePath = async (input: {
+  outputRoot: string;
+  canonicalOutputRoot: string;
+  target: CaptureOutput;
+  captureLabel: string;
+}) => {
+  const resolvedPath = path.resolve(input.target.path);
+  const canonicalPath = await realpathFromExistingAncestor(resolvedPath).catch(() => undefined);
+  if (!isUiCapturePathWithin(input.outputRoot, resolvedPath)
+    || !canonicalPath
+    || !isUiCapturePathWithin(input.canonicalOutputRoot, canonicalPath)) {
+    throw new Error(`${input.captureLabel} ${input.target.kind} escapes output directory: ${resolvedPath}`);
+  }
+};
+
+const executeCaptureMatrix = async <T>(input: {
+  plan: CaptureMatrixPlan;
+  commandTemplate: string;
+  projectRoot?: string;
+  timeoutPerCaptureMs?: number;
+  assertArtifactPath?: (artifactPath: string) => Promise<void>;
+  outputTargets?: CaptureOutput[];
+  captureLabel: string;
+  screenshotError: (screenshotPath: string) => string;
+  parseCapture: (value: unknown, entry: UiCaptureMatrixEntry) => T;
+}): Promise<T[]> => {
+  const outputRoot = path.resolve(input.plan.outputDir);
+  const canonicalOutputRoot = await realpathFromExistingAncestor(outputRoot).catch(() => undefined);
+  if (!canonicalOutputRoot) {
+    throw new Error(`${input.captureLabel} output directory cannot be resolved safely: ${outputRoot}`);
+  }
+  const targets: CaptureOutput[] = [
+    ...input.plan.entries.map(({ screenshotPath }) => ({ path: screenshotPath, kind: "screenshot" as const })),
+    ...(input.outputTargets ?? []),
+  ];
+  const seenPaths = new Set<string>();
+  for (const target of targets) {
+    const resolvedPath = path.resolve(target.path);
+    if (!isUiCapturePathWithin(outputRoot, resolvedPath)) {
+      throw new Error(`${input.captureLabel} ${target.kind} escapes output directory: ${resolvedPath}`);
+    }
+    if (seenPaths.has(resolvedPath)) {
+      throw new Error(`${input.captureLabel} duplicate capture output path: ${resolvedPath}`);
+    }
+    seenPaths.add(resolvedPath);
+  }
+  for (const target of targets) {
+    const resolvedPath = path.resolve(target.path);
+    await input.assertArtifactPath?.(resolvedPath);
+    await assertCanonicalCapturePath({ outputRoot, canonicalOutputRoot, target, captureLabel: input.captureLabel });
+    if (await stat(resolvedPath).catch(() => undefined)) {
+      const noun = target.kind === "screenshot" ? "screenshot" : "output";
+      throw new Error(`${input.captureLabel} ${noun} already exists: ${resolvedPath}`);
+    }
+  }
+
+  const captures: T[] = [];
+  try {
+    for (const entry of input.plan.entries) {
+      const screenshotTarget = { path: entry.screenshotPath, kind: "screenshot" as const };
+      await input.assertArtifactPath?.(entry.screenshotPath);
+      await assertCanonicalCapturePath({ outputRoot, canonicalOutputRoot, target: screenshotTarget, captureLabel: input.captureLabel });
+      await mkdir(path.dirname(entry.screenshotPath), { recursive: true });
+      await input.assertArtifactPath?.(entry.screenshotPath);
+      let raw: unknown;
+      try {
+        raw = await executeAdapterJson({
+          commandTemplate: input.commandTemplate,
+          cwd: input.projectRoot,
+          timeoutMs: input.timeoutPerCaptureMs,
+          replacements: {
+            "{{url}}": `${input.plan.baseUrl}${input.plan.route}`,
+            "{{route}}": input.plan.route,
+            "{{width}}": String(entry.viewport.width),
+            "{{height}}": String(entry.viewport.height),
+            "{{state}}": entry.state,
+            "{{screenshotPath}}": entry.screenshotPath,
+          },
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === "Browser adapter returned invalid JSON.") {
+          throw new Error(`Browser adapter returned invalid JSON for ${entry.viewport.width}px ${entry.state}.`);
+        }
+        throw error;
+      }
+      await input.assertArtifactPath?.(entry.screenshotPath);
+      await assertCanonicalCapturePath({ outputRoot, canonicalOutputRoot, target: screenshotTarget, captureLabel: input.captureLabel });
+      const parsed = input.parseCapture(raw, entry);
+      const screenshot = await stat(entry.screenshotPath).catch(() => undefined);
+      if (!screenshot?.isFile() || screenshot.size === 0) {
+        throw new Error(input.screenshotError(entry.screenshotPath));
+      }
+      captures.push(parsed);
+    }
+    for (const target of input.outputTargets ?? []) {
+      const resolvedPath = path.resolve(target.path);
+      await input.assertArtifactPath?.(resolvedPath);
+      await assertCanonicalCapturePath({ outputRoot, canonicalOutputRoot, target, captureLabel: input.captureLabel });
+      if (await stat(resolvedPath).catch(() => undefined)) {
+        throw new Error(`${input.captureLabel} output already exists: ${resolvedPath}`);
+      }
+    }
+  } catch (error) {
+    const currentFiles = await Promise.all(input.plan.entries.map(async ({ screenshotPath }) =>
+      (await stat(screenshotPath).catch(() => undefined))?.isFile() ? screenshotPath : undefined));
+    const paths = [...new Set(currentFiles.filter((entry): entry is string => Boolean(entry)))];
+    throw new Error(`${error instanceof Error ? error.message : String(error)} Captured screenshots retained: ${paths.join(", ") || "none"}`);
+  }
+  return captures;
+};
+
+const parseBrowserObservation = (
+  value: unknown,
+  expected: UiCaptureMatrixEntry,
+  route: string,
+): BrowserObservation => {
+  if (!isRecord(value)) {
+    throw new Error("Browser adapter must return one JSON object per invocation.");
+  }
+  return {
+    schemaVersion: "1.0",
+    viewport: expected.viewport,
+    route,
+    state: expected.state,
+    ...parseLegacyBrowserObservation(value),
+    screenshotPath: expected.screenshotPath,
+  };
+};
+
+export const executeBrowserObservationCapture = async (input: {
+  plan: BrowserObservationCapturePlan;
+  commandTemplate: string;
+  outputPath?: string;
+  projectRoot?: string;
+  timeoutPerObservationMs?: number;
+}) => {
+  const observations = await executeCaptureMatrix({
+    plan: input.plan,
+    commandTemplate: input.commandTemplate,
+    projectRoot: input.projectRoot,
+    timeoutPerCaptureMs: input.timeoutPerObservationMs,
+    outputTargets: input.outputPath ? [{ path: input.outputPath, kind: "output" }] : [],
+    captureLabel: "Browser observation",
+    screenshotError: (screenshotPath) =>
+      `Browser adapter did not create screenshot: ${screenshotPath} (non-empty screenshot required)`,
+    parseCapture: (value, entry) => parseBrowserObservation(value, entry, input.plan.route),
+  });
+  if (input.outputPath) {
+    await mkdir(path.dirname(input.outputPath), { recursive: true });
+    await writeFile(input.outputPath, `${JSON.stringify(observations, null, 2)}\n`, "utf8");
+  }
+  return observations;
+};
+
 export const executeUiEvidenceCapture = async (input: {
   plan: UiEvidenceCapturePlan;
   commandTemplate: string;
@@ -114,62 +315,31 @@ export const executeUiEvidenceCapture = async (input: {
   assertArtifactPath?: (artifactPath: string) => Promise<void>;
 }): Promise<UiEvidenceBundle> => {
   const bundlePath = path.join(input.plan.outputDir, "bundle.json");
-  for (const entry of input.plan.entries) {
-    if (!isPathWithin(input.plan.outputDir, entry.screenshotPath)) {
-      throw new Error(`UI evidence screenshot escapes output directory: ${entry.screenshotPath}`);
-    }
-    await input.assertArtifactPath?.(entry.screenshotPath);
-    if (await stat(entry.screenshotPath).catch(() => undefined)) {
-      throw new Error(`UI evidence screenshot already exists: ${entry.screenshotPath}`);
-    }
-  }
-  await input.assertArtifactPath?.(bundlePath);
-  if (await stat(bundlePath).catch(() => undefined)) throw new Error(`UI evidence bundle already exists: ${bundlePath}`);
-
-  const captures: UiEvidenceBundle["captures"] = [];
-  try {
-    for (const entry of input.plan.entries) {
-      await input.assertArtifactPath?.(entry.screenshotPath);
-      await mkdir(path.dirname(entry.screenshotPath), { recursive: true });
-      await input.assertArtifactPath?.(entry.screenshotPath);
-      const raw = await executeAdapterJson({
-        commandTemplate: input.commandTemplate,
-        cwd: input.projectRoot,
-        timeoutMs: input.timeoutPerCaptureMs,
-        replacements: {
-          "{{url}}": `${input.plan.baseUrl}${input.plan.route}`,
-          "{{route}}": input.plan.route,
-          "{{width}}": String(entry.viewport.width),
-          "{{height}}": String(entry.viewport.height),
-          "{{state}}": entry.state,
-          "{{screenshotPath}}": entry.screenshotPath,
-        },
-      });
+  const captures = await executeCaptureMatrix({
+    plan: input.plan,
+    commandTemplate: input.commandTemplate,
+    projectRoot: input.projectRoot,
+    timeoutPerCaptureMs: input.timeoutPerCaptureMs,
+    assertArtifactPath: input.assertArtifactPath,
+    outputTargets: [{ path: bundlePath, kind: "output" }],
+    captureLabel: "UI evidence",
+    screenshotError: (screenshotPath) =>
+      `Browser adapter did not create a non-empty screenshot: ${screenshotPath}`,
+    parseCapture: (raw, entry) => {
       const parsed = parsePayload(raw);
-      await input.assertArtifactPath?.(entry.screenshotPath);
-      const screenshot = await stat(entry.screenshotPath).catch(() => undefined);
-      if (!screenshot?.isFile() || screenshot.size === 0) {
-        throw new Error(`Browser adapter did not create a non-empty screenshot: ${entry.screenshotPath}`);
-      }
       const checks = sortUiCheckResults([
         ...evaluateBrowserPayload({ payload: parsed.browser, viewport: entry.viewport.width, state: entry.state, screenshotPath: entry.screenshotPath }),
         ...evaluateMechanicalSnapshot({ snapshot: parsed.mechanical, policy: defaultMechanicalCheckPolicy, viewport: entry.viewport.width, state: entry.state, screenshotPath: entry.screenshotPath }),
       ]);
-      captures.push({
+      return {
         ...entry,
         observation: observationFor(parsed.browser, entry, input.plan.route),
         stateRendered: parsed.browser.stateRendered,
         stateSynchronization: parsed.browser.stateSynchronization,
         checks,
-      });
-    }
-  } catch (error) {
-    const retained = captures.map(({ screenshotPath }) => screenshotPath);
-    const currentFiles = await Promise.all(input.plan.entries.map(async ({ screenshotPath }) =>
-      (await stat(screenshotPath).catch(() => undefined))?.isFile() ? screenshotPath : undefined));
-    const paths = [...new Set([...retained, ...currentFiles.filter((entry): entry is string => Boolean(entry))])];
-    throw new Error(`${error instanceof Error ? error.message : String(error)} Captured screenshots retained: ${paths.join(", ") || "none"}`);
-  }
+      };
+    },
+  });
 
   const bundle: UiEvidenceBundle = {
     schemaVersion: "1.0",
