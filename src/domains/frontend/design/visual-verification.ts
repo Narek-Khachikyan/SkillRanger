@@ -3,11 +3,11 @@ import { createVerificationReport } from "../../../runtime/verification.ts";
 import type { VerificationFinding } from "../../../runtime/types.ts";
 import type { BoundedRepairRequest, DesignExecutionPolicy } from "./policy-types.ts";
 import { isValidStateSynchronization, type UiCheckResult, type UiEvidenceBundle } from "./evidence-types.ts";
-import { evaluateUiStatePayload, uiStateCheckCodes } from "./browser-checks.ts";
 import { visualCriticQualityFloorFindings } from "./critic.ts";
 import type { DesignBrief, DesignDirection, DesignValidationResult } from "./types.ts";
 import type { DesignVariantMetadata, VisualCriticReport, VisualRun, VisualRunState } from "./visual-loop-types.ts";
 import { assertValidVisualRunSnapshot, digestDesignExecutionPolicy } from "./visual-loop.ts";
+import { interpretUiEvidenceBundle } from "./ui-evidence.ts";
 import { validateDesignBrief, validateDesignDirection } from "./validation.ts";
 
 const artifactIsNonEmptyFile = (filePath: string) => {
@@ -244,9 +244,14 @@ export const verifyVisualResult = (input: {
     ));
   }
 
+  const initialInterpretation = interpretUiEvidenceBundle({ bundle: input.initialEvidence, requireMechanical: true });
+  const recheckInterpretation = interpretUiEvidenceBundle({ bundle: input.recheckEvidence, requireMechanical: true });
+
   const missingMatrix = [
     ...evidenceMatrixIssues("initial", input.initialEvidence, input.policy),
     ...evidenceMatrixIssues("recheck", input.recheckEvidence, input.policy),
+    ...initialInterpretation.issues.map((issue) => `initial:${issue}`),
+    ...recheckInterpretation.issues.map((issue) => `recheck:${issue}`),
   ];
   if (missingMatrix.length > 0) {
     findings.push(hardFinding(
@@ -287,22 +292,8 @@ export const verifyVisualResult = (input: {
     ));
   }
   findings.push(...input.boundedRepairFindings);
-  findings.push(...input.recheckEvidence.captures.flatMap((capture) => {
-    const persistedStateChecks = isValidStateSynchronization(capture.stateSynchronization)
-      && typeof capture.stateRendered === "boolean"
-      ? evaluateUiStatePayload({
-        stateRendered: capture.stateRendered,
-        stateSynchronization: capture.stateSynchronization,
-        viewport: capture.viewport.width,
-        state: capture.state,
-        screenshotPath: capture.screenshotPath,
-      })
-      : [];
-    return [
-      ...capture.checks.filter(({ code }) => !uiStateCheckCodes.has(code)).map(checkFinding),
-      ...persistedStateChecks.map(checkFinding),
-    ];
-  }));
+  findings.push(...recheckInterpretation.captures.flatMap(({ interpretation }) =>
+    interpretation.checks.map(checkFinding)));
 
   const capabilities = new Set(input.recheckEvidence.adapterCapabilities);
   const capabilityStatus = capabilities.has("browser") && capabilities.has("screenshots") ? "ready" : "degraded";

@@ -14,6 +14,10 @@ const install = async (root: string, skillId: string) => {
   const skill = await findSkill(skillId); assert.ok(skill);
   await getAdapter("codex").applyInstall(skill, { projectRoot: root, targetAgent: "codex", scope: "repo", dryRun: false, mode: "copy" });
 };
+const emptyMechanicalSnapshot = {
+  spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [], textBlocks: [],
+  touchTargets: [],
+};
 const readAll = async (store: StrictSkillRunStore, run: SkillRunV2) => {
   while (run.state === "reading") {
     const unread = run.skillLedgers.find((ledger) => ledger.readReceipts.length < ledger.contentChunks.length);
@@ -128,6 +132,7 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
     invisibleFocus: [],
     criticalAxeViolations: index === 0 ? ["button-name"] : [],
     reducedMotionVerified: true,
+    mechanicalSnapshot: emptyMechanicalSnapshot,
     stateRendered: true,
     action: "Select the captured state",
     changes: [{ locator: "#active-state", before: "previous", after: `viewport-${width}` }],
@@ -174,6 +179,7 @@ test("Tailwind pilot records critic evidence, repairs a hard gate, rechecks fres
     invisibleFocus: [],
     criticalAxeViolations: [],
     reducedMotionVerified: true,
+    mechanicalSnapshot: emptyMechanicalSnapshot,
     stateRendered: true,
     action: "Select the captured state",
     changes: [{ locator: "#active-state", before: "previous", after: `viewport-${width}` }],
@@ -323,6 +329,7 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
     invisibleFocus: [],
     criticalAxeViolations: [],
     reducedMotionVerified: true,
+    mechanicalSnapshot: emptyMechanicalSnapshot,
     stateRendered: true,
     action: "Select the captured state",
     changes: [{ locator: "#active-state", before: "previous", after: `viewport-${width}` }],
@@ -394,6 +401,7 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
     invisibleFocus: [],
     criticalAxeViolations: [],
     reducedMotionVerified: true,
+    mechanicalSnapshot: emptyMechanicalSnapshot,
     stateRendered: true,
     action: "Select the captured state",
     changes: [{ locator: "#active-state", before: "previous", after: `viewport-${width}` }],
@@ -447,7 +455,7 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
     viewport: { width, height: width === 390 ? 844 : width === 768 ? 1024 : 900 },
     state: "default",
     screenshotPath: `evidence/tw-initial-${width}.png`,
-    horizontalOverflow: false, clippedControls: [], unreachableActions: [], stickyOverlaps: [], consoleErrors: [], keyboardTraps: [], invisibleFocus: [], criticalAxeViolations: [], reducedMotionVerified: true,
+    horizontalOverflow: false, clippedControls: [], unreachableActions: [], stickyOverlaps: [], consoleErrors: [], keyboardTraps: [], invisibleFocus: [], criticalAxeViolations: [], reducedMotionVerified: true, mechanicalSnapshot: emptyMechanicalSnapshot,
     stateRendered: true, action: "Select the captured state",
     changes: [{ locator: "#active-state", before: "previous", after: `viewport-${width}` }],
   }));

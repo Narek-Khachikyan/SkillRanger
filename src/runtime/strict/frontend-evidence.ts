@@ -1,25 +1,13 @@
 import { validateFrontendSources } from "../../domains/frontend/design/source-validation.ts";
+import {
+  interpretFrontendUiEvidence,
+  isRecord,
+  parseStrictUiEvidenceObservation,
+  type FrontendUiEvidenceFacts,
+} from "../../domains/frontend/design/ui-evidence.ts";
 import type { EvidenceArtifact } from "./types.ts";
 
 type Result = { passed: boolean; message?: string };
-type Observation = {
-  viewport: { width: number; height: number };
-  state: string;
-  screenshotPath: string;
-  horizontalOverflow: boolean;
-  clippedControls: string[];
-  unreachableActions: string[];
-  stickyOverlaps: string[];
-  consoleErrors: string[];
-  keyboardTraps: string[];
-  invisibleFocus: string[];
-  criticalAxeViolations: string[];
-  reducedMotionVerified: boolean;
-  stateRendered: boolean;
-  action: string;
-  changes: Array<{ locator: string; before: string; after: string }>;
-};
-
 const browserGateSlugs = [
   "required-states-covered",
   "no-horizontal-overflow",
@@ -46,90 +34,50 @@ const observationKeys = [
   "action",
   "changes",
 ] as const;
-const stringArrayKeys = [
-  "clippedControls",
-  "unreachableActions",
-  "stickyOverlaps",
-  "consoleErrors",
-  "keyboardTraps",
-  "invisibleFocus",
-  "criticalAxeViolations",
-] as const;
-const record = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-const exactKeys = (value: Record<string, unknown>, keys: readonly string[]) => {
-  const actual = Object.keys(value);
-  return actual.length === keys.length && actual.every((key) => keys.includes(key));
-};
-const parseObservation = (value: unknown, index: number): Observation => {
-  if (!record(value) || !exactKeys(value, observationKeys)) {
-    throw new Error(`Browser observation ${index} must have the required closed shape.`);
+const verificationInputKeys = ["observations", "requiredStates"] as const;
+const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]) =>
+  Object.keys(value).every((key) => keys.includes(key));
+const parseRequiredStates = (value: unknown): string[] => {
+  if (!Array.isArray(value) || value.length === 0
+    || !value.every((state) => typeof state === "string" && state.trim() !== "")) {
+    throw new Error("verification-input requiredStates must be a non-empty array of strings.");
   }
-  if (!record(value.viewport) || !exactKeys(value.viewport, ["width", "height"])) {
-    throw new Error(`Browser observation ${index} viewport must contain width and height.`);
-  }
-  const { width, height } = value.viewport;
-  if (typeof width !== "number" || !Number.isFinite(width) || width <= 0 || typeof height !== "number" || !Number.isFinite(height) || height <= 0) {
-    throw new Error(`Browser observation ${index} viewport dimensions must be finite positive numbers.`);
-  }
-  if (typeof value.state !== "string" || value.state.trim() === "") {
-    throw new Error(`Browser observation ${index} state must be a non-empty string.`);
-  }
-  if (typeof value.screenshotPath !== "string" || value.screenshotPath.trim() === "") {
-    throw new Error(`Browser observation ${index} screenshotPath must be a non-empty string.`);
-  }
-  if (typeof value.horizontalOverflow !== "boolean") {
-    throw new Error(`Browser observation ${index} horizontalOverflow must be boolean.`);
-  }
-  if (typeof value.reducedMotionVerified !== "boolean") {
-    throw new Error(`Browser observation ${index} reducedMotionVerified must be boolean.`);
-  }
-  if (value.stateRendered !== true) {
-    throw new Error(`Browser observation ${index} must record stateRendered: true for the requested state.`);
-  }
-  if (typeof value.action !== "string" || value.action.trim() === "") {
-    throw new Error(`Browser observation ${index} must record a concrete performed action.`);
-  }
-  if (!Array.isArray(value.changes) || !value.changes.every((change) =>
-    record(change)
-    && exactKeys(change, ["locator", "before", "after"])
-    && typeof change.locator === "string"
-    && change.locator.trim() !== ""
-    && typeof change.before === "string"
-    && typeof change.after === "string")) {
-    throw new Error(`Browser observation ${index} changes must contain closed locator, before, and after records.`);
-  }
-  if (!value.changes.some((change) => (change as Record<string, unknown>).before !== (change as Record<string, unknown>).after)) {
-    throw new Error(`Browser observation ${index} must record at least one observed change where before differs from after.`);
-  }
-  for (const key of stringArrayKeys) {
-    if (!Array.isArray(value[key]) || !value[key].every((item) => typeof item === "string")) {
-      throw new Error(`Browser observation ${index} ${key} must be an array of strings.`);
-    }
-  }
-  return value as Observation;
+  return [...new Set(value as string[])];
 };
 
 export const deriveBrowserGateResults = (
   value: unknown,
   artifacts: EvidenceArtifact[],
+  options: { requiredStates?: readonly string[] } = {},
 ): Record<string, Result> => {
   const failed = (message: string) => Object.fromEntries(
     browserGateSlugs.map((slug) => [slug, { passed: false, message }]),
   );
-  if (!record(value) || !exactKeys(value, ["observations"]) || !Array.isArray(value.observations)) {
+  if (!isRecord(value) || !hasOnlyKeys(value, verificationInputKeys) || !Array.isArray(value.observations)) {
     // The rejection carries the contract: without it an agent cannot tell this apart from the
     // other verification-input shapes (performance review passes {measurements}) and retries blind.
     return failed(
       "verification-input for frontend/browser-hard-gates must be exactly { observations: [...] }, "
+      + "with optional requiredStates metadata, "
       + `where every observation has the closed shape: ${observationKeys.join(", ")}. `
       + "Self-declared pass flags are not accepted; observations must include a rendered state, "
       + "a concrete action, and an observed before/after change bound to real browser capture evidence.",
     );
   }
-  let observations: Observation[];
+  let observations: FrontendUiEvidenceFacts[];
+  let requiredStates: string[] | undefined;
   try {
-    observations = value.observations.map(parseObservation);
+    const declaredRequiredStates = Object.hasOwn(value, "requiredStates")
+      ? parseRequiredStates(value.requiredStates)
+      : undefined;
+    const optionRequiredStates = options.requiredStates === undefined
+      ? undefined
+      : parseRequiredStates(options.requiredStates);
+    observations = value.observations.map((observation, index) =>
+      parseStrictUiEvidenceObservation(observation, index, { requireMechanical: true }));
+    requiredStates = optionRequiredStates === undefined
+      ? declaredRequiredStates
+      : optionRequiredStates;
   } catch (error) {
     return failed(error instanceof Error ? error.message : "verification-input must contain valid browser observations.");
   }
@@ -146,16 +94,36 @@ export const deriveBrowserGateResults = (
   if (observations.some(({ viewport, screenshotPath }) => !screenshotBindings.has(`${viewport.width}::${screenshotPath}`))) {
     return failed("Observation screenshot is not bound to ingested evidence.");
   }
+  const interpretations = observations.map((facts) => interpretFrontendUiEvidence({ facts }));
+  const checks = interpretations.flatMap(({ checks: factsChecks }) => factsChecks);
+  const unsupportedHardChecks = checks.filter(({ code, gate }) => gate === "hard" && ![
+    "horizontal-overflow", "clipped-content", "element-overlap", "unreachable-action", "sticky-overlap",
+    "focus-order", "keyboard-trap", "invisible-focus", "critical-axe", "contrast", "console-error",
+    "reduced-motion", "ui-state-not-rendered", "ui-state-action-missing", "ui-state-change-missing",
+    "ui-state-desynchronized",
+  ].includes(code));
+  if (unsupportedHardChecks.length > 0) {
+    return failed(`Canonical frontend UI evidence contains non-certifying hard findings: ${unsupportedHardChecks.map(({ code }) => code).join(", ")}.`);
+  }
+  const hasCheck = (codes: string[]) => !checks.some(({ code }) => codes.includes(code));
   const widths = new Set(observations.map(({ viewport }) => viewport.width));
+  const matrixStates = requiredStates ?? [...new Set(observations.map(({ state }) => state))];
+  const missingMatrixEntries = [390, 768, 1440].flatMap((width) =>
+    matrixStates
+      .filter((state) => !observations.some((observation) => observation.viewport.width === width && observation.state === state))
+      .map((state) => `${width}px:${state}`));
   return {
-    "required-states-covered": { passed: [390, 768, 1440].every((width) => widths.has(width)) },
-    "no-horizontal-overflow": { passed: observations.every(({ horizontalOverflow }) => !horizontalOverflow) },
-    "no-clipped-controls": { passed: observations.every(({ clippedControls, unreachableActions }) => clippedControls.length === 0 && unreachableActions.length === 0) },
-    "no-sticky-overlap": { passed: observations.every(({ stickyOverlaps }) => stickyOverlaps.length === 0) },
-    "focus-visible": { passed: observations.every(({ invisibleFocus, keyboardTraps, criticalAxeViolations }) =>
-      invisibleFocus.length === 0 && keyboardTraps.length === 0 && criticalAxeViolations.length === 0) },
-    "no-runtime-console-errors": { passed: observations.every(({ consoleErrors }) => consoleErrors.length === 0) },
-    "reduced-motion-verified": { passed: observations.every(({ reducedMotionVerified }) => reducedMotionVerified) },
+    "required-states-covered": {
+      passed: [390, 768, 1440].every((width) => widths.has(width))
+        && missingMatrixEntries.length === 0
+        && hasCheck(["ui-state-not-rendered", "ui-state-action-missing", "ui-state-change-missing", "ui-state-desynchronized"]),
+    },
+    "no-horizontal-overflow": { passed: hasCheck(["horizontal-overflow"]) },
+    "no-clipped-controls": { passed: hasCheck(["clipped-content", "element-overlap", "unreachable-action"]) },
+    "no-sticky-overlap": { passed: hasCheck(["sticky-overlap"]) },
+    "focus-visible": { passed: hasCheck(["focus-order", "keyboard-trap", "invisible-focus", "critical-axe", "contrast"]) },
+    "no-runtime-console-errors": { passed: hasCheck(["console-error"]) },
+    "reduced-motion-verified": { passed: hasCheck(["reduced-motion"]) },
   };
 };
 

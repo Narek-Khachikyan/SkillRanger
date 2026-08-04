@@ -224,6 +224,10 @@ const browserObservation = (width: number) => ({
   invisibleFocus: [],
   criticalAxeViolations: [],
   reducedMotionVerified: true,
+  mechanicalSnapshot: {
+    spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [], textBlocks: [],
+    touchTargets: [],
+  },
   stateRendered: true,
   action: "Select the captured state",
   changes: [{ locator: "#active-state", before: "previous", after: `viewport-${width}` }],
@@ -271,6 +275,50 @@ test("strict browser gates require rendered action and observed change evidence"
     const results = deriveBrowserGateResults({ observations }, browserArtifacts);
     assert.ok(Object.values(results).every(({ passed }) => !passed));
   }
+});
+
+test("strict browser gates consume the canonical extended UI evidence shape", () => {
+  const observations = [390, 768, 1440].map((width) => ({
+    ...browserObservation(width),
+    overlaps: [],
+    focusOrderViolations: [],
+    contrastViolations: [],
+    mechanicalSnapshot: browserObservation(390).mechanicalSnapshot,
+  }));
+  const valid = deriveBrowserGateResults({ observations }, browserArtifacts);
+  assert.ok(Object.values(valid).every(({ passed }) => passed));
+
+  const weakened = deriveBrowserGateResults({
+    observations: observations.map((observation, index) => index === 0
+      ? { ...observation, overlaps: ["#panel"] }
+      : observation),
+  }, browserArtifacts);
+  assert.equal(weakened["no-clipped-controls"].passed, false);
+
+  const missingViewport = deriveBrowserGateResults({ observations: observations.slice(0, 2) }, browserArtifacts);
+  assert.equal(missingViewport["required-states-covered"].passed, false);
+
+  const desynchronized = deriveBrowserGateResults({
+    observations: observations.map((observation, index) => index === 0
+      ? {
+          ...observation,
+          stateSynchronization: {
+            status: "mismatch",
+            path: "#active-state -> #summary",
+            observations: ["#active-state=next", "#summary=previous"],
+            action: observation.action,
+            changes: observation.changes,
+          },
+        }
+      : observation),
+  }, browserArtifacts);
+  assert.equal(desynchronized["required-states-covered"].passed, false);
+
+  const missingState = deriveBrowserGateResults({
+    observations,
+    requiredStates: ["default", "empty"],
+  }, browserArtifacts);
+  assert.equal(missingState["required-states-covered"].passed, false);
 });
 
 test("rejects root checks beside otherwise valid browser observations", () => {

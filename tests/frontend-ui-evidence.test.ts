@@ -103,6 +103,11 @@ test("captures observations and extended mechanical evidence", async () => {
     && stateSynchronization.reason?.includes("no state-changing")
     && checks.some(({ code }) => code === "ui-state-action-missing")
     && !checks.some(({ code }) => code === "ui-state-desynchronized")));
+  assert.ok(bundle.captures.every(({ mechanicalSnapshot, overlaps, focusOrderViolations, contrastViolations }) =>
+    mechanicalSnapshot !== undefined
+    && Array.isArray(overlaps)
+    && Array.isArray(focusOrderViolations)
+    && Array.isArray(contrastViolations)));
   // The adapter leaks an extra key; the published bundle schema forbids additional properties here,
   // so it must survive neither into the returned bundle nor into the persisted one.
   assert.ok(bundle.captures.every(({ stateSynchronization }) =>
@@ -162,4 +167,6 @@ test("publishes the UI evidence bundle schema", async () => {
   assert.ok(schema.$defs.check.properties.code.enum.includes("state-not-rendered"));
   assert.ok(schema.$defs.check.properties.code.enum.includes("state-mismatch"));
   assert.equal(schema.$defs.stateSynchronization.allOf.length, 1);
+  assert.equal(schema.$defs.mechanicalSnapshot.properties.touchTargets.items.$ref, "#/$defs/touchTargetSample");
+  assert.equal(schema.$defs.mechanicalSnapshot.properties.typography.items.$ref, "#/$defs/typographySample");
 });

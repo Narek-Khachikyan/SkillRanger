@@ -261,7 +261,17 @@ export const deriveStrictValidatorResults = async (
   const sourceReview = parse(implementationDiffs.at(-1), artifactBytes);
   const criticReport = parse(canonicalCriticArtifact(ledger, artifacts), artifactBytes);
   const criticSystemGate = deriveCriticSystemGate(ledger, artifacts, artifactBytes);
-  const browser = deriveBrowserGateResults(verificationInput, artifacts);
+  const requiredStatesFromBrief = (() => {
+    const brief = ledger.input.brief;
+    const surface = record(brief) ? brief.surface : undefined;
+    const requiredStates = record(surface) ? surface.requiredStates : undefined;
+    return Array.isArray(requiredStates)
+      && requiredStates.length > 0
+      && requiredStates.every((state) => typeof state === "string" && state.trim() !== "")
+      ? requiredStates as string[]
+      : undefined;
+  })();
+  const browser = deriveBrowserGateResults(verificationInput, artifacts, { requiredStates: requiredStatesFromBrief });
   const sourceResults = implementationDiffs.map((artifact) =>
     deriveTailwindSourceResults(artifactBytes.get(artifact.artifactId)?.toString("utf8") ?? ""));
   const source = Object.fromEntries([

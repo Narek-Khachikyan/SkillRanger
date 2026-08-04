@@ -47,6 +47,7 @@ export const makeBundle = (input: {
   route: "/runs",
   capturedAt: input.id === "e1" ? "2026-07-14T00:00:00Z" : "2026-07-14T00:01:00Z",
   requiredViewports: [390, 768, 1440],
+  evidenceLevel: "verifiable",
   requiredStates: ["loading", "empty", "error", "success"],
   captures: input.captures ?? [390, 768, 1440].flatMap((width) =>
     ["loading", "empty", "error", "success"].map((state) => {
@@ -71,6 +72,13 @@ export const makeBundle = (input: {
             { locator: "#selected-run", before: "run-3", after: "run-7" },
             { locator: "#recovery-run", before: "run-3", after: "run-7" },
           ],
+        },
+        overlaps: [],
+        focusOrderViolations: [],
+        contrastViolations: [],
+        mechanicalSnapshot: {
+          spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [], textBlocks: [],
+          touchTargets: [],
         },
         checks: [],
       };

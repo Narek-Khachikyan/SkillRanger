@@ -1,5 +1,7 @@
 import type { BrowserObservation } from "./types.ts";
 
+export type UiEvidenceLevel = "observation" | "verifiable";
+
 export type UiCheckCode =
   | "horizontal-overflow" | "clipped-content" | "element-overlap" | "sticky-overlap"
   | "console-error" | "unreachable-action" | "keyboard-trap" | "focus-order"
@@ -83,11 +85,16 @@ export type UiCaptureEntry = {
   observation: BrowserObservation;
   stateRendered?: boolean;
   stateSynchronization: StateSynchronization;
+  overlaps?: string[];
+  focusOrderViolations?: string[];
+  contrastViolations?: Array<{ locator: string; ratio: number; largeText: boolean }>;
+  mechanicalSnapshot?: MechanicalSnapshot;
   checks: UiCheckResult[];
 };
 
 export type UiEvidenceBundle = {
   schemaVersion: "1.0";
+  evidenceLevel?: UiEvidenceLevel;
   id: string;
   variantId: string;
   iteration: number;

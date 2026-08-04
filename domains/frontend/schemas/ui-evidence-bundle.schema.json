@@ -5,6 +5,7 @@
   "required": ["schemaVersion", "id", "variantId", "iteration", "sourceIdentity", "route", "capturedAt", "requiredViewports", "requiredStates", "captures", "adapterCapabilities"],
   "properties": {
     "schemaVersion": { "const": "1.0" },
+    "evidenceLevel": { "enum": ["observation", "verifiable"] },
     "id": { "$ref": "#/$defs/safeId" },
     "variantId": { "$ref": "#/$defs/safeId" },
     "iteration": { "type": "integer", "minimum": 0 },
@@ -18,6 +19,9 @@
   },
   "$defs": {
     "safeId": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$" },
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nonNegativeNumber": { "type": "number", "minimum": 0 },
+    "nonNegativeInteger": { "type": "integer", "minimum": 0 },
     "viewport": {
       "type": "object", "required": ["width", "height"],
       "properties": { "width": { "enum": [390, 768, 1440] }, "height": { "type": "integer", "minimum": 1 } },
@@ -81,6 +85,114 @@
       ],
       "additionalProperties": false
     },
+    "contrastViolation": {
+      "type": "object",
+      "required": ["locator", "ratio", "largeText"],
+      "properties": {
+        "locator": { "type": "string", "minLength": 1 },
+        "ratio": { "type": "number", "minimum": 0 },
+        "largeText": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "mechanicalSnapshot": {
+      "type": "object",
+      "required": ["spacingContexts", "colors", "radii", "shadows", "cards", "typography", "textBlocks", "touchTargets"],
+      "properties": {
+        "spacingContexts": { "type": "array", "items": { "$ref": "#/$defs/spacingContext" } },
+        "colors": { "type": "array", "items": { "$ref": "#/$defs/colorSample" } },
+        "radii": { "type": "array", "items": { "$ref": "#/$defs/radiusSample" } },
+        "shadows": { "type": "array", "items": { "$ref": "#/$defs/shadowSample" } },
+        "cards": { "type": "array", "items": { "$ref": "#/$defs/cardSample" } },
+        "typography": { "type": "array", "items": { "$ref": "#/$defs/typographySample" } },
+        "textBlocks": { "type": "array", "items": { "$ref": "#/$defs/textBlockSample" } },
+        "touchTargets": { "type": "array", "items": { "$ref": "#/$defs/touchTargetSample" } }
+      },
+      "additionalProperties": false
+    },
+    "spacingContext": {
+      "type": "object",
+      "required": ["id", "locators", "valuesPx"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyString" },
+        "locators": { "$ref": "#/$defs/stringList" },
+        "valuesPx": { "type": "array", "items": { "$ref": "#/$defs/nonNegativeNumber" } }
+      },
+      "additionalProperties": false
+    },
+    "colorSample": {
+      "type": "object",
+      "required": ["locator", "value", "occurrences"],
+      "properties": {
+        "locator": { "$ref": "#/$defs/nonEmptyString" },
+        "value": { "$ref": "#/$defs/nonEmptyString" },
+        "role": { "$ref": "#/$defs/nonEmptyString" },
+        "occurrences": { "$ref": "#/$defs/nonNegativeInteger" }
+      },
+      "additionalProperties": false
+    },
+    "radiusSample": {
+      "type": "object",
+      "required": ["locator", "valuePx", "isPillOrCircle"],
+      "properties": {
+        "locator": { "$ref": "#/$defs/nonEmptyString" },
+        "valuePx": { "$ref": "#/$defs/nonNegativeNumber" },
+        "isPillOrCircle": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "shadowSample": {
+      "type": "object",
+      "required": ["locator", "value", "isNone"],
+      "properties": {
+        "locator": { "$ref": "#/$defs/nonEmptyString" },
+        "value": { "$ref": "#/$defs/nonEmptyString" },
+        "isNone": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "cardSample": {
+      "type": "object",
+      "required": ["locator", "depth", "repeatedCount", "semanticRole"],
+      "properties": {
+        "locator": { "$ref": "#/$defs/nonEmptyString" },
+        "depth": { "$ref": "#/$defs/nonNegativeInteger" },
+        "repeatedCount": { "$ref": "#/$defs/nonNegativeInteger" },
+        "semanticRole": { "enum": ["generic", "group", "tool", "item"] }
+      },
+      "additionalProperties": false
+    },
+    "typographySample": {
+      "type": "object",
+      "required": ["locator", "role", "fontSizePx", "fontWeight"],
+      "properties": {
+        "locator": { "$ref": "#/$defs/nonEmptyString" },
+        "role": { "enum": ["h1", "h2", "h3", "body", "meta"] },
+        "fontSizePx": { "$ref": "#/$defs/nonNegativeNumber" },
+        "fontWeight": { "$ref": "#/$defs/nonNegativeNumber" }
+      },
+      "additionalProperties": false
+    },
+    "textBlockSample": {
+      "type": "object",
+      "required": ["locator", "measureCh"],
+      "properties": {
+        "locator": { "$ref": "#/$defs/nonEmptyString" },
+        "measureCh": { "$ref": "#/$defs/nonNegativeNumber" }
+      },
+      "additionalProperties": false
+    },
+    "touchTargetSample": {
+      "type": "object",
+      "required": ["locator", "widthPx", "heightPx", "interactive"],
+      "properties": {
+        "locator": { "$ref": "#/$defs/nonEmptyString" },
+        "widthPx": { "$ref": "#/$defs/nonNegativeNumber" },
+        "heightPx": { "$ref": "#/$defs/nonNegativeNumber" },
+        "interactive": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
     "capture": {
       "type": "object", "required": ["viewport", "state", "screenshotPath", "observation", "stateSynchronization", "checks"],
       "properties": {
@@ -88,6 +200,10 @@
         "observation": { "$ref": "#/$defs/observation" },
         "stateRendered": { "type": "boolean" },
         "stateSynchronization": { "$ref": "#/$defs/stateSynchronization" },
+        "overlaps": { "$ref": "#/$defs/stringList" },
+        "focusOrderViolations": { "$ref": "#/$defs/stringList" },
+        "contrastViolations": { "type": "array", "items": { "$ref": "#/$defs/contrastViolation" } },
+        "mechanicalSnapshot": { "$ref": "#/$defs/mechanicalSnapshot" },
         "checks": { "type": "array", "items": { "$ref": "#/$defs/check" } }
       },
       "additionalProperties": false

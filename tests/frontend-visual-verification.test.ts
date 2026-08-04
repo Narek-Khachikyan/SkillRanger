@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { digestDesignExecutionPolicy, verifyVisualResult } from "../src/domains/frontend/design/index.ts";
 import type { UiCaptureEntry, VisualCriterion, VisualCriticReport } from "../src/domains/frontend/design/index.ts";
+import { deriveBrowserGateResults } from "../src/runtime/strict/frontend-evidence.ts";
+import type { EvidenceArtifact } from "../src/runtime/strict/types.ts";
 import { makeBundle, makeVerificationInput } from "./helpers/frontend-visual-fixtures.ts";
 
 const freshCycle = () => makeVerificationInput({
@@ -66,6 +68,48 @@ test("recomputes rendered and synchronized state findings at the final boundary"
   assert.ok(result.findings.some(({ code }) => code === "ui-state-desynchronized"));
 });
 
+test("recomputes canonical browser observations instead of trusting persisted checks", () => {
+  const input = freshCycle();
+  for (const capture of input.recheckEvidence.captures) {
+    capture.observation.clippedControls = ["#clipped-panel"];
+    capture.checks = [];
+  }
+
+  const result = verifyVisualResult(input);
+  assert.equal(result.report.outcome, "failed");
+  assert.ok(result.findings.some(({ code }) => code === "clipped-content"));
+});
+
+test("recomputes canonical mechanical facts instead of trusting persisted checks", () => {
+  const input = freshCycle();
+  for (const capture of input.recheckEvidence.captures) {
+    capture.mechanicalSnapshot = {
+      spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [], textBlocks: [],
+      touchTargets: [{ locator: "#icon", widthPx: 24, heightPx: 24, interactive: true }],
+    };
+    capture.checks = [];
+  }
+
+  const result = verifyVisualResult(input);
+  assert.equal(result.report.outcome, "failed");
+  assert.ok(result.findings.some(({ code }) => code === "touch-target"));
+});
+
+test("rejects a verifiable bundle that lost its mechanical facts", () => {
+  const input = freshCycle();
+  input.initialEvidence.evidenceLevel = "verifiable";
+  input.recheckEvidence.evidenceLevel = "verifiable";
+  for (const capture of [...input.initialEvidence.captures, ...input.recheckEvidence.captures]) {
+    delete capture.mechanicalSnapshot;
+  }
+
+  const result = verifyVisualResult(input);
+  assert.equal(result.report.outcome, "failed");
+  assert.ok(result.findings.some(({ code, evidence }) =>
+    code === "visual-evidence-matrix-incomplete"
+    && evidence.some((entry) => entry.includes("mechanicalSnapshot"))));
+});
+
 test("treats not-applicable interaction evidence as non-certifying", () => {
   const input = freshCycle();
   for (const capture of input.recheckEvidence.captures) {
@@ -124,6 +168,68 @@ test("verifies only a complete fresh correction cycle", () => {
   assert.ok(result.report.evidence.some(({ kind, description }) =>
     kind === "visual-critique" && description.includes("host-attested actor separation")));
   assert.ok(!JSON.stringify(result).includes("independent critic"));
+});
+
+test("strict and visual verification agree on the same canonical weakened evidence", () => {
+  const input = freshCycle();
+  const selectedCaptures = [390, 768, 1440].map((width) =>
+    input.recheckEvidence.captures.find((capture) => capture.viewport.width === width)!);
+  const strictObservations = selectedCaptures.map((capture) => ({
+    viewport: capture.viewport,
+    route: input.recheckEvidence.route,
+    state: capture.state,
+    screenshotPath: capture.screenshotPath,
+    horizontalOverflow: capture.observation.horizontalOverflow,
+    clippedControls: capture.observation.clippedControls,
+    unreachableActions: capture.observation.unreachableActions,
+    stickyOverlaps: capture.observation.stickyOverlaps,
+    consoleErrors: capture.observation.consoleErrors,
+    keyboardTraps: capture.observation.keyboardTraps,
+    invisibleFocus: capture.observation.invisibleFocus,
+    criticalAxeViolations: capture.observation.criticalAxeViolations,
+    reducedMotionVerified: capture.observation.reducedMotionVerified,
+    stateRendered: capture.stateRendered,
+    action: capture.stateSynchronization.action,
+    changes: capture.stateSynchronization.changes,
+    overlaps: capture.overlaps,
+    focusOrderViolations: capture.focusOrderViolations,
+    contrastViolations: capture.contrastViolations,
+    mechanicalSnapshot: capture.mechanicalSnapshot,
+  }));
+  const artifacts = selectedCaptures.map(({ viewport, screenshotPath }) => ({
+    kind: `browser-screenshot-${viewport.width}`,
+    sourcePath: screenshotPath,
+  })) as EvidenceArtifact[];
+  assert.ok(Object.values(deriveBrowserGateResults({ observations: strictObservations }, artifacts))
+    .every(({ passed }) => passed));
+
+  selectedCaptures[0].observation.clippedControls = ["#panel"];
+  selectedCaptures[0].checks = [];
+  strictObservations[0].clippedControls = ["#panel"];
+  const visual = verifyVisualResult(input);
+  const strict = deriveBrowserGateResults({ observations: strictObservations }, artifacts);
+  assert.equal(visual.report.outcome, "failed");
+  assert.ok(visual.findings.some(({ code }) => code === "clipped-content"));
+  assert.equal(strict["no-clipped-controls"].passed, false);
+
+  const partialStrict = deriveBrowserGateResults({
+    observations: strictObservations,
+    requiredStates: ["loading", "empty"],
+  }, artifacts);
+  assert.equal(partialStrict["required-states-covered"].passed, false);
+
+  const missingMechanicalInput = freshCycle();
+  for (const capture of missingMechanicalInput.recheckEvidence.captures) {
+    delete capture.mechanicalSnapshot;
+    capture.checks = [];
+  }
+  const missingMechanicalVisual = verifyVisualResult(missingMechanicalInput);
+  const missingMechanicalStrict = deriveBrowserGateResults({
+    observations: strictObservations.map(({ mechanicalSnapshot: _mechanicalSnapshot, ...observation }) => observation),
+  }, artifacts);
+  assert.equal(missingMechanicalVisual.report.outcome, "failed");
+  assert.ok(missingMechanicalVisual.findings.some(({ code }) => code === "visual-evidence-matrix-incomplete"));
+  assert.ok(Object.values(missingMechanicalStrict).every(({ passed }) => !passed));
 });
 
 
