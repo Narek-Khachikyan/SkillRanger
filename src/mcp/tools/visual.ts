@@ -139,7 +139,7 @@ export const visualToolDefinitions: McpToolDefinition[] = [
     name: "verify_visual_result",
     title: "Verify visual result",
     description: "Run the canonical strict final visual verifier. criticReport must be a VisualCriticReport v1 (schemaVersion 1.0), not the CriticReportV2 evidence shape.",
-    inputSchema: { type: "object", required: ["workflowId", "policy", "visualRun", "variant", "brief", "direction", "initialEvidence", "recheckEvidence", "criticReport", "boundedRepairFindings"], properties: { workflowId: { type: "string" }, policy: verifyPolicySchema, visualRun: verifyVisualRunSchema, variant: objectSchema, brief: objectSchema, direction: objectSchema, initialEvidence: verifiedEvidenceSchema, recheckEvidence: verifiedEvidenceSchema, criticReport: visualCriticReportSchema, boundedRepairRequest: objectSchema, boundedRepairFindings: { type: "array", items: objectSchema } } },
+    inputSchema: { type: "object", required: ["workflowId", "policy", "visualRun", "variant", "brief", "direction", "initialEvidence", "recheckEvidence", "criticReport", "boundedRepairFindings"], properties: { workflowId: { type: "string" }, policy: verifyPolicySchema, visualRun: verifyVisualRunSchema, variant: objectSchema, brief: objectSchema, direction: objectSchema, examplePack: objectSchema, executionTrace: objectSchema, initialEvidence: verifiedEvidenceSchema, recheckEvidence: verifiedEvidenceSchema, criticReport: visualCriticReportSchema, boundedRepairRequest: objectSchema, boundedRepairFindings: { type: "array", items: objectSchema } } },
   },
 ];
 
@@ -330,6 +330,8 @@ const verify: McpToolHandler = async (args) => {
       criticReport: args.criticReport as VisualCriticReport,
       boundedRepairRequest: args.boundedRepairRequest as BoundedRepairRequest | undefined,
       boundedRepairFindings: (args.boundedRepairFindings ?? []) as VerificationFinding[],
+      examplePack: args.examplePack as Parameters<typeof verifyVisualResult>[0]["examplePack"],
+      executionTrace: args.executionTrace as Parameters<typeof verifyVisualResult>[0]["executionTrace"],
     });
     return jsonToolResult(result.report);
   } catch (error) {

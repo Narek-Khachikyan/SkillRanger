@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/domains/frontend/visual-execution-trace.schema.json",
+  "title": "Frontend visual design execution trace",
+  "type": "object",
+  "required": ["schemaVersion", "id", "directionPath", "directionDigest", "recipeId", "examplePackPath", "examplePackDigest", "ruleSelectionDigest"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "id": { "type": "string", "minLength": 1 },
+    "directionPath": { "type": "string", "minLength": 1 },
+    "directionDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "recipeId": { "type": "string", "minLength": 1 },
+    "examplePackPath": { "type": "string", "minLength": 1 },
+    "examplePackDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "ruleSelectionDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  },
+  "additionalProperties": false
+}

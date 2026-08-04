@@ -552,7 +552,7 @@ const qualityFloorFindings = (
 };
 
 export const createCritiqueRecordedEvent = (
-  run: Pick<VisualRun, "variantIds">,
+  run: Pick<VisualRun, "variantIds" | "executionTrace">,
   input: VisualCriticInput,
   report: unknown,
   event: { id: string; at: string },
@@ -566,6 +566,9 @@ export const createCritiqueRecordedEvent = (
   if (runCandidateIds.length !== inputCandidateIds.length
     || runCandidateIds.some((id, index) => id !== inputCandidateIds[index])) {
     throw new Error("Visual critic input candidate set must exactly match the current visual run variants.");
+  }
+  if (run.executionTrace && input.candidates.some(({ directionPath }) => directionPath !== run.executionTrace?.directionPath)) {
+    throw new Error("Visual critic input candidates must reference the current material execution trace direction.");
   }
   const findings = validateVisualCriticReport(input, report);
   if (findings.length > 0 || !validReportContract(report)) {

@@ -1,6 +1,15 @@
 import { createHash } from "node:crypto";
 import { canonicalizeJson } from "../../../runtime/skill-run/validation.ts";
+import type { VerificationFinding } from "../../../runtime/types.ts";
+import {
+  assertValidDesignExecutionTrace,
+  createDesignExecutionTrace,
+  validateMaterialVisualExecution,
+  type DesignExecutionTrace,
+} from "./execution-trace.ts";
+import type { LoadedRecipeExamplePack } from "./example-types.ts";
 import type { DesignExecutionPolicy } from "./policy-types.ts";
+import type { DesignDirection } from "./types.ts";
 import type { VisualRun, VisualRunEvent, VisualRunState } from "./visual-loop-types.ts";
 
 const transitionByState: Record<VisualRunState, VisualRunEvent["type"][]> = {
@@ -72,7 +81,7 @@ const validateStoredRun = (run: VisualRun, policy: DesignExecutionPolicy) => {
   if (run?.schemaVersion !== "1.0") throw new Error("visual run schemaVersion must be 1.0");
   hasOnlyKeys(run, [
     "schemaVersion", "id", "policyPath", "policyDigest", "state", "variantIds", "selectedVariantId",
-    "critiqueRepairFindingCount", "artifacts", "history",
+    "executionTrace", "critiqueRepairFindingCount", "artifacts", "history",
   ], "visual run");
   nonEmpty(run.id, "visual run id");
   nonEmpty(run.policyPath, "visual run policy path");
@@ -83,6 +92,7 @@ const validateStoredRun = (run: VisualRun, policy: DesignExecutionPolicy) => {
     nonEmpty(run.selectedVariantId, "visual run selected variant id");
     if (!run.variantIds.includes(run.selectedVariantId)) throw new Error("visual run selected variant is stale");
   }
+  if (run.executionTrace !== undefined) assertValidDesignExecutionTrace(run.executionTrace);
   if (run.critiqueRepairFindingCount !== undefined
     && (!Number.isInteger(run.critiqueRepairFindingCount) || run.critiqueRepairFindingCount < 0)) {
     throw new Error("visual run critique repair finding count must be a non-negative integer");
@@ -241,7 +251,7 @@ const validateEventPayload = (event: VisualRunEvent) => {
     throw new Error("visual run event type is invalid");
   }
   const fieldsByType: Record<VisualRunEvent["type"], string[]> = {
-    "directions-validated": ["type", "id", "at", "variantIds"],
+    "directions-validated": ["type", "id", "at", "variantIds", "traceId"],
     "implementation-recorded": ["type", "id", "at", "implementations"],
     "initial-evidence-recorded": ["type", "id", "at", "evidenceId"],
     "critique-recorded": ["type", "id", "at", "critiqueId", "selectedVariantId", "repairFindingCount"],
@@ -260,6 +270,7 @@ const validateEventPayload = (event: VisualRunEvent) => {
   switch (event.type) {
     case "directions-validated":
       validateStringIds(event.variantIds, "directions variant ids", true);
+      if (event.traceId !== undefined) nonEmpty(event.traceId, "visual execution trace id");
       break;
     case "implementation-recorded": {
       if (!Array.isArray(event.implementations)) throw new Error("implementation references must be an array");
@@ -300,10 +311,12 @@ export const createVisualRun = (input: {
   id: string;
   policyPath: string;
   policy: DesignExecutionPolicy;
+  executionTrace?: DesignExecutionTrace;
 }): VisualRun => {
-  hasOnlyKeys(input, ["id", "policyPath", "policy"], "visual run input");
+  hasOnlyKeys(input, ["id", "policyPath", "policy", "executionTrace"], "visual run input");
   nonEmpty(input.id, "visual run id");
   nonEmpty(input.policyPath, "visual run policy path");
+  if (input.executionTrace !== undefined) assertValidDesignExecutionTrace(input.executionTrace);
   return {
     schemaVersion: "1.0",
     id: input.id,
@@ -311,6 +324,7 @@ export const createVisualRun = (input: {
     policyDigest: digestDesignExecutionPolicy(input.policy),
     state: "policy-resolved",
     variantIds: [],
+    ...(input.executionTrace ? { executionTrace: { ...input.executionTrace } } : {}),
     artifacts: {},
     history: [{ state: "policy-resolved", at: "1970-01-01T00:00:00.000Z" }],
   };
@@ -336,6 +350,12 @@ const validateEvent = (
     }
     if (new Set(event.variantIds).size !== event.variantIds.length) {
       throw new Error("directions must contain unique variant ids");
+    }
+    if (run.executionTrace && event.traceId !== run.executionTrace.id) {
+      throw new Error("directions must reference the current material execution trace");
+    }
+    if (!run.executionTrace && event.traceId !== undefined) {
+      throw new Error("directions cannot reference a material execution trace on a legacy visual run");
     }
   }
 
@@ -400,6 +420,7 @@ export const applyVisualRunEvent = (
     ...run,
     state: targetState,
     variantIds: [...run.variantIds],
+    ...(run.executionTrace ? { executionTrace: { ...run.executionTrace } } : {}),
     artifacts: {
       ...run.artifacts,
       implementations: run.artifacts.implementations?.map((implementation) => ({ ...implementation })),
@@ -440,4 +461,73 @@ export const applyVisualRunEvent = (
   }
 
   return next;
+};
+
+export type MaterialVisualExecutionPreparation = {
+  ok: boolean;
+  findings: VerificationFinding[];
+  run: VisualRun;
+  trace?: DesignExecutionTrace;
+};
+
+/**
+ * Prepare the material-only entry point. Legacy visual runs can still be replayed,
+ * but a new material run is blocked before implementation when its direction or
+ * worked-example decision is incomplete or incompatible.
+ */
+export const prepareMaterialVisualExecution = (input: {
+  id: string;
+  policyPath: string;
+  policy: DesignExecutionPolicy;
+  directionPath: string;
+  examplePackPath: string;
+  direction: DesignDirection;
+  examplePack?: LoadedRecipeExamplePack;
+  brief?: unknown;
+  blockedAt?: string;
+}): MaterialVisualExecutionPreparation => {
+  const findings = validateMaterialVisualExecution({
+    brief: input.brief ?? {},
+    direction: input.direction,
+    examplePack: input.examplePack,
+    policy: input.policy,
+    requireTrace: false,
+  });
+  const hasHardFailure = findings.some(({ gate, severity }) =>
+    gate === "hard" && (severity === "critical" || severity === "high"));
+  const baseRun = createVisualRun({
+    id: input.id,
+    policyPath: input.policyPath,
+    policy: input.policy,
+  });
+  if (hasHardFailure) {
+    const run = applyVisualRunEvent(baseRun, {
+      type: "blocked",
+      id: `${input.id}:blocked`,
+      at: input.blockedAt ?? new Date().toISOString(),
+    }, input.policy);
+    return { ok: false, findings, run };
+  }
+  if (!input.examplePack) {
+    throw new Error("Material visual execution passed validation without a loaded example pack");
+  }
+  const trace = createDesignExecutionTrace({
+    id: `${input.id}:trace`,
+    directionPath: input.directionPath,
+    examplePackPath: input.examplePackPath,
+    direction: input.direction,
+    examplePack: input.examplePack,
+    policy: input.policy,
+  });
+  return {
+    ok: true,
+    findings,
+    trace,
+    run: createVisualRun({
+      id: input.id,
+      policyPath: input.policyPath,
+      policy: input.policy,
+      executionTrace: trace,
+    }),
+  };
 };

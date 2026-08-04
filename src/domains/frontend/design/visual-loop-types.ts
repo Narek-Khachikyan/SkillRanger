@@ -1,4 +1,5 @@
 import type { VerificationFinding, VerificationOutcome } from "../../../runtime/types.ts";
+import type { DesignExecutionTrace } from "./execution-trace.ts";
 
 export type DesignVariantMetadata = {
   schemaVersion: "1.0";
@@ -27,6 +28,7 @@ export type VisualRun = {
   state: VisualRunState;
   variantIds: string[];
   selectedVariantId?: string;
+  executionTrace?: DesignExecutionTrace;
   critiqueRepairFindingCount?: number;
   artifacts: {
     implementations?: Array<{ variantId: string; artifactId: string }>;
@@ -48,7 +50,7 @@ type VisualRunEventBase<Type extends string> = {
 };
 
 export type VisualRunEvent =
-  | (VisualRunEventBase<"directions-validated"> & { variantIds: string[] })
+  | (VisualRunEventBase<"directions-validated"> & { variantIds: string[]; traceId?: string })
   | (VisualRunEventBase<"implementation-recorded"> & {
     implementations: Array<{ variantId: string; artifactId: string }>;
   })

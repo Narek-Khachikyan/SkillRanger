@@ -12,6 +12,7 @@
     "variantIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
     "selectedVariantId": { "type": "string", "minLength": 1 },
     "critiqueRepairFindingCount": { "type": "integer", "minimum": 0 },
+    "executionTrace": { "$ref": "#/$defs/executionTrace" },
     "artifacts": {
       "type": "object",
       "properties": {
@@ -54,6 +55,21 @@
   "$defs": {
     "state": {
       "enum": ["policy-resolved", "directions-valid", "implemented", "initial-evidence-captured", "critiqued", "repair-requested", "no-repair-needed", "repaired", "recheck-evidence-captured", "final-audited", "verified", "failed", "blocked"]
+    },
+    "executionTrace": {
+      "type": "object",
+      "required": ["schemaVersion", "id", "directionPath", "directionDigest", "recipeId", "examplePackPath", "examplePackDigest", "ruleSelectionDigest"],
+      "properties": {
+        "schemaVersion": { "const": "1.0" },
+        "id": { "type": "string", "minLength": 1 },
+        "directionPath": { "type": "string", "minLength": 1 },
+        "directionDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "recipeId": { "type": "string", "minLength": 1 },
+        "examplePackPath": { "type": "string", "minLength": 1 },
+        "examplePackDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "ruleSelectionDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

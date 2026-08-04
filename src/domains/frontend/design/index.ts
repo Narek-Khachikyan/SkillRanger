@@ -24,6 +24,7 @@ export * from "./browser.ts";
 export * from "./source-validation.ts";
 export * from "./visual-loop-types.ts";
 export * from "./visual-loop.ts";
+export * from "./execution-trace.ts";
 export * from "./critic.ts";
 export * from "./evidence-types.ts";
 export * from "./evidence-plan.ts";

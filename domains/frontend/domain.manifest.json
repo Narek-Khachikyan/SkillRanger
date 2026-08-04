@@ -29,6 +29,7 @@
       "schemas/design-variant.schema.json",
       "schemas/visual-critic-report.schema.json",
       "schemas/visual-run.schema.json",
+      "schemas/visual-execution-trace.schema.json",
       "schemas/ui-evidence-bundle.schema.json",
       "schemas/model-capability-record.schema.json"
     ],
