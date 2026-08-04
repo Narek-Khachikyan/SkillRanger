@@ -1,12 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { digestDesignExecutionPolicy, resolveDesignExecutionPolicy } from "../src/domains/frontend/design/index.ts";
 import { callMcpTool, mcpTools } from "../src/mcp/tools.ts";
 import { makeBrief, makeBundle, makeVerificationInput } from "./helpers/frontend-visual-fixtures.ts";
+
+const execFileAsync = promisify(execFile);
 
 const captureArgs = async (projectRoot: string, outputDir: string) => {
   const adapterPath = path.join(projectRoot, "capture-adapter.mjs");
@@ -25,6 +29,7 @@ const captureArgs = async (projectRoot: string, outputDir: string) => {
         status: "not-applicable",
         path: "requested capture state",
         observations: ["This fixture has no state-changing primary action."],
+        changes: [{ locator: "#status", before: "idle", after: "idle", adapterInternalId: "leak" }],
         reason: "This fixture has no state-changing primary action.",
       },
       mechanicalSnapshot: {
@@ -132,6 +137,255 @@ test("capture requires explicit confirmation", async () => {
     assert.equal(result.isError, true);
     assert.equal((result.structuredContent as { code?: string }).code, "confirmation-required");
     assert.equal(existsSync(outputDir), false);
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("confirmed capture returns the canonical bundle with recheck identity and no temporary publication", async () => {
+  const projectRoot = await mkdtemp(path.join(tmpdir(), "skillranger-mcp-capture-bundle-"));
+  const outputDir = path.join(projectRoot, "evidence");
+  try {
+    const result = await callMcpTool("capture_ui_evidence", {
+      ...await captureArgs(projectRoot, outputDir),
+      confirm: true,
+      iteration: 2,
+    });
+
+    assert.equal(result.isError, false);
+    const bundle = result.structuredContent as {
+      id: string;
+      variantId: string;
+      sourceIdentity: string;
+      iteration: number;
+      captures: unknown[];
+    };
+    assert.equal(bundle.id, "e1");
+    assert.equal(bundle.variantId, "v1");
+    assert.equal(bundle.sourceIdentity, "git:abc");
+    assert.equal(bundle.iteration, 2);
+    assert.equal(bundle.captures.length, 3);
+    assert.ok((bundle.captures as Array<{ stateSynchronization: { changes?: Array<Record<string, unknown>> } }>).every(({ stateSynchronization }) =>
+      stateSynchronization.changes?.every((change) => Object.keys(change).sort().join(",") === "after,before,locator")));
+    assert.deepEqual(JSON.parse(await readFile(path.join(outputDir, "bundle.json"), "utf8")), bundle);
+    assert.ok((await readdir(outputDir, { recursive: true })).every((entry) => !entry.endsWith(".tmp")));
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("capture classifies malformed mechanical facts as capture failures", async () => {
+  const projectRoot = await mkdtemp(path.join(tmpdir(), "skillranger-mcp-capture-mechanical-"));
+  const outputDir = path.join(projectRoot, "evidence");
+  const adapterPath = path.join(projectRoot, "malformed-mechanical.mjs");
+  try {
+    await writeFile(adapterPath, `
+      import { mkdir, writeFile } from "node:fs/promises";
+      import path from "node:path";
+      const [screenshotPath] = process.argv.slice(2);
+      await mkdir(path.dirname(screenshotPath), { recursive: true });
+      await writeFile(screenshotPath, "screenshot");
+      process.stdout.write(JSON.stringify({
+        horizontalOverflow: false,
+        clippedControls: [], unreachableActions: [], stickyOverlaps: [], consoleErrors: [],
+        keyboardTraps: [], invisibleFocus: [], criticalAxeViolations: [], reducedMotionVerified: true,
+        stateRendered: true, overlaps: [], focusOrderViolations: [], contrastViolations: [],
+        stateSynchronization: {
+          status: "not-applicable",
+          path: "requested capture state",
+          observations: ["No state-changing primary action is available."],
+          reason: "No state-changing primary action is available.",
+        },
+        mechanicalSnapshot: {
+          spacingContexts: [null], colors: [], radii: [], shadows: [], cards: [], typography: [],
+          textBlocks: [], touchTargets: [],
+        },
+      }));
+    `, "utf8");
+    const args = await captureArgs(projectRoot, outputDir);
+    args.commandTemplate = `${process.execPath} "${adapterPath}" "{{screenshotPath}}"`;
+
+    const result = await callMcpTool("capture_ui_evidence", { ...args, confirm: true });
+
+    assert.equal(result.isError, true);
+    assert.equal((result.structuredContent as { code?: string }).code, "capture-failed");
+    assert.equal(existsSync(path.join(outputDir, "bundle.json")), false);
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("capture classifies a missing project context as invalid arguments", async () => {
+  const projectRoot = await mkdtemp(path.join(tmpdir(), "skillranger-mcp-capture-project-"));
+  const missingProjectRoot = path.join(projectRoot, "missing-project");
+  try {
+    const args = await captureArgs(projectRoot, "evidence");
+    const result = await callMcpTool("capture_ui_evidence", {
+      ...args,
+      projectRoot: missingProjectRoot,
+      outputDir: "evidence",
+      confirm: true,
+    });
+
+    assert.equal(result.isError, true);
+    assert.equal((result.structuredContent as { code?: string }).code, "invalid-arguments");
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("capture rejects a file used as the output context before invoking the adapter", async () => {
+  const projectRoot = await mkdtemp(path.join(tmpdir(), "skillranger-mcp-capture-output-file-"));
+  const outputFile = path.join(projectRoot, "evidence");
+  try {
+    await writeFile(outputFile, "existing");
+    const args = await captureArgs(projectRoot, outputFile);
+    const result = await callMcpTool("capture_ui_evidence", { ...args, confirm: true });
+
+    assert.equal(result.isError, true);
+    assert.equal((result.structuredContent as { code?: string }).code, "invalid-arguments");
+    assert.equal(await readFile(outputFile, "utf8"), "existing");
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("capture rejects an output context nested beneath a regular file", async () => {
+  const projectRoot = await mkdtemp(path.join(tmpdir(), "skillranger-mcp-capture-output-ancestor-file-"));
+  const blockedPath = path.join(projectRoot, "blocked");
+  try {
+    await writeFile(blockedPath, "existing");
+    const args = await captureArgs(projectRoot, path.join(blockedPath, "evidence"));
+    const result = await callMcpTool("capture_ui_evidence", { ...args, confirm: true });
+
+    assert.equal(result.isError, true);
+    assert.equal((result.structuredContent as { code?: string }).code, "invalid-arguments");
+    assert.equal(await readFile(blockedPath, "utf8"), "existing");
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("CLI and MCP classify missing screenshots through their shared capture matrix", async () => {
+  const projectRoot = await mkdtemp(path.join(tmpdir(), "skillranger-capture-failure-parity-"));
+  const briefPath = path.join(projectRoot, "brief.json");
+  const adapterPath = path.join(projectRoot, "missing-screenshot-adapter.mjs");
+  const cliOutputPath = path.join(projectRoot, "cli-output", "observations.json");
+  const mcpOutputDir = path.join(projectRoot, "mcp-output");
+  try {
+    const brief = makeBrief({ requiredStates: ["success"], supportedViewports: [390, 768, 1440] });
+    await writeFile(briefPath, `${JSON.stringify(brief)}\n`, "utf8");
+    await writeFile(adapterPath, `
+      process.stdout.write(JSON.stringify({
+        horizontalOverflow: false,
+        clippedControls: [], unreachableActions: [], stickyOverlaps: [], consoleErrors: [],
+        keyboardTraps: [], invisibleFocus: [], criticalAxeViolations: [], reducedMotionVerified: true,
+      }));
+    `, "utf8");
+
+    const commandTemplate = `${process.execPath} "${adapterPath}" "{{screenshotPath}}"`;
+    let cliError: { stderr?: string } | undefined;
+    try {
+      await execFileAsync(process.execPath, [
+        "src/cli/index.ts", "design:observe", "--brief", briefPath,
+        "--base-url", "http://127.0.0.1:3000/", "--command", commandTemplate,
+        "--output", cliOutputPath, "--project", projectRoot, "--json",
+      ]);
+    } catch (error) {
+      cliError = error as { stderr?: string };
+    }
+    assert.match(cliError?.stderr ?? "", /did not create screenshot/);
+
+    const policy = resolveDesignExecutionPolicy({
+      mode: "refine", profile: "standard", rankedRecipeIds: ["developer-tool"],
+      requiredStates: brief.surface.requiredStates,
+    });
+    const mcpResult = await callMcpTool("capture_ui_evidence", {
+      brief, policy, evidenceId: "e1", variantId: "v1", sourceIdentity: "git:abc",
+      baseUrl: "http://127.0.0.1:3000/", commandTemplate, outputDir: mcpOutputDir,
+      projectRoot, confirm: true,
+    });
+    assert.equal(mcpResult.isError, true);
+    assert.equal((mcpResult.structuredContent as { code?: string }).code, "capture-failed");
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test("CLI and MCP captures agree on common observations and adapter replacements", async () => {
+  const projectRoot = await mkdtemp(path.join(tmpdir(), "skillranger-capture-parity-"));
+  const briefPath = path.join(projectRoot, "brief.json");
+  const adapterPath = path.join(projectRoot, "parity-adapter.mjs");
+  const cliOutputDir = path.join(projectRoot, "cli-output");
+  const mcpOutputDir = path.join(projectRoot, "mcp-output");
+  const cliRecordsDir = path.join(projectRoot, "cli-records");
+  const mcpRecordsDir = path.join(projectRoot, "mcp-records");
+  try {
+    const brief = makeBrief({ requiredStates: ["success"], supportedViewports: [390, 768, 1440] });
+    await writeFile(briefPath, `${JSON.stringify(brief)}\n`, "utf8");
+    await writeFile(adapterPath, `
+      import { mkdir, writeFile } from "node:fs/promises";
+      import path from "node:path";
+      const [url, route, width, height, state, screenshotPath, recordsDir] = process.argv.slice(2);
+      await mkdir(path.dirname(screenshotPath), { recursive: true });
+      await mkdir(recordsDir, { recursive: true });
+      await writeFile(screenshotPath, "screenshot");
+      await writeFile(path.join(recordsDir, width + "-" + state + ".json"), JSON.stringify({ url, route, width, height, state, screenshotPath }));
+      process.stdout.write(JSON.stringify({
+        horizontalOverflow: false,
+        clippedControls: [], unreachableActions: [], stickyOverlaps: [], consoleErrors: [],
+        keyboardTraps: [], invisibleFocus: [], criticalAxeViolations: [], reducedMotionVerified: true,
+        stateRendered: true, overlaps: [], focusOrderViolations: [], contrastViolations: [],
+        stateSynchronization: {
+          status: "not-applicable",
+          path: "parity capture",
+          observations: ["This fixture has no state-changing primary action."],
+          reason: "This fixture has no state-changing primary action.",
+        },
+        mechanicalSnapshot: {
+          spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [],
+          textBlocks: [], touchTargets: [],
+        },
+      }));
+    `, "utf8");
+
+    const cliCommand = `${process.execPath} "${adapterPath}" "{{url}}" "{{route}}" "{{width}}" "{{height}}" "{{state}}" "{{screenshotPath}}" "${cliRecordsDir}"`;
+    const cliOutputPath = path.join(cliOutputDir, "observations.json");
+    const { stdout } = await execFileAsync(process.execPath, [
+      "src/cli/index.ts", "design:observe", "--brief", briefPath,
+      "--base-url", "http://127.0.0.1:3000/", "--route", "/runs",
+      "--command", cliCommand, "--output", cliOutputPath, "--project", projectRoot, "--json",
+    ]);
+    const cliResult = JSON.parse(stdout) as { observations: Array<Record<string, unknown>> };
+
+    const policy = resolveDesignExecutionPolicy({
+      mode: "refine", profile: "standard", rankedRecipeIds: ["developer-tool"],
+      requiredStates: brief.surface.requiredStates,
+    });
+    const mcpCommand = `${process.execPath} "${adapterPath}" "{{url}}" "{{route}}" "{{width}}" "{{height}}" "{{state}}" "{{screenshotPath}}" "${mcpRecordsDir}"`;
+    const mcpResult = await callMcpTool("capture_ui_evidence", {
+      brief, policy, evidenceId: "e1", variantId: "v1", sourceIdentity: "git:abc",
+      baseUrl: "http://127.0.0.1:3000/", route: "/runs", commandTemplate: mcpCommand,
+      outputDir: mcpOutputDir, projectRoot, confirm: true,
+    });
+    assert.equal(mcpResult.isError, false);
+    const mcpBundle = mcpResult.structuredContent as { captures: Array<{ observation: Record<string, unknown> }> };
+    const normalizeObservation = (observation: Record<string, unknown>) => ({
+      ...observation,
+      screenshotPath: path.basename(String(observation.screenshotPath)),
+    });
+    assert.deepEqual(
+      mcpBundle.captures.map(({ observation }) => normalizeObservation(observation)),
+      cliResult.observations.map(normalizeObservation),
+    );
+
+    const readRecords = async (directory: string) => Promise.all(
+      (await readdir(directory)).sort().map(async (name) => {
+        const record = JSON.parse(await readFile(path.join(directory, name), "utf8")) as Record<string, unknown>;
+        return { ...record, screenshotPath: path.basename(String(record.screenshotPath)) };
+      }),
+    );
+    assert.deepEqual(await readRecords(mcpRecordsDir), await readRecords(cliRecordsDir));
   } finally {
     await rm(projectRoot, { recursive: true, force: true });
   }

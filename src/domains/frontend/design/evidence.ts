@@ -54,10 +54,58 @@ const parseLegacyBrowserObservation = (value: Record<string, unknown>): LegacyBr
 
 const mechanicalSnapshot = (value: unknown): MechanicalSnapshot => {
   if (!isRecord(value)) throw new Error("Browser observation mechanicalSnapshot must be an object.");
-  const fields = ["spacingContexts", "colors", "radii", "shadows", "cards", "typography", "textBlocks", "touchTargets"] as const;
-  for (const field of fields) {
-    if (!Array.isArray(value[field])) throw new Error(`Browser observation mechanicalSnapshot.${field} must be an array.`);
-  }
+  const nonEmptyString = (entry: unknown): entry is string => typeof entry === "string" && entry.trim() !== "";
+  const finiteNumber = (entry: unknown): entry is number => typeof entry === "number" && Number.isFinite(entry);
+  const nonNegativeNumber = (entry: unknown): entry is number => finiteNumber(entry) && entry >= 0;
+  const nonNegativeInteger = (entry: unknown): entry is number => nonNegativeNumber(entry) && Number.isInteger(entry);
+  const stringList = (entry: unknown): entry is string[] => Array.isArray(entry) && entry.every(nonEmptyString);
+  const entries = <T>(field: string, valid: (entry: unknown) => boolean): T[] => {
+    const valueForField = value[field];
+    if (!Array.isArray(valueForField)) {
+      throw new Error(`Browser observation mechanicalSnapshot.${field} must be an array.`);
+    }
+    const invalidIndex = valueForField.findIndex((entry) => !valid(entry));
+    if (invalidIndex !== -1) {
+      throw new Error(`Browser observation mechanicalSnapshot.${field}[${invalidIndex}] has an invalid shape.`);
+    }
+    return valueForField as T[];
+  };
+  entries("spacingContexts", (entry) => isRecord(entry)
+    && nonEmptyString(entry.id)
+    && stringList(entry.locators)
+    && Array.isArray(entry.valuesPx)
+    && entry.valuesPx.every(nonNegativeNumber));
+  entries("colors", (entry) => isRecord(entry)
+    && nonEmptyString(entry.locator)
+    && nonEmptyString(entry.value)
+    && (entry.role === undefined || nonEmptyString(entry.role))
+    && nonNegativeInteger(entry.occurrences));
+  entries("radii", (entry) => isRecord(entry)
+    && nonEmptyString(entry.locator)
+    && nonNegativeNumber(entry.valuePx)
+    && typeof entry.isPillOrCircle === "boolean");
+  entries("shadows", (entry) => isRecord(entry)
+    && nonEmptyString(entry.locator)
+    && nonEmptyString(entry.value)
+    && typeof entry.isNone === "boolean");
+  entries("cards", (entry) => isRecord(entry)
+    && nonEmptyString(entry.locator)
+    && nonNegativeInteger(entry.depth)
+    && nonNegativeInteger(entry.repeatedCount)
+    && ["generic", "group", "tool", "item"].includes(entry.semanticRole as string));
+  entries("typography", (entry) => isRecord(entry)
+    && nonEmptyString(entry.locator)
+    && ["h1", "h2", "h3", "body", "meta"].includes(entry.role as string)
+    && nonNegativeNumber(entry.fontSizePx)
+    && nonNegativeNumber(entry.fontWeight));
+  entries("textBlocks", (entry) => isRecord(entry)
+    && nonEmptyString(entry.locator)
+    && nonNegativeNumber(entry.measureCh));
+  entries("touchTargets", (entry) => isRecord(entry)
+    && nonEmptyString(entry.locator)
+    && nonNegativeNumber(entry.widthPx)
+    && nonNegativeNumber(entry.heightPx)
+    && typeof entry.interactive === "boolean");
   return value as MechanicalSnapshot;
 };
 
@@ -77,7 +125,9 @@ const stateSynchronization = (value: unknown): BrowserCheckPayload["stateSynchro
     observations: [...value.observations],
     ...(value.action !== undefined ? { action: value.action } : {}),
     ...(value.changes !== undefined
-      ? { changes: value.changes.map((change) => ({ ...change })) }
+      ? {
+          changes: value.changes.map(({ locator, before, after }) => ({ locator, before, after })),
+        }
       : {}),
     ...(value.reason !== undefined ? { reason: value.reason } : {}),
   };
@@ -87,7 +137,9 @@ const parsePayload = (value: unknown) => {
   if (!isRecord(value)) throw new Error("Browser adapter must return one JSON object per invocation.");
   const contrast = value.contrastViolations;
   if (!Array.isArray(contrast) || !contrast.every((entry) => isRecord(entry)
-    && typeof entry.locator === "string" && typeof entry.ratio === "number" && typeof entry.largeText === "boolean")) {
+    && typeof entry.locator === "string" && entry.locator.trim() !== ""
+    && typeof entry.ratio === "number" && Number.isFinite(entry.ratio) && entry.ratio >= 0
+    && typeof entry.largeText === "boolean")) {
     throw new Error("Browser observation contrastViolations must contain locator, ratio, and largeText values.");
   }
   const browser: BrowserCheckPayload = {
@@ -149,6 +201,9 @@ const realpathFromExistingAncestor = async (value: string) => {
       ancestor = parent;
       continue;
     }
+    if (missingTail.length > 0 && !(await stat(ancestor)).isDirectory()) {
+      throw new Error("an existing output-path ancestor is not a directory");
+    }
     return path.resolve(await realpath(ancestor), ...missingTail);
   }
 };
@@ -180,6 +235,10 @@ const executeCaptureMatrix = async <T>(input: {
   parseCapture: (value: unknown, entry: UiCaptureMatrixEntry) => T;
 }): Promise<T[]> => {
   const outputRoot = path.resolve(input.plan.outputDir);
+  const existingOutputRoot = await stat(outputRoot).catch(() => undefined);
+  if (existingOutputRoot && !existingOutputRoot.isDirectory()) {
+    throw new Error(`${input.captureLabel} output directory is not a directory: ${outputRoot}`);
+  }
   const canonicalOutputRoot = await realpathFromExistingAncestor(outputRoot).catch(() => undefined);
   if (!canonicalOutputRoot) {
     throw new Error(`${input.captureLabel} output directory cannot be resolved safely: ${outputRoot}`);

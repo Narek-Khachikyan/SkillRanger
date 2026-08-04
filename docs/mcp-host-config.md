@@ -120,7 +120,7 @@ These tools use host-managed mutation approval and update the persisted run JSON
 
 ### Confirmed command and artifact write (1)
 
-- `capture_ui_evidence` executes the reviewed browser-evidence command and writes its artifacts within `projectRoot` after `confirm: true`.
+- `capture_ui_evidence` executes the reviewed browser-evidence command and writes its artifacts within `projectRoot` after `confirm: true`. It returns the canonical `bundle.json` shape, including the persisted evidence `id`, `variantId`, `sourceIdentity`, and the optional non-negative `iteration` used to distinguish a fresh recheck.
 
 `recommend_skills` arguments:
 
@@ -183,6 +183,7 @@ If the current plan differs from the expected paths, installation is rejected. I
 3. Expect rejection when `outputDir` escapes `projectRoot`.
 4. Treat the invoked command as open-world and potentially destructive according to MCP annotations.
 5. Do not send install-only `expectedWrites` or `expectedLockfileUpdates` fields.
+6. For an initial capture and its recheck, use distinct evidence ids and source identities, retain the selected variant id, and increment `iteration` for the recheck.
 
 ## Critic and Verification Contracts
 

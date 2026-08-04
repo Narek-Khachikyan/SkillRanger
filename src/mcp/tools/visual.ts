@@ -1,6 +1,6 @@
 import path from "node:path";
 import { readFileSync } from "node:fs";
-import { lstat, realpath } from "node:fs/promises";
+import { lstat, realpath, stat } from "node:fs/promises";
 import {
   compareDesignVariants,
   createUiEvidenceCapturePlan,
@@ -125,7 +125,7 @@ export const visualToolDefinitions: McpToolDefinition[] = [
     name: "capture_ui_evidence",
     title: "Capture UI evidence",
     description: "Create and execute the canonical browser evidence matrix.",
-    inputSchema: { type: "object", required: ["brief", "policy", "evidenceId", "variantId", "sourceIdentity", "baseUrl", "commandTemplate", "outputDir", "confirm"], properties: { brief: captureBriefSchema, policy: capturePolicySchema, evidenceId: { type: "string" }, variantId: { type: "string" }, sourceIdentity: { type: "string" }, baseUrl: { type: "string" }, commandTemplate: { type: "string" }, outputDir: { type: "string" }, confirm: { type: "boolean", description: "Must be true after the host reviews commandTemplate, baseUrl, and outputDir." }, projectRoot: { type: "string" }, route: { type: "string" }, timeoutPerCaptureMs: { type: "number" } } },
+    inputSchema: { type: "object", required: ["brief", "policy", "evidenceId", "variantId", "sourceIdentity", "baseUrl", "commandTemplate", "outputDir", "confirm"], properties: { brief: captureBriefSchema, policy: capturePolicySchema, evidenceId: { type: "string" }, variantId: { type: "string" }, sourceIdentity: { type: "string" }, baseUrl: { type: "string" }, commandTemplate: { type: "string" }, outputDir: { type: "string" }, confirm: { type: "boolean", description: "Must be true after the host reviews commandTemplate, baseUrl, and outputDir." }, projectRoot: { type: "string" }, route: { type: "string" }, iteration: { type: "integer", minimum: 0 }, timeoutPerCaptureMs: { type: "number" } } },
   },
   {
     ...mcpToolEffects.readOnly,
@@ -163,6 +163,9 @@ const realpathFromExistingAncestor = async (value: string) => {
       ancestor = parent;
       continue;
     }
+    if (missingTail.length > 0 && !(await stat(ancestor)).isDirectory()) {
+      throw new Error("an existing output-path ancestor is not a directory");
+    }
     return path.resolve(await realpath(ancestor), ...missingTail);
   }
 };
@@ -176,10 +179,35 @@ const resolveProjectOutputDir = async (projectRoot: string, value: unknown) => {
       { projectRoot, outputDir },
     );
   }
-  const [canonicalProjectRoot, canonicalOutputDir] = await Promise.all([
-    realpath(projectRoot),
-    realpathFromExistingAncestor(outputDir),
-  ]);
+  const existingOutput = await stat(outputDir).catch(() => undefined);
+  if (existingOutput && !existingOutput.isDirectory()) {
+    throw new McpToolError(
+      "invalid-arguments",
+      "capture_ui_evidence outputDir must be a directory or a path that can be created.",
+      { projectRoot, outputDir },
+    );
+  }
+  let canonicalProjectRoot: string;
+  try {
+    canonicalProjectRoot = await realpath(projectRoot);
+    if (!(await stat(canonicalProjectRoot)).isDirectory()) throw new Error("not a directory");
+  } catch {
+    throw new McpToolError(
+      "invalid-arguments",
+      "capture_ui_evidence projectRoot must be an existing directory.",
+      { projectRoot },
+    );
+  }
+  let canonicalOutputDir: string;
+  try {
+    canonicalOutputDir = await realpathFromExistingAncestor(outputDir);
+  } catch {
+    throw new McpToolError(
+      "invalid-arguments",
+      "capture_ui_evidence outputDir must have a valid existing component chain within projectRoot.",
+      { projectRoot, outputDir },
+    );
+  }
   if (isOutside(canonicalProjectRoot, canonicalOutputDir)) {
     throw new McpToolError(
       "invalid-arguments",
@@ -188,6 +216,12 @@ const resolveProjectOutputDir = async (projectRoot: string, value: unknown) => {
     );
   }
   return { outputDir, canonicalProjectRoot };
+};
+
+const optionalNonNegativeInteger = (value: unknown, name: string) => {
+  if (value === undefined) return undefined;
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) return value;
+  throw new McpToolError("invalid-arguments", `${name} must be a non-negative integer.`, { argument: name });
 };
 
 const assertProjectArtifactPath = async (
@@ -244,6 +278,7 @@ const capture: McpToolHandler = async (args) => {
     brief: args.brief as DesignBrief,
     policy: args.policy as DesignExecutionPolicy,
     variantId: requireString(args.variantId, "variantId"),
+    iteration: optionalNonNegativeInteger(args.iteration, "iteration"),
     sourceIdentity: requireString(args.sourceIdentity, "sourceIdentity"),
     baseUrl: requireString(args.baseUrl, "baseUrl"),
     route: typeof args.route === "string" ? args.route : undefined,
