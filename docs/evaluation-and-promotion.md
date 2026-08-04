@@ -8,6 +8,13 @@ The frontend benchmark compares:
 
 Run the same model snapshot, parameters, fixture, prompt, context budget, capabilities, and timeout for every arm. Use fresh isolated project copies. The initial frontend protocol requires three repetitions.
 
+When all three baselines are declared, every task/repetition record must carry the matched identity
+(`model`, `parameters`, `fixture`, `prompt`, `context`, `capabilities`, `timeoutMs`, assertion texts,
+and `repetition`). The verifier compares these fields canonically and rejects drift, missing arms,
+incomplete operational evidence, false completion claims, hard-gate failures, and unverified current
+outcomes. Runner output is intentionally marked operationally incomplete until the external assessor
+attaches verification and reviewed assertion evidence.
+
 Evidence validation rejects model or fixture drift between baselines for the same task and repetition. Run each model tier as a separate evidence bundle so A/B/C always measures workflow impact rather than provider differences.
 
 ```bash
@@ -39,7 +46,7 @@ node src/cli/index.ts eval:frontend \
   --json
 ```
 
-Evaluate mean pass rate, worst-run pass rate, sample standard deviation across repetitions, hard-gate failures, false completion claims, responsive/accessibility failures, and blind human preference. Promotion requires improvement over no skill, no regression against the prose skill, and stable repeated results. The repository does not set benchmark scores automatically from unassessed runner output.
+Evaluate mean pass rate, worst-run pass rate, sample standard deviation across repetitions, hard-gate failures, false completion claims, responsive/accessibility failures, repair iterations, verification outcomes, and blind human preference. The companion variance report makes deltas over `without-skill` and `old-skill` explicit; promotion requires improvement over no skill, no regression against the prose skill (including variance, worst-run, responsive/accessibility, repair, verification, and operational behavior), and stable repeated results. The repository does not set benchmark scores automatically from unassessed runner output.
 
 Each assessed run may include `verification.outcome`, `verification.hardGatesPassed`, and `verification.criticalFindings`. Claiming `verified` while any hard gate fails, a critical finding remains, or an assertion is not passed is counted as a false completion claim.
 

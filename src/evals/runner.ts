@@ -1,19 +1,17 @@
 import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { FRONTEND_COMPARISON_BASELINES, sameEvalIdentityValue } from "./identity.ts";
 import type {
   FrontendEvalSuite,
   FrontendTaskAssertion,
   FrontendTaskEvidence,
+  FrontendTaskRunParameters,
 } from "./frontend.ts";
 
-export type BaselineKind = "without-skill" | "old-skill" | "current-skill";
+export type BaselineKind = typeof FRONTEND_COMPARISON_BASELINES[number];
 
-export const BASELINE_KINDS: readonly BaselineKind[] = [
-  "without-skill",
-  "old-skill",
-  "current-skill",
-] as const;
+export const BASELINE_KINDS: readonly BaselineKind[] = FRONTEND_COMPARISON_BASELINES;
 
 export type BaselineConfig = {
   kind: BaselineKind;
@@ -22,6 +20,10 @@ export type BaselineConfig = {
   skillChecksum?: string;
   model?: string;
   fixture?: string;
+  parameters?: FrontendTaskRunParameters;
+  context?: unknown;
+  capabilities?: string[];
+  timeoutMs?: number;
 };
 
 export type BaselineConfigMap = Partial<Record<BaselineKind, BaselineConfig>>;
@@ -107,6 +109,36 @@ const requiredArtifactsFor = (entry: RunPlanEntry) => [
     ),
   ),
 ];
+
+const runIdentityFor = (
+  entry: RunPlanEntry,
+  baselineMeta: BaselineConfig,
+  timeoutPerRunMs: number | undefined,
+) => ({
+  model: baselineMeta.model ?? "(none)",
+  fixture: baselineMeta.fixture ?? "(none)",
+  repetition: entry.repetition ?? 1,
+  parameters: baselineMeta.parameters ?? {},
+  prompt: entry.prompt,
+  context: baselineMeta.context ?? "",
+  capabilities: [...new Set(baselineMeta.capabilities ?? [])].sort(),
+  timeoutMs: baselineMeta.timeoutMs ?? timeoutPerRunMs ?? 0,
+  assertions: entry.assertions
+    .map((assertion) => typeof assertion === "string" ? assertion : assertion.text)
+    .sort(),
+});
+
+const assertPersistedIdentity = (
+  existing: Record<string, unknown>,
+  identity: ReturnType<typeof runIdentityFor>,
+  runId: string,
+) => {
+  for (const field of ["model", "fixture", "repetition", "parameters", "prompt", "context", "capabilities", "timeoutMs", "assertions"] as const) {
+    if (!sameEvalIdentityValue(existing[field], identity[field])) {
+      throw new Error(`Cannot resume ${runId}: persisted ${field} does not match the requested run identity.`);
+    }
+  }
+};
 
 const substitutePlaceholders = (
   args: string[],
@@ -255,19 +287,10 @@ export const printRunPlan = (plan: RunPlan, baselineMeta: BaselineConfigMap): vo
 
 const readExistingRunDir = async (
   runDir: string,
-): Promise<{
-  exitCode: number | null;
-  signal: string | null;
-  durationMs: number;
-} | null> => {
+): Promise<Record<string, unknown> | null> => {
   try {
     const metaPath = path.join(runDir, "task-meta.json");
-    const meta = JSON.parse(await readFile(metaPath, "utf8")) as {
-      exitCode: number | null;
-      signal: string | null;
-      durationMs: number;
-    };
-    return meta;
+    return JSON.parse(await readFile(metaPath, "utf8")) as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -313,24 +336,33 @@ export const executeRunPlan = async (
     const stderrPath = path.join(runDir, "stderr.log");
 
     const baselineMeta = baselinesConfig[entry.baselineKind] ?? { kind: entry.baselineKind };
+    const identity = runIdentityFor(entry, baselineMeta, timeoutPerRunMs);
+    const runId = `${entry.taskId}-${entry.baselineKind}${entry.repetition ? `-rep-${entry.repetition}` : ""}`;
 
     if (resume && !dryRun) {
       const existing = await readExistingRunDir(runDir);
       if (existing !== null) {
+        assertPersistedIdentity(existing, identity, runId);
         runs.push({
-          runId: `${entry.taskId}-${entry.baselineKind}${entry.repetition ? `-rep-${entry.repetition}` : ""}`,
+          runId,
           taskId: entry.taskId,
           baseline: entry.baselineKind,
-          ...(entry.repetition ? { repetition: entry.repetition } : {}),
+          repetition: identity.repetition,
           skillId: baselineMeta.skillId ?? "(none)",
           skillVersion: baselineMeta.skillVersion ?? "(none)",
           skillChecksum: baselineMeta.skillChecksum ?? "(none)",
-          model: baselineMeta.model ?? "(none)",
-          fixture: baselineMeta.fixture ?? "(none)",
+          model: identity.model,
+          fixture: identity.fixture,
+          parameters: identity.parameters,
+          prompt: identity.prompt,
+          context: identity.context,
+          capabilities: identity.capabilities,
+          timeoutMs: identity.timeoutMs,
           command: substitutePlaceholders(templateArgs, entry, runDir).join(" "),
-          durationMs: existing.durationMs,
-          exitCode: existing.exitCode,
-          signal: existing.signal,
+          durationMs: typeof existing.durationMs === "number" ? existing.durationMs : 0,
+          exitCode: typeof existing.exitCode === "number" ? existing.exitCode : null,
+          signal: typeof existing.signal === "string" ? existing.signal : null,
+          operationalEvidence: "incomplete",
           expectedArtifacts: requiredArtifactsFor(entry),
           artifacts: [
             { name: "stdout", path: stdoutPath },
@@ -352,19 +384,25 @@ export const executeRunPlan = async (
         console.log(`[dry-run] ${entry.taskId} / ${entry.baselineKind}: ${cmdLine}`);
       }
       runs.push({
-        runId: `${entry.taskId}-${entry.baselineKind}${entry.repetition ? `-rep-${entry.repetition}` : ""}`,
+        runId,
         taskId: entry.taskId,
         baseline: entry.baselineKind,
-        ...(entry.repetition ? { repetition: entry.repetition } : {}),
+        repetition: identity.repetition,
         skillId: baselineMeta.skillId ?? "(none)",
         skillVersion: baselineMeta.skillVersion ?? "(none)",
         skillChecksum: baselineMeta.skillChecksum ?? "(none)",
-        model: baselineMeta.model ?? "(none)",
-        fixture: baselineMeta.fixture ?? "(none)",
+        model: identity.model,
+        fixture: identity.fixture,
+        parameters: identity.parameters,
+        prompt: identity.prompt,
+        context: identity.context,
+        capabilities: identity.capabilities,
+        timeoutMs: identity.timeoutMs,
         command: substitutePlaceholders(templateArgs, entry, runDir).join(" "),
         durationMs: 0,
         exitCode: null,
         signal: null,
+        operationalEvidence: "incomplete",
         expectedArtifacts: requiredArtifactsFor(entry),
         artifacts: [],
         assertions: entry.assertions.map((a) => ({
@@ -380,12 +418,13 @@ export const executeRunPlan = async (
     const substituted = substitutePlaceholders(templateArgs, entry, runDir);
     const [cmd, ...args] = substituted;
 
-    const result = await runCommand(cmd, args, projectRoot, timeoutPerRunMs);
+    const result = await runCommand(cmd, args, projectRoot, identity.timeoutMs > 0 ? identity.timeoutMs : undefined);
 
     await writeFile(stdoutPath, result.stdout);
     await writeFile(stderrPath, result.stderr);
 
     const meta = {
+      ...identity,
       exitCode: result.exitCode,
       signal: result.signal,
       durationMs: result.durationMs,
@@ -399,19 +438,25 @@ export const executeRunPlan = async (
     ];
 
     runs.push({
-      runId: `${entry.taskId}-${entry.baselineKind}${entry.repetition ? `-rep-${entry.repetition}` : ""}`,
+      runId,
       taskId: entry.taskId,
       baseline: entry.baselineKind,
-      ...(entry.repetition ? { repetition: entry.repetition } : {}),
+      repetition: identity.repetition,
       skillId: baselineMeta.skillId ?? "(none)",
       skillVersion: baselineMeta.skillVersion ?? "(none)",
       skillChecksum: baselineMeta.skillChecksum ?? "(none)",
-      model: baselineMeta.model ?? "(none)",
-      fixture: baselineMeta.fixture ?? "(none)",
+      model: identity.model,
+      fixture: identity.fixture,
+      parameters: identity.parameters,
+      prompt: identity.prompt,
+      context: identity.context,
+      capabilities: identity.capabilities,
+      timeoutMs: identity.timeoutMs,
       command: substituted.join(" "),
       durationMs: result.durationMs,
       exitCode: result.exitCode,
       signal: result.signal,
+      operationalEvidence: "incomplete",
       expectedArtifacts: requiredArtifactsFor(entry),
       artifacts: artifactEntries,
       assertions: entry.assertions.map((a) => ({

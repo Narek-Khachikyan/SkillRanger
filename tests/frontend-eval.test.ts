@@ -451,6 +451,7 @@ test("A/B/C evidence requires the same model and fixture across baselines", () =
     runId: baseline,
     taskId: "routing-smoke-task",
     baseline,
+    repetition: 1,
     skillId: baseline === "without-skill" ? "(none)" : "frontend.visual-design-polish",
     skillVersion: baseline === "without-skill" ? "(none)" : "1.0.0",
     skillChecksum: baseline === "without-skill" ? "(none)" : "sha256:test",
@@ -474,6 +475,99 @@ test("A/B/C evidence requires the same model and fixture across baselines", () =
   const report = validateFrontendTaskEvidence(suite, evidence);
   assert.ok(report.issues.includes("task evidence routing-smoke-task must use the same model across baselines"));
   assert.ok(report.issues.includes("task evidence routing-smoke-task must use the same fixture across baselines"));
+  assert.equal(report.metrics.promotionReady, false);
+});
+
+test("three-arm evidence rejects drift in matched run identity", () => {
+  const suite = routingSuite([]);
+  const run = (baseline: string): FrontendTaskEvidence["runs"][number] => ({
+    runId: baseline,
+    taskId: "routing-smoke-task",
+    baseline,
+    repetition: 1,
+    skillId: baseline === "without-skill" ? "(none)" : "frontend.visual-design-polish",
+    skillVersion: baseline === "without-skill" ? "(none)" : "1.0.0",
+    skillChecksum: baseline === "without-skill" ? "(none)" : "sha256:test",
+    model: "model@pinned",
+    fixture: "fixture@pinned",
+    command: "agent run",
+    durationMs: 1,
+    exitCode: 0,
+    artifacts: [{ name: "stdout", path: `${baseline}.stdout` }],
+    assertions: [{ text: "A routing smoke assertion exists.", status: "passed" }],
+    parameters: { temperature: 0.2, seed: 7 },
+    prompt: "Review a frontend page.",
+    context: "shared-context-v1",
+    capabilities: ["browser", "screenshots"],
+    timeoutMs: 120000,
+    operationalEvidence: "complete",
+    completionClaimed: true,
+    repairIterations: 1,
+    verification: { outcome: "verified", hardGatesPassed: true, criticalFindings: 0 },
+  } as unknown as FrontendTaskEvidence["runs"][number]);
+  const evidence: FrontendTaskEvidence = {
+    schemaVersion: "1.0",
+    suiteName: suite.name,
+    baselines: ["without-skill", "old-skill", "current-skill"],
+    runs: [run("without-skill"), run("old-skill"), run("current-skill")],
+  };
+  (evidence.runs[2] as unknown as { parameters: Record<string, unknown> }).parameters = {
+    temperature: 0.7,
+    seed: 7,
+  };
+
+  const report = validateFrontendTaskEvidence(suite, evidence);
+  assert.ok(report.issues.some((issue) => issue.includes("parameters")));
+  assert.equal(report.metrics.promotionReady, false);
+});
+
+test("three-arm evidence rejects incomplete operational evidence", () => {
+  const suite = routingSuite([]);
+  const run = (baseline: string): FrontendTaskEvidence["runs"][number] => ({
+    runId: baseline,
+    taskId: "routing-smoke-task",
+    baseline,
+    repetition: 1,
+    skillId: baseline === "without-skill" ? "(none)" : "frontend.visual-design-polish",
+    skillVersion: baseline === "without-skill" ? "(none)" : "1.0.0",
+    skillChecksum: baseline === "without-skill" ? "(none)" : "sha256:test",
+    model: "model@pinned",
+    fixture: "fixture@pinned",
+    command: "agent run",
+    durationMs: 1,
+    exitCode: 0,
+    artifacts: [{ name: "stdout", path: `${baseline}.stdout` }],
+    assertions: [{ text: "A routing smoke assertion exists.", status: "passed" }],
+    parameters: {},
+    prompt: "Review a frontend page.",
+    context: "shared-context-v1",
+    capabilities: [],
+    timeoutMs: 120000,
+    operationalEvidence: "complete",
+    completionClaimed: true,
+    repairIterations: 0,
+    verification: { outcome: "verified", hardGatesPassed: true, criticalFindings: 0 },
+  } as unknown as FrontendTaskEvidence["runs"][number]);
+  const evidence: FrontendTaskEvidence = {
+    schemaVersion: "1.0",
+    suiteName: suite.name,
+    baselines: ["without-skill", "old-skill", "current-skill"],
+    runs: [run("without-skill"), run("old-skill"), run("current-skill")],
+  };
+  (evidence.runs[1] as unknown as { operationalEvidence: string }).operationalEvidence = "incomplete";
+  (evidence.runs[1] as unknown as {
+    verification: { outcome: string; hardGatesPassed: boolean; criticalFindings: number };
+  }).verification = {
+    outcome: "implemented-unverified",
+    hardGatesPassed: false,
+    criticalFindings: 1,
+  };
+
+  const report = validateFrontendTaskEvidence(suite, evidence);
+  assert.ok(report.issues.some((issue) => issue.includes("operational evidence")));
+  assert.ok(report.issues.some((issue) => issue.includes("not verified")));
+  assert.ok(report.issues.some((issue) => issue.includes("hard-gate")));
+  assert.ok(report.issues.some((issue) => issue.includes("false completion")));
   assert.equal(report.metrics.promotionReady, false);
 });
 
@@ -1023,6 +1117,134 @@ test("variance summary reports mean, worst run, and variance deltas", () => {
   assert.equal(summary.promotionReady, true);
 });
 
+test("variance promotion rejects a worst-run regression hidden by aggregate improvement", () => {
+  const suite = routingSuite([]);
+  suite.scoring.promotionGates.minimumRepetitions = 3;
+  suite.scoring.promotionGates.minimumNoSkillDelta = 0;
+  suite.scoring.promotionGates.minimumOldSkillDelta = 0;
+  suite.scoring.promotionGates.maximumPassRateStdDev = 1;
+  const run = (
+    baseline: string,
+    repetition: number,
+    statuses: Array<"passed" | "failed">,
+  ): FrontendTaskEvidence["runs"][number] => ({
+    runId: `${baseline}-${repetition}`,
+    taskId: "routing-smoke-task",
+    baseline,
+    repetition,
+    skillId: baseline === "without-skill" ? "(none)" : "frontend.visual-design-polish",
+    skillVersion: baseline === "without-skill" ? "(none)" : "1.0.0",
+    skillChecksum: baseline === "without-skill" ? "(none)" : "sha256:test",
+    model: "model@pinned",
+    fixture: "fixture@pinned",
+    command: "agent run",
+    durationMs: 1,
+    artifacts: [],
+    assertions: statuses.map((status, index) => ({ text: `assertion-${index}`, status })),
+  });
+  const evidence: FrontendTaskEvidence = {
+    schemaVersion: "1.0",
+    suiteName: suite.name,
+    repetitions: 3,
+    baselines: ["without-skill", "old-skill", "current-skill"],
+    runs: [
+      ...[1, 2, 3].map((repetition) => run("without-skill", repetition, ["passed", "failed"])),
+      ...[1, 2, 3].map((repetition) => run("old-skill", repetition, ["passed", "failed"])),
+      run("current-skill", 1, ["passed", "passed"]),
+      run("current-skill", 2, ["failed", "failed"]),
+      run("current-skill", 3, ["passed", "passed"]),
+    ],
+  };
+
+  const summary = summarizeFrontendVariance(evidence, suite);
+  assert.equal(summary.promotionReady, false);
+  assert.ok(summary.issues.some((issue) => issue.includes("worst-run")));
+});
+
+test("matched three-arm variance reports promotion deltas and operational quality metrics", () => {
+  const suite = routingSuite([]);
+  suite.taskBands[0]!.seedTasks[0]!.assertions = [
+    { text: "Responsive behavior is verified.", graderType: "browser" },
+    { text: "Accessibility is verified.", graderType: "axe" },
+  ];
+  suite.scoring.promotionGates.minimumRepetitions = 3;
+  suite.scoring.promotionGates.minimumNoSkillDelta = 0;
+  suite.scoring.promotionGates.minimumOldSkillDelta = 0;
+  suite.scoring.promotionGates.maximumPassRateStdDev = 0;
+  const run = (
+    baseline: string,
+    repetition: number,
+    statuses: Array<"passed" | "failed">,
+    repairIterations: number,
+  ): FrontendTaskEvidence["runs"][number] => ({
+    runId: `${baseline}-${repetition}`,
+    taskId: "routing-smoke-task",
+    baseline,
+    repetition,
+    skillId: baseline === "without-skill" ? "(none)" : "frontend.visual-design-polish",
+    skillVersion: baseline === "without-skill" ? "(none)" : "1.0.0",
+    skillChecksum: baseline === "without-skill" ? "(none)" : "sha256:test",
+    model: "model@pinned",
+    fixture: "fixture@pinned",
+    command: "agent run",
+    durationMs: 1,
+    exitCode: 0,
+    parameters: { temperature: 0.2 },
+    prompt: "Review a frontend page.",
+    context: "shared-context-v1",
+    capabilities: ["browser", "screenshots"],
+    timeoutMs: 120000,
+    operationalEvidence: "complete",
+    repairIterations,
+    completionClaimed: baseline !== "without-skill",
+    artifacts: [{ name: "stdout", path: `${baseline}-${repetition}.stdout` }],
+    assertions: statuses.map((status, index) => ({
+      text: suite.taskBands[0]!.seedTasks[0]!.assertions[index] instanceof Object
+        ? (suite.taskBands[0]!.seedTasks[0]!.assertions[index] as { text: string }).text
+        : String(suite.taskBands[0]!.seedTasks[0]!.assertions[index]),
+      status,
+    })),
+    verification: {
+      outcome: baseline === "without-skill" ? "failed" : "verified",
+      hardGatesPassed: true,
+      criticalFindings: 0,
+    },
+  } as unknown as FrontendTaskEvidence["runs"][number]);
+  const evidence: FrontendTaskEvidence = {
+    schemaVersion: "1.0",
+    suiteName: suite.name,
+    repetitions: 3,
+    baselines: ["without-skill", "old-skill", "current-skill"],
+    runs: [
+      ...[1, 2, 3].map((repetition) => run("without-skill", repetition, ["failed", "failed"], 0)),
+      ...[1, 2, 3].map((repetition) => run("old-skill", repetition, ["passed", "passed"], 2)),
+      ...[1, 2, 3].map((repetition) => run("current-skill", repetition, ["passed", "passed"], 1)),
+    ],
+  };
+
+  const summary = summarizeFrontendVariance(evidence, suite);
+  const candidate = summary.groups.find((group) => group.baseline === "current-skill");
+  const oldComparison = summary.comparisons.find((comparison) => comparison.baseline === "old-skill");
+  const noSkillComparison = summary.comparisons.find((comparison) => comparison.baseline === "without-skill");
+  const evidenceReport = validateFrontendTaskEvidence(suite, evidence);
+  assert.equal(summary.promotionReady, true);
+  assert.equal(evidenceReport.metrics.promotionReady, true);
+  assert.equal(noSkillComparison?.improvementOverBaseline, true);
+  assert.equal(oldComparison?.noRegressionAgainstBaseline, true);
+  assert.equal(candidate?.worstRunPassRate, 1);
+  assert.equal(candidate?.passRateStdDev, 0);
+  assert.equal(candidate?.responsiveFailures, 0);
+  assert.equal(candidate?.accessibilityFailures, 0);
+  assert.equal(candidate?.repairIterations, 1);
+  assert.equal(candidate?.verificationSuccessRate, 1);
+  assert.equal(candidate?.unverifiedOutcomes, 0);
+
+  evidence.runs.find((run) => run.baseline === "current-skill" && run.repetition === 1)!.repairIterations = 6;
+  const regressedSummary = summarizeFrontendVariance(evidence, suite);
+  assert.equal(regressedSummary.promotionReady, false);
+  assert.ok(regressedSummary.issues.some((issue) => issue.includes("repair")));
+});
+
 test("task evidence validates only the declared skill slice across repetitions", async () => {
   const suite = await fullSuite();
   const plan = generateRunPlan(suite, {
@@ -1264,6 +1486,64 @@ test("runner includes metadata from baseline config", async () => {
     assert.equal(run.skillChecksum, "sha256:abc");
     assert.equal(run.model, "test-model");
     assert.equal(run.fixture, "test-fixture");
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
+  }
+});
+
+test("runner records matched comparison identity and rejects stale resume metadata", async () => {
+  const suite = smallSuite();
+  const plan = generateRunPlan(suite, {
+    baselines: ["without-skill", "old-skill", "current-skill"],
+    repetitions: 2,
+  });
+  const outputDir = await mkdtemp(path.join(tmpdir(), "runner-identity-"));
+  const shared = {
+    model: "model@pinned",
+    fixture: "fixture@pinned",
+    parameters: { temperature: 0.2, seed: 7 },
+    context: "shared-context-v1",
+    capabilities: ["browser", "screenshots"],
+    timeoutMs: 1234,
+  };
+  const baselinesConfig: BaselineConfigMap = {
+    "without-skill": { kind: "without-skill", ...shared },
+    "old-skill": { kind: "old-skill", ...shared, skillId: "frontend.old", skillVersion: "1.0.0", skillChecksum: "sha256:old" },
+    "current-skill": { kind: "current-skill", ...shared, skillId: "frontend.current", skillVersion: "1.0.0", skillChecksum: "sha256:current" },
+  };
+  try {
+    const evidence = await executeRunPlan({
+      plan,
+      commandTemplate: 'echo "{{taskId}} {{baseline}}"',
+      outputDir,
+      baselinesConfig,
+      projectRoot: ".",
+      timeoutPerRunMs: 9999,
+    });
+    assert.equal(evidence.runs.length, 12);
+    assert.ok(evidence.runs.every((run) =>
+      run.model === "model@pinned" &&
+      run.fixture === "fixture@pinned" &&
+      run.timeoutMs === 1234 &&
+      run.prompt === (run.taskId === "task-a" ? "Do task A" : "Do task B") &&
+      run.context === "shared-context-v1" &&
+      run.capabilities?.join(",") === "browser,screenshots" &&
+      run.parameters?.temperature === 0.2,
+    ));
+    const metaPath = path.join(outputDir, "task-a", "current-skill", "rep-1", "task-meta.json");
+    const meta = JSON.parse(await readFile(metaPath, "utf8")) as Record<string, unknown>;
+    await writeFile(metaPath, JSON.stringify({ ...meta, context: "drifted-context" }));
+    await assert.rejects(
+      executeRunPlan({
+        plan,
+        commandTemplate: 'echo "should not run"',
+        outputDir,
+        baselinesConfig,
+        projectRoot: ".",
+        resume: true,
+      }),
+      /persisted context does not match/,
+    );
   } finally {
     await rm(outputDir, { recursive: true, force: true });
   }

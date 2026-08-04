@@ -161,7 +161,7 @@ node src/cli/index.ts eval:frontend --suite evals/frontend/suite.json --verify-t
 node src/cli/index.ts eval:frontend --suite evals/frontend/suite.json --verify-pairwise-review results/pairwise-review.json --json
 ```
 
-Task evidence requires one run for every seed task, its skill id/version/checksum, model, fixture, command, duration, asserted outcome, and every required artifact named by that task. A failed or unassessed assertion blocks the evidence promotion gate. Pairwise review requires a human reviewer, complete task coverage, opaque `A`/`B` labels instead of skill names, and a candidate preference share meeting `minimumBlindPreferenceShare`; it intentionally rejects `llm_judge`.
+Task evidence requires one run for every seed task, its skill id/version/checksum, model, fixture, command, duration, asserted outcome, and every required artifact named by that task. For a matched three-arm comparison, the verifier also requires the same model snapshot, parameters, prompt/context, capabilities, timeout, assertions, and declared repetition across `without-skill`, `old-skill`, and `current-skill`; baseline failures remain visible as comparison signal, while current-skill failures or unassessed assertions block promotion. Pairwise review requires a human reviewer, complete task coverage, opaque `A`/`B` labels instead of skill names, and a candidate preference share meeting `minimumBlindPreferenceShare`; it intentionally rejects `llm_judge`.
 
 When scan detects React outside 18–19 or Tailwind outside 3–4, it emits a conservative version-drift warning. Keep the skill unpromoted until an evidence run verifies that project version.
 
@@ -184,18 +184,18 @@ Do not promote to `curated` yet. The repo validates the 54 task seeds plus trace
 
 ## Task Eval Runner
 
-The `src/evals/runner.ts` module closes the execution gap. It generates a deterministic run plan for all seed tasks across named baselines, executes a user-supplied command template per task with safe `spawn`-based substitution (no shell concatenation), and records suite/task/baseline metadata, exit status, duration, model/fixture info, skill id/version/checksum, and stdout/stderr artifact paths into the existing `FrontendTaskEvidence` format.
+The `src/evals/runner.ts` module closes the execution gap. It generates a deterministic run plan for all seed tasks across named baselines, executes a user-supplied command template per task with safe `spawn`-based substitution (no shell concatenation), and records suite/task/baseline metadata, exit status, duration, matched model/fixture/parameter/context/capability/timeout identity, skill id/version/checksum, and stdout/stderr artifact paths into the existing `FrontendTaskEvidence` format. Use `--timeout <ms>` or per-baseline `timeoutMs` to declare the same execution limit for every arm.
 
 The runner does **not** score or review. All assertion statuses are set to `not-assessed`; automated scoring and human review remain separate gates.
 
 ### Usage
 
-Generate a run plan for 54 task seeds across two baselines:
+Generate a run plan for 54 task seeds across the three comparison arms:
 
 ```bash
 node src/cli/index.ts eval:frontend --run-tasks \
   --project fixtures/next-react-ts \
-  --baselines without-skill,current-skill \
+  --baselines without-skill,old-skill,current-skill \
   --command 'npx agent run --task "{{taskId}}" --prompt "{{prompt}}" --baseline "{{baseline}}" --output-dir "{{outputDir}}"'
 ```
 
@@ -204,7 +204,7 @@ Dry-run (plan only, no execution, no agent executable required):
 ```bash
 node src/cli/index.ts eval:frontend --run-tasks \
   --project fixtures/next-react-ts \
-  --baselines without-skill,current-skill \
+  --baselines without-skill,old-skill,current-skill \
   --command 'echo "task={{taskId}} baseline={{baseline}}"' \
   --output /tmp/my-eval-run \
   --dry-run
@@ -215,12 +215,13 @@ Attach per-baseline fixture metadata (model, skill identity):
 ```bash
 node src/cli/index.ts eval:frontend --run-tasks \
   --project fixtures/next-react-ts \
-  --baselines without-skill,current-skill \
+  --baselines without-skill,old-skill,current-skill \
   --command 'npx agent run --task "{{taskId}}" --prompt "{{prompt}}" --baseline "{{baseline}}"' \
   --output /tmp/frontend-eval-results \
   --baseline-fixture-metadata '{
-    "without-skill": {"model": "claude-3.5-sonnet", "fixture": "next-react-ts"},
-    "current-skill": {"model": "claude-4-sonnet", "fixture": "next-react-ts", "skillId": "frontend.visual-design-polish", "skillVersion": "1.0.0", "skillChecksum": "sha256:abc123"}
+    "without-skill": {"model": "pinned-model-id", "fixture": "next-react-ts"},
+    "old-skill": {"model": "pinned-model-id", "fixture": "next-react-ts", "skillId": "frontend.visual-design-polish", "skillVersion": "0.9.0", "skillChecksum": "sha256:old123"},
+    "current-skill": {"model": "pinned-model-id", "fixture": "next-react-ts", "skillId": "frontend.visual-design-polish", "skillVersion": "1.0.0", "skillChecksum": "sha256:abc123"}
   }'
 ```
 
@@ -229,7 +230,7 @@ Filter to specific task ids and resume a partial run:
 ```bash
 node src/cli/index.ts eval:frontend --run-tasks \
   --project fixtures/next-react-ts \
-  --baselines without-skill,current-skill \
+  --baselines without-skill,old-skill,current-skill \
   --filter "greenfield-crm,existing-shadcn" \
   --command 'npx agent run --task "{{taskId}}" --prompt "{{prompt}}"' \
   --output /tmp/frontend-eval-results \
@@ -256,10 +257,10 @@ node src/cli/index.ts eval:frontend --run-tasks \
     <baseline>/
       stdout.log              # Captured stdout
       stderr.log              # Captured stderr
-      task-meta.json          # { exitCode, signal, durationMs }
+      task-meta.json          # matched identity + { exitCode, signal, durationMs }
 ```
 
-The aggregated `task-evidence.json` preserves each task/baseline pair as a distinct run and passes structural validation. Assertion statuses remain `not-assessed`, so it is not promotion-ready until required artifacts are attached and the assertions are reviewed.
+The aggregated `task-evidence.json` preserves each task/baseline/repetition as a distinct run and passes structural validation. Assertion statuses remain `not-assessed`, and runner records are marked operationally incomplete until an external assessor attaches verification and reviewed assertion evidence, so raw runner output is not promotion-ready.
 
 ### Security
 

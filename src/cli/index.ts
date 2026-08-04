@@ -971,7 +971,7 @@ const run = async () => {
           `Frontend eval suite validation failed: ${issues.join("; ")}`,
         );
       }
-      const baselinesRaw = asString(args.flags.baselines, "without-skill,current-skill");
+      const baselinesRaw = asString(args.flags.baselines, "without-skill,old-skill,current-skill");
       const parsedBaselines = baselinesRaw
         .split(",")
         .map((baseline) => baseline.trim())
@@ -992,9 +992,10 @@ const run = async () => {
       const filterRaw = typeof args.flags.filter === "string" ? args.flags.filter : undefined;
       const filter = filterRaw ? filterRaw.split(",").map((f) => f.trim()).filter(Boolean) : undefined;
       const repetitions = asPositiveInteger(args.flags.repetitions, "--repetitions") ?? 1;
+      const timeoutPerRunMs = asPositiveInteger(args.flags.timeout, "--timeout");
       const skillSlice = typeof args.flags["skill-slice"] === "string" ? args.flags["skill-slice"] : undefined;
-      const baselineFixtureMetadata: Record<string, { kind: string; skillId?: string; skillVersion?: string; skillChecksum?: string; model?: string; fixture?: string }> = typeof args.flags["baseline-fixture-metadata"] === "string"
-        ? JSON.parse(args.flags["baseline-fixture-metadata"])
+      const baselineFixtureMetadata: BaselineConfigMap = typeof args.flags["baseline-fixture-metadata"] === "string"
+        ? JSON.parse(args.flags["baseline-fixture-metadata"]) as BaselineConfigMap
         : {};
       for (const baseline of baselines) {
         if (!baselineFixtureMetadata[baseline]) {
@@ -1037,6 +1038,7 @@ const run = async () => {
         dryRun,
         resume,
         baselinesConfig: baselineFixtureMetadata,
+        timeoutPerRunMs,
         quiet: Boolean(args.flags.json),
       });
 
@@ -1062,14 +1064,20 @@ const run = async () => {
     if (args.flags["verify-pairwise-review"] === true) {
       throw new Error("--verify-pairwise-review requires a JSON review path.");
     }
+    if (args.flags["summarize-variance"] === true && !taskEvidencePath) {
+      throw new Error("--summarize-variance requires --verify-task-evidence.");
+    }
     const routingEval = runRouting && projectRoot
       ? await runFrontendRoutingEval(suite, { projectRoot, targetAgent, locale })
       : undefined;
-    const taskEvidence = taskEvidencePath
-      ? validateFrontendTaskEvidence(suite, await loadFrontendTaskEvidence(taskEvidencePath))
+    const loadedTaskEvidence = taskEvidencePath
+      ? await loadFrontendTaskEvidence(taskEvidencePath)
       : undefined;
-    const varianceSummary = taskEvidencePath && args.flags["summarize-variance"]
-      ? summarizeFrontendVariance(await loadFrontendTaskEvidence(taskEvidencePath), suite)
+    const taskEvidence = loadedTaskEvidence
+      ? validateFrontendTaskEvidence(suite, loadedTaskEvidence)
+      : undefined;
+    const varianceSummary = loadedTaskEvidence && args.flags["summarize-variance"]
+      ? summarizeFrontendVariance(loadedTaskEvidence, suite)
       : undefined;
     const pairwiseReview = pairwiseReviewPath
       ? validateFrontendPairwiseReview(suite, await loadFrontendPairwiseReview(pairwiseReviewPath))
@@ -1113,8 +1121,27 @@ const run = async () => {
       }
       if (varianceSummary) {
         console.log(`Variance: ${varianceSummary.repetitions} repetitions across ${varianceSummary.groups.length} model/baseline groups`);
+        console.log(`Variance promotion gate: ${varianceSummary.promotionReady ? "ready" : "blocked"}`);
         for (const group of varianceSummary.groups) {
-          console.log(`${group.model} ${group.baseline}: mean ${group.passRate.toFixed(3)}, worst ${group.worstRunPassRate.toFixed(3)}, stddev ${group.passRateStdDev.toFixed(3)}`);
+          console.log(
+            `${group.model} ${group.baseline}: mean ${group.passRate.toFixed(3)}, ` +
+            `worst ${group.worstRunPassRate.toFixed(3)}, stddev ${group.passRateStdDev.toFixed(3)}, ` +
+            `responsive failures ${group.responsiveFailures}, accessibility failures ${group.accessibilityFailures}, ` +
+            `repairs/run ${group.repairIterations.toFixed(3)}, verification ${group.verificationSuccessRate.toFixed(3)}, ` +
+            `unverified ${group.unverifiedOutcomes}, hard-gate failures ${group.hardGateFailures}, ` +
+            `incomplete operational evidence ${group.operationalEvidenceIncomplete}`,
+          );
+        }
+        for (const comparison of varianceSummary.comparisons) {
+          console.log(
+            `Comparison ${comparison.candidate} vs ${comparison.baseline}: ` +
+            `pass delta ${comparison.passRateDelta.toFixed(3)}, worst delta ${comparison.worstRunDelta.toFixed(3)}, ` +
+            `variance delta ${comparison.varianceDelta.toFixed(3)}, responsive delta ${comparison.responsiveFailureDelta}, ` +
+            `accessibility delta ${comparison.accessibilityFailureDelta}, verification delta ${comparison.verificationSuccessDelta.toFixed(3)}, ` +
+            `repairs delta ${comparison.repairIterationsDelta.toFixed(3)}, ` +
+            `improvement ${comparison.improvementOverBaseline ? "yes" : "no"}, ` +
+            `no regression ${comparison.noRegressionAgainstBaseline ? "yes" : "no"}`,
+          );
         }
         for (const issue of varianceSummary.issues) console.log(`Variance issue: ${issue}`);
       }

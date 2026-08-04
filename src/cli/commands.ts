@@ -324,7 +324,7 @@ export const cliCommandDefinitions = Object.freeze([
     description: "Inspect, run, or verify the frontend evaluation suite.",
     usages: [
       "eval:frontend [--suite <path>] [--locale en|ru|all] [--json]",
-      "eval:frontend --run-tasks --skill-slice <id> --repetitions <n> [--baselines without-skill,old-skill,current-skill] [--json]",
+      "eval:frontend --run-tasks --skill-slice <id> --repetitions <n> [--baselines without-skill,old-skill,current-skill] [--timeout <ms>] [--json]",
       "eval:frontend --verify-task-evidence <path> --summarize-variance [--json]",
       "eval:frontend --run-routing --project <path> [--target codex] [--suite <path>] [--locale en|ru|all] [--json]",
       "eval:frontend --verify-task-evidence <path> [--suite <path>] [--json]",
@@ -344,6 +344,7 @@ export const cliCommandDefinitions = Object.freeze([
       "skill-slice",
       "repetitions",
       "baselines",
+      "timeout",
       "verify-task-evidence",
       "project",
       "target",

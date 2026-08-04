@@ -4,6 +4,7 @@ import { recommendSkills } from "../recommender/index.ts";
 import { scanProject } from "../scanner/index.ts";
 import { defaultFrontendEvalSuitePath, defaultRegistryRoot } from "../paths.ts";
 import type { Recommendation } from "../types.ts";
+import { FRONTEND_COMPARISON_BASELINES, sameEvalIdentityValue } from "./identity.ts";
 
 export type GraderType =
   | "code"
@@ -40,6 +41,20 @@ export type FrontendTaskAssertion =
       graderType: FrontendGraderType;
       requiredArtifacts?: string[];
     };
+
+export type FrontendTaskRunParameters = Record<string, unknown>;
+
+export type FrontendTaskRunIdentity = {
+  model: string;
+  parameters: FrontendTaskRunParameters;
+  fixture: string;
+  prompt: string;
+  context: unknown;
+  capabilities: string[];
+  timeoutMs: number;
+  assertions: string[];
+  repetition: number;
+};
 
 export type FrontendTriggerPrompt = {
   id: string;
@@ -101,10 +116,18 @@ export type FrontendTaskEvidence = {
     skillChecksum: string;
     model: string;
     fixture: string;
+    parameters?: FrontendTaskRunParameters;
+    prompt?: string;
+    context?: unknown;
+    capabilities?: string[];
+    timeoutMs?: number;
     command: string;
     durationMs: number;
     exitCode?: number | null;
     signal?: string | null;
+    operationalEvidence?: "complete" | "incomplete";
+    completionClaimed?: boolean;
+    repairIterations?: number;
     expectedArtifacts?: string[];
     artifacts: Array<{
       name: string;
@@ -135,6 +158,13 @@ export type FrontendVarianceSummary = {
     passRateStdDev: number;
     failedAssertions: number;
     falseCompletionClaims: number;
+    responsiveFailures: number;
+    accessibilityFailures: number;
+    repairIterations: number;
+    verificationSuccessRate: number;
+    unverifiedOutcomes: number;
+    hardGateFailures: number;
+    operationalEvidenceIncomplete: number;
   }>;
   comparisons: Array<{
     candidate: string;
@@ -142,6 +172,12 @@ export type FrontendVarianceSummary = {
     passRateDelta: number;
     worstRunDelta: number;
     varianceDelta: number;
+    responsiveFailureDelta: number;
+    accessibilityFailureDelta: number;
+    verificationSuccessDelta: number;
+    repairIterationsDelta: number;
+    improvementOverBaseline: boolean;
+    noRegressionAgainstBaseline: boolean;
   }>;
 };
 
@@ -474,6 +510,17 @@ const assertionText = (assertion: FrontendTaskAssertion) =>
 const assertionArtifacts = (assertion: FrontendTaskAssertion) =>
   typeof assertion === "string" ? [] : assertion.requiredArtifacts ?? [];
 
+const comparisonBaselineKinds = FRONTEND_COMPARISON_BASELINES;
+
+const normalizedStringList = (values: string[]) => [...new Set(values)].sort();
+
+const validVerificationOutcomes = new Set<NonNullable<FrontendTaskEvidence["runs"][number]["verification"]>["outcome"]>([
+  "verified",
+  "implemented-unverified",
+  "failed",
+  "blocked",
+]);
+
 export const validateFrontendTaskEvidence = (
   suite: FrontendEvalSuite,
   evidence: FrontendTaskEvidence,
@@ -510,13 +557,23 @@ export const validateFrontendTaskEvidence = (
   const expectedBaselines = Array.isArray(evidence.baselines)
     ? [...new Set(evidence.baselines)]
     : [];
-  if (expectedBaselines.some((baseline) => !baseline?.trim())) {
+  if (Array.isArray(evidence.baselines) && evidence.baselines.length !== expectedBaselines.length) {
+    issues.push("task evidence baselines must not contain duplicates");
+  }
+  if (expectedBaselines.some((baseline) => typeof baseline !== "string" || !baseline.trim())) {
     issues.push("task evidence baselines must be non-empty strings");
+  }
+  for (const baseline of expectedBaselines) {
+    if (!comparisonBaselineKinds.includes(baseline as typeof comparisonBaselineKinds[number])) {
+      issues.push(`task evidence references unknown baseline: ${baseline}`);
+    }
   }
   const expectedRepetitions = evidence.repetitions ?? 1;
   if (!Number.isInteger(expectedRepetitions) || expectedRepetitions < 1) {
     issues.push("task evidence repetitions must be a positive integer");
   }
+  const requiresMatchedThreeArmIdentity = comparisonBaselineKinds.every((baseline) => expectedBaselines.includes(baseline));
+  const comparisonIdentities = new Map<string, FrontendTaskRunIdentity>();
 
   for (const run of Array.isArray(evidence.runs) ? evidence.runs : []) {
     if (!run.runId?.trim()) issues.push("task evidence runId is required");
@@ -551,7 +608,7 @@ export const validateFrontendTaskEvidence = (
       issues.push(`duplicate task evidence run: ${runKey}`);
     }
     seenRunKeys.add(runKey);
-    if (expectedBaselines.length > 1) {
+    if (expectedBaselines.length > 1 && !requiresMatchedThreeArmIdentity) {
       const comparisonKey = [
         run.taskId,
         ...(expectedRepetitions > 1 ? [`rep:${run.repetition ?? ""}`] : []),
@@ -650,6 +707,120 @@ export const validateFrontendTaskEvidence = (
         }
       }
     }
+
+    if (requiresMatchedThreeArmIdentity) {
+      const runLabel = `task evidence ${run.taskId}${run.baseline ? `::${run.baseline}` : ""}`;
+      const expectedAssertionTexts = task.assertions.map(assertionText);
+      for (const actualAssertionText of assertionByText.keys()) {
+        if (!expectedAssertionTexts.includes(actualAssertionText)) {
+          issues.push(`${runLabel} has unexpected assertion: ${actualAssertionText}`);
+        }
+      }
+      if (!run.parameters || typeof run.parameters !== "object" || Array.isArray(run.parameters)) {
+        issues.push(`${runLabel} parameters are required for matched three-arm comparisons`);
+      }
+      if (typeof run.prompt !== "string" || !run.prompt.trim()) {
+        issues.push(`${runLabel} prompt is required for matched three-arm comparisons`);
+      } else if (run.prompt !== task.prompt) {
+        issues.push(`${runLabel} prompt must match the suite task prompt`);
+      }
+      if (run.context === undefined) {
+        issues.push(`${runLabel} context is required for matched three-arm comparisons`);
+      }
+      if (!Array.isArray(run.capabilities) || run.capabilities.some((capability) => typeof capability !== "string" || !capability.trim())) {
+        issues.push(`${runLabel} capabilities are required for matched three-arm comparisons`);
+      }
+      if (!Number.isInteger(run.timeoutMs) || (run.timeoutMs ?? -1) < 0) {
+        issues.push(`${runLabel} timeoutMs must be a non-negative integer for matched three-arm comparisons`);
+      }
+      if (!Number.isInteger(run.repetition) || (run.repetition ?? 0) < 1 || (run.repetition ?? 0) > expectedRepetitions) {
+        issues.push(`${runLabel} declared repetition must be from 1 to ${expectedRepetitions}`);
+      }
+      if (run.operationalEvidence !== "complete") {
+        issues.push(`${runLabel} operational evidence is incomplete`);
+      }
+      if (run.operationalEvidence === "complete" && (!Array.isArray(run.artifacts) || run.artifacts.length === 0)) {
+        issues.push(`${runLabel} operational evidence requires at least one artifact`);
+      }
+      if (run.exitCode !== 0) {
+        issues.push(`${runLabel} operational evidence requires exitCode 0`);
+      }
+      if (run.signal !== undefined && run.signal !== null) {
+        issues.push(`${runLabel} operational evidence cannot contain a termination signal`);
+      }
+      const isCandidateRun = run.baseline === "current-skill";
+      if (typeof run.completionClaimed !== "boolean") {
+        issues.push(`${runLabel} completionClaimed is required for matched three-arm comparisons`);
+      } else if (isCandidateRun && !run.completionClaimed) {
+        issues.push(`${runLabel} completionClaimed must be true for matched three-arm comparisons`);
+      }
+      if (!Number.isInteger(run.repairIterations) || (run.repairIterations ?? -1) < 0) {
+        issues.push(`${runLabel} repairIterations must be a non-negative integer`);
+      }
+      const verification = run.verification;
+      if (!verification) {
+        issues.push(`${runLabel} verification outcome is required for matched three-arm comparisons`);
+      } else {
+        if (!validVerificationOutcomes.has(verification.outcome)) {
+          issues.push(`${runLabel} verification outcome is invalid`);
+        }
+        if (typeof verification.hardGatesPassed !== "boolean") {
+          issues.push(`${runLabel} verification hardGatesPassed must be boolean`);
+        }
+        if (!Number.isInteger(verification.criticalFindings) || verification.criticalFindings < 0) {
+          issues.push(`${runLabel} verification criticalFindings must be a non-negative integer`);
+        }
+        if (verification.outcome === "implemented-unverified" || verification.outcome === "blocked" || (isCandidateRun && verification.outcome !== "verified")) {
+          issues.push(`${runLabel} verification outcome is not verified`);
+        }
+        if (verification.hardGatesPassed !== true) {
+          issues.push(`${runLabel} verification contains hard-gate failures`);
+        }
+        if (verification.criticalFindings > 0) {
+          issues.push(`${runLabel} verification contains critical findings`);
+        }
+        if (
+          run.completionClaimed === true &&
+          (verification.outcome !== "verified" || verification.hardGatesPassed !== true || verification.criticalFindings > 0 || [...assertionByText.values()].some((status) => status !== "passed"))
+        ) {
+          issues.push(`${runLabel} makes a false completion claim`);
+        }
+      }
+
+      if (run.baseline && comparisonBaselineKinds.includes(run.baseline as typeof comparisonBaselineKinds[number])) {
+        const identity: FrontendTaskRunIdentity = {
+          model: run.model,
+          parameters: run.parameters as FrontendTaskRunParameters,
+          fixture: run.fixture,
+          prompt: run.prompt as string,
+          context: run.context,
+          capabilities: normalizedStringList(run.capabilities as string[]),
+          timeoutMs: run.timeoutMs as number,
+          assertions: [...assertionByText.keys()].sort(),
+          repetition: run.repetition as number,
+        };
+        const comparisonKey = `${run.taskId}::rep:${identity.repetition}`;
+        const previous = comparisonIdentities.get(comparisonKey);
+        if (!previous) {
+          comparisonIdentities.set(comparisonKey, identity);
+        } else {
+          const compareIdentityField = (field: keyof FrontendTaskRunIdentity, label: string) => {
+            if (!sameEvalIdentityValue(previous[field], identity[field])) {
+              issues.push(`${runLabel} must use the same ${label} across baselines`);
+            }
+          };
+          compareIdentityField("model", "model snapshot");
+          compareIdentityField("parameters", "parameters");
+          compareIdentityField("fixture", "fixture");
+          compareIdentityField("prompt", "prompt");
+          compareIdentityField("context", "context");
+          compareIdentityField("capabilities", "capabilities");
+          compareIdentityField("timeoutMs", "timeout");
+          compareIdentityField("assertions", "assertions");
+          compareIdentityField("repetition", "declared repetition");
+        }
+      }
+    }
   }
 
   for (const task of tasks) {
@@ -673,6 +844,9 @@ export const validateFrontendTaskEvidence = (
     }
   }
 
+  const promotionRuns = requiresMatchedThreeArmIdentity
+    ? (Array.isArray(evidence.runs) ? evidence.runs.filter((run) => run.baseline === "current-skill") : [])
+    : (Array.isArray(evidence.runs) ? evidence.runs : []);
   return {
     issues,
     metrics: {
@@ -684,7 +858,9 @@ export const validateFrontendTaskEvidence = (
       passedAssertions,
       failedAssertions,
       unassessedAssertions,
-      promotionReady: issues.length === 0 && failedAssertions === 0 && unassessedAssertions === 0,
+      promotionReady: issues.length === 0 && promotionRuns.every((run) =>
+        Array.isArray(run.assertions) && run.assertions.every((assertion) => assertion.status === "passed"),
+      ),
     },
   };
 };
@@ -700,6 +876,24 @@ const standardDeviation = (values: number[]) => {
     0,
   );
   return Math.sqrt(squaredDeviations / (values.length - 1));
+};
+
+const assertionDeclaration = (suite: FrontendEvalSuite | undefined, run: FrontendTaskEvidence["runs"][number], text: string) =>
+  suite?.taskBands
+    .flatMap((band) => band.seedTasks)
+    .find((task) => task.id === run.taskId)
+    ?.assertions.find((assertion) => assertionText(assertion) === text);
+
+const isAccessibilityAssertion = (suite: FrontendEvalSuite | undefined, run: FrontendTaskEvidence["runs"][number], text: string) => {
+  const declaration = assertionDeclaration(suite, run, text);
+  const graderType = (typeof declaration === "string" || !declaration ? "" : declaration.graderType) as string;
+  return graderType === "axe" || graderType === "accessibility" || /accessib|a11y|contrast|keyboard|focus/i.test(text);
+};
+
+const isResponsiveAssertion = (suite: FrontendEvalSuite | undefined, run: FrontendTaskEvidence["runs"][number], text: string) => {
+  const declaration = assertionDeclaration(suite, run, text);
+  const graderType = (typeof declaration === "string" || !declaration ? "" : declaration.graderType) as string;
+  return graderType === "browser" || /responsive|viewport|mobile|breakpoint|overflow|clipped|unreachable/i.test(text);
 };
 
 export const summarizeFrontendVariance = (
@@ -729,23 +923,63 @@ export const summarizeFrontendVariance = (
       (total, run) => total + run.assertions.filter((assertion) => assertion.status === "failed").length,
       0,
     );
-    const falseCompletionClaims = runs.filter((run) =>
-      run.verification?.outcome === "verified" &&
-      (
-        !run.verification.hardGatesPassed ||
+    const responsiveFailures = runs.reduce(
+      (total, run) => total + run.assertions.filter((assertion) =>
+        assertion.status === "failed" && isResponsiveAssertion(suite, run, assertion.text),
+      ).length,
+      0,
+    );
+    const accessibilityFailures = runs.reduce(
+      (total, run) => total + run.assertions.filter((assertion) =>
+        assertion.status === "failed" && isAccessibilityAssertion(suite, run, assertion.text),
+      ).length,
+      0,
+    );
+    const falseCompletionClaims = runs.filter((run) => {
+      const invalidVerifiedOutcome = run.verification?.outcome === "verified" && (
+        run.verification.hardGatesPassed !== true ||
         run.verification.criticalFindings > 0 ||
         run.assertions.some((assertion) => assertion.status !== "passed")
-      ),
+      );
+      const invalidExplicitClaim = run.completionClaimed === true && (
+        run.verification?.outcome !== "verified" ||
+        run.verification.hardGatesPassed !== true ||
+        (run.verification.criticalFindings ?? 0) > 0 ||
+        run.assertions.some((assertion) => assertion.status !== "passed")
+      );
+      return invalidVerifiedOutcome || invalidExplicitClaim;
+    }).length;
+    const repairIterations = runs.reduce(
+      (total, run) => total + (Number.isInteger(run.repairIterations) && (run.repairIterations ?? 0) >= 0 ? run.repairIterations ?? 0 : 0),
+      0,
+    );
+    const verificationSuccessRate = roundedRate(
+      runs.filter((run) => run.verification?.outcome === "verified").length,
+      runs.length,
+    );
+    const unverifiedOutcomes = runs.filter((run) =>
+      !run.verification || run.verification.outcome === "implemented-unverified" || run.verification.outcome === "blocked",
     ).length;
+    const hardGateFailures = runs.filter((run) =>
+      run.verification?.hardGatesPassed === false || (run.verification?.criticalFindings ?? 0) > 0,
+    ).length;
+    const operationalEvidenceIncomplete = runs.filter((run) => run.operationalEvidence !== "complete").length;
     return {
       baseline,
       model,
       runs: runs.length,
       passRate: Number(mean(passRates).toFixed(4)),
-      worstRunPassRate: Number(Math.min(...passRates).toFixed(4)),
+      worstRunPassRate: Number((passRates.length > 0 ? Math.min(...passRates) : 0).toFixed(4)),
       passRateStdDev: Number(standardDeviation(passRates).toFixed(4)),
       failedAssertions,
       falseCompletionClaims,
+      responsiveFailures,
+      accessibilityFailures,
+      repairIterations: Number((repairIterations / Math.max(runs.length, 1)).toFixed(4)),
+      verificationSuccessRate,
+      unverifiedOutcomes,
+      hardGateFailures,
+      operationalEvidenceIncomplete,
     };
   }).sort((a, b) => a.model.localeCompare(b.model) || a.baseline.localeCompare(b.baseline));
   const comparisons: FrontendVarianceSummary["comparisons"] = [];
@@ -757,6 +991,22 @@ export const summarizeFrontendVariance = (
         passRateDelta: Number((candidate.passRate - baseline.passRate).toFixed(4)),
         worstRunDelta: Number((candidate.worstRunPassRate - baseline.worstRunPassRate).toFixed(4)),
         varianceDelta: Number((candidate.passRateStdDev - baseline.passRateStdDev).toFixed(4)),
+        responsiveFailureDelta: candidate.responsiveFailures - baseline.responsiveFailures,
+        accessibilityFailureDelta: candidate.accessibilityFailures - baseline.accessibilityFailures,
+        verificationSuccessDelta: Number((candidate.verificationSuccessRate - baseline.verificationSuccessRate).toFixed(4)),
+        repairIterationsDelta: Number((candidate.repairIterations - baseline.repairIterations).toFixed(4)),
+        improvementOverBaseline: candidate.passRate > baseline.passRate,
+        noRegressionAgainstBaseline:
+          candidate.passRate >= baseline.passRate &&
+          candidate.worstRunPassRate >= baseline.worstRunPassRate &&
+          candidate.passRateStdDev <= baseline.passRateStdDev &&
+          candidate.responsiveFailures <= baseline.responsiveFailures &&
+          candidate.accessibilityFailures <= baseline.accessibilityFailures &&
+          candidate.repairIterations <= baseline.repairIterations &&
+          candidate.verificationSuccessRate >= baseline.verificationSuccessRate &&
+          candidate.unverifiedOutcomes <= baseline.unverifiedOutcomes &&
+          candidate.hardGateFailures <= baseline.hardGateFailures &&
+          candidate.operationalEvidenceIncomplete <= baseline.operationalEvidenceIncomplete,
       });
     }
   }
@@ -766,6 +1016,11 @@ export const summarizeFrontendVariance = (
     issues.push("variance requires a current-skill model group");
   }
   if (suite) {
+    for (const requiredBaseline of comparisonBaselineKinds) {
+      if (!evidence.baselines?.includes(requiredBaseline)) {
+        issues.push(`variance evidence is missing required ${requiredBaseline} arm`);
+      }
+    }
     for (const candidate of currentGroups) {
       for (const requiredBaseline of ["without-skill", "old-skill"] as const) {
         if (!groups.some(
@@ -791,12 +1046,21 @@ export const summarizeFrontendVariance = (
   if ((evidence.repetitions ?? 1) < minimumRepetitions) {
     issues.push(`variance requires at least ${minimumRepetitions} repetitions`);
   }
-  for (const group of groups.filter((candidate) => candidate.baseline === "current-skill")) {
-    if (group.passRateStdDev > maximumPassRateStdDev) {
+  for (const group of groups) {
+    if (group.baseline === "current-skill" && group.passRateStdDev > maximumPassRateStdDev) {
       issues.push(`${group.model} current-skill variance ${group.passRateStdDev} exceeds ${maximumPassRateStdDev}`);
     }
     if (group.falseCompletionClaims > 0) {
       issues.push(`${group.model} has ${group.falseCompletionClaims} false verified completion claims`);
+    }
+    if (suite && group.baseline === "current-skill" && group.operationalEvidenceIncomplete > 0) {
+      issues.push(`${group.model} ${group.baseline} has incomplete operational evidence`);
+    }
+    if (suite && group.baseline === "current-skill" && group.hardGateFailures > 0) {
+      issues.push(`${group.model} ${group.baseline} has ${group.hardGateFailures} hard-gate failures`);
+    }
+    if (suite && group.baseline === "current-skill" && group.unverifiedOutcomes > 0) {
+      issues.push(`${group.model} ${group.baseline} has ${group.unverifiedOutcomes} unverified outcomes`);
     }
   }
   for (const comparison of comparisons) {
@@ -809,6 +1073,15 @@ export const summarizeFrontendVariance = (
       issues.push(
         `${comparison.candidate} pass-rate delta over ${comparison.baseline} is ${comparison.passRateDelta}; required ${minimumDelta}`,
       );
+    }
+    if (comparison.baseline === "without-skill" && comparison.passRateDelta <= 0) {
+      issues.push(`${comparison.candidate} must improve over without-skill; observed delta ${comparison.passRateDelta}`);
+    }
+    if (comparison.baseline === "old-skill" && !comparison.noRegressionAgainstBaseline) {
+      issues.push(`${comparison.candidate} has a regression against old-skill in aggregate, variance, worst-run, responsive/accessibility, repair, verification, or operational results`);
+      if (comparison.worstRunDelta < 0) {
+        issues.push(`${comparison.candidate} worst-run regression against old-skill is ${comparison.worstRunDelta}`);
+      }
     }
   }
   return {
