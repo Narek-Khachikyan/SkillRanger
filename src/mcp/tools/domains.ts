@@ -2,7 +2,7 @@ import path from "node:path";
 import "../../domains/bundled.ts";
 import { getDomainPack, inspectDomainPack, listDomainPacks } from "../../domains/registry.ts";
 import {
-  compileDesignMarkdown,
+  compileDesignMarkdownWithExamples,
   createDesignBriefScaffold,
   loadFrontendRecipes,
   recommendFrontendRecipe,
@@ -340,7 +340,7 @@ const compileFrontendDesignSpec: McpToolHandler = async (args) => {
   }
   // The optional report is rendered by dereferencing its gates and findings, so when a caller supplies
   // one it has to satisfy the same contract the repair planner requires.
-  const markdown = compileDesignMarkdown(
+  const markdown = await compileDesignMarkdownWithExamples(
     brief,
     direction,
     args.report === undefined ? undefined : requireVerificationReport(args.report),

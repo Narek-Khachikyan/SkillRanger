@@ -28,3 +28,14 @@ export type LoadedRecipeExamplePack = Omit<RecipeExamplePack, "scenes"> & {
   sourcePath: string;
   scenes: LoadedExampleScene[];
 };
+
+export type RecipeExampleComparison = {
+  ok: boolean;
+  recipeId: string;
+  selectedRuleIds: string[];
+  referenceRuleIds: string[];
+  badReferenceRuleIds: string[];
+  matchedRuleIds: string[];
+  matchedViolationRuleIds: string[];
+  findings: string[];
+};

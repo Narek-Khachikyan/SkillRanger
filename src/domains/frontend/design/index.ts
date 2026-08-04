@@ -5,12 +5,15 @@ import type { VerificationReport } from "../../../runtime/types.ts";
 import type { ProjectFingerprint } from "../../../types.ts";
 import type { DesignBrief, DesignDirection, DesignRecipe } from "./types.ts";
 import { frontendRecipeFiles } from "./catalog.ts";
+import { compareRecipeExamplePack } from "./example-comparison.ts";
+import { loadRecipeExamplePacks } from "./examples.ts";
 export * from "./types.ts";
 export * from "./catalog.ts";
 export * from "./library-types.ts";
 export * from "./library.ts";
 export * from "./example-types.ts";
 export * from "./examples.ts";
+export * from "./example-comparison.ts";
 export * from "./example-renderer.ts";
 export * from "./generate-example-assets.ts";
 export * from "./policy-types.ts";
@@ -134,13 +137,40 @@ export const compileDesignMarkdown = (
   "",
 ].join("\n");
 
+export const compileDesignMarkdownWithExamples = async (
+  brief: DesignBrief,
+  direction: DesignDirection,
+  report?: VerificationReport,
+) => {
+  const packs = await loadRecipeExamplePacks();
+  const pack = packs.find(({ recipeId }) => recipeId === direction.recipeId);
+  if (!pack) throw new Error(`No recipe example pack is bundled for ${direction.recipeId}.`);
+  const goodReference = pack.scenes.find((scene) => scene.id === "good-desktop-success");
+  const badReference = pack.scenes.find((scene) => scene.id === "bad-desktop-success");
+  const comparison = direction.selectedRuleIds === undefined ? undefined : compareRecipeExamplePack(pack, direction);
+  return [
+    compileDesignMarkdown(brief, direction, report).trimEnd(),
+    section("Worked Examples", [
+      `Pack: domains/frontend/examples/${pack.recipeId}/example.json`,
+      `Good desktop reference: ${goodReference?.id ?? "missing"}`,
+      `Bad desktop reference: ${badReference?.id ?? "missing"} (violations: ${badReference?.violatedRuleIds.join(", ") ?? "none"})`,
+      ...(comparison ? [
+        `Selected rules matched in the good reference: ${comparison.matchedRuleIds.join(", ") || "none"}`,
+        `Selected rules also shown as violated in the bad reference: ${comparison.matchedViolationRuleIds.join(", ") || "none"}`,
+        ...(comparison.findings.length > 0 ? [`Comparison findings: ${comparison.findings.join(" ")}`] : []),
+      ] : []),
+    ]),
+    "",
+  ].join("\n");
+};
+
 export const compileDesignFile = async (input: {
   brief: DesignBrief;
   direction: DesignDirection;
   report?: VerificationReport;
   outputPath: string;
 }) => {
-  const markdown = compileDesignMarkdown(input.brief, input.direction, input.report);
+  const markdown = await compileDesignMarkdownWithExamples(input.brief, input.direction, input.report);
   await mkdir(path.dirname(input.outputPath), { recursive: true });
   await writeFile(input.outputPath, markdown, "utf8");
   return { outputPath: path.resolve(input.outputPath), bytes: Buffer.byteLength(markdown), markdown };

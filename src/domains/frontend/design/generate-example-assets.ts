@@ -2,21 +2,16 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderExamplePlate } from "./example-renderer.ts";
-import { defaultExamplesRoot, loadRecipeExamplePacks } from "./examples.ts";
+import { defaultExamplesRoot, loadRecipeExamplePacks, resolveExampleAssetPath } from "./examples.ts";
 
 export const generateExampleAssets = async (root = defaultExamplesRoot) => {
   const examplesRoot = path.resolve(root);
-  const packs = await loadRecipeExamplePacks(examplesRoot);
+  const packs = await loadRecipeExamplePacks(examplesRoot, { requireAssets: false });
   const outputs: string[] = [];
   for (const pack of packs) {
     const packRoot = path.dirname(pack.sourcePath);
     for (const scene of pack.scenes) {
-      const expectedAsset = `assets/${scene.id}.svg`;
-      if (scene.asset !== expectedAsset) throw new Error(`Example scene asset must match ${expectedAsset}`);
-      const outputPath = path.resolve(packRoot, expectedAsset);
-      if (!outputPath.startsWith(`${packRoot}${path.sep}`)) {
-        throw new Error(`Generated example asset escapes pack: ${scene.asset}`);
-      }
+      const outputPath = await resolveExampleAssetPath(packRoot, scene);
       await mkdir(path.dirname(outputPath), { recursive: true });
       await writeFile(outputPath, renderExamplePlate(scene), "utf8");
       outputs.push(outputPath);

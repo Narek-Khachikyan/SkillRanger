@@ -1,8 +1,9 @@
-import { readFile } from "node:fs/promises";
+import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { defaultDomainsRoot } from "../../../paths.ts";
 import { frontendRecipeIds } from "./catalog.ts";
 import { loadDesignRuleLibrary } from "./library.ts";
+import { designRuleFamilies } from "./library-types.ts";
 import type { ExampleScene, LoadedRecipeExamplePack, RecipeExamplePack } from "./example-types.ts";
 
 export const defaultExamplesRoot = path.join(defaultDomainsRoot, "frontend", "examples");
@@ -13,6 +14,48 @@ const contained = (root: string, relativePath: string, label: string) => {
     throw new Error(`${label} escapes example pack: ${relativePath}`);
   }
   return resolved;
+};
+
+const assertNoSymlinkComponents = async (root: string, target: string, label: string) => {
+  const relative = path.relative(root, target);
+  if (relative === "" || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error(`${label} escaped example pack.`);
+  }
+  let current = root;
+  for (const component of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, component);
+    const info = await lstat(current).catch(() => undefined);
+    if (info?.isSymbolicLink()) {
+      throw new Error(`${label} contains a symlink component: ${path.relative(root, current)}`);
+    }
+  }
+};
+
+const safeContained = async (
+  root: string,
+  relativePath: string,
+  label: string,
+  requireRegularFile = false,
+) => {
+  const resolved = contained(root, relativePath, label);
+  await assertNoSymlinkComponents(root, resolved, label);
+  if (requireRegularFile) {
+    const info = await lstat(resolved).catch(() => undefined);
+    if (!info?.isFile()) throw new Error(`${label} must be a regular file: ${relativePath}`);
+  }
+  return resolved;
+};
+
+const expectedExampleAsset = (sceneId: string) => `assets/${sceneId}.svg`;
+
+export const resolveExampleAssetPath = async (
+  packRoot: string,
+  scene: Pick<ExampleScene, "id" | "asset">,
+  requireRegularFile = false,
+) => {
+  const expectedAsset = expectedExampleAsset(scene.id);
+  if (scene.asset !== expectedAsset) throw new Error(`Example scene asset must match ${expectedAsset}`);
+  return safeContained(packRoot, scene.asset, "Recipe example asset", requireRegularFile);
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -28,6 +71,24 @@ const isNonEmptyString = (value: unknown): value is string =>
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every(isNonEmptyString);
+
+const explanationStopWords = new Set([
+  "good", "bad", "the", "and", "a", "an", "of", "as", "to", "with", "from", "its", "their",
+  "this", "that", "keep", "keeps", "preserving", "preserve", "through", "visible", "into", "one",
+  "primary", "generic", "states", "state", "mobile", "desktop", "composition", "hierarchy", "roles",
+  "recovery", "action", "product", "object", "meaning", "sequence", "context", "evidence", "source",
+  "current", "same",
+]);
+
+const contentTokens = (value: string) => new Set(
+  value.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length > 2 && !explanationStopWords.has(token)),
+);
+
+const explanationTopics = [
+  /good.*(?:hierarchy|composition).*bad/i,
+  /good.*(?:state|recovery|semantic).*bad/i,
+  /good.*(?:mobile|responsive|recompos).*bad/i,
+] as const;
 
 const requiredSceneKeys = [
   "good:desktop:success", "bad:desktop:success", "good:mobile:success", "bad:mobile:success",
@@ -81,18 +142,33 @@ const validateScene = (
     !isNonEmptyString(value.asset)
   ) throw new Error(`Invalid recipe example scene: ${recipeId}`);
 
-  const expectedAsset = `assets/${value.id}.svg`;
-  if (value.asset !== expectedAsset) throw new Error(`Example scene asset must match ${expectedAsset}`);
+  if (typeof value.id !== "string" || typeof value.asset !== "string") {
+    throw new Error(`Invalid recipe example scene: ${recipeId}`);
+  }
+  if (value.asset !== expectedExampleAsset(value.id)) {
+    throw new Error(`Example scene asset must match ${expectedExampleAsset(value.id)}`);
+  }
   const scene = value as unknown as ExampleScene;
-  const referencedRules = [...scene.appliedRuleIds, ...scene.violatedRuleIds].map((id) => rulesById.get(id));
+  const allRuleIds = [...scene.appliedRuleIds, ...scene.violatedRuleIds];
+  if (new Set(allRuleIds).size !== allRuleIds.length) {
+    throw new Error(`Duplicate design rule reference in ${recipeId}/${scene.id}`);
+  }
+  const referencedRules = allRuleIds.map((id) => rulesById.get(id));
   if (referencedRules.some((rule) => !rule)) throw new Error(`Unknown design rule id in ${recipeId}`);
+  const incompatible = allRuleIds.find((id) => {
+    const rule = rulesById.get(id);
+    return !rule || (!rule.recipeIds.includes("*") && !rule.recipeIds.includes(recipeId));
+  });
+  if (incompatible) {
+    throw new Error(`Incompatible design rule reference in ${recipeId}/${scene.id}: ${incompatible}`);
+  }
   if (scene.quality === "good") {
     const families = new Set(scene.appliedRuleIds.map((id) => rulesById.get(id)?.family));
-    const incompatible = scene.appliedRuleIds.some((id) => {
-      const rule = rulesById.get(id);
-      return !rule || (!rule.recipeIds.includes("*") && !rule.recipeIds.includes(recipeId));
-    });
-    if (families.size !== 6 || incompatible || scene.violatedRuleIds.length !== 0) {
+    if (
+      scene.appliedRuleIds.length !== designRuleFamilies.length ||
+      families.size !== designRuleFamilies.length ||
+      scene.violatedRuleIds.length !== 0
+    ) {
       throw new Error(`Good example scene must apply one compatible rule from every family: ${recipeId}/${scene.id}`);
     }
   } else if (new Set(scene.violatedRuleIds).size < 3) {
@@ -106,14 +182,38 @@ const validatePack = (
   recipeId: string,
   rulesById: Map<string, { family: string; recipeIds: string[] }>,
 ): RecipeExamplePack => {
+  const differenceExplanation = isRecord(value) && isStringArray(value.differenceExplanation)
+    ? value.differenceExplanation
+    : undefined;
   if (!isRecord(value) || !hasOnlyKeys(value, ["schemaVersion", "recipeId", "productScenario", "differenceExplanation", "scenes"]) ||
     value.schemaVersion !== "1.0" || value.recipeId !== recipeId ||
     value.productScenario !== scenarios[recipeId]?.scenario ||
-    !isStringArray(value.differenceExplanation) || value.differenceExplanation.length < 3 ||
+    !differenceExplanation || differenceExplanation.length < 3 ||
     !Array.isArray(value.scenes) || value.scenes.length !== 10) {
     throw new Error(`Invalid recipe example pack: ${recipeId}`);
   }
+  if (!explanationTopics.every((topic) => differenceExplanation.some((entry) => topic.test(entry)))) {
+    throw new Error(`Recipe example pack must explain hierarchy, state recovery, and mobile relationships: ${recipeId}`);
+  }
+  const sceneIds = new Set<string>();
+  for (const rawScene of value.scenes) {
+    if (isRecord(rawScene) && typeof rawScene.id === "string") {
+      if (sceneIds.has(rawScene.id)) throw new Error(`Duplicate example scene id in ${recipeId}: ${rawScene.id}`);
+      sceneIds.add(rawScene.id);
+    }
+  }
   const scenes = value.scenes.map((scene) => validateScene(scene, recipeId, rulesById));
+  const sceneContentTokens = contentTokens(scenes.flatMap((scene) => [
+    scene.title,
+    scene.primaryAction,
+    ...scene.blocks.map(({ label }) => label),
+  ]).join(" "));
+  const evidenceBackedExplanations = differenceExplanation.filter((entry) =>
+    [...contentTokens(entry)].some((token) => sceneContentTokens.has(token)),
+  );
+  if (evidenceBackedExplanations.length < 2) {
+    throw new Error(`Recipe example pack relationship explanation must refer to supplied scene material: ${recipeId}`);
+  }
   const combinations = scenes.map((scene) => `${scene.quality}:${scene.viewport}:${scene.state}`);
   if (new Set(combinations).size !== 10 || requiredSceneKeys.some((key) => !combinations.includes(key))) {
     throw new Error(`Invalid recipe example pack state matrix: ${recipeId}`);
@@ -132,22 +232,29 @@ const validatePack = (
 
 export const loadRecipeExamplePacks = async (
   examplesRoot = defaultExamplesRoot,
+  options: { requireAssets?: boolean } = {},
 ): Promise<LoadedRecipeExamplePack[]> => {
-  const root = path.resolve(examplesRoot);
-  const rulesById = new Map((await loadDesignRuleLibrary()).rules.map((rule) => [rule.id, rule]));
+  const requestedRoot = path.resolve(examplesRoot);
+  const rootInfo = await lstat(requestedRoot).catch(() => undefined);
+  if (!rootInfo?.isDirectory() || rootInfo.isSymbolicLink()) {
+    throw new Error("Recipe examples root must be a real directory.");
+  }
+  const root = await realpath(requestedRoot);
+  const library = await loadDesignRuleLibrary();
+  const rulesById = new Map(library.rules.map((rule) => [rule.id, rule]));
+  const requireAssets = options.requireAssets !== false;
   return Promise.all(frontendRecipeIds.map(async (recipeId) => {
-    const packRoot = contained(root, recipeId, "Recipe example directory");
-    const sourcePath = contained(packRoot, "example.json", "Recipe example source");
+    const packRoot = await safeContained(root, recipeId, "Recipe example directory");
+    const packInfo = await lstat(packRoot).catch(() => undefined);
+    if (!packInfo?.isDirectory()) throw new Error(`Recipe example directory must be a directory: ${recipeId}`);
+    const sourcePath = await safeContained(packRoot, "example.json", "Recipe example source", true);
     const pack = validatePack(JSON.parse(await readFile(sourcePath, "utf8")) as unknown, recipeId, rulesById);
-    const sceneIds = new Set<string>();
-    const scenes = pack.scenes.map((scene) => {
-      if (sceneIds.has(scene.id)) throw new Error(`Duplicate example scene id in ${recipeId}: ${scene.id}`);
-      sceneIds.add(scene.id);
+    const scenes = await Promise.all(pack.scenes.map(async (scene) => {
       return {
         ...scene,
-        assetPath: contained(packRoot, scene.asset, "Recipe example asset"),
+        assetPath: await resolveExampleAssetPath(packRoot, scene, requireAssets),
       };
-    });
+    }));
     return { ...pack, sourcePath, scenes };
   }));
 };

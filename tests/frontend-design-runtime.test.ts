@@ -645,6 +645,8 @@ test("CLI and MCP expose the same structured frontend brief and recipe workflow"
     const compiledContent = compiled.structuredContent as { ok: boolean; markdown: string };
     assert.equal(compiledContent.ok, true);
     assert.match(compiledContent.markdown, /# Design Contract/);
+    assert.match(compiledContent.markdown, /domains\/frontend\/examples\/developer-tool\/example\.json/);
+    assert.match(compiledContent.markdown, /Bad desktop reference: bad-desktop-success/);
 
     const evalPlan = await callMcpTool("run_domain_eval", {
       domainId: "frontend",
