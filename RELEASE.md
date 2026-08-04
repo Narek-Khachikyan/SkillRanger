@@ -2,6 +2,8 @@
 
 This checklist covers the current public beta. It verifies the npx/npm UX, compiled npm binaries, source-run CLI, MCP server, Universal Prompt Router, bundled registry, audit gates, frontend and router eval suites, and package hygiene before handing the beta to another user or publishing a tarball.
 
+0.3.2 is a patch release. Visual verification now derives rendered-state and synchronization findings from persisted evidence at the final boundary instead of trusting caller-supplied checks; a `verified` synchronization must include a concrete action and at least one locator-level before/after change. The legacy synchronization shape remains readable, but it is non-certifying without causal evidence. Strict critic reports stay bound to their own screenshot attempt across bounded repairs, and MCP visual contracts publish the fields used for validation.
+
 0.3.1 is a patch release. CLI `run:finalize` now emits the same error `details` (`userMessage`, `blockedSkills`) as the MCP surface; repeat finalization of a terminal run is a no-op instead of advancing its revision; evidence kinds named after `Object.prototype` members are ingested as plain evidence again; `verify_visual_result` publishes the container fields it dereferences and rejects deeper malformed snapshot shapes as `invalid-arguments` instead of a JSON-RPC internal error; and the fixtures `eval:router` loads at startup now ship in the package.
 
 0.3.0 is a breaking release for host browser adapters: every capture payload must now carry `stateSynchronization` with a status, a non-empty `path`, and observed values, and a payload without it is rejected by the parser. See `docs/browser-adapter.md` and the `frontend/browser-evidence` shared contract (1.1.0).
@@ -115,6 +117,7 @@ Expected tarball contents exclude:
 
 - `.codegraph/`
 - `.pnpm-store/`
+- local agent/session metadata such as `docs/agents/`, `.workbuddy-ai/`, and `skills-lock.json`
 - executable test files and test helpers
 - fixture projects outside the explicitly packaged router eval baseline
 - local temporary files

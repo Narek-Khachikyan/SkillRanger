@@ -3,6 +3,7 @@ import {
   isValidStateSynchronization,
   type MechanicalSnapshot,
   type StateSynchronization,
+  type UiEvidenceLevel,
   type UiCaptureEntry,
   type UiCheckResult,
   type UiEvidenceBundle,
@@ -70,6 +71,42 @@ export const parseLegacyBrowserObservation = (value: Record<string, unknown>): L
   criticalAxeViolations: stringArray(value, "criticalAxeViolations"),
   reducedMotionVerified: booleanField(value, "reducedMotionVerified"),
 });
+
+const browserObservationArrayKeys = [
+  "clippedControls",
+  "unreachableActions",
+  "stickyOverlaps",
+  "consoleErrors",
+  "keyboardTraps",
+  "invisibleFocus",
+  "criticalAxeViolations",
+] as const;
+
+export const isValidBrowserObservation = (value: unknown): value is BrowserObservation => {
+  if (!isRecord(value)
+    || value.schemaVersion !== "1.0"
+    || !isRecord(value.viewport)
+    || typeof value.viewport.width !== "number"
+    || typeof value.viewport.height !== "number"
+    || !Number.isInteger(value.viewport.width)
+    || value.viewport.width <= 0
+    || !Number.isInteger(value.viewport.height)
+    || value.viewport.height <= 0
+    || typeof value.route !== "string"
+    || value.route.trim() === ""
+    || typeof value.state !== "string"
+    || value.state.trim() === ""
+    || typeof value.horizontalOverflow !== "boolean"
+    || typeof value.reducedMotionVerified !== "boolean"
+    || (value.screenshotPath !== undefined
+      && (typeof value.screenshotPath !== "string" || value.screenshotPath.trim() === ""))) {
+    return false;
+  }
+  return browserObservationArrayKeys.every((key) => {
+    const entries = value[key];
+    return Array.isArray(entries) && entries.every((entry) => typeof entry === "string");
+  });
+};
 
 const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]) =>
   Object.keys(value).every((key) => keys.includes(key));
@@ -308,6 +345,7 @@ const transitionIsCertifying = (payload: BrowserCheckPayload) =>
 
 export const interpretFrontendUiEvidence = (input: {
   facts: FrontendUiEvidenceFacts;
+  evidenceLevel?: UiEvidenceLevel;
   mechanicalCheckPolicy?: MechanicalCheckPolicy;
 }): FrontendUiEvidenceInterpretation => {
   const { facts } = input;
@@ -316,6 +354,7 @@ export const interpretFrontendUiEvidence = (input: {
     viewport: facts.viewport.width,
     state: facts.state,
     screenshotPath: facts.screenshotPath,
+    includeStateTransition: input.evidenceLevel !== "observation",
   });
   const mechanicalChecks = facts.mechanicalSnapshot
     ? evaluateMechanicalSnapshot({
@@ -333,6 +372,31 @@ export const interpretFrontendUiEvidence = (input: {
     stateTransition: transitionIsCertifying(facts.browser) ? "certifying" : "non-certifying",
   };
 };
+
+export const interpretBrowserObservation = (
+  observation: BrowserObservation,
+): FrontendUiEvidenceInterpretation => interpretFrontendUiEvidence({
+  evidenceLevel: "observation",
+  facts: {
+    viewport: observation.viewport,
+    route: observation.route,
+    state: observation.state,
+    screenshotPath: observation.screenshotPath ?? "",
+    browser: {
+      ...parseLegacyBrowserObservation(observation as unknown as Record<string, unknown>),
+      stateRendered: true,
+      overlaps: [],
+      focusOrderViolations: [],
+      contrastViolations: [],
+      stateSynchronization: {
+        status: "not-applicable",
+        path: "compatibility observation",
+        observations: ["Observation-level capture does not include State-transition evidence."],
+        reason: "State-transition evidence is available only at the verifiable UI-evidence level.",
+      },
+    },
+  },
+});
 
 const persistedCapturePayload = (capture: UiCaptureEntry): Record<string, unknown> => ({
   ...capture.observation,

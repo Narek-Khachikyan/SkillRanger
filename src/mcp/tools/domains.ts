@@ -65,7 +65,12 @@ const designBriefSchema = {
         type: { type: "string", minLength: 1 },
         primaryAction: { type: "string", minLength: 1 },
         supportedViewports: { type: "array", minItems: 2, items: { type: "integer", minimum: 320 } },
-        requiredStates: { type: "array", items: { type: "string" } },
+        requiredStates: {
+          type: "array",
+          minItems: 1,
+          description: "States listed here require browser evidence at every supported viewport.",
+          items: { type: "string", minLength: 1 },
+        },
       },
       additionalProperties: false,
     },
@@ -138,6 +143,12 @@ export const domainToolDefinitions: McpToolDefinition[] = [
         primaryTask: { type: "string" },
         surfaceType: { type: "string" },
         primaryAction: { type: "string" },
+        requiredStates: {
+          type: "array",
+          minItems: 1,
+          description: "Optional for compatibility; omission keeps the legacy loading/empty/error/success matrix. Explicit states require evidence at every supported viewport.",
+          items: { type: "string", minLength: 1 },
+        },
       },
       additionalProperties: false,
     },
@@ -265,6 +276,7 @@ const createFrontendDesignBrief: McpToolHandler = async (args) => {
     primaryTask: optionalText(args.primaryTask),
     surfaceType: optionalText(args.surfaceType),
     primaryAction: optionalText(args.primaryAction),
+    requiredStates: Array.isArray(args.requiredStates) ? args.requiredStates as string[] : undefined,
   });
   return jsonToolResult({ projectRoot, brief, findings: validateDesignBrief(brief) });
 };

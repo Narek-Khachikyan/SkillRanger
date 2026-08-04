@@ -78,6 +78,46 @@ test("MCP exposes the project, install, and domain workflow tool set", () => {
   );
 });
 
+test("frontend brief preserves only explicitly declared states", async () => {
+  const definition = mcpTools.find(({ name }) => name === "create_frontend_design_brief");
+  assert.ok(definition);
+  assert.equal(definition.inputSchema.required?.includes("requiredStates") ?? false, false);
+  const requiredStates = definition.inputSchema.properties?.requiredStates as {
+    minItems?: number;
+    items?: { minLength?: number };
+  };
+  assert.equal(requiredStates.minItems, 1);
+  assert.equal(requiredStates.items?.minLength, 1);
+
+  const result = parseStructuredContent<{ brief: { surface: { requiredStates: string[] } }; findings: Array<{ code: string }> }>(
+    await callMcpTool("create_frontend_design_brief", {
+      projectRoot: "fixtures/vite-react-ts",
+      domain: "travel",
+      primaryUserOrActor: "Traveler",
+      primaryTask: "Explore Japan",
+      surfaceType: "landing page",
+      primaryAction: "Plan a trip",
+      requiredStates: ["success"],
+    }),
+  );
+  assert.deepEqual(result.brief.surface.requiredStates, ["success"]);
+  assert.equal(result.findings.some(({ code }) => code === "brief-required-state"), false);
+});
+
+test("MCP frontend brief keeps the legacy default matrix when states are omitted", async () => {
+  const result = parseStructuredContent<{ brief: { surface: { requiredStates: string[] } } }>(
+    await callMcpTool("create_frontend_design_brief", {
+      projectRoot: "fixtures/vite-react-ts",
+      domain: "travel",
+      primaryUserOrActor: "Traveler",
+      primaryTask: "Explore Japan",
+      surfaceType: "landing page",
+      primaryAction: "Plan a trip",
+    }),
+  );
+  assert.deepEqual(result.brief.surface.requiredStates, ["loading", "empty", "error", "success"]);
+});
+
 test("MCP exposes the strict v2 lifecycle", () => {
   const names = new Set(mcpTools.map((tool) => tool.name));
   for (const name of [

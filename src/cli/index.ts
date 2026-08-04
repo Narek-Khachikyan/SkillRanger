@@ -495,12 +495,19 @@ const run = async () => {
   if (command === "design:brief") {
     const projectRoot = path.resolve(args.positionals[0] ?? ".");
     const fingerprint = await scanProject(projectRoot);
+    const requiredStates = typeof args.flags.states === "string"
+      ? args.flags.states.split(",").map((state) => state.trim()).filter(Boolean)
+      : undefined;
+    if (args.flags.states !== undefined && (!requiredStates || requiredStates.length === 0)) {
+      throw new Error("--states requires at least one comma-separated UI state.");
+    }
     const brief = createDesignBriefScaffold(fingerprint, {
       domain: typeof args.flags.domain === "string" ? args.flags.domain : undefined,
       primaryUserOrActor: typeof args.flags.user === "string" ? args.flags.user : undefined,
       primaryTask: typeof args.flags.task === "string" ? args.flags.task : undefined,
       surfaceType: typeof args.flags.surface === "string" ? args.flags.surface : undefined,
       primaryAction: typeof args.flags.action === "string" ? args.flags.action : undefined,
+      requiredStates,
     });
     const outputPath = typeof args.flags.output === "string" ? path.resolve(args.flags.output) : undefined;
     if (outputPath) {

@@ -47,6 +47,9 @@ export const asDesignBrief = (value: unknown): DesignBrief | undefined => {
 };
 
 const recipesRoot = path.join(defaultDomainsRoot, "frontend", "recipes");
+// Keep the pre-0.3.2 scaffold contract readable while allowing new callers to declare the
+// narrower state matrix that their primary flow actually supports.
+const legacyRequiredStates = ["loading", "empty", "error", "success"] as const;
 
 export const loadFrontendRecipes = async (): Promise<DesignRecipe[]> =>
   Promise.all(
@@ -154,7 +157,8 @@ export const createDesignBriefScaffold = (
     primaryTask?: string;
     surfaceType?: string;
     primaryAction?: string;
-  } = {},
+    requiredStates?: string[];
+  },
 ): DesignBrief => ({
   schemaVersion: "1.0",
   product: {
@@ -169,7 +173,7 @@ export const createDesignBriefScaffold = (
     type: input.surfaceType ?? "unknown",
     primaryAction: input.primaryAction ?? "unknown",
     supportedViewports: [390, 1440],
-    requiredStates: ["loading", "empty", "error", "success"],
+    requiredStates: [...(input.requiredStates ?? legacyRequiredStates)],
   },
   direction: {
     requestedTone: [],

@@ -89,8 +89,10 @@ const getExpectedScreenshotsForCritic = (
   const criticStepIndex = ledger.contract.steps.findIndex(({ id }) => id === attribution.stepId);
   if (criticStepIndex === -1) return [];
 
+  const criticArtifactIndex = artifacts.findIndex(({ artifactId }) => artifactId === criticArtifact.artifactId);
+  if (criticArtifactIndex === -1) return [];
   const precedingStepIds = new Set(ledger.contract.steps.slice(0, criticStepIndex).map(({ id }) => id));
-  const precedingScreenshots = artifacts.filter((artifact) =>
+  const precedingScreenshots = artifacts.slice(0, criticArtifactIndex).filter((artifact) =>
     artifact.kind.includes("screenshot") &&
     artifact.attributions.some(({ relation, stepId }) => relation === "produced" && precedingStepIds.has(stepId)),
   );

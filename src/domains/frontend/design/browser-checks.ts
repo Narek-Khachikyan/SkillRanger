@@ -117,8 +117,15 @@ export const evaluateBrowserPayload = (input: {
   viewport: number;
   state: string;
   screenshotPath: string;
+  includeStateTransition?: boolean;
 }): UiCheckResult[] => {
-  const { payload, viewport, state, screenshotPath } = input;
+  const {
+    payload,
+    viewport,
+    state,
+    screenshotPath,
+    includeStateTransition = true,
+  } = input;
   const checks: UiCheckResult[] = [];
   const addStrings = (
     values: string[], code: UiCheckCode, severity: UiCheckResult["severity"], expected: string, remediation: string,
@@ -139,12 +146,14 @@ export const evaluateBrowserPayload = (input: {
   }
   addStrings(payload.criticalAxeViolations, "critical-axe", "critical", "no critical accessibility violations", "Resolve the critical accessibility violation and rerun the adapter checks.");
   if (!payload.reducedMotionVerified) checks.push(check({ code: "reduced-motion", severity: "high", viewport, state, locator: "document", measured: "prefers-reduced-motion not verified", expected: "motion is removed or reduced under reduced-motion emulation", screenshotPath, remediation: "Implement and verify the reduced-motion behavior." }));
-  checks.push(...evaluateUiStatePayload({
-    stateRendered: payload.stateRendered,
-    stateSynchronization: payload.stateSynchronization,
-    viewport,
-    state,
-    screenshotPath,
-  }));
+  if (includeStateTransition) {
+    checks.push(...evaluateUiStatePayload({
+      stateRendered: payload.stateRendered,
+      stateSynchronization: payload.stateSynchronization,
+      viewport,
+      state,
+      screenshotPath,
+    }));
+  }
   return sortUiCheckResults(checks);
 };

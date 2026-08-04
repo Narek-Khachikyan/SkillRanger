@@ -10,8 +10,8 @@ import type {
 import { frontendRecipeIds } from "./catalog.ts";
 import { loadDesignRuleLibrarySync } from "./library.ts";
 import { designRuleFamilies } from "./library-types.ts";
+import { isValidBrowserObservation, interpretBrowserObservation } from "./ui-evidence.ts";
 
-const requiredStates = new Set(["loading", "empty", "error"]);
 const usageFrequencies = new Set(["rare", "occasional", "frequent", "continuous", "unknown"]);
 const supportedRecipeIds = new Set(frontendRecipeIds);
 const axisValues = {
@@ -133,15 +133,13 @@ export const validateDesignBrief = (brief: unknown): VerificationFinding[] => {
   ) {
     findings.push(finding("brief-viewports", "high", "hard", "Material design work requires mobile and desktop viewports.", "Add at least one mobile width and one desktop width."));
   }
-  if (!surface || !isStringArray(surface.requiredStates)) {
-    findings.push(finding("brief-state-matrix", "high", "hard", "requiredStates must be declared.", "Declare required UI states for the primary flow."));
-  } else {
-    const declared = new Set(surface.requiredStates);
-    for (const state of requiredStates) {
-      if (!declared.has(state)) {
-        findings.push(finding("brief-required-state", "medium", "soft", `The ${state} state is not declared.`, `Add ${state} or document why the surface cannot enter it.`));
-      }
-    }
+  if (
+    !surface ||
+    !isStringArray(surface.requiredStates) ||
+    surface.requiredStates.length === 0 ||
+    !surface.requiredStates.every(nonEmpty)
+  ) {
+    findings.push(finding("brief-state-matrix", "high", "hard", "requiredStates must contain at least one non-empty state.", "Declare the UI states that the primary flow can actually enter."));
   }
 
   if (
@@ -348,27 +346,85 @@ export const validateDesignDirection = (
   return findings;
 };
 
-const browserObservationArrayKeys = [
-  "clippedControls",
-  "unreachableActions",
-  "stickyOverlaps",
-  "consoleErrors",
-  "keyboardTraps",
-  "invisibleFocus",
-  "criticalAxeViolations",
-] as const;
-
-const isValidBrowserObservation = (observation: unknown): observation is BrowserObservation =>
-  isRecord(observation)
-  && observation.schemaVersion === "1.0"
-  && isRecord(observation.viewport)
-  && Number.isInteger(observation.viewport.width)
-  && Number.isInteger(observation.viewport.height)
-  && nonEmpty(observation.route)
-  && nonEmpty(observation.state)
-  && typeof observation.horizontalOverflow === "boolean"
-  && typeof observation.reducedMotionVerified === "boolean"
-  && browserObservationArrayKeys.every((key) => isStringArray(observation[key]));
+const legacyBrowserFinding = (
+  check: ReturnType<typeof interpretBrowserObservation>["browserChecks"][number],
+  surface: string,
+): VerificationFinding | undefined => {
+  // These are compatibility names only; pass/fail semantics come from the canonical interpreter.
+  const legacy = {
+    "horizontal-overflow": {
+      code: "horizontal-overflow",
+      severity: "critical" as const,
+      message: "Page-level horizontal overflow.",
+      remediation: "Remove the overflowing layout condition without hiding reachable content.",
+    },
+    "clipped-content": {
+      code: "clipped-controls",
+      severity: "critical" as const,
+      message: "Controls are clipped.",
+      remediation: "Recompose or resize the affected controls without hiding required actions.",
+    },
+    "sticky-overlap": {
+      code: "sticky-overlap",
+      severity: "critical" as const,
+      message: "Sticky UI overlaps content or controls.",
+      remediation: "Reserve layout space or adjust sticky bounds and offsets.",
+    },
+    "console-error": {
+      code: "runtime-console-error",
+      severity: "critical" as const,
+      message: "Runtime console errors remain.",
+      remediation: "Resolve the underlying runtime errors and rerun verification.",
+    },
+    "unreachable-action": {
+      code: "unreachable-actions",
+      severity: "critical" as const,
+      message: "Required actions are unreachable.",
+      remediation: "Move the action into the reachable flow for the affected viewport.",
+    },
+    "keyboard-trap": {
+      code: "keyboard-trap",
+      severity: "critical" as const,
+      message: "A keyboard trap was observed.",
+      remediation: "Restore complete keyboard navigation and an escape path.",
+    },
+    "invisible-focus": {
+      code: "invisible-focus",
+      severity: "critical" as const,
+      message: "Focus is invisible in the primary flow.",
+      remediation: "Add a visible non-clipped focus indicator.",
+    },
+    "critical-axe": {
+      code: "critical-axe",
+      severity: "critical" as const,
+      message: "Critical axe violations remain.",
+      remediation: "Resolve the reported critical accessibility violations before verification.",
+    },
+    "reduced-motion": {
+      code: "reduced-motion-unverified",
+      severity: "high" as const,
+      message: "Reduced-motion behavior was not verified.",
+      remediation: "Enable reduced motion and verify that essential state changes remain understandable.",
+    },
+  } satisfies Record<string, {
+    code: string;
+    severity: VerificationFinding["severity"];
+    message: string;
+    remediation: string;
+  }>;
+  const compatibility = Object.hasOwn(legacy, check.code)
+    ? legacy[check.code as keyof typeof legacy]
+    : undefined;
+  if (!compatibility) return undefined;
+  return finding(
+    compatibility.code,
+    compatibility.severity,
+    "hard",
+    `${compatibility.message} ${surface}`,
+    compatibility.remediation,
+    check.locator === "document" ? [surface] : [check.locator],
+  );
+};
 
 export const validateBrowserObservations = (
   brief: unknown,
@@ -418,34 +474,12 @@ export const validateBrowserObservations = (
       }
     }
   }
-  const checks: Array<{
-    key: keyof BrowserObservation;
-    code: string;
-    message: string;
-    remediation: string;
-  }> = [
-    { key: "clippedControls", code: "clipped-controls", message: "Controls are clipped.", remediation: "Recompose or resize the affected controls without hiding required actions." },
-    { key: "unreachableActions", code: "unreachable-actions", message: "Required actions are unreachable.", remediation: "Move the action into the reachable flow for the affected viewport." },
-    { key: "stickyOverlaps", code: "sticky-overlap", message: "Sticky UI overlaps content or controls.", remediation: "Reserve layout space or adjust sticky bounds and offsets." },
-    { key: "consoleErrors", code: "runtime-console-error", message: "Runtime console errors remain.", remediation: "Resolve the underlying runtime errors and rerun verification." },
-    { key: "keyboardTraps", code: "keyboard-trap", message: "A keyboard trap was observed.", remediation: "Restore complete keyboard navigation and an escape path." },
-    { key: "invisibleFocus", code: "invisible-focus", message: "Focus is invisible in the primary flow.", remediation: "Add a visible non-clipped focus indicator." },
-    { key: "criticalAxeViolations", code: "critical-axe", message: "Critical axe violations remain.", remediation: "Resolve the reported accessibility violations before verification." },
-  ];
   for (const observation of validObservations) {
     const surface = `${observation.route} ${observation.viewport.width}x${observation.viewport.height} ${observation.state}`;
-    if (observation.horizontalOverflow) {
-      findings.push(finding("horizontal-overflow", "critical", "hard", `Page-level horizontal overflow at ${surface}.`, "Remove the overflowing layout condition without hiding reachable content.", [surface]));
-    }
-    for (const check of checks) {
-      const value = observation[check.key];
-      if (Array.isArray(value) && value.length > 0) {
-        findings.push(finding(check.code, "critical", "hard", `${check.message} ${surface}`, check.remediation, value));
-      }
-    }
-    if (!observation.reducedMotionVerified) {
-      findings.push(finding("reduced-motion-unverified", "high", "hard", `Reduced-motion behavior was not verified at ${surface}.`, "Enable reduced motion and verify that essential state changes remain understandable."));
-    }
+    findings.push(...interpretBrowserObservation(observation).browserChecks.flatMap((check) => {
+      const compatibilityFinding = legacyBrowserFinding(check, surface);
+      return compatibilityFinding ? [compatibilityFinding] : [];
+    }));
     if (!nonEmpty(observation.screenshotPath) || !artifactExists(observation.screenshotPath)) {
       findings.push(finding(
         "screenshot-evidence-missing",

@@ -74,6 +74,19 @@ const criticRepairContract: ExecutionContractV2 = {
   ],
 };
 
+const multiRepairCriticContract: ExecutionContractV2 = {
+  ...criticRepairContract,
+  maxRepairIterations: 2,
+  steps: [
+    { id: "frontend.store-test/step/capture-initial", type: "collect", requiredEvidenceKinds: ["browser-screenshot-initial"], ruleIds: ["frontend.store-test/rule/evidence"] },
+    { id: "frontend.store-test/step/critic-initial", type: "critic", requiredEvidenceKinds: ["critic-report"], ruleIds: ["frontend.store-test/rule/evidence"] },
+    { id: "frontend.store-test/step/repair", type: "repair", requiredEvidenceKinds: ["repair-diff"], ruleIds: ["frontend.store-test/rule/evidence"], repairable: true },
+    { id: "frontend.store-test/step/capture-recheck", type: "collect", requiredEvidenceKinds: ["browser-screenshot-recheck"], ruleIds: ["frontend.store-test/rule/evidence"] },
+    { id: "frontend.store-test/step/critic-recheck", type: "critic", requiredEvidenceKinds: ["critic-report"], ruleIds: ["frontend.store-test/rule/evidence"] },
+    { id: "frontend.store-test/step/report", type: "report", requiredEvidenceKinds: ["report"], ruleIds: ["frontend.store-test/rule/evidence"] },
+  ],
+};
+
 const criticValidatorContract: ExecutionContractV2 = {
   ...criticRepairContract,
   gates: [...criticRepairContract.gates, {
@@ -1466,6 +1479,66 @@ test("a findings report produced after completed repair consumes the exhausted b
   assert.equal(ledger.outcome, "blocked");
   assert.equal(ledger.repairIterations, 1);
   assert.equal(ledger.verificationReports.at(-1)!.gateResults.find(({ gateId }) => gateId === "core/gate/critic-findings")?.passed, false);
+});
+
+test("historical critic reports stay bound to their own screenshot attempts across multiple repairs", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-critic-multi-repair-"));
+  const store = new StrictSkillRunStore(root);
+  let run = readNextStrictChunk(fixtureRun(multiRepairCriticContract), multiRepairCriticContract.skillId).run;
+  await store.create(run);
+
+  run = await completeStoreStep(root, store, run, multiRepairCriticContract.steps[0].id, [{
+    kind: "browser-screenshot-initial",
+    value: "initial",
+  }]);
+  run = await completeStoreStep(root, store, run, multiRepairCriticContract.steps[1].id, [{
+    kind: "critic-report",
+    value: criticReport("clean", "initial"),
+    validatedAs: "critic-report",
+  }]);
+  run = await completeStoreStep(root, store, run, multiRepairCriticContract.steps[3].id, [{
+    kind: "browser-screenshot-recheck",
+    value: "recheck-1",
+  }]);
+  run = await completeStoreStep(root, store, run, multiRepairCriticContract.steps[4].id, [{
+    kind: "critic-report",
+    value: criticReport("findings", "recheck-1"),
+    validatedAs: "critic-report",
+  }]);
+  run = await completeStoreStep(root, store, run, multiRepairCriticContract.steps[5].id, [{
+    kind: "report",
+    value: {},
+    validatedAs: "output",
+  }]);
+  run = await store.verifySkill(run.runId, multiRepairCriticContract.skillId);
+  assert.equal(run.state, "repair-required");
+
+  for (const [iteration, outcome] of [["2", "findings"], ["3", "clean"]] as const) {
+    run = await completeStoreStep(root, store, run, multiRepairCriticContract.steps[2].id, [{
+      kind: "repair-diff",
+      value: `repair-${iteration}`,
+    }]);
+    run = await completeStoreStep(root, store, run, multiRepairCriticContract.steps[3].id, [{
+      kind: "browser-screenshot-recheck",
+      value: `recheck-${iteration}`,
+    }]);
+    run = await completeStoreStep(root, store, run, multiRepairCriticContract.steps[4].id, [{
+      kind: "critic-report",
+      value: criticReport(outcome, `recheck-${iteration}`),
+      validatedAs: "critic-report",
+    }]);
+    run = await completeStoreStep(root, store, run, multiRepairCriticContract.steps[5].id, [{
+      kind: "report",
+      value: { iteration },
+      validatedAs: "output",
+    }]);
+    run = await store.verifySkill(run.runId, multiRepairCriticContract.skillId);
+  }
+
+  const criticGate = run.skillLedgers[0].verificationReports.at(-1)!.gateResults
+    .find(({ gateId }) => gateId === "core/gate/critic-findings");
+  assert.deepEqual(criticGate, { gateId: "core/gate/critic-findings", passed: true, level: "hard" });
+  assert.equal(run.skillLedgers[0].outcome, "used");
 });
 
 test("submillisecond timestamps are rejected before critic causality can collapse ordering", async () => {

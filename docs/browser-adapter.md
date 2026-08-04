@@ -13,6 +13,10 @@ Available placeholders:
 - `{{state}}`
 - `{{screenshotPath}}`
 
+## 0.3.2 migration
+
+Adapters may continue returning the legacy `stateSynchronization` shape, and SkillRanger will still parse it. However, a capture with `status: "verified"` is no longer certifying unless it also records a concrete `action` and at least one locator-level `changes` entry whose `before` and `after` values differ. Add those fields to preserve a verified outcome; otherwise the final result reports a hard UI-state finding.
+
 ## Payload contract
 
 Every adapter response retains these required legacy fields:

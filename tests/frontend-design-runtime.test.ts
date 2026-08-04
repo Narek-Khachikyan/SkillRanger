@@ -9,6 +9,7 @@ import {
   compileDesignMarkdown,
   createBrowserObservationPlan,
   executeBrowserObservationPlan,
+  interpretBrowserObservation,
   loadFrontendRecipes,
   recommendFrontendRecipe,
   validateDesignBrief,
@@ -227,6 +228,25 @@ test("browser hard gates produce failed and verified outcomes deterministically"
   assert.equal(failed.report.findings[0]?.code, "horizontal-overflow");
 });
 
+test("legacy browser verification projects through the canonical observation interpreter", () => {
+  const legacyObservation = observation(390, "success");
+  legacyObservation.clippedControls = ["#toolbar"];
+
+  const interpretation = interpretBrowserObservation(legacyObservation);
+  assert.ok(interpretation.browserChecks.some(({ code }) => code === "clipped-content"));
+  assert.equal(interpretation.browserChecks.some(({ code }) => code.startsWith("ui-state-")), false);
+
+  const result = validateDesignResult({
+    workflowId: "frontend.design-generation",
+    brief: brief(),
+    direction: direction(),
+    observations: [legacyObservation],
+    capabilities: ["browser", "screenshots"],
+    artifactExists: () => true,
+  });
+  assert.ok(result.findings.some(({ code }) => code === "clipped-controls"));
+});
+
 test("an undeclared browser capability is named instead of silently skipping the gate", () => {
   const result = validateDesignResult({
     workflowId: "frontend.design-generation",
@@ -313,7 +333,7 @@ test("a capability superset still enables the browser gate", () => {
   assert.equal(result.report.outcome, "verified");
 });
 
-test("soft design findings remain verified when every hard gate passes", () => {
+test("a single explicitly required state remains verified without invented baseline states", () => {
   const softBrief = brief();
   softBrief.surface.requiredStates = ["success"];
   const result = validateDesignResult({
@@ -324,7 +344,7 @@ test("soft design findings remain verified when every hard gate passes", () => {
     capabilities: ["browser", "screenshots"],
     artifactExists: () => true,
   });
-  assert.ok(result.findings.some((finding) => finding.gate === "soft"));
+  assert.equal(result.findings.some((finding) => finding.code === "brief-required-state"), false);
   assert.equal(result.report.gates.hardPassed, true);
   assert.equal(result.report.verificationStatus, "passed");
   assert.equal(result.report.outcome, "verified");
@@ -606,6 +626,7 @@ test("CLI and MCP expose the same structured frontend brief and recipe workflow"
       "--task", "inspect skills",
       "--surface", "dashboard",
       "--action", "inspect recommendation",
+      "--states", "success",
       "--output", briefPath,
       "--json",
     ]);

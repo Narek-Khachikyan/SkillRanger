@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { digestDesignExecutionPolicy, verifyVisualResult } from "../src/domains/frontend/design/index.ts";
+import { digestDesignExecutionPolicy, isValidStateSynchronization, verifyVisualResult } from "../src/domains/frontend/design/index.ts";
 import type { UiCaptureEntry, VisualCriterion, VisualCriticReport } from "../src/domains/frontend/design/index.ts";
 import { deriveBrowserGateResults } from "../src/runtime/strict/frontend-evidence.ts";
 import type { EvidenceArtifact } from "../src/runtime/strict/types.ts";
@@ -9,6 +9,26 @@ import { makeBundle, makeVerificationInput } from "./helpers/frontend-visual-fix
 const freshCycle = () => makeVerificationInput({
   initialEvidence: makeBundle({ id: "e1", variantId: "v1", sourceIdentity: "git:abc" }),
   recheckEvidence: makeBundle({ id: "e2", variantId: "v1", sourceIdentity: "git:def" }),
+});
+
+test("keeps legacy synchronization readable but does not certify it without causal evidence", () => {
+  const legacySynchronization = {
+    status: "verified" as const,
+    path: "run selection -> log -> recovery",
+    observations: ["log=selected-run", "recovery=selected-run"],
+  };
+  assert.equal(isValidStateSynchronization(legacySynchronization), true);
+
+  const input = freshCycle();
+  for (const capture of input.recheckEvidence.captures) {
+    capture.stateSynchronization = legacySynchronization;
+    capture.checks = [];
+  }
+
+  const result = verifyVisualResult(input);
+  assert.equal(result.report.outcome, "failed");
+  assert.ok(result.findings.some(({ code }) => code === "ui-state-action-missing"));
+  assert.ok(result.findings.some(({ code }) => code === "ui-state-change-missing"));
 });
 
 test("rejects a selected variant below the critic quality floor", () => {

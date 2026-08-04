@@ -9,6 +9,29 @@ import { makeBrief } from "./helpers/frontend-visual-fixtures.ts";
 
 const execFileAsync = promisify(execFile);
 
+test("design:brief preserves explicitly declared states", async () => {
+  const { stdout } = await execFileAsync(process.execPath, [
+    "src/cli/index.ts",
+    "design:brief",
+    "fixtures/vite-react-ts",
+    "--states", "success",
+    "--json",
+  ]);
+  const result = JSON.parse(stdout) as { brief: { surface: { requiredStates: string[] } } };
+  assert.deepEqual(result.brief.surface.requiredStates, ["success"]);
+});
+
+test("design:brief keeps the legacy default matrix when states are omitted", async () => {
+  const { stdout } = await execFileAsync(process.execPath, [
+    "src/cli/index.ts",
+    "design:brief",
+    "fixtures/vite-react-ts",
+    "--json",
+  ]);
+  const result = JSON.parse(stdout) as { brief: { surface: { requiredStates: string[] } } };
+  assert.deepEqual(result.brief.surface.requiredStates, ["loading", "empty", "error", "success"]);
+});
+
 test("design:verify rejects a UI evidence bundle passed as observations", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "skillranger-cli-design-"));
   const briefPath = path.join(root, "brief.json");

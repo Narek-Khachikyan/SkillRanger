@@ -66,10 +66,10 @@ export const cliCommandDefinitions = Object.freeze([
     name: "design:brief",
     description: "Create a structured frontend design brief.",
     usages: [
-      "design:brief [project] [--domain <name>] [--user <actor>] [--task <task>] [--surface <type>] [--action <action>] [--output <path>] [--json]",
+      "design:brief [project] [--states <state,...>] [--domain <name>] [--user <actor>] [--task <task>] [--surface <type>] [--action <action>] [--output <path>] [--json]",
     ],
     booleanOptions: ["json"],
-    valueOptions: ["domain", "user", "task", "surface", "action", "output"],
+    valueOptions: ["states", "domain", "user", "task", "surface", "action", "output"],
   }),
   defineCommand({
     name: "design:recommend-recipe",
