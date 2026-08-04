@@ -2,15 +2,15 @@ import { cp, lstat, mkdir, readFile, readdir, realpath, rename, stat, writeFile 
 import path from "node:path";
 import { packageRoot } from "../../paths.ts";
 import { parseCommandTemplate, runProcess, substituteCommandPlaceholders } from "../process.ts";
-import type { VisualBenchmarkPlan, VisualBenchmarkPlanEntry, VisualBenchmarkRunResult, VisualBenchmarkSuite, VisualCapabilityCandidate, VisualVerificationOutcome } from "./types.ts";
+import { isCompleteVisualOperationalEvidence } from "./operational.ts";
+import type { VisualBenchmarkPlan, VisualBenchmarkPlanEntry, VisualBenchmarkRunResult, VisualBenchmarkSuite, VisualCapabilityCandidate, VisualOperationalEvidence } from "./types.ts";
 
 const candidateIds = ["weak", "medium", "strong"] as const;
 const arms = ["without-skillranger", "with-skillranger"] as const;
 const repetitions = [1, 2] as const;
-const resultKeys = ["runId", "briefId", "recipeId", "capabilityCandidateId", "modelId", "commandProfile", "arm", "repetition", "prompt", "fixture", "route", "benchmarkVersion", "skillRangerVersion", "skillRangerChecksum", "workspacePath", "resultPath", "dryRun", "exitCode", "signal", "durationMs", "stdoutPath", "stderrPath", "artifactPaths", "operationalEvidence", "hardGateFailed", "repairIterations", "verificationOutcome", "completionClaimed"];
+const resultKeys = ["runId", "briefId", "recipeId", "capabilityCandidateId", "modelId", "commandProfile", "arm", "repetition", "prompt", "fixture", "route", "benchmarkVersion", "skillRangerVersion", "skillRangerChecksum", "workspacePath", "resultPath", "dryRun", "exitCode", "signal", "durationMs", "stdoutPath", "stderrPath", "artifactPaths", "operationalEvidence", "hardGateFailed", "criticalFindings", "repairIterations", "verificationOutcome", "completionClaimed"];
 const entryKeys = ["runId", "briefId", "recipeId", "capabilityCandidateId", "modelId", "commandProfile", "arm", "repetition", "prompt", "fixture", "route"];
 const planKeys = ["schemaVersion", "benchmarkVersion", "skillRangerVersion", "skillRangerChecksum", "entries"];
-const verificationOutcomes = new Set<VisualVerificationOutcome>(["verified", "failed", "implemented-unverified", "blocked"]);
 const safeRunId = /^[a-z0-9][a-z0-9._-]{2,255}$/;
 const exactKeys = (value: Record<string, unknown>, keys: string[]) => {
   const actual = Object.keys(value).sort(); const expected = [...keys].sort();
@@ -105,11 +105,11 @@ const collectArtifacts = async (runDir: string): Promise<string[]> => {
   const unique = [...new Set(candidates)].sort(); for (const candidate of unique) await validateRegularContainedFile(runDir, candidate, true); return unique;
 };
 
-type OperationalMetadata = { schemaVersion: "1.0"; hardGateFailed: boolean; repairIterations: number; verificationOutcome: VisualVerificationOutcome; completionClaimed: boolean };
+type OperationalMetadata = { schemaVersion: "1.0" } & VisualOperationalEvidence;
 const loadOperationalMetadata = async (runDir: string): Promise<OperationalMetadata | undefined> => {
   const file = path.join(runDir, "run-metadata.json"); if (!(await stat(file).catch(() => undefined))) return undefined;
   await validateRegularContainedFile(runDir, file, true); const value: unknown = JSON.parse(await readFile(file, "utf8"));
-  if (!object(value) || !exactKeys(value, ["schemaVersion", "hardGateFailed", "repairIterations", "verificationOutcome", "completionClaimed"]) || value.schemaVersion !== "1.0" || typeof value.hardGateFailed !== "boolean" || !Number.isInteger(value.repairIterations) || Number(value.repairIterations) < 0 || !verificationOutcomes.has(value.verificationOutcome as VisualVerificationOutcome) || typeof value.completionClaimed !== "boolean") throw new Error("invalid benchmark run-metadata.json");
+  if (!object(value) || !exactKeys(value, ["schemaVersion", "hardGateFailed", "criticalFindings", "repairIterations", "verificationOutcome", "completionClaimed"]) || value.schemaVersion !== "1.0" || !isCompleteVisualOperationalEvidence(value)) throw new Error("invalid benchmark run-metadata.json");
   return value as OperationalMetadata;
 };
 
@@ -126,10 +126,10 @@ const assertPersistedResult = async (value: unknown, entry: VisualBenchmarkPlanE
   if (expectedEvidence.length !== recordedEvidence.length || expectedEvidence.some((artifact, index) => artifact !== recordedEvidence[index])) throw new Error(`stale benchmark run ${entry.runId}: artifact manifest mismatch`);
   const complete = result.operationalEvidence === "complete";
   if (!complete && result.operationalEvidence !== "incomplete") throw new Error(`stale benchmark run ${entry.runId}: invalid operational evidence status`);
-  if (complete !== (typeof result.hardGateFailed === "boolean" && Number.isInteger(result.repairIterations) && Number(result.repairIterations) >= 0 && verificationOutcomes.has(result.verificationOutcome as VisualVerificationOutcome) && typeof result.completionClaimed === "boolean")) throw new Error(`stale benchmark run ${entry.runId}: invalid operational evidence`);
-  if (!complete && [result.hardGateFailed, result.repairIterations, result.verificationOutcome, result.completionClaimed].some((item) => item !== null)) throw new Error(`stale benchmark run ${entry.runId}: incomplete operational evidence must use null fields`);
+  if (complete !== isCompleteVisualOperationalEvidence(result)) throw new Error(`stale benchmark run ${entry.runId}: invalid operational evidence`);
+  if (!complete && [result.hardGateFailed, result.criticalFindings, result.repairIterations, result.verificationOutcome, result.completionClaimed].some((item) => item !== null)) throw new Error(`stale benchmark run ${entry.runId}: incomplete operational evidence must use null fields`);
   const metadata = await loadOperationalMetadata(runDir);
-  if (complete !== Boolean(metadata) || (metadata && (metadata.hardGateFailed !== result.hardGateFailed || metadata.repairIterations !== result.repairIterations || metadata.verificationOutcome !== result.verificationOutcome || metadata.completionClaimed !== result.completionClaimed))) throw new Error(`stale benchmark run ${entry.runId}: operational metadata mismatch`);
+  if (complete !== Boolean(metadata) || (metadata && (metadata.hardGateFailed !== result.hardGateFailed || metadata.criticalFindings !== result.criticalFindings || metadata.repairIterations !== result.repairIterations || metadata.verificationOutcome !== result.verificationOutcome || metadata.completionClaimed !== result.completionClaimed))) throw new Error(`stale benchmark run ${entry.runId}: operational metadata mismatch`);
   return result;
 };
 
@@ -142,7 +142,7 @@ const execute = async (input: { plan: VisualBenchmarkPlan; commandTemplate: stri
     const runDir = path.join(outputDir, "runs", entry.runId); const workspacePath = path.join(runDir, "workspace"); const resultPath = path.join(runDir, "run-result.json");
     if (!contained(outputDir, runDir)) throw new Error(`benchmark run escaped output directory: ${entry.runId}`);
     if (input.resume && await stat(resultPath).catch(() => undefined)) { const text = await readFile(resultPath, "utf8"); const existing = await assertPersistedResult(JSON.parse(text), entry, input.plan, runDir); runs.push(existing); continue; }
-    const base = { ...entry, benchmarkVersion: input.plan.benchmarkVersion, skillRangerVersion: input.plan.skillRangerVersion, skillRangerChecksum: input.plan.skillRangerChecksum, workspacePath, resultPath, dryRun: Boolean(input.dryRun), artifactPaths: [] as string[], operationalEvidence: "incomplete" as const, hardGateFailed: null, repairIterations: null, verificationOutcome: null, completionClaimed: null };
+    const base = { ...entry, benchmarkVersion: input.plan.benchmarkVersion, skillRangerVersion: input.plan.skillRangerVersion, skillRangerChecksum: input.plan.skillRangerChecksum, workspacePath, resultPath, dryRun: Boolean(input.dryRun), artifactPaths: [] as string[], operationalEvidence: "incomplete" as const, hardGateFailed: null, criticalFindings: null, repairIterations: null, verificationOutcome: null, completionClaimed: null };
     if (input.dryRun) { runs.push({ ...base, exitCode: 0, signal: null, durationMs: 0 }); continue; }
     if (await stat(resultPath).catch(() => undefined)) throw new Error(`benchmark run already exists ${entry.runId}`);
     await mkdir(runDir, { recursive: true }); const canonicalRun = await realpath(runDir); if (!contained(canonicalOutput, canonicalRun)) throw new Error(`benchmark run escaped output directory: ${entry.runId}`);
@@ -151,7 +151,7 @@ const execute = async (input: { plan: VisualBenchmarkPlan; commandTemplate: stri
     const args = substituteCommandPlaceholders(template, { runId: entry.runId, briefId: entry.briefId, recipeId: entry.recipeId, candidateId: entry.capabilityCandidateId, modelId: entry.modelId, arm: entry.arm, repetition: String(entry.repetition), prompt: entry.prompt, workspace: workspacePath, outputDir: runDir });
     const processResult = await runProcess(args[0], args.slice(1), { cwd: workspacePath, timeoutMs: input.timeoutPerRunMs }); const stdoutPath = path.join(runDir, "stdout.txt"); const stderrPath = path.join(runDir, "stderr.txt"); await writeFile(stdoutPath, processResult.stdout || "\n"); await writeFile(stderrPath, processResult.stderr || "\n");
     const renderedArtifacts = await collectArtifacts(runDir); const metadata = await loadOperationalMetadata(runDir);
-    const record: VisualBenchmarkRunResult = { ...base, exitCode: processResult.exitCode, signal: processResult.signal, durationMs: processResult.durationMs, stdoutPath, stderrPath, artifactPaths: [stdoutPath, stderrPath, ...renderedArtifacts], operationalEvidence: metadata ? "complete" : "incomplete", hardGateFailed: metadata?.hardGateFailed ?? null, repairIterations: metadata?.repairIterations ?? null, verificationOutcome: metadata?.verificationOutcome ?? null, completionClaimed: metadata?.completionClaimed ?? null };
+    const record: VisualBenchmarkRunResult = { ...base, exitCode: processResult.exitCode, signal: processResult.signal, durationMs: processResult.durationMs, stdoutPath, stderrPath, artifactPaths: [stdoutPath, stderrPath, ...renderedArtifacts], operationalEvidence: metadata ? "complete" : "incomplete", hardGateFailed: metadata?.hardGateFailed ?? null, criticalFindings: metadata?.criticalFindings ?? null, repairIterations: metadata?.repairIterations ?? null, verificationOutcome: metadata?.verificationOutcome ?? null, completionClaimed: metadata?.completionClaimed ?? null };
     await atomicJson(resultPath, record); runs.push(record);
   }
   return { schemaVersion: "1.0" as const, benchmarkVersion: input.plan.benchmarkVersion, runs };

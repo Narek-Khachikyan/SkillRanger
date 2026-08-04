@@ -11,6 +11,10 @@ import { visualCandidates } from "./helpers/visual-benchmark-fixtures.ts";
 import type { VisualBenchmarkPlan, VisualBenchmarkRunResult, VisualHumanReview } from "../src/evals/visual/types.ts";
 
 const close = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`);
+const persistResults = async (results: VisualBenchmarkRunResult[]) => {
+  await Promise.all(results.map((result) => writeFile(result.resultPath, `${JSON.stringify(result)}\n`)));
+  return results;
+};
 
 const completedFixture = async () => {
   const plan = generateVisualBenchmarkPlan({ suite: await loadVisualBenchmarkSuite(), candidates: [...visualCandidates] });
@@ -23,18 +27,19 @@ const completedFixture = async () => {
     return ({
     ...entry, benchmarkVersion: plan.benchmarkVersion, skillRangerVersion: plan.skillRangerVersion,
     skillRangerChecksum: plan.skillRangerChecksum, workspacePath: path.join(root, entry.runId, "workspace"),
-    resultPath: path.join(root, entry.runId, "run-result.json"), dryRun: false, exitCode: 0, signal: null,
+    resultPath: path.join(root, `${entry.runId}.json`), dryRun: false, exitCode: 0, signal: null,
     durationMs: 1, artifactPaths: [screenshot], operationalEvidence: "complete", hardGateFailed: weakFailure,
     repairIterations: entry.capabilityCandidateId === "weak" && entry.arm === "with-skillranger" ? (entry.repetition === 1 ? 2 : 3) : 1,
-    verificationOutcome: weakFailure ? "failed" : "verified", completionClaimed: true,
+    verificationOutcome: weakFailure ? "failed" : "verified", criticalFindings: 0, completionClaimed: true,
   });
   });
+  await persistResults(results);
   let n = 0;
   const prepared = createBlindReviewPackage({ plan, results, labelFactory: () => `opaque-${++n}` });
   const byRun = new Map(results.map((result) => [result.runId, result]));
   const byPair = new Map(prepared.privateMapping.pairs.map((pair) => [pair.pairId, pair]));
   const review: VisualHumanReview = {
-    schemaVersion: "1.0", benchmarkVersion: plan.benchmarkVersion, reviewerId: "human-1", reviewerType: "human",
+    schemaVersion: "1.0", benchmarkVersion: plan.benchmarkVersion, reviewPackageDigest: prepared.reviewPackage.reviewPackageDigest, reviewerId: "human-1", reviewerType: "human",
     judgments: prepared.reviewPackage.pairs.map(({ pairId }) => {
       const mapping = byPair.get(pairId)!;
       const score = (side: "A" | "B") => mapping[side].arm === "with-skillranger" ? 4 : 3;
@@ -46,6 +51,59 @@ const completedFixture = async () => {
     }),
   };
   return { plan, results, ...prepared, review };
+};
+
+const secondHumanReview = (review: VisualHumanReview): VisualHumanReview => ({
+  ...structuredClone(review),
+  reviewerId: "human-2",
+});
+
+const aggregateReviews = (review: VisualHumanReview): VisualHumanReview[] => [review, secondHumanReview(review)];
+
+const refreshFixtureContracts = (fixture: Awaited<ReturnType<typeof completedFixture>>) => {
+  let n = 0;
+  const prepared = createBlindReviewPackage({ plan: fixture.plan, results: fixture.results, labelFactory: () => `opaque-${++n}` });
+  return {
+    ...fixture,
+    ...prepared,
+    review: { ...fixture.review, reviewPackageDigest: prepared.reviewPackage.reviewPackageDigest },
+  };
+};
+
+const cleanResults = async (results: VisualBenchmarkRunResult[]): Promise<VisualBenchmarkRunResult[]> => {
+  for (const result of results) {
+    result.hardGateFailed = false;
+    result.verificationOutcome = "verified";
+    result.criticalFindings = 0;
+  }
+  return persistResults(results);
+};
+
+const cleanReview = (review: VisualHumanReview): VisualHumanReview => ({
+  ...structuredClone(review),
+  judgments: review.judgments.map((judgment) => ({ ...judgment, catastrophicA: false, catastrophicB: false })),
+});
+
+const reviewWithCandidateWins = (
+  fixture: Awaited<ReturnType<typeof completedFixture>>,
+  review: VisualHumanReview,
+  reviewerId: string,
+  candidateWins: number,
+  mode: "decisive" | "abstain" = "decisive",
+): VisualHumanReview => {
+  const mappings = new Map(fixture.privateMapping.pairs.map((pair) => [pair.pairId, pair]));
+  return {
+    ...structuredClone(review),
+    reviewerId,
+    judgments: review.judgments.map((judgment, index) => {
+      const mapping = mappings.get(judgment.pairId)!;
+      if (mode === "abstain" || index >= candidateWins) {
+        if (mode === "abstain") return { ...judgment, preference: "abstain" } as any;
+      }
+      const candidateLabel = mapping.A.arm === "with-skillranger" ? "A" : "B";
+      return { ...judgment, preference: candidateWins > index ? candidateLabel : candidateLabel === "A" ? "B" : "A" } as any;
+    }),
+  };
 };
 
 test("loads one frozen brief per recipe with fixed lifecycle evidence", async () => {
@@ -75,7 +133,7 @@ test("discovers rendered artifacts and persists immutable resume evidence", asyn
   const full = generateVisualBenchmarkPlan({ suite: await loadVisualBenchmarkSuite(), candidates: [...visualCandidates] });
   const plan: VisualBenchmarkPlan = { ...full, entries: full.entries.slice(0, 1) };
   const outputDir = await mkdtemp(path.join(os.tmpdir(), "visual-run-"));
-  const script = `const f=require('fs');const d=process.argv[1];f.writeFileSync(d+'/screen.png','pixels');f.writeFileSync(d+'/run-metadata.json',JSON.stringify({schemaVersion:'1.0',hardGateFailed:false,repairIterations:1,verificationOutcome:'verified',completionClaimed:true}))`;
+  const script = `const f=require('fs');const d=process.argv[1];f.writeFileSync(d+'/screen.png','pixels');f.writeFileSync(d+'/run-metadata.json',JSON.stringify({schemaVersion:'1.0',hardGateFailed:false,criticalFindings:0,repairIterations:1,verificationOutcome:'verified',completionClaimed:true}))`;
   const first = await executeVisualBenchmarkPlanSubsetForTesting({ plan, commandTemplate: `${process.execPath} -e \"${script}\" {{outputDir}}`, outputDir });
   assert.equal(first.runs[0].operationalEvidence, "complete");
   assert.equal(first.runs[0].artifactPaths.filter((item) => item.endsWith("screen.png")).length, 1);
@@ -107,7 +165,7 @@ test("rejects forged persisted result fields without rewriting the record", asyn
   const full = generateVisualBenchmarkPlan({ suite: await loadVisualBenchmarkSuite(), candidates: [...visualCandidates] });
   const plan: VisualBenchmarkPlan = { ...full, entries: full.entries.slice(0, 1) };
   const outputDir = await mkdtemp(path.join(os.tmpdir(), "visual-resume-guard-"));
-  const script = `const f=require('fs');const d=process.argv[1];f.writeFileSync(d+'/screen.png','pixels');f.writeFileSync(d+'/run-metadata.json',JSON.stringify({schemaVersion:'1.0',hardGateFailed:false,repairIterations:0,verificationOutcome:'verified',completionClaimed:true}))`;
+  const script = `const f=require('fs');const d=process.argv[1];f.writeFileSync(d+'/screen.png','pixels');f.writeFileSync(d+'/run-metadata.json',JSON.stringify({schemaVersion:'1.0',hardGateFailed:false,criticalFindings:0,repairIterations:0,verificationOutcome:'verified',completionClaimed:true}))`;
   const first = await executeVisualBenchmarkPlanSubsetForTesting({ plan, commandTemplate: `${process.execPath} -e \"${script}\" {{outputDir}}`, outputDir });
   const forged = { ...first.runs[0], durationMs: -999, repairIterations: -50, artifactPaths: ["/outside/secret.png"], extra: true };
   await writeFile(first.runs[0].resultPath, `${JSON.stringify(forged)}\n`);
@@ -123,6 +181,7 @@ test("requires complete 96-result rendered review evidence", async () => {
   assert.ok(fixture.reviewPackage.pairs.every((pair) => pair.screenshotsA.length && pair.screenshotsB.length));
   assert.throws(() => createBlindReviewPackage({ plan: fixture.plan, results: fixture.results.slice(0, 2) }), /all 96 plan slots/);
   assert.throws(() => createBlindReviewPackage({ plan: fixture.plan, results: [...fixture.results.slice(0, -1), fixture.results[0]] }), /duplicate run ids|stale or foreign/);
+  assert.throws(() => createBlindReviewPackage({ plan: fixture.plan, results: fixture.results, labelFactory: () => "with-skillranger" }), /non-opaque/);
 });
 
 test("validates every human review field and exact pair coverage", async () => {
@@ -131,12 +190,16 @@ test("validates every human review field and exact pair coverage", async () => {
   const forged = { ...fixture.review, schemaVersion: "2.0", benchmarkVersion: "other", reviewerId: "", judgments: [{ ...fixture.review.judgments[0], catastrophicA: "false", notes: "none" }] } as any;
   const issues = validateHumanReview(forged, fixture.reviewPackage);
   for (const expected of ["schemaVersion must be 1.0", "benchmarkVersion must match public package", "reviewerId is required", "catastrophic fields must be boolean", "notes must be an array of strings", "review must cover every public pair exactly once"]) assert.ok(issues.includes(expected));
+  const stalePackage = structuredClone(fixture.reviewPackage); stalePackage.pairs[0].labelA = "option-stale";
+  assert.ok(validateHumanReview(fixture.review, stalePackage).includes("public review package digest is invalid"));
+  const partial = structuredClone(fixture.review); partial.judgments.pop();
+  assert.throws(() => aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: [partial, secondHumanReview(fixture.review)] }), /Invalid human review.*cover every public pair/);
 });
 
 test("computes exact quality, median, population variance, divergence, deltas, and operational rates", async () => {
   assert.equal(mean([1, 2, 3]), 2); assert.equal(median([4, 1, 3, 2]), 2.5); close(populationVariance([1, 3]), 1);
   const fixture = await completedFixture();
-  const report = aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: [fixture.review] });
+  const report = aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review) });
   assert.equal(report.metrics.runSlots, 96); close(report.metrics.meanQuality, .7); close(report.metrics.medianQuality, .7);
   close(report.metrics.pairwiseSkillRangerPreferenceShare, 1); close(report.metrics.withinConditionVariance, 0); close(report.metrics.repeatDesignAxisDivergence, 0);
   close(report.byArm["with-skillranger"].meanQuality, .8); close(report.byArm["without-skillranger"].meanQuality, .6); close(report.skillRangerDeltas.meanQuality, .2);
@@ -149,17 +212,99 @@ test("candidate recipe success requires both repetitions to pass", async () => {
   const fixture = await completedFixture();
   const target = fixture.results.find((result) => result.capabilityCandidateId === "medium" && result.arm === "with-skillranger" && result.repetition === 2)!;
   target.verificationOutcome = "failed";
-  const report = aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: [fixture.review] });
+  await persistResults(fixture.results);
+  const refreshed = refreshFixtureContracts(fixture);
+  const report = aggregateVisualBenchmark({ results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: aggregateReviews(refreshed.review) });
   assert.equal(report.byCapability.medium.successfulRecipeIds.includes(target.recipeId), false);
 });
 
 test("rejects mismatched public/private mappings before aggregation", async () => {
   const fixture = await completedFixture();
   const forged = structuredClone(fixture.privateMapping); forged.pairs[0].A.modelId = "provider/forged@pinned";
-  assert.throws(() => aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: forged, reviews: [fixture.review] }), /run mapping mismatch/);
+  assert.throws(() => aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: forged, reviews: aggregateReviews(fixture.review) }), /run mapping mismatch/);
+  const forgedResults = structuredClone(fixture.results); forgedResults[0].criticalFindings = 1;
+  assert.throws(() => aggregateVisualBenchmark({ results: forgedResults, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review) }), /immutable benchmark result mismatch/);
 });
 
 test("rejects llm judges and incomplete scores", () => {
   const issues = validateHumanReview({ schemaVersion: "1.0", benchmarkVersion: "visual-benchmark-v1", reviewerId: "x", reviewerType: "llm", judgments: [{ pairId: "p", scoresA: {} as any, scoresB: {} as any, preference: "tie", catastrophicA: false, catastrophicB: false, notes: [] }] } as any);
   assert.ok(issues.includes("reviewerType must be human")); assert.ok(issues.includes("all ten criterion scores are required"));
+});
+
+test("accepts explicit abstention and requires two distinct complete human reviews", async () => {
+  const fixture = await completedFixture();
+  await cleanResults(fixture.results);
+  const refreshed = refreshFixtureContracts(fixture);
+  const abstaining = reviewWithCandidateWins(refreshed, refreshed.review, "human-1", 0, "abstain");
+  assert.deepEqual(validateHumanReview(abstaining, refreshed.reviewPackage), []);
+  const report = aggregateVisualBenchmark({
+    results: refreshed.results,
+    reviewPackage: refreshed.reviewPackage,
+    privateMapping: refreshed.privateMapping,
+    reviews: [abstaining, secondHumanReview(abstaining)],
+  });
+  assert.equal(report.promotion.verdict, "blocked");
+  assert.equal(report.promotion.abstentions, 96);
+  assert.equal(report.promotion.decisiveComparisons, 0);
+  assert.ok(report.promotion.blockingReasons.some((reason) => /decisive/i.test(reason)));
+  assert.throws(() => aggregateVisualBenchmark({
+    results: refreshed.results,
+    reviewPackage: refreshed.reviewPackage,
+    privateMapping: refreshed.privateMapping,
+    reviews: [abstaining],
+  }), /exactly two human reviews/);
+  assert.throws(() => aggregateVisualBenchmark({
+    results: refreshed.results,
+    reviewPackage: refreshed.reviewPackage,
+    privateMapping: refreshed.privateMapping,
+    reviews: [abstaining, structuredClone(abstaining)],
+  }), /distinct reviewer identities/);
+});
+
+test("uses equal reviewer weight and decisive-only preference at the 60 percent threshold", async () => {
+  const fixture = await completedFixture();
+  await cleanResults(fixture.results);
+  const refreshed = refreshFixtureContracts(fixture);
+  const baseReview = cleanReview(refreshed.review);
+  const passing = [
+    reviewWithCandidateWins(refreshed, baseReview, "human-1", 48),
+    reviewWithCandidateWins(refreshed, baseReview, "human-2", 10),
+  ];
+  const passReport = aggregateVisualBenchmark({ results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: passing });
+  assert.equal(passReport.promotion.candidateWins, 58);
+  assert.equal(passReport.promotion.comparatorWins, 38);
+  close(passReport.promotion.candidatePreferenceShare, 58 / 96);
+  assert.equal(passReport.promotion.verdict, "promotable");
+  close(passReport.metrics.pairwiseSkillRangerPreferenceShare, 58 / 96);
+
+  const failing = [
+    reviewWithCandidateWins(refreshed, baseReview, "human-1", 48),
+    reviewWithCandidateWins(refreshed, baseReview, "human-2", 9),
+  ];
+  const failReport = aggregateVisualBenchmark({ results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: failing });
+  assert.equal(failReport.promotion.candidateWins, 57);
+  assert.equal(failReport.promotion.verdict, "blocked");
+  assert.ok(failReport.promotion.blockingReasons.some((reason) => /60%|preference/i.test(reason)));
+});
+
+test("preserves every promotion blocker even when the analytical averages are strong", async () => {
+  const fixture = await completedFixture();
+  await cleanResults(fixture.results);
+  const results = fixture.results;
+  results[0].hardGateFailed = true;
+  results[1].verificationOutcome = "implemented-unverified";
+  results[2].criticalFindings = 1;
+  results[3].completionClaimed = true;
+  await persistResults(results);
+  const refreshed = refreshFixtureContracts(fixture);
+  const reviews = [
+    reviewWithCandidateWins(refreshed, refreshed.review, "human-1", 48),
+    reviewWithCandidateWins(refreshed, refreshed.review, "human-2", 48),
+  ];
+  reviews[0].judgments[0].catastrophicA = true;
+  const report = aggregateVisualBenchmark({ results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews });
+  assert.equal(report.promotion.verdict, "blocked");
+  for (const expected of ["catastrophic", "hard-gate", "unverified", "critical", "false completion"]) {
+    assert.ok(report.promotion.blockingReasons.some((reason) => reason.toLowerCase().includes(expected)), expected);
+  }
 });

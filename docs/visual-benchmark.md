@@ -27,6 +27,7 @@ By default each slot uses `results/runs/<immutable-run-id>/workspace` and the re
 {
   "schemaVersion": "1.0",
   "hardGateFailed": false,
+  "criticalFindings": 0,
   "repairIterations": 1,
   "verificationOutcome": "verified",
   "completionClaimed": true
@@ -37,11 +38,13 @@ By default each slot uses `results/runs/<immutable-run-id>/workspace` and the re
 
 ## Blind human review
 
-Reviewers receive only opaque randomized A/B labels and copied rendered screenshots. They score all ten criteria from 1–5, select A/B/tie, mark catastrophic failures, and may add notes. `reviewerType` must be `human`; LLM judging does not satisfy this gate. **Never place or share the private A/B mapping in the public review directory.** The mapping is unblinded only during aggregation.
+Exactly two distinct reviewers receive only opaque randomized A/B labels and copied rendered screenshots. Each reviewer must be human, independently cover every pair exactly once, score all ten criteria from 1–5, select A/B/tie/abstain, mark catastrophic failures, and may add notes. The public package carries a SHA-256 snapshot digest, which every human review must echo; the restricted private mapping also carries a digest for each immutable run result. These bindings prevent same-version reviews or edited result indexes from being reused during certification. LLM judging, duplicate reviewer identities, partial reviews, and stale reviews fail before certification. **Never place or share the private A/B mapping in the public review directory.** The mapping is unblinded only during aggregation.
 
 ## Metrics
 
-Run quality is the arithmetic mean of ten scores divided by 5. Preference share is `(SkillRanger wins + 0.5 × ties) / reviewed pairs`. Repeat variance is population variance within brief/candidate/arm. Design-axis divergence is Euclidean distance between repetition vectors divided by `sqrt(10 × 16)`. Reports also include median quality, catastrophic and hard-gate failure rates, mean repair iterations, verification success, false completion (completion claimed without `verified`), per-candidate values, and SkillRanger deltas.
+Run quality is the arithmetic mean of ten scores divided by 5. Preference share is the equal-weight decisive share `SkillRanger wins / (SkillRanger wins + comparator wins)`; ties and abstentions are reported but never candidate wins. Repeat variance is population variance within brief/candidate/arm. Design-axis divergence is Euclidean distance between repetition vectors divided by `sqrt(10 × 16)`. Reports also include median quality, catastrophic and hard-gate failure rates, mean repair iterations, verification success, false completion (completion claimed without `verified`), per-candidate values, and SkillRanger deltas.
+
+The aggregate report includes `promotion.verdict` (`promotable` or `blocked`) and `promotion.blockingReasons`. Promotion requires at least 60% decisive blinded preference, at least one decisive judgment, and no catastrophic finding, unverified outcome, hard-gate failure, critical finding, or false completion claim. The complete report and its reasons are retained even when analytical averages look favorable.
 
 | Profile | Evidence and thresholds |
 | --- | --- |

@@ -34,17 +34,36 @@ export type VisualBenchmarkPlanEntry = {
 };
 export type VisualBenchmarkPlan = { schemaVersion: "1.0"; benchmarkVersion: string; skillRangerVersion: string; skillRangerChecksum: string; entries: VisualBenchmarkPlanEntry[] };
 export type VisualVerificationOutcome = "verified" | "failed" | "implemented-unverified" | "blocked";
+export type VisualOperationalEvidence = {
+  hardGateFailed: boolean;
+  criticalFindings: number;
+  repairIterations: number;
+  verificationOutcome: VisualVerificationOutcome;
+  completionClaimed: boolean;
+};
 export type VisualBenchmarkRunResult = VisualBenchmarkPlanEntry & {
   benchmarkVersion: string; skillRangerVersion: string; skillRangerChecksum: string; workspacePath: string;
   resultPath: string; dryRun: boolean; exitCode: number | null; signal: string | null; durationMs: number;
   stdoutPath?: string; stderrPath?: string; artifactPaths: string[];
-  operationalEvidence: "complete" | "incomplete"; hardGateFailed: boolean | null; repairIterations: number | null;
+  operationalEvidence: "complete" | "incomplete"; hardGateFailed: boolean | null; criticalFindings: number | null; repairIterations: number | null;
   verificationOutcome: VisualVerificationOutcome | null; completionClaimed: boolean | null;
 };
 
 export type VisualHumanReview = {
-  schemaVersion: "1.0"; benchmarkVersion: string; reviewerId: string; reviewerType: "human";
-  judgments: Array<{ pairId: string; scoresA: Record<VisualCriterion, number>; scoresB: Record<VisualCriterion, number>; preference: "A" | "B" | "tie"; catastrophicA: boolean; catastrophicB: boolean; notes: string[] }>;
+  schemaVersion: "1.0"; benchmarkVersion: string; reviewPackageDigest: string; reviewerId: string; reviewerType: "human";
+  judgments: Array<{ pairId: string; scoresA: Record<VisualCriterion, number>; scoresB: Record<VisualCriterion, number>; preference: "A" | "B" | "tie" | "abstain"; catastrophicA: boolean; catastrophicB: boolean; notes: string[] }>;
+};
+
+export type VisualPromotionVerdict = {
+  verdict: "promotable" | "blocked";
+  blockingReasons: string[];
+  reviewerCount: number;
+  decisiveComparisons: number;
+  candidateWins: number;
+  comparatorWins: number;
+  ties: number;
+  abstentions: number;
+  candidatePreferenceShare: number;
 };
 
 export type VisualBenchmarkMetricSet = {
@@ -62,4 +81,5 @@ export type VisualBenchmarkReport = {
   byArm: Record<VisualBenchmarkArm, VisualBenchmarkMetricSet>;
   skillRangerDeltas: Record<string, number>;
   modelIds: string[]; successfulRecipeIds: string[]; evidencePaths: string[];
+  promotion: VisualPromotionVerdict;
 };

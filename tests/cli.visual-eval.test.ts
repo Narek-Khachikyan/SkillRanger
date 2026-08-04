@@ -50,7 +50,7 @@ test("eval:visual prevents private mapping inside a public tree through symlink 
 test("eval:visual runs, prepares, and aggregates runner-produced operational evidence end to end", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "visual-cli-e2e-"));
   const agent = path.join(root, "agent.cjs");
-  await writeFile(agent, `const f=require('fs'),p=require('path'),d=process.argv[2];f.writeFileSync(p.join(d,'screen.png'),'pixels');f.writeFileSync(p.join(d,'run-metadata.json'),JSON.stringify({schemaVersion:'1.0',hardGateFailed:false,repairIterations:1,verificationOutcome:'verified',completionClaimed:true}));`);
+  await writeFile(agent, `const f=require('fs'),p=require('path'),d=process.argv[2];f.writeFileSync(p.join(d,'screen.png'),'pixels');f.writeFileSync(p.join(d,'run-metadata.json'),JSON.stringify({schemaVersion:'1.0',hardGateFailed:false,criticalFindings:0,repairIterations:1,verificationOutcome:'verified',completionClaimed:true}));`);
   const artifacts = path.join(root, "artifacts"); const results = path.join(root, "results.json");
   await cli(["--run", "--candidates", "tests/fixtures/visual-candidates.json", "--command", `${process.execPath} ${agent} {{outputDir}}`, "--artifacts", artifacts, "--output", results, "--json"]);
   const resultIndex = JSON.parse(await readFile(results, "utf8"));
@@ -61,9 +61,10 @@ test("eval:visual runs, prepares, and aggregates runner-produced operational evi
   const publicValue = JSON.parse(await readFile(publicPackage, "utf8")); const mappingValue = JSON.parse(await readFile(privateMapping, "utf8"));
   const mappingByPair = new Map(mappingValue.pairs.map((pair: any) => [pair.pairId, pair]));
   const scores = Object.fromEntries(publicValue.criteria.map((criterion: string) => [criterion, 4]));
-  const review = { schemaVersion: "1.0", benchmarkVersion: publicValue.benchmarkVersion, reviewerId: "human-e2e", reviewerType: "human", judgments: publicValue.pairs.map((pair: any) => ({ pairId: pair.pairId, scoresA: scores, scoresB: scores, preference: "tie", catastrophicA: false, catastrophicB: false, notes: [] })) };
+  const review = { schemaVersion: "1.0", benchmarkVersion: publicValue.benchmarkVersion, reviewPackageDigest: publicValue.reviewPackageDigest, reviewerId: "human-e2e", reviewerType: "human", judgments: publicValue.pairs.map((pair: any) => ({ pairId: pair.pairId, scoresA: scores, scoresB: scores, preference: "tie", catastrophicA: false, catastrophicB: false, notes: [] })) };
   assert.equal(mappingByPair.size, 48);
-  const reviewPath = path.join(root, "review.json"); const reportPath = path.join(root, "report.json"); await writeFile(reviewPath, JSON.stringify(review));
-  await cli(["--aggregate", "--results", results, "--review-package", publicPackage, "--private-mapping", privateMapping, "--human-review", reviewPath, "--output", reportPath, "--json"]);
-  const report = JSON.parse(await readFile(reportPath, "utf8")); assert.equal(report.metrics.runSlots, 96); assert.equal(report.metrics.verificationSuccessRate, 1); assert.equal(report.metrics.meanRepairIterations, 1);
+  const reviewPath = path.join(root, "review.json"); const secondReviewPath = path.join(root, "review-2.json"); const reportPath = path.join(root, "report.json");
+  await writeFile(reviewPath, JSON.stringify(review)); await writeFile(secondReviewPath, JSON.stringify({ ...review, reviewerId: "human-e2e-2" }));
+  await cli(["--aggregate", "--results", results, "--review-package", publicPackage, "--private-mapping", privateMapping, "--human-review", `${reviewPath},${secondReviewPath}`, "--output", reportPath, "--json"]);
+  const report = JSON.parse(await readFile(reportPath, "utf8")); assert.equal(report.metrics.runSlots, 96); assert.equal(report.metrics.verificationSuccessRate, 1); assert.equal(report.metrics.meanRepairIterations, 1); assert.equal(report.promotion.verdict, "blocked");
 });
