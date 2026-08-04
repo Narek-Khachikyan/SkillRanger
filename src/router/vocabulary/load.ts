@@ -28,7 +28,9 @@ export const loadDomainRoutingVocabulary = async (input: {
   root: string;
   manifest: DomainPackManifest;
 }): Promise<{ vocabulary: RoutingVocabularyFile; bytes: number } | undefined> => {
-  const relative = input.manifest.schemaVersion === "1.1" ? input.manifest.artifacts.routingVocabulary : undefined;
+  const relative = input.manifest.schemaVersion === "1.1" || input.manifest.schemaVersion === "1.2"
+    ? input.manifest.artifacts.routingVocabulary
+    : undefined;
   if (!relative) return undefined;
   if (path.isAbsolute(relative) || relative.replace(/\\/gu, "/").split("/").includes("..")) {
     throw new Error("routing-vocabulary-path-invalid");
@@ -65,4 +67,3 @@ export const adaptFixtureRoutingPacks = (packs: RouterFixturePack[]): LoadedRout
   ownership: pack.schemaVersion === "router-fixture-pack/1.1" ? pack.domain.ownership ?? [] : [],
   ...(pack.schemaVersion === "router-fixture-pack/1.1" && pack.vocabulary ? { vocabulary: pack.vocabulary } : {}),
 }));
-

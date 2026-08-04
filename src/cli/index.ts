@@ -60,6 +60,7 @@ import { handleRunCliCommand } from "./runs.ts";
 import { summarizeSetupRecommendations } from "./setup-recommendations.ts";
 import { handleVisualEvalCommand } from "./visual-eval.ts";
 import { handleTaskCliCommand } from "./task.ts";
+import { handleReleaseCommand } from "./release.ts";
 
 const asString = (value: string | boolean | undefined, fallback: string) => (typeof value === "string" ? value : fallback);
 
@@ -454,6 +455,8 @@ const run = async () => {
   const registryRoot = defaultRegistryRoot;
 
   if (await handleVisualEvalCommand({ command, flags: args.flags })) return;
+
+  if (await handleReleaseCommand({ command, flags: args.flags })) return;
 
   if (await handleTaskCliCommand({ command, positionals: args.positionals, flags: args.flags, registryRoot })) return;
 

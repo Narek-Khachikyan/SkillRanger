@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { cp, lstat, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { packageRoot } from "../../paths.ts";
@@ -10,6 +11,7 @@ const arms = ["without-skillranger", "with-skillranger"] as const;
 const repetitions = [1, 2] as const;
 const resultKeys = ["runId", "briefId", "recipeId", "capabilityCandidateId", "modelId", "commandProfile", "arm", "repetition", "prompt", "fixture", "route", "benchmarkVersion", "skillRangerVersion", "skillRangerChecksum", "workspacePath", "resultPath", "dryRun", "exitCode", "signal", "durationMs", "stdoutPath", "stderrPath", "artifactPaths", "operationalEvidence", "hardGateFailed", "criticalFindings", "repairIterations", "verificationOutcome", "completionClaimed"];
 const entryKeys = ["runId", "briefId", "recipeId", "capabilityCandidateId", "modelId", "commandProfile", "arm", "repetition", "prompt", "fixture", "route"];
+const profileDigestPattern = /^sha256:[a-f0-9]{64}$/;
 const planKeys = ["schemaVersion", "benchmarkVersion", "skillRangerVersion", "skillRangerChecksum", "entries"];
 const safeRunId = /^[a-z0-9][a-z0-9._-]{2,255}$/;
 const exactKeys = (value: Record<string, unknown>, keys: string[]) => {
@@ -19,27 +21,50 @@ const exactKeys = (value: Record<string, unknown>, keys: string[]) => {
 const object = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const contained = (root: string, candidate: string) => candidate === root || candidate.startsWith(`${root}${path.sep}`);
 const canonicalRunId = (entry: Pick<VisualBenchmarkPlanEntry, "briefId" | "capabilityCandidateId" | "arm" | "repetition">) => `${entry.briefId}--${entry.capabilityCandidateId}--${entry.arm}--r${entry.repetition}`;
+const keysWithProfileDigest = (value: Record<string, unknown>, keys: string[]) =>
+  Object.hasOwn(value, "commandProfileDigest") ? [...keys, "commandProfileDigest"] : keys;
+const validateProfileDigest = (value: unknown, label: string) => {
+  if (typeof value !== "string" || !profileDigestPattern.test(value)) throw new Error(`${label} must be a sha256 digest`);
+};
 
 export const validateVisualCandidates = (value: unknown): VisualCapabilityCandidate[] => {
   if (!Array.isArray(value) || value.length !== 3) throw new Error("visual benchmark candidates must contain exactly three records");
   const candidates = value.map((candidate, index) => {
-    if (!object(candidate) || !exactKeys(candidate, ["id", "modelId", "commandProfile"])) throw new Error(`visual benchmark candidate ${index} has invalid keys`);
+    if (!object(candidate) || !exactKeys(candidate, keysWithProfileDigest(candidate, ["id", "modelId", "commandProfile"]))) throw new Error(`visual benchmark candidate ${index} has invalid keys`);
     const { id, modelId, commandProfile } = candidate;
     if (!candidateIds.includes(id as typeof candidateIds[number])) throw new Error(`invalid visual benchmark candidate id: ${String(id)}`);
     if (typeof modelId !== "string" || !/^[^\s/@]+\/[^\s@]+@[^\s@]+$/.test(modelId)) throw new Error(`candidate ${String(id)} modelId must be an exact pinned provider/model@version identity`);
     if (typeof commandProfile !== "string" || !commandProfile.trim() || path.isAbsolute(commandProfile) || commandProfile.split(/[\\/]/).includes("..") || /[\0\r\n]/.test(commandProfile)) throw new Error(`candidate ${String(id)} commandProfile must be a safe non-empty relative path`);
-    return { id, modelId, commandProfile } as VisualCapabilityCandidate;
+    if (Object.hasOwn(candidate, "commandProfileDigest")) validateProfileDigest(candidate.commandProfileDigest, `candidate ${String(id)} commandProfileDigest`);
+    return {
+      id, modelId, commandProfile,
+      ...(typeof candidate.commandProfileDigest === "string" ? { commandProfileDigest: candidate.commandProfileDigest } : {}),
+    } as VisualCapabilityCandidate;
   });
   for (const id of candidateIds) if (candidates.filter((candidate) => candidate.id === id).length !== 1) throw new Error("visual benchmark candidates must contain weak, medium, and strong exactly once");
   return candidates;
 };
+
+const profileDigest = (bytes: Uint8Array) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+
+export const bindVisualCandidateProfileDigests = async (
+  candidates: VisualCapabilityCandidate[],
+  root: string,
+): Promise<VisualCapabilityCandidate[]> => Promise.all(validateVisualCandidates(candidates).map(async (candidate) => {
+  try {
+    const bytes = await readFile(path.resolve(root, candidate.commandProfile));
+    return { ...candidate, commandProfileDigest: profileDigest(bytes) };
+  } catch {
+    return candidate;
+  }
+}));
 
 export const generateVisualBenchmarkPlan = (input: { suite: VisualBenchmarkSuite; candidates: VisualCapabilityCandidate[] }): VisualBenchmarkPlan => {
   const candidates = validateVisualCandidates(input.candidates); const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
   const entries: VisualBenchmarkPlanEntry[] = [];
   for (const brief of input.suite.briefs) for (const id of candidateIds) for (const arm of arms) for (const repetition of repetitions) {
     const candidate = byId.get(id)!;
-    entries.push({ runId: `${brief.id}--${id}--${arm}--r${repetition}`, briefId: brief.id, recipeId: brief.recipeId, capabilityCandidateId: id, modelId: candidate.modelId, commandProfile: candidate.commandProfile, arm, repetition, prompt: brief.prompt, fixture: brief.fixture, route: brief.route });
+    entries.push({ runId: `${brief.id}--${id}--${arm}--r${repetition}`, briefId: brief.id, recipeId: brief.recipeId, capabilityCandidateId: id, modelId: candidate.modelId, commandProfile: candidate.commandProfile, ...(candidate.commandProfileDigest ? { commandProfileDigest: candidate.commandProfileDigest } : {}), arm, repetition, prompt: brief.prompt, fixture: brief.fixture, route: brief.route });
   }
   const plan: VisualBenchmarkPlan = { schemaVersion: "1.0", benchmarkVersion: input.suite.version, skillRangerVersion: input.suite.skillRangerVersion, skillRangerChecksum: input.suite.skillRangerChecksum, entries };
   validateVisualBenchmarkPlan(plan);
@@ -47,8 +72,9 @@ export const generateVisualBenchmarkPlan = (input: { suite: VisualBenchmarkSuite
 };
 
 const validateEntry = (entry: unknown, index: number): VisualBenchmarkPlanEntry => {
-  if (!object(entry) || !exactKeys(entry, entryKeys)) throw new Error(`visual benchmark plan entry ${index} has invalid keys`);
+  if (!object(entry) || !exactKeys(entry, keysWithProfileDigest(entry, entryKeys))) throw new Error(`visual benchmark plan entry ${index} has invalid keys`);
   for (const key of ["runId", "briefId", "recipeId", "modelId", "commandProfile", "prompt", "fixture", "route"] as const) if (typeof entry[key] !== "string" || !(entry[key] as string).length) throw new Error(`visual benchmark plan entry ${index}.${key} must be non-empty`);
+  if (Object.hasOwn(entry, "commandProfileDigest")) validateProfileDigest(entry.commandProfileDigest, `visual benchmark plan entry ${index}.commandProfileDigest`);
   if (!candidateIds.includes(entry.capabilityCandidateId as typeof candidateIds[number]) || !arms.includes(entry.arm as typeof arms[number]) || !repetitions.includes(entry.repetition as 1 | 2)) throw new Error(`visual benchmark plan entry ${index} has an invalid matrix cell`);
   const typed = entry as unknown as VisualBenchmarkPlanEntry;
   if (!safeRunId.test(typed.runId) || typed.runId !== canonicalRunId(typed) || path.isAbsolute(typed.runId) || typed.runId.includes("..")) throw new Error(`visual benchmark plan entry ${index} has invalid canonical runId`);
@@ -114,9 +140,9 @@ const loadOperationalMetadata = async (runDir: string): Promise<OperationalMetad
 };
 
 const assertPersistedResult = async (value: unknown, entry: VisualBenchmarkPlanEntry, plan: VisualBenchmarkPlan, runDir: string): Promise<VisualBenchmarkRunResult> => {
-  if (!object(value) || !exactKeys(value, resultKeys)) throw new Error(`stale benchmark run ${entry.runId}: invalid result contract`);
+  if (!object(value) || !exactKeys(value, keysWithProfileDigest(value, resultKeys))) throw new Error(`stale benchmark run ${entry.runId}: invalid result contract`);
   const result = value as unknown as VisualBenchmarkRunResult;
-  for (const key of entryKeys as Array<keyof VisualBenchmarkPlanEntry>) if (result[key] !== entry[key]) throw new Error(`stale benchmark run ${entry.runId}`);
+  for (const key of keysWithProfileDigest(entry, entryKeys) as Array<keyof VisualBenchmarkPlanEntry>) if (result[key] !== entry[key]) throw new Error(`stale benchmark run ${entry.runId}`);
   if (result.benchmarkVersion !== plan.benchmarkVersion || result.skillRangerVersion !== plan.skillRangerVersion || result.skillRangerChecksum !== plan.skillRangerChecksum || result.dryRun !== false || !Number.isFinite(result.durationMs) || result.durationMs < 0 || !(result.exitCode === null || Number.isInteger(result.exitCode)) || !(result.signal === null || typeof result.signal === "string")) throw new Error(`stale benchmark run ${entry.runId}: invalid provenance`);
   const expectedWorkspace = path.join(runDir, "workspace"); const expectedResult = path.join(runDir, "run-result.json");
   if (path.resolve(result.workspacePath) !== path.resolve(expectedWorkspace) || path.resolve(result.resultPath) !== path.resolve(expectedResult) || result.stdoutPath !== path.join(runDir, "stdout.txt") || result.stderrPath !== path.join(runDir, "stderr.txt")) throw new Error(`stale benchmark run ${entry.runId}: invalid paths`);

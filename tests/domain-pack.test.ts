@@ -31,24 +31,27 @@ test("bundled frontend domain registers through the generic domain API", async (
   assert.deepEqual(diskManifest, domain.manifest);
 });
 
-test("domain manifest v1.1 accepts routing vocabulary and typed required evidence without weakening v1.0", () => {
+test("domain manifest v1.2 release identity preserves v1.1 and v1.0 compatibility", () => {
   const bundled = structuredClone(getDomainPack("frontend")?.manifest);
   assert.ok(bundled);
-  const { routingVocabulary: _routingVocabulary, ...v10Artifacts } = bundled.artifacts;
+  assert.equal(bundled.schemaVersion, "1.2");
+  assert.equal(bundled.releaseVersion, "0.4.0");
+  const { releaseVersion: _releaseVersion, ...legacyBundled } = bundled;
+  const { routingVocabulary: _routingVocabulary, releaseManifest: _releaseManifest, ...v10Artifacts } = legacyBundled.artifacts;
   const v10 = {
-    ...bundled,
+    ...legacyBundled,
     schemaVersion: "1.0",
     artifacts: v10Artifacts,
-    ownership: bundled.ownership.map((rule) => ({
+    ownership: legacyBundled.ownership.map((rule) => ({
       ...rule,
       ...(rule.requiresEvidence ? { requiresEvidence: rule.requiresEvidence.map((evidence) => typeof evidence === "string" ? evidence : evidence.id) } : {}),
     })),
   };
   const v11 = {
-    ...bundled,
+    ...legacyBundled,
     schemaVersion: "1.1",
-    artifacts: { ...bundled.artifacts, routingVocabulary: "routing.vocabulary.json" },
-    ownership: bundled.ownership.map((rule) => rule.primarySkill === "frontend.design-to-code"
+    artifacts: { ...v10Artifacts, routingVocabulary: "routing.vocabulary.json" },
+    ownership: legacyBundled.ownership.map((rule) => rule.primarySkill === "frontend.design-to-code"
       ? {
           ...rule,
           requiresEvidence: [{ kind: "intent", id: "visual-reference", allowedSources: ["prompt-exact"] }],
@@ -58,6 +61,12 @@ test("domain manifest v1.1 accepts routing vocabulary and typed required evidenc
   assert.deepEqual(validateDomainPackManifest(v11), []);
   assert.ok(validateDomainPackManifest({ ...v10, artifacts: v11.artifacts }).some((issue) => issue.includes("routingVocabulary")));
   assert.ok(validateDomainPackManifest({ ...v11, ownership: v10.ownership }).some((issue) => issue.includes("requiresEvidence")));
+  assert.ok(validateDomainPackManifest({ ...v11, releaseVersion: "0.4.0" }).some((issue) => issue.includes("releaseVersion")));
+  assert.ok(validateDomainPackManifest({ ...bundled, artifacts: { ...bundled.artifacts, releaseManifest: "" } }).some((issue) => issue.includes("releaseManifest")));
+  assert.ok(validateDomainPackManifest({ ...bundled, artifacts: { ...bundled.artifacts, releaseManifest: "x".repeat(257) } }).some((issue) => issue.includes("releaseManifest")));
+  assert.ok(validateDomainPackManifest({ ...bundled, artifacts: { ...bundled.artifacts, releaseManifest: "../release.json" } }).some((issue) => issue.includes("releaseManifest")));
+  assert.ok(validateDomainPackManifest({ ...bundled, artifacts: { ...bundled.artifacts, evalSuite: "" } }).some((issue) => issue.includes("evalSuite")));
+  assert.ok(validateDomainPackManifest({ ...bundled, artifacts: { ...bundled.artifacts, schemas: [bundled.artifacts.schemas[0], bundled.artifacts.schemas[0]] } }).some((issue) => issue.includes("schemas")));
 });
 
 test("source and built frontend adapters load the canonical manifest JSON", async () => {

@@ -2,6 +2,33 @@
 
 This checklist covers the current public beta. It verifies the npx/npm UX, compiled npm binaries, source-run CLI, MCP server, Universal Prompt Router, bundled registry, audit gates, frontend and router eval suites, and package hygiene before handing the beta to another user or publishing a tarball.
 
+0.4.0 is the frontend design certification release. The package and frontend domain publish the same release identity, a six-family/18-rule contract, eight recipe packs, 80 deterministic worked-example assets, and the frozen visual benchmark pinned to `visual-benchmark-v1`. Validate the shipped contract with:
+
+```bash
+npm run release:validate
+```
+
+After external benchmark execution and independent review, assemble the retained evidence into one handoff report:
+
+```bash
+node src/cli/index.ts release:certify \
+  --visual-candidates /path/to/candidates.json \
+  --visual-plan /path/to/plan.json \
+  --visual-results /path/to/results/index.json \
+  --visual-report /path/to/aggregate.json \
+  --review-package /path/to/public/package.json \
+  --private-mapping /restricted/path/mapping.json \
+  --capability-record /restricted/path/capability.json \
+  --human-review /restricted/path/review-a.json,/restricted/path/review-b.json \
+  --baseline-evidence /path/to/task-evidence.json \
+  --output /path/to/release-handoff.json \
+  --json
+```
+
+The command retains SHA-256 file metadata and returns `promotable` only when the artifact, visual, matched three-arm baseline, and evidence-completeness gates all pass. Missing evidence, hard gates, catastrophic findings, false completion, incomplete operational evidence, preference regressions, or baseline regressions produce `not-promotable` and exit non-zero. External model execution remains outside the deterministic local release check; its immutable outputs must be supplied to this handoff.
+
+Each candidate's safe relative `commandProfile` is resolved beside the candidate configuration, its `sha256:` digest is copied into every plan entry and run result, and the file is retained as a separate hashed evidence artifact. Certification rejects missing or changed profile digests. The certification command always uses the checked-in frozen visual and frontend eval suites; those suites are not overrideable at release time.
+
 0.3.2 is a patch release. Visual verification now derives rendered-state and synchronization findings from persisted evidence at the final boundary instead of trusting caller-supplied checks; a `verified` synchronization must include a concrete action and at least one locator-level before/after change. The legacy synchronization shape remains readable, but it is non-certifying without causal evidence. Strict critic reports stay bound to their own screenshot attempt across bounded repairs, and MCP visual contracts publish the fields used for validation.
 
 0.3.1 is a patch release. CLI `run:finalize` now emits the same error `details` (`userMessage`, `blockedSkills`) as the MCP surface; repeat finalization of a terminal run is a no-op instead of advancing its revision; evidence kinds named after `Object.prototype` members are ingested as plain evidence again; `verify_visual_result` publishes the container fields it dereferences and rejects deeper malformed snapshot shapes as `invalid-arguments` instead of a JSON-RPC internal error; and the fixtures `eval:router` loads at startup now ship in the package.

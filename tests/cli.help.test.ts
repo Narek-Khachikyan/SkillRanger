@@ -35,6 +35,8 @@ const canonicalCommands = [
   "audit:registry",
   "lint:skills",
   "publish:check",
+  "release:validate",
+  "release:certify",
   "eval:visual",
   "eval:frontend",
   "install",

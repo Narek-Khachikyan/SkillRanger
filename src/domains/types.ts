@@ -74,6 +74,9 @@ export type DomainPackArtifactsV10 = DomainPackArtifactsBase;
 export type DomainPackArtifactsV11 = DomainPackArtifactsBase & {
   routingVocabulary?: string;
 };
+export type DomainPackArtifactsV12 = DomainPackArtifactsV11 & {
+  releaseManifest?: string;
+};
 
 export type DomainPackManifestBase<TArtifacts extends DomainPackArtifactsBase> = {
   id: string;
@@ -93,6 +96,11 @@ export type DomainPackManifest =
     })
   | (DomainPackManifestBase<DomainPackArtifactsV11> & {
       schemaVersion: "1.1";
+      ownership: DomainOwnershipRuleV11[];
+    })
+  | (DomainPackManifestBase<DomainPackArtifactsV12> & {
+      schemaVersion: "1.2";
+      releaseVersion: string;
       ownership: DomainOwnershipRuleV11[];
     });
 

@@ -1,8 +1,9 @@
 {
-  "schemaVersion": "1.1",
+  "schemaVersion": "1.2",
   "id": "frontend",
   "displayName": "Frontend",
   "version": "1.0.0",
+  "releaseVersion": "0.4.0",
   "coreApi": "1.0",
   "skillIdPrefix": "frontend.",
   "capabilities": [
@@ -31,7 +32,8 @@
       "schemas/visual-run.schema.json",
       "schemas/visual-execution-trace.schema.json",
       "schemas/ui-evidence-bundle.schema.json",
-      "schemas/model-capability-record.schema.json"
+      "schemas/model-capability-record.schema.json",
+      "schemas/release-manifest.schema.json"
     ],
     "rules": [
       "rules/index.json"
@@ -67,6 +69,7 @@
     "capabilityRecords": [
       "capabilities/default-constrained.json"
     ],
+    "releaseManifest": "release.json",
     "routingVocabulary": "routing.vocabulary.json"
   },
   "ownership": [

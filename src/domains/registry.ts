@@ -25,9 +25,10 @@ const capabilities = new Set<DomainCapability>([
   "repair",
   "evaluation",
 ]);
-const domainFields = new Set(["schemaVersion", "id", "displayName", "version", "coreApi", "skillIdPrefix", "capabilities", "artifacts", "ownership", "routing"]);
+const domainFields = new Set(["schemaVersion", "id", "displayName", "version", "releaseVersion", "coreApi", "skillIdPrefix", "capabilities", "artifacts", "ownership", "routing"]);
 const artifactFields = new Set(["intents", "schemas", "recipes", "rules", "examples", "workflows", "validators", "evalSuite", "capabilityRecords"]);
 const artifactFieldsV11 = new Set([...artifactFields, "routingVocabulary"]);
+const artifactFieldsV12 = new Set([...artifactFieldsV11, "releaseManifest"]);
 const ownershipFields = new Set(["intent", "primarySkill", "supportingSkills", "requiresEvidence"]);
 const routingFields = ["aliases", "intentTags", "artifactTypes", "technologyTags", "projectTags"] as const;
 const evidenceKinds = new Set(["domain", "action", "artifact", "intent", "technology", "quality", "constraint", "acceptance"]);
@@ -41,6 +42,9 @@ const isStringArray = (value: unknown): value is string[] =>
 
 const safeRelativePath = (value: string) =>
   !path.isAbsolute(value) && !value.replace(/\\/g, "/").split("/").includes("..");
+const boundedSafeRelativePath = (value: string) => value.length > 0 && value.length <= 256 && safeRelativePath(value);
+const artifactPathArray = (value: unknown): value is string[] =>
+  isStringArray(value) && value.length <= 64 && new Set(value).size === value.length && value.every(boundedSafeRelativePath);
 
 export const validateDomainPackManifest = (input: unknown): string[] => {
   const issues: string[] = [];
@@ -52,9 +56,14 @@ export const validateDomainPackManifest = (input: unknown): string[] => {
     if (!domainFields.has(key)) issues.push(`${key} is an unknown property`);
   }
   const schemaVersion = input.schemaVersion;
-  if (schemaVersion !== "1.0" && schemaVersion !== "1.1") issues.push("schemaVersion must be 1.0 or 1.1");
+  if (schemaVersion !== "1.0" && schemaVersion !== "1.1" && schemaVersion !== "1.2") issues.push("schemaVersion must be 1.0, 1.1, or 1.2");
   for (const key of ["id", "displayName", "version", "coreApi", "skillIdPrefix"] as const) {
     if (typeof input[key] !== "string" || !input[key].trim()) issues.push(`${key} is required`);
+  }
+  if (schemaVersion === "1.2") {
+    if (typeof input.releaseVersion !== "string" || !input.releaseVersion.trim()) issues.push("releaseVersion is required for schemaVersion 1.2");
+  } else if (input.releaseVersion !== undefined) {
+    issues.push("releaseVersion is only supported by schemaVersion 1.2");
   }
   if (typeof input.id === "string" && !idPattern.test(input.id)) issues.push("id must be a safe slug");
   if (typeof input.skillIdPrefix === "string" && !input.skillIdPrefix.endsWith(".")) {
@@ -70,30 +79,34 @@ export const validateDomainPackManifest = (input: unknown): string[] => {
   if (!isRecord(input.artifacts)) {
     issues.push("artifacts must be an object");
   } else {
-    const allowedArtifactFields = schemaVersion === "1.1" ? artifactFieldsV11 : artifactFields;
+    const allowedArtifactFields = schemaVersion === "1.2"
+      ? artifactFieldsV12
+      : schemaVersion === "1.1" ? artifactFieldsV11 : artifactFields;
     for (const key of Object.keys(input.artifacts)) {
       if (!allowedArtifactFields.has(key)) issues.push(`artifacts.${key} is an unknown property`);
     }
     for (const key of ["intents", "schemas", "recipes", "workflows", "validators"] as const) {
-      if (!isStringArray(input.artifacts[key])) issues.push(`artifacts.${key} must be a string array`);
-      else if (!input.artifacts[key].every(safeRelativePath)) issues.push(`artifacts.${key} contains an unsafe path`);
+      if (!artifactPathArray(input.artifacts[key])) issues.push(`artifacts.${key} must be a unique bounded safe string array`);
     }
     for (const key of ["rules", "examples", "capabilityRecords"] as const) {
       if (input.artifacts[key] !== undefined) {
-        if (!isStringArray(input.artifacts[key])) issues.push(`artifacts.${key} must be a string array`);
-        else if (!input.artifacts[key].every(safeRelativePath)) issues.push(`artifacts.${key} contains an unsafe path`);
+        if (!artifactPathArray(input.artifacts[key])) issues.push(`artifacts.${key} must be a unique bounded safe string array`);
       }
+    }
+    if (schemaVersion === "1.2" && input.artifacts.releaseManifest !== undefined && (
+      typeof input.artifacts.releaseManifest !== "string" || !boundedSafeRelativePath(input.artifacts.releaseManifest)
+    )) {
+      issues.push("artifacts.releaseManifest must be a safe relative path");
     }
     if (
       input.artifacts.evalSuite !== undefined &&
-      (typeof input.artifacts.evalSuite !== "string" || !safeRelativePath(input.artifacts.evalSuite))
+      (typeof input.artifacts.evalSuite !== "string" || !boundedSafeRelativePath(input.artifacts.evalSuite))
     ) {
       issues.push("artifacts.evalSuite must be a safe relative path");
     }
-    if (schemaVersion === "1.1" && input.artifacts.routingVocabulary !== undefined && (
+    if ((schemaVersion === "1.1" || schemaVersion === "1.2") && input.artifacts.routingVocabulary !== undefined && (
       typeof input.artifacts.routingVocabulary !== "string" ||
-      input.artifacts.routingVocabulary.trim() === "" ||
-      !safeRelativePath(input.artifacts.routingVocabulary)
+      !boundedSafeRelativePath(input.artifacts.routingVocabulary)
     )) {
       issues.push("artifacts.routingVocabulary must be a safe relative path");
     }

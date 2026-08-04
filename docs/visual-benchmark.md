@@ -1,5 +1,11 @@
 # Visual benchmark and capability calibration
 
+The frozen benchmark is published as the `0.4.0` frontend release contract. Confirm the checked-in suite, its eight briefs, and deterministic example assets before running external candidates:
+
+```bash
+npm run release:validate
+```
+
 The frozen v1 matrix is **8 briefs × 3 externally configured capability candidates × 2 arms × 2 repetitions = 96 isolated runs**. Candidate ids (`weak`, `medium`, `strong`) are benchmark lanes, not conclusions inferred from model names. Use exact pinned model ids:
 
 ```json
@@ -22,6 +28,8 @@ npm run eval:visual -- --calibrate --report report.json --candidate medium --out
 ```
 
 By default each slot uses `results/runs/<immutable-run-id>/workspace` and the result index is `results/index.json`. With the optional split form above, slots use `results/artifacts/runs/<immutable-run-id>/workspace` while the index stays at `results/index.json`. Each run directory contains `run-result.json`, stdout, stderr, and evidence. The adapter must write `run-metadata.json` in the run directory with the exact versioned shape below; missing metadata is persisted as `operationalEvidence: "incomplete"`, and review/aggregation/calibration reject that run rather than substituting zero or favorable values.
+
+When the candidate configuration is loaded, SkillRanger resolves each safe profile path beside that configuration and records its `sha256:` digest in every matching plan entry and run result. Release certification requires those digests and compares them with the retained profile files, so a profile replacement after execution cannot be silently certified.
 
 ```json
 {
@@ -53,3 +61,5 @@ The aggregate report includes `promotion.verdict` (`promotable` or `blocked`) an
 | standard | all other sufficient, stable evidence |
 
 Unknown or insufficient evidence is constrained. Calibration uses measured candidate metrics, never model-id text. Retain the frozen suite, candidate config, command profiles, all immutable run results and screenshots, public review package, human reviews, private mapping in restricted storage, aggregate report, and emitted capability record for auditability.
+
+Once the candidate configuration, frozen plan, run index, screenshots, review files, emitted capability record, and matched three-arm baseline evidence exist, `release:certify` is the release boundary that recomputes the visual aggregate, checks both human reviews, records all retained-file hashes, and emits the final `promotable` or `not-promotable` verdict.

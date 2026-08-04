@@ -51,7 +51,7 @@ only through the compiled `dist/` output, which is why CI has a dedicated `node2
 ```mermaid
 graph TD
   subgraph Surfaces
-    CLI["src/cli/<br/>41 commands"]
+    CLI["src/cli/<br/>43 commands"]
     MCP["src/mcp/<br/>33 tools"]
   end
   subgraph Orchestration
@@ -105,6 +105,7 @@ graph TD
 | `cli/task.ts` | `task` / `task:read` handlers over the router |
 | `cli/runs.ts` | The 13 `run:*` handlers over both runtimes, with per-error-code remediation text |
 | `cli/visual-eval.ts` | `eval:visual` handler |
+| `cli/release.ts` | `release:validate` and `release:certify` handlers |
 | `cli/setup-recommendations.ts` | Pure helper that dedupes recommendations across target agents |
 | `mcp/server.ts` | stdio readline loop |
 | `mcp/protocol.ts` | JSON-RPC 2.0 framing, `initialize` / `tools/list` / `tools/call` |
@@ -123,6 +124,7 @@ graph TD
 | `audit/index.ts` | `auditSkill` — static pattern scan over a package |
 | `lockfile/index.ts` | `skillranger.lock.json` read/validate/write |
 | `config/` | `skillranger.config.json` defaults, exact-key validation, canonical digest |
+| `release/` | Frontend 0.4.0 artifact validation and retained evidence certification |
 | `domains/` | `types.ts` (pack contract), `registry.ts` (validation + in-memory registry), `bundled.ts` (side-effect registration), `frontend/` |
 | `evals/` | `frontend.ts`, `router/index.ts`, `visual/`, plus the generic `runner.ts` |
 | `paths.ts`, `types.ts`, `version.ts` | Leaf modules; `paths.ts` resolves package-relative roots only |
@@ -133,7 +135,7 @@ graph TD
 | :--- | :--- |
 | `registry/skills/` | 18 skill packages, all `frontend.*` |
 | `registry/contracts/frontend/` | 3 shared contracts, materialized into installs as `references/shared/frontend--<name>.md` |
-| `domains/frontend/` | Domain manifest, routing vocabulary, 12 schemas, rules, 8 recipes, 8 example packs, workflows, validators |
+| `domains/frontend/` | Domain manifest, routing vocabulary, 14 schemas, release manifest, rules, 8 recipes, 8 example packs, workflows, validators |
 | `schemas/` | 16 published JSON Schemas |
 | `evals/frontend/` | Frozen eval suite, promotion slices, visual benchmark |
 | `fixtures/` | `next-react-ts`, `vite-react-ts`, `backend-node`, `malicious-skill` |
@@ -165,16 +167,17 @@ domain-pack registry and the scanner's signal-provider registry.
 
 ## 5. CLI flow
 
-`src/cli/commands.ts` holds `cliCommandDefinitions` — a frozen array of 41 commands, each declaring
+`src/cli/commands.ts` holds `cliCommandDefinitions` — a frozen array of 43 commands, each declaring
 its `booleanOptions` and `valueOptions`. `parseCliInvocation(argv)` rejects single-dash flags and any
 undeclared flag, and returns a `help` / `version` / `command` invocation.
 
-`run()` in `src/cli/index.ts` offers the invocation to three sub-handlers in order — each returns
+`run()` in `src/cli/index.ts` offers the invocation to four sub-handlers in order — each returns
 whether it claimed the command — and then falls through to its own dispatch chain:
 
 ```text
 parseCliInvocation
   → handleVisualEvalCommand   (eval:visual)
+  → handleReleaseCommand      (release:validate, release:certify)
   → handleTaskCliCommand      (task, task:read)
   → handleRunCliCommand       (13 run:* commands)
   → inline dispatch           (scan, recommend, setup, install, audit, domain:*, design:*, …)
@@ -185,8 +188,8 @@ arbitrary registry path.
 
 Command groups: `task*`, `scan`, `recommend`, `setup`, `install` / `installed` / `verify` /
 `uninstall`, `audit` / `validate:registry` / `lint:skills` / `audit:registry` / `publish:check`,
-`domain:*`, `design:*` (8 frontend design-pipeline commands), `run:*` (7 lifecycle-v1 + 6 strict),
-`eval:frontend` / `eval:visual`, `mcp`, `doctor`.
+`release:validate` / `release:certify`, `domain:*`, `design:*` (8 frontend design-pipeline commands),
+`run:*` (7 lifecycle-v1 + 6 strict), `eval:frontend` / `eval:visual`, `mcp`, `doctor`.
 
 `src/cli/task.ts` maps router outcomes to distinct process exit codes so scripts can branch without
 parsing text: `2` clarification required, `3` decomposition required, `4` no matching skills,
@@ -452,11 +455,14 @@ bounded age, and times out acquisition. Release is deliberately deadline-free.
 ## 10. Domain packs
 
 The pack contract is `src/domains/types.ts`. `DomainPackManifest` is a discriminated union on
-`schemaVersion`: `"1.0"` or `"1.1"`. Version 1.1 adds `artifacts.routingVocabulary` and upgrades
+`schemaVersion`: `"1.0"`, `"1.1"`, or `"1.2"`. Version 1.1 adds `artifacts.routingVocabulary` and upgrades
 `requiresEvidence` from a string list to a typed `RequiredEvidenceRef { kind, id, allowedSources }`,
 where sources are restricted to `prompt-exact`, `prompt-normalized`, `prompt-inferred`. That
 restriction is the reason project fingerprints and host semantic hints can never, on their own,
 satisfy an ownership rule.
+
+Version 1.2 adds the release identity and `artifacts.releaseManifest` fields used by the frontend
+0.4.0 certification contract; version 1.0 and 1.1 manifests remain valid without those fields.
 
 A pack contributes: routing policy (`rejectIntent`, `laneAdjustment`, `skillAdjustment`,
 `includeSkill`, `compose`), a run policy, project signal providers, an ownership-intent list, a routing
@@ -467,8 +473,8 @@ vocabulary, and optional schemas/rules/recipes. Core owns everything else.
 registry, loads bundled packs from `domains/` with folder-name-equals-manifest-id enforcement, and
 confines `evalSuite` resolution to the package root.
 
-`domains/frontend/` is the only bundled pack and the reference implementation: `schemaVersion 1.1`,
-`skillIdPrefix "frontend."`, nine ownership intents, an owner-scoped routing vocabulary, 12 schemas,
+`domains/frontend/` is the only bundled pack and the reference implementation: `schemaVersion 1.2`,
+`skillIdPrefix "frontend."`, nine ownership intents, an owner-scoped routing vocabulary, 14 schemas,
 six rule families, eight recipes, and eight example packs. Its implementation lives in
 `src/domains/frontend/` — routing policy, phases, run policy, bilingual intent lexicons
 (`intents/en.ts`, `intents/ru.ts`), and the ~30-module `design/` pipeline. Executable third-party packs
@@ -514,7 +520,7 @@ Two facts that are easy to get wrong:
   schemas, because host SDKs cache validators by `$id` and a shared id would bind one tool's validator
   to the other.
 
-`domains/frontend/schemas/` holds 12 further domain-local schemas that are owned by the pack, not Core.
+`domains/frontend/schemas/` holds 14 further domain-local schemas that are owned by the pack, not Core.
 
 ---
 
@@ -585,7 +591,7 @@ Further reading: [`SECURITY.md`](SECURITY.md), [`threat-model.md`](threat-model.
 
 ## 14. Tests
 
-74 files under `tests/`, run by `node --test tests/*.test.ts` with `node:assert/strict`. No Vitest,
+80 files under `tests/`, run by `node --test tests/*.test.ts` with `node:assert/strict`. No Vitest,
 no Jest, no transpile step. The repository does not label test levels; in practice they fall into:
 
 | Level | Examples |

@@ -285,6 +285,22 @@ export const cliCommandDefinitions = Object.freeze([
     valueOptions: [],
   }),
   defineCommand({
+    name: "release:validate",
+    description: "Validate the 0.4.0 frontend release artifact contract and deterministic assets.",
+    usages: ["release:validate [--json]"],
+    booleanOptions: ["json"],
+    valueOptions: [],
+  }),
+  defineCommand({
+    name: "release:certify",
+    description: "Assemble retained visual and matched-baseline evidence into a release verdict.",
+    usages: [
+      "release:certify --visual-candidates <path> --visual-plan <path> --visual-results <path> --visual-report <path> --review-package <path> --private-mapping <path> --capability-record <path> --human-review <path,path> --baseline-evidence <path> --output <path> [options] [--json]",
+    ],
+    booleanOptions: ["json"],
+    valueOptions: ["visual-candidates", "visual-plan", "visual-results", "visual-report", "review-package", "private-mapping", "capability-record", "human-review", "baseline-evidence", "output"],
+  }),
+  defineCommand({
     name: "eval:visual",
     description: "Plan, run, review, aggregate, or calibrate the visual benchmark.",
     usages: [

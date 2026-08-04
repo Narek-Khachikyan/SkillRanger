@@ -25,12 +25,18 @@ export type VisualBenchmarkSuite = {
   briefs: VisualBenchmarkBrief[];
 };
 
-export type VisualCapabilityCandidate = { id: "weak" | "medium" | "strong"; modelId: string; commandProfile: string };
+export type VisualCapabilityCandidate = {
+  id: "weak" | "medium" | "strong";
+  modelId: string;
+  commandProfile: string;
+  commandProfileDigest?: string;
+};
 export type VisualBenchmarkArm = "without-skillranger" | "with-skillranger";
 export type VisualBenchmarkPlanEntry = {
   runId: string; briefId: string; recipeId: string; capabilityCandidateId: VisualCapabilityCandidate["id"];
   modelId: string; commandProfile: string; arm: VisualBenchmarkArm; repetition: 1 | 2;
   prompt: string; fixture: string; route: string;
+  commandProfileDigest?: string;
 };
 export type VisualBenchmarkPlan = { schemaVersion: "1.0"; benchmarkVersion: string; skillRangerVersion: string; skillRangerChecksum: string; entries: VisualBenchmarkPlanEntry[] };
 export type VisualVerificationOutcome = "verified" | "failed" | "implemented-unverified" | "blocked";

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/domains/frontend/release-manifest.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "releaseVersion", "domainId", "domainApiVersion", "ruleContract", "publishedArtifacts"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "releaseVersion": { "const": "0.4.0" },
+    "domainId": { "const": "frontend" },
+    "domainApiVersion": { "type": "string", "minLength": 1 },
+    "ruleContract": {
+      "type": "object",
+      "required": ["families", "ruleIds", "ruleCount", "recipeIds", "recipeCount", "examplePackCount", "exampleSceneCount", "assetCount"],
+      "properties": {
+        "families": { "const": ["typography", "layout", "responsive", "color", "state", "signature-move"] },
+        "ruleIds": { "const": [
+          "typography.role-contrast", "typography.editorial-product", "typography.dense-workspace",
+          "layout.action-evidence", "layout.list-detail", "layout.commerce-comparison",
+          "responsive.recompose-not-stack", "responsive.list-detail-drill-in", "responsive.mobile-thumb-zone",
+          "color.semantic-roles", "color.commerce-trust", "color.operational-status",
+          "state.complete-primary-flow", "state.recovery-first", "state.optimistic-offline",
+          "signature.product-data-grammar", "signature.conversion-proof", "signature.repeated-action-feedback"
+        ]},
+        "ruleCount": { "const": 18 },
+        "recipeIds": { "const": [
+          "operational-command-center", "consumer-discovery", "developer-tool", "editorial-content",
+          "marketing-landing", "saas-workspace", "e-commerce", "mobile-consumer-app"
+        ]},
+        "recipeCount": { "const": 8 },
+        "examplePackCount": { "const": 8 },
+        "exampleSceneCount": { "const": 80 },
+        "assetCount": { "const": 80 }
+      },
+      "additionalProperties": false
+    },
+    "publishedArtifacts": {
+      "type": "object",
+      "required": ["domainManifest", "ruleIndex", "ruleFiles", "recipes", "examples", "visualBenchmarkSuite", "frontendEvalSuite"],
+      "properties": {
+        "domainManifest": { "const": "domains/frontend/domain.manifest.json" },
+        "ruleIndex": { "const": "domains/frontend/rules/index.json" },
+        "ruleFiles": { "const": [
+          "domains/frontend/rules/typography.json", "domains/frontend/rules/layout.json",
+          "domains/frontend/rules/responsive.json", "domains/frontend/rules/color.json",
+          "domains/frontend/rules/state.json", "domains/frontend/rules/signature-move.json"
+        ]},
+        "recipes": { "const": [
+          "domains/frontend/recipes/operational-command-center.json", "domains/frontend/recipes/consumer-discovery.json",
+          "domains/frontend/recipes/developer-tool.json", "domains/frontend/recipes/editorial-content.json",
+          "domains/frontend/recipes/marketing-landing.json", "domains/frontend/recipes/saas-workspace.json",
+          "domains/frontend/recipes/e-commerce.json", "domains/frontend/recipes/mobile-consumer-app.json"
+        ]},
+        "examples": { "const": [
+          "domains/frontend/examples/operational-command-center/example.json", "domains/frontend/examples/consumer-discovery/example.json",
+          "domains/frontend/examples/developer-tool/example.json", "domains/frontend/examples/editorial-content/example.json",
+          "domains/frontend/examples/marketing-landing/example.json", "domains/frontend/examples/saas-workspace/example.json",
+          "domains/frontend/examples/e-commerce/example.json", "domains/frontend/examples/mobile-consumer-app/example.json"
+        ]},
+        "visualBenchmarkSuite": { "const": "evals/frontend/visual-benchmark/suite.json" },
+        "frontendEvalSuite": { "const": "evals/frontend/suite.json" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

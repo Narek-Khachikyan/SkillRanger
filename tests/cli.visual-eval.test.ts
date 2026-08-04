@@ -15,6 +15,25 @@ test("eval:visual plans the frozen 96-run matrix and atomically writes it", asyn
   assert.equal(printed.entries.length, 96); assert.deepEqual(persisted, printed);
 });
 
+test("eval:visual carries command-profile digests through the frozen plan", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "visual-cli-profile-digests-"));
+  const candidatesPath = path.join(root, "candidates.json"); const planPath = path.join(root, "plan.json");
+  for (const profile of ["weak.json", "medium.json", "strong.json"]) await writeFile(path.join(root, profile), `${profile}\n`);
+  await writeFile(candidatesPath, JSON.stringify([
+    { id: "weak", modelId: "fixture/model-weak@pinned", commandProfile: "weak.json" },
+    { id: "medium", modelId: "fixture/model-medium@pinned", commandProfile: "medium.json" },
+    { id: "strong", modelId: "fixture/model-strong@pinned", commandProfile: "strong.json" },
+  ]));
+  await cli(["--plan", "--candidates", candidatesPath, "--output", planPath, "--json"]);
+  const first = JSON.parse(await readFile(planPath, "utf8"));
+  assert.ok(first.entries.every((entry: any) => /^sha256:[a-f0-9]{64}$/.test(entry.commandProfileDigest)));
+  const firstDigest = first.entries.find((entry: any) => entry.capabilityCandidateId === "weak").commandProfileDigest;
+  await writeFile(path.join(root, "weak.json"), "changed\n");
+  await cli(["--plan", "--candidates", candidatesPath, "--output", planPath, "--json"]);
+  const second = JSON.parse(await readFile(planPath, "utf8"));
+  assert.notEqual(second.entries.find((entry: any) => entry.capabilityCandidateId === "weak").commandProfileDigest, firstDigest);
+});
+
 test("eval:visual run writes the documented result index separately from artifacts", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "visual-cli-run-")); const output = path.join(root, "results", "index.json"); const artifacts = path.join(root, "artifacts");
   await cli(["--run", "--candidates", "tests/fixtures/visual-candidates.json", "--command", "echo {{runId}}", "--artifacts", artifacts, "--output", output, "--dry-run", "--json"]);

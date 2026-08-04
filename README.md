@@ -18,6 +18,8 @@
 
 SkillRanger scans your repository, detects its stack and development context, recommends compatible skills, audits them for safety risks, and creates a reviewable install plan before writing anything.
 
+The frontend design contract ships in release `0.4.0`: six rule families, 18 stable rules, eight recipe packs, and 80 deterministic worked-example assets. Run `npm run release:validate` to verify the local package artifacts; use `release:certify` to bind external visual and matched-baseline evidence into a retained promotion verdict.
+
 For example, when you ask an AI agent to review a Next.js application, SkillRanger can select the relevant Next.js, accessibility, performance, and testing instructions instead of making the agent work from a generic prompt.
 
 ## Quick Start

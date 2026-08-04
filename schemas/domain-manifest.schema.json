@@ -4,10 +4,11 @@
   "type": "object",
   "required": ["schemaVersion", "id", "displayName", "version", "coreApi", "skillIdPrefix", "capabilities", "artifacts", "ownership"],
   "properties": {
-    "schemaVersion": { "enum": ["1.0", "1.1"] },
+    "schemaVersion": { "enum": ["1.0", "1.1", "1.2"] },
     "id": { "$ref": "#/$defs/token" },
     "displayName": { "type": "string", "minLength": 1 },
     "version": { "type": "string", "minLength": 1 },
+    "releaseVersion": { "type": "string", "minLength": 1 },
     "coreApi": { "type": "string", "minLength": 1 },
     "skillIdPrefix": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.$" },
     "capabilities": {
@@ -28,13 +29,24 @@
         "schemaVersion": { "const": "1.0" },
         "artifacts": { "$ref": "#/$defs/artifactsV10" },
         "ownership": { "$ref": "#/$defs/ownershipV10" }
-      }
+      },
+      "not": { "required": ["releaseVersion"] }
     },
     {
       "required": ["schemaVersion", "artifacts", "ownership"],
       "properties": {
         "schemaVersion": { "const": "1.1" },
         "artifacts": { "$ref": "#/$defs/artifactsV11" },
+        "ownership": { "$ref": "#/$defs/ownershipV11" }
+      },
+      "not": { "required": ["releaseVersion"] }
+    },
+    {
+      "required": ["schemaVersion", "releaseVersion", "artifacts", "ownership"],
+      "properties": {
+        "schemaVersion": { "const": "1.2" },
+        "releaseVersion": { "type": "string", "minLength": 1 },
+        "artifacts": { "$ref": "#/$defs/artifactsV12" },
         "ownership": { "$ref": "#/$defs/ownershipV11" }
       }
     }
@@ -51,7 +63,13 @@
       "type": "array",
       "maxItems": 64,
       "uniqueItems": true,
-      "items": { "type": "string", "minLength": 1, "maxLength": 256 }
+      "items": { "$ref": "#/$defs/path" }
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?![\\\\/])(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$"
     },
     "artifactsV10": {
       "type": "object",
@@ -64,7 +82,7 @@
         "examples": { "$ref": "#/$defs/paths" },
         "workflows": { "$ref": "#/$defs/paths" },
         "validators": { "$ref": "#/$defs/paths" },
-        "evalSuite": { "type": "string", "minLength": 1 },
+        "evalSuite": { "$ref": "#/$defs/path" },
         "capabilityRecords": { "$ref": "#/$defs/paths" }
       },
       "additionalProperties": false
@@ -80,9 +98,27 @@
         "examples": { "$ref": "#/$defs/paths" },
         "workflows": { "$ref": "#/$defs/paths" },
         "validators": { "$ref": "#/$defs/paths" },
-        "evalSuite": { "type": "string", "minLength": 1 },
+        "evalSuite": { "$ref": "#/$defs/path" },
         "capabilityRecords": { "$ref": "#/$defs/paths" },
         "routingVocabulary": { "type": "string", "minLength": 1, "maxLength": 256 }
+      },
+      "additionalProperties": false
+    },
+    "artifactsV12": {
+      "type": "object",
+      "required": ["intents", "schemas", "recipes", "workflows", "validators"],
+      "properties": {
+        "intents": { "$ref": "#/$defs/paths" },
+        "schemas": { "$ref": "#/$defs/paths" },
+        "recipes": { "$ref": "#/$defs/paths" },
+        "rules": { "$ref": "#/$defs/paths" },
+        "examples": { "$ref": "#/$defs/paths" },
+        "workflows": { "$ref": "#/$defs/paths" },
+        "validators": { "$ref": "#/$defs/paths" },
+        "evalSuite": { "type": "string", "minLength": 1 },
+        "capabilityRecords": { "$ref": "#/$defs/paths" },
+        "releaseManifest": { "$ref": "#/$defs/path" },
+        "routingVocabulary": { "$ref": "#/$defs/path" }
       },
       "additionalProperties": false
     },

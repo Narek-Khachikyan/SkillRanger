@@ -76,19 +76,21 @@ test("router schemas validate real instances and reject malformed contracts", as
   assert.ok(validateJsonSchema(schema, { ...profile, locale: "secret", rawPrompt: "canary" }).length > 0);
 });
 
-test("domain manifest schema keeps v1.0 and v1.1 fields version-bound", async () => {
+test("domain manifest schema keeps v1.0, v1.1, and v1.2 fields version-bound", async () => {
   const schema = JSON.parse(await readFile("schemas/domain-manifest.schema.json", "utf8")) as Record<string, unknown>;
   const bundled = JSON.parse(await readFile("domains/frontend/domain.manifest.json", "utf8")) as Record<string, unknown>;
-  const { routingVocabulary: _routingVocabulary, ...artifacts } = bundled.artifacts as Record<string, unknown>;
-  const ownership = (bundled.ownership as Array<Record<string, unknown>>).map((rule) => ({
+  assert.deepEqual(validateJsonSchema(schema, bundled), []);
+  const { releaseVersion: _releaseVersion, ...legacyBundled } = bundled;
+  const { routingVocabulary: _routingVocabulary, releaseManifest: _releaseManifest, ...artifacts } = legacyBundled.artifacts as Record<string, unknown>;
+  const ownership = (legacyBundled.ownership as Array<Record<string, unknown>>).map((rule) => ({
     ...rule,
     ...(Array.isArray(rule.requiresEvidence)
       ? { requiresEvidence: rule.requiresEvidence.map((evidence) => typeof evidence === "string" ? evidence : (evidence as { id: string }).id) }
       : {}),
   }));
-  const v10 = { ...bundled, schemaVersion: "1.0", artifacts, ownership };
+  const v10 = { ...legacyBundled, schemaVersion: "1.0", artifacts, ownership };
   const v11 = {
-    ...bundled,
+    ...legacyBundled,
     schemaVersion: "1.1",
     artifacts: { ...artifacts, routingVocabulary: "routing.vocabulary.json" },
     ownership: ownership.map((rule) => rule.primarySkill === "frontend.design-to-code"
@@ -97,6 +99,8 @@ test("domain manifest schema keeps v1.0 and v1.1 fields version-bound", async ()
   };
   assert.deepEqual(validateJsonSchema(schema, v10), []);
   assert.deepEqual(validateJsonSchema(schema, v11), []);
+  assert.ok(validateJsonSchema(schema, { ...v11, releaseVersion: "0.4.0" }).length > 0);
+  assert.ok(validateJsonSchema(schema, { ...bundled, schemaVersion: "1.1" }).length > 0);
   assert.ok(validateJsonSchema(schema, { ...v10, artifacts: v11.artifacts }).length > 0);
   assert.ok(validateJsonSchema(schema, { ...v11, ownership }).length > 0);
 });

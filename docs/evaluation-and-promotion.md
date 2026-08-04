@@ -48,6 +48,23 @@ node src/cli/index.ts eval:frontend \
 
 Evaluate mean pass rate, worst-run pass rate, sample standard deviation across repetitions, hard-gate failures, false completion claims, responsive/accessibility failures, repair iterations, verification outcomes, and blind human preference. The companion variance report makes deltas over `without-skill` and `old-skill` explicit; promotion requires improvement over no skill, no regression against the prose skill (including variance, worst-run, responsive/accessibility, repair, verification, and operational behavior), and stable repeated results. The repository does not set benchmark scores automatically from unassessed runner output.
 
+## 0.4.0 release handoff
+
+`release:certify` is the final evidence boundary for the frontend certification release. It validates the package/domain identity and six-family rule contract, then binds the frozen visual suite, plan, all 96 immutable run results and screenshots, public blind-review package, private mapping, exactly two independent human reviews, matched three-arm task evidence, and aggregate reports into one retained JSON handoff:
+
+```bash
+node src/cli/index.ts release:certify \
+  --visual-candidates candidates.json --visual-plan plan.json --visual-results results/index.json --visual-report report.json \
+  --review-package review/public/package.json --private-mapping private/mapping.json \
+  --capability-record capability.json \
+  --human-review reviews/alice.json,reviews/bob.json \
+  --baseline-evidence baseline/task-evidence.json --output release-handoff.json --json
+```
+
+The handoff is `promotable` only when every gate and required retained role passes. A missing artifact, incomplete operational evidence, hard or catastrophic finding, false completion claim, below-threshold preference, baseline regression, or variance failure is recorded as `not-promotable`; a favorable partial score never overrides a blocker. `npm run release:validate` checks the deterministic package artifacts without requiring external model execution.
+
+Candidate `commandProfile` paths are resolved relative to the candidate configuration, and their `sha256:` digests are carried through the frozen plan and each result before being retained individually. Release certification uses the checked-in visual and frontend suites, whose content digests are bound to the release artifact report.
+
 Each assessed run may include `verification.outcome`, `verification.hardGatesPassed`, and `verification.criticalFindings`. Claiming `verified` while any hard gate fails, a critical finding remains, or an assertion is not passed is counted as a false completion claim.
 
 ## Visual calibration evidence
