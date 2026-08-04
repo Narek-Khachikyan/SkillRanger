@@ -66,6 +66,8 @@ test("domain manifest v1.2 release identity preserves v1.1 and v1.0 compatibilit
   assert.ok(validateDomainPackManifest({ ...bundled, artifacts: { ...bundled.artifacts, releaseManifest: "x".repeat(257) } }).some((issue) => issue.includes("releaseManifest")));
   assert.ok(validateDomainPackManifest({ ...bundled, artifacts: { ...bundled.artifacts, releaseManifest: "../release.json" } }).some((issue) => issue.includes("releaseManifest")));
   assert.ok(validateDomainPackManifest({ ...bundled, artifacts: { ...bundled.artifacts, evalSuite: "" } }).some((issue) => issue.includes("evalSuite")));
+  assert.ok(validateDomainPackManifest({ ...v11, artifacts: { ...v11.artifacts, routingVocabulary: "C:\\outside.json" } }).some((issue) => issue.includes("routingVocabulary")));
+  assert.ok(validateDomainPackManifest({ ...bundled, artifacts: { ...bundled.artifacts, evalSuite: "C:/outside.json" } }).some((issue) => issue.includes("evalSuite")));
   assert.ok(validateDomainPackManifest({ ...bundled, artifacts: { ...bundled.artifacts, schemas: [bundled.artifacts.schemas[0], bundled.artifacts.schemas[0]] } }).some((issue) => issue.includes("schemas")));
 });
 

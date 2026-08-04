@@ -1,5 +1,5 @@
-import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
+import { canonicalPath, isContained, readJson } from "./io.ts";
 import { calibrateCapabilityRecord } from "../evals/visual/calibration.ts";
 import { aggregateVisualBenchmark } from "../evals/visual/metrics.ts";
 import { createBlindReviewPackage } from "../evals/visual/review.ts";
@@ -7,29 +7,15 @@ import { atomicJson, bindVisualCandidateProfileDigests, executeVisualBenchmarkPl
 import { loadVisualBenchmarkSuite } from "../evals/visual/suite.ts";
 import type { VisualBenchmarkPlan, VisualBenchmarkReport, VisualBenchmarkRunResult, VisualCapabilityCandidate, VisualHumanReview } from "../evals/visual/types.ts";
 
-const readJson = async <T>(file: string): Promise<T> => JSON.parse(await readFile(path.resolve(file), "utf8")) as T;
 const required = (flags: Record<string, string | boolean>, name: string) => { const value = flags[name]; if (typeof value !== "string" || !value.trim()) throw new Error(`--${name} is required`); return value; };
 const outputJson = async (file: string, value: unknown) => atomicJson(path.resolve(file), value);
 const candidatesFrom = async (flags: Record<string, string | boolean>): Promise<VisualCapabilityCandidate[]> => {
   const file = path.resolve(required(flags, "candidates"));
   return bindVisualCandidateProfileDigests(validateVisualCandidates(await readJson<unknown>(file)), path.dirname(file));
 };
-const isContained = (root: string, candidate: string) => candidate === root || candidate.startsWith(`${root}${path.sep}`);
-const canonicalFuturePath = async (target: string): Promise<string> => {
-  const resolved = path.resolve(target);
-  let cursor = resolved;
-  const suffix: string[] = [];
-  while (!(await lstat(cursor).catch(() => undefined))) {
-    const parent = path.dirname(cursor);
-    if (parent === cursor) break;
-    suffix.unshift(path.basename(cursor)); cursor = parent;
-  }
-  const canonicalParent = await realpath(cursor).catch(() => cursor);
-  return path.join(canonicalParent, ...suffix);
-};
 const assertReviewOutputsSeparated = async (publicOutput: string, privateOutput: string) => {
-  const publicCanonical = await canonicalFuturePath(publicOutput);
-  const privateCanonical = await canonicalFuturePath(privateOutput);
+  const publicCanonical = await canonicalPath(publicOutput);
+  const privateCanonical = await canonicalPath(privateOutput);
   const publicTree = path.dirname(publicCanonical);
   if (publicCanonical === privateCanonical || isContained(publicTree, privateCanonical)
     || isContained(privateCanonical, publicCanonical) || isContained(publicCanonical, privateCanonical)) {

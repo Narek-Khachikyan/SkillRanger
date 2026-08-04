@@ -1,5 +1,5 @@
-import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
+import { canonicalPath, isContained, readJson } from "./io.ts";
 import { loadFrontendEvalSuite } from "../evals/frontend.ts";
 import type { ModelCapabilityRecord } from "../evals/visual/calibration.ts";
 import { loadVisualBenchmarkSuite } from "../evals/visual/suite.ts";
@@ -40,8 +40,6 @@ const requiredPath = (flags: Flags, name: string, issues: string[]) => {
     return undefined;
   }
 };
-
-const readJson = async <T>(file: string): Promise<T> => JSON.parse(await readFile(file, "utf8")) as T;
 
 const readSource = async <T>(
   file: string | undefined,
@@ -102,17 +100,6 @@ const printArtifactValidation = (report: Awaited<ReturnType<typeof validateFront
   console.log(`Release: ${report.releaseVersion} · package ${report.packageVersion || "missing"}`);
   console.log(`Rule contract: ${report.ruleContract.ruleCount} rules across ${report.ruleContract.families.length} families; ${report.ruleContract.examplePackCount} example packs; ${report.ruleContract.assetCount} assets`);
   for (const issue of report.issues) console.log(`- ${issue}`);
-};
-
-const isContained = (root: string, candidate: string) =>
-  candidate === root || candidate.startsWith(`${root}${path.sep}`);
-
-const canonicalPath = async (candidate: string) => {
-  try {
-    return await realpath(candidate);
-  } catch {
-    return path.resolve(candidate);
-  }
 };
 
 const collectHandoffEvidence = async (input: {

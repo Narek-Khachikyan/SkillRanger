@@ -42,10 +42,14 @@ Each provenance entry has this closed shape:
 - `extractionMethod` and `extractionSchema`, preserving how the observation was obtained;
 - `evidenceStatus`: `observed`, `inferred`, `assumed`, or `unknown`.
 
-The bundled 0.4.0 rules use the stable source identifier
-`skillranger://frontend/reference-corpus/0.4.0`. Its normalized observations are
-documented in [`docs/FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md`](./FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md), whose source table
+Every bundled 0.4.0 rule carries at least two distinct source records. The
+Refero and DesignMD records are independent extraction paths for the accepted
+corpus and remain `inferred` after normalization; they are not a claim that an
+extractor output is an official source design system. The normalized source
+ledger is [`docs/FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md`](./FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md), whose source table
 retains the accepted public URLs, inspected pages/states, and extractor roles.
+Source-level recurrence is a minimum provenance gate; a new rule still needs
+independent-product evidence and the visual promotion gates described below.
 
 The bundled rules are normalized observations. Exact source tokens, typefaces, geometry, composition, motion, and trade dress remain provenance-labelled worked-example material rather than universal rules.
 

@@ -10,7 +10,10 @@
       "rolesConsumed": ["loading", "empty", "error", "success", "primary-action"], "responsiveBehavior": ["Keep state identity and recovery visible at every supported viewport."],
       "accessibility": ["Announce asynchronous state changes without moving focus unexpectedly."], "antiPatterns": ["Generic centered messages detached from the task."],
       "verification": ["Exercise loading, empty, error, and success through the same primary-flow entry point."],
-      "provenance": [{ "source": "skillranger://frontend/reference-corpus/0.4.0", "page": "FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "curated normalization from public reference sources", "extractionSchema": "skillranger.frontend.design-rule/1.0", "evidenceStatus": "inferred" }]
+      "provenance": [
+        { "source": "https://styles.refero.design/style/90ce5883-bb24-4466-93f7-801cd617b0d1", "page": "DESIGN.md → Extended", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "normalized semantic reference observation", "extractionSchema": "refero.design/semantic-reference/1.0", "evidenceStatus": "inferred" },
+        { "source": "https://designmd.cc/benchmarks/linear", "page": "Raw extraction", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "independent computed-style triangulation", "extractionSchema": "designmd.cc/raw-extraction/1.0", "evidenceStatus": "inferred" }
+      ]
     },
     {
       "schemaVersion": "1.0", "id": "state.recovery-first", "version": "1.0.0", "family": "state", "name": "Recovery First",
@@ -20,7 +23,10 @@
       "rolesConsumed": ["error", "context", "recovery", "support"], "responsiveBehavior": ["Keep recovery action visible without covering error context."],
       "accessibility": ["Move focus only when required and connect the error to the affected control or object."], "antiPatterns": ["Error banners with no recovery path."],
       "verification": ["Trigger each error and confirm context preservation, focus behavior, and a working recovery action."],
-      "provenance": [{ "source": "skillranger://frontend/reference-corpus/0.4.0", "page": "FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "curated normalization from public reference sources", "extractionSchema": "skillranger.frontend.design-rule/1.0", "evidenceStatus": "inferred" }]
+      "provenance": [
+        { "source": "https://styles.refero.design/style/90ce5883-bb24-4466-93f7-801cd617b0d1", "page": "DESIGN.md → Extended", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "normalized semantic reference observation", "extractionSchema": "refero.design/semantic-reference/1.0", "evidenceStatus": "inferred" },
+        { "source": "https://designmd.cc/benchmarks/linear", "page": "Raw extraction", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "independent computed-style triangulation", "extractionSchema": "designmd.cc/raw-extraction/1.0", "evidenceStatus": "inferred" }
+      ]
     },
     {
       "schemaVersion": "1.0", "id": "state.optimistic-offline", "version": "1.0.0", "family": "state", "name": "Optimistic Offline",
@@ -30,7 +36,10 @@
       "rolesConsumed": ["pending", "offline", "saved", "retry"], "responsiveBehavior": ["Keep connectivity feedback adjacent to the repeated action."],
       "accessibility": ["Announce pending and failure transitions through a polite live region."], "antiPatterns": ["Silent optimistic updates that can disappear after refresh."],
       "verification": ["Simulate offline, retry, reconnect, and duplicate-action conditions."],
-      "provenance": [{ "source": "skillranger://frontend/reference-corpus/0.4.0", "page": "FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "curated normalization from public reference sources", "extractionSchema": "skillranger.frontend.design-rule/1.0", "evidenceStatus": "inferred" }]
+      "provenance": [
+        { "source": "https://styles.refero.design/style/90ce5883-bb24-4466-93f7-801cd617b0d1", "page": "DESIGN.md → Extended", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "normalized semantic reference observation", "extractionSchema": "refero.design/semantic-reference/1.0", "evidenceStatus": "inferred" },
+        { "source": "https://designmd.cc/benchmarks/linear", "page": "Raw extraction", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "independent computed-style triangulation", "extractionSchema": "designmd.cc/raw-extraction/1.0", "evidenceStatus": "inferred" }
+      ]
     }
   ]
 }

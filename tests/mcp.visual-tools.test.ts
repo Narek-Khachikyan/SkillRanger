@@ -6,8 +6,9 @@ import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { digestDesignExecutionPolicy, resolveDesignExecutionPolicy } from "../src/domains/frontend/design/index.ts";
+import { digestDesignExecutionPolicy, loadRecipeExamplePacks, resolveDesignExecutionPolicy } from "../src/domains/frontend/design/index.ts";
 import { callMcpTool, mcpTools } from "../src/mcp/tools.ts";
+import { validateJsonSchema } from "../src/runtime/strict/json-schema.ts";
 import { makeBrief, makeBundle, makeVerificationInput } from "./helpers/frontend-visual-fixtures.ts";
 
 const execFileAsync = promisify(execFile);
@@ -88,6 +89,28 @@ test("visual MCP array inputs publish item schemas",()=>{
     .recheckEvidence.properties.captures.items;
   assert.equal(verifiedCapture.required.includes("stateRendered"), false);
   assert.deepEqual((byName.get("verify_visual_result")?.inputSchema.properties as any).boundedRepairFindings.items,{type:"object"});
+});
+
+test("verify visual publishes closed example-pack and execution-trace schemas", async () => {
+  const schema = (mcpTools.find(({ name }) => name === "verify_visual_result")?.inputSchema.properties as any);
+  assert.deepEqual(schema.examplePack.required, [
+    "schemaVersion", "recipeId", "productScenario", "differenceExplanation", "sourcePath", "scenes",
+  ]);
+  assert.equal(schema.examplePack.additionalProperties, false);
+  assert.deepEqual(schema.examplePack.properties.scenes.items.required, [
+    "id", "quality", "viewport", "state", "title", "primaryAction", "blocks",
+    "appliedRuleIds", "violatedRuleIds", "asset", "assetPath",
+  ]);
+  assert.equal(schema.examplePack.properties.scenes.items.additionalProperties, false);
+  const examplePack = (await loadRecipeExamplePacks()).find(({ recipeId }) => recipeId === "developer-tool");
+  assert.ok(examplePack);
+  assert.deepEqual(validateJsonSchema(schema.examplePack, examplePack), []);
+  assert.deepEqual(schema.executionTrace.required, [
+    "schemaVersion", "id", "directionPath", "directionDigest", "recipeId",
+    "examplePackPath", "examplePackDigest", "ruleSelectionDigest",
+  ]);
+  assert.equal(schema.executionTrace.additionalProperties, false);
+  assert.equal(schema.executionTrace.properties.directionDigest.pattern, "^sha256:[a-f0-9]{64}$");
 });
 test("compare tool returns a critic exchange before validation",async()=>{const result=await callMcpTool("compare_design_variants",{policyId:"p1",generatorActorId:"g1",criticActorId:"c1",candidates:[{variantId:"v1",directionPath:"v1.json",evidenceId:"e1",screenshotPaths:["v1.png"]}]});assert.equal(result.isError,false);assert.equal((result.structuredContent as any).status,"critic-required");});
 
@@ -512,6 +535,19 @@ test("verify_visual_result rejects missing dereferenced containers as invalid-ar
   } as never);
   assert.equal(brokenCapture.isError, true);
   assert.equal((brokenCapture.structuredContent as { code?: string }).code, "invalid-arguments");
+});
+
+test("verify_visual_result rejects malformed material containers before dispatch", async () => {
+  const args = makeVerificationInput({
+    initialEvidence: makeBundle({ id: "e1", variantId: "v1", sourceIdentity: "git:abc" }),
+    recheckEvidence: makeBundle({ id: "e2", variantId: "v1", sourceIdentity: "git:def" }),
+  });
+  const { artifactExists: _artifactExists, ...serializable } = args;
+  for (const field of ["examplePack", "executionTrace"]) {
+    const result = await callMcpTool("verify_visual_result", { ...serializable, [field]: {} } as never);
+    assert.equal(result.isError, true, field);
+    assert.equal((result.structuredContent as { code?: string }).code, "invalid-arguments", field);
+  }
 });
 
 test("visual verification delegates stale and mismatched evidence to the strict verifier",async()=>{const args=makeVerificationInput({initialEvidence:makeBundle({id:"e1",variantId:"v1",sourceIdentity:"git:abc"}),recheckEvidence:makeBundle({id:"e1",variantId:"v2",sourceIdentity:"git:abc",captures:[]})});args.policy.requiredStates=["success"];args.visualRun.policyDigest=digestDesignExecutionPolicy(args.policy);const {artifactExists:_artifactExists,...serializable}=args;const result=await callMcpTool("verify_visual_result",serializable as any);assert.equal(result.isError,false);const report=result.structuredContent as any;assert.equal(report.outcome,"failed");assert.ok(report.findings.some((finding:any)=>finding.code==="visual-evidence-stale"));assert.ok(report.findings.some((finding:any)=>finding.code==="visual-evidence-matrix-incomplete"));});

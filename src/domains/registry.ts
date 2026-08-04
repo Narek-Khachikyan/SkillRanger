@@ -41,7 +41,7 @@ const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((entry) => typeof entry === "string" && entry.trim() !== "");
 
 const safeRelativePath = (value: string) =>
-  !path.isAbsolute(value) && !value.replace(/\\/g, "/").split("/").includes("..");
+  !/^[A-Za-z]:/.test(value) && !path.isAbsolute(value) && !value.replace(/\\/g, "/").split("/").includes("..");
 const boundedSafeRelativePath = (value: string) => value.length > 0 && value.length <= 256 && safeRelativePath(value);
 const artifactPathArray = (value: unknown): value is string[] =>
   isStringArray(value) && value.length <= 64 && new Set(value).size === value.length && value.every(boundedSafeRelativePath);

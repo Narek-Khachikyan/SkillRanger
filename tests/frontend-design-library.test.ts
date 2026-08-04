@@ -53,12 +53,18 @@ test("loads all six rule families with unique versioned ids", async () => {
     "signature.product-data-grammar", "signature.conversion-proof", "signature.repeated-action-feedback",
   ]);
   assert.ok(library.rules.every((rule) => /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(rule.version)));
-  assert.ok(library.rules.every((rule) => rule.provenance.length > 0 && rule.verification.length > 0));
+  assert.ok(library.rules.every((rule) => rule.provenance.length >= 2 && rule.verification.length > 0));
   assert.ok(library.rules.every((rule) => rule.provenance.every((entry) =>
-    entry.source.startsWith("skillranger://") && entry.page?.length && entry.state?.length &&
+    entry.source.startsWith("https://") && entry.page?.length && entry.state?.length &&
     entry.extractionMethod.length > 0 && entry.extractionSchema.length > 0 &&
     entry.evidenceStatus.length > 0 && (entry.reviewedAt || entry.capturedAt))
   ));
+  assert.ok(library.rules.every((rule) => new Set(rule.provenance.map(({ source }) => source)).size >= 2));
+  const ledger = await readFile("docs/FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md", "utf8");
+  assert.match(ledger, /Provenance ledger/);
+  assert.match(ledger, /Refero Linear style/);
+  assert.match(ledger, /DesignMD Linear benchmark/);
+  assert.match(ledger, /recurr/i);
 });
 
 test("selects one compatible rule from every family", async () => {
@@ -131,6 +137,15 @@ test("rejects incomplete provenance metadata", async () => {
     delete source.rules[0].provenance[0].extractionSchema;
     await writeFile(file, JSON.stringify(source), "utf8");
   }, /provenance/);
+});
+
+test("rejects repeated provenance source records", async () => {
+  await withRulesFixture(async (root) => {
+    const file = path.join(root, "typography.json");
+    const source = JSON.parse(await readFile(file, "utf8"));
+    source.rules[0].provenance[1].source = source.rules[0].provenance[0].source;
+    await writeFile(file, JSON.stringify(source), "utf8");
+  }, /two independent sources/);
 });
 
 test("rejects an invalid supplied provenance date even when the other date is valid", async () => {

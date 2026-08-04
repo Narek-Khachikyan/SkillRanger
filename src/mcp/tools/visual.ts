@@ -22,6 +22,73 @@ import { McpToolError, mcpToolEffects, type JsonObject, type McpToolDefinition, 
 import { jsonToolResult, requireString } from "./utils.ts";
 
 const objectSchema = { type: "object" } as const;
+const digestSchema = { type: "string", pattern: "^sha256:[a-f0-9]{64}$" } as const;
+const stringArraySchema = {
+  type: "array",
+  items: { type: "string", minLength: 1 },
+} as const;
+const examplePackBlockSchema = {
+  type: "object",
+  required: ["kind", "label", "emphasis"],
+  properties: {
+    kind: { type: "string", enum: ["heading", "copy", "action", "list", "media", "status"] },
+    label: { type: "string", minLength: 1 },
+    emphasis: { type: "integer", enum: [1, 2, 3] },
+  },
+  additionalProperties: false,
+} as const;
+const examplePackSceneSchema = {
+  type: "object",
+  required: [
+    "id", "quality", "viewport", "state", "title", "primaryAction", "blocks",
+    "appliedRuleIds", "violatedRuleIds", "asset", "assetPath",
+  ],
+  properties: {
+    id: { type: "string", pattern: "^[a-z0-9-]+$" },
+    quality: { type: "string", enum: ["good", "bad"] },
+    viewport: { type: "string", enum: ["desktop", "mobile"] },
+    state: { type: "string", enum: ["success", "loading", "empty", "error"] },
+    title: { type: "string", minLength: 1 },
+    primaryAction: { type: "string", minLength: 1 },
+    blocks: { type: "array", minItems: 1, items: examplePackBlockSchema },
+    appliedRuleIds: stringArraySchema,
+    violatedRuleIds: stringArraySchema,
+    asset: { type: "string", pattern: "^assets/[a-z0-9-]+\\.svg$" },
+    assetPath: { type: "string", minLength: 1 },
+  },
+  additionalProperties: false,
+} as const;
+const examplePackSchema = {
+  type: "object",
+  required: ["schemaVersion", "recipeId", "productScenario", "differenceExplanation", "sourcePath", "scenes"],
+  properties: {
+    schemaVersion: { const: "1.0" },
+    recipeId: { type: "string", minLength: 1 },
+    productScenario: { type: "string", minLength: 1 },
+    differenceExplanation: { type: "array", minItems: 3, items: { type: "string", minLength: 1 } },
+    sourcePath: { type: "string", minLength: 1 },
+    scenes: { type: "array", minItems: 10, maxItems: 10, items: examplePackSceneSchema },
+  },
+  additionalProperties: false,
+} as const;
+const executionTraceSchema = {
+  type: "object",
+  required: [
+    "schemaVersion", "id", "directionPath", "directionDigest", "recipeId",
+    "examplePackPath", "examplePackDigest", "ruleSelectionDigest",
+  ],
+  properties: {
+    schemaVersion: { const: "1.0" },
+    id: { type: "string", minLength: 1 },
+    directionPath: { type: "string", minLength: 1 },
+    directionDigest: digestSchema,
+    recipeId: { type: "string", minLength: 1 },
+    examplePackPath: { type: "string", minLength: 1 },
+    examplePackDigest: digestSchema,
+    ruleSelectionDigest: digestSchema,
+  },
+  additionalProperties: false,
+} as const;
 // Canonical VisualCriticReport v1, loaded from the shipped skill package so the published contract
 // cannot drift from the one the validator enforces. This is NOT the strict CriticReportV2 used for
 // `critic-report` evidence inside a strict run.
@@ -139,7 +206,7 @@ export const visualToolDefinitions: McpToolDefinition[] = [
     name: "verify_visual_result",
     title: "Verify visual result",
     description: "Run the canonical strict final visual verifier. criticReport must be a VisualCriticReport v1 (schemaVersion 1.0), not the CriticReportV2 evidence shape.",
-    inputSchema: { type: "object", required: ["workflowId", "policy", "visualRun", "variant", "brief", "direction", "initialEvidence", "recheckEvidence", "criticReport", "boundedRepairFindings"], properties: { workflowId: { type: "string" }, policy: verifyPolicySchema, visualRun: verifyVisualRunSchema, variant: objectSchema, brief: objectSchema, direction: objectSchema, examplePack: objectSchema, executionTrace: objectSchema, initialEvidence: verifiedEvidenceSchema, recheckEvidence: verifiedEvidenceSchema, criticReport: visualCriticReportSchema, boundedRepairRequest: objectSchema, boundedRepairFindings: { type: "array", items: objectSchema } } },
+    inputSchema: { type: "object", required: ["workflowId", "policy", "visualRun", "variant", "brief", "direction", "initialEvidence", "recheckEvidence", "criticReport", "boundedRepairFindings"], properties: { workflowId: { type: "string" }, policy: verifyPolicySchema, visualRun: verifyVisualRunSchema, variant: objectSchema, brief: objectSchema, direction: objectSchema, examplePack: examplePackSchema, executionTrace: executionTraceSchema, initialEvidence: verifiedEvidenceSchema, recheckEvidence: verifiedEvidenceSchema, criticReport: visualCriticReportSchema, boundedRepairRequest: objectSchema, boundedRepairFindings: { type: "array", items: objectSchema } } },
   },
 ];
 

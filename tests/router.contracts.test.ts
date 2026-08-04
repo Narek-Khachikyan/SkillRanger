@@ -105,6 +105,42 @@ test("domain manifest schema keeps v1.0, v1.1, and v1.2 fields version-bound", a
   assert.ok(validateJsonSchema(schema, { ...v11, ownership }).length > 0);
 });
 
+test("domain manifest schema applies the runtime-safe path contract to eval suites and routing vocabularies", async () => {
+  const schema = JSON.parse(await readFile("schemas/domain-manifest.schema.json", "utf8")) as Record<string, unknown>;
+  const bundled = JSON.parse(await readFile("domains/frontend/domain.manifest.json", "utf8")) as Record<string, unknown>;
+  const artifacts = bundled.artifacts as Record<string, unknown>;
+  const { releaseManifest: _releaseManifest, ...legacyArtifacts } = artifacts;
+  const { releaseVersion: _releaseVersion, ...legacyBundled } = bundled;
+  const v11 = {
+    ...legacyBundled,
+    schemaVersion: "1.1",
+    artifacts: { ...legacyArtifacts, routingVocabulary: "../routing.vocabulary.json" },
+  };
+  const v12 = {
+    ...bundled,
+    artifacts: { ...artifacts, evalSuite: "../evals/frontend.json" },
+  };
+
+  assert.ok(validateJsonSchema(schema, v11).length > 0, "v1.1 routingVocabulary must reject traversal");
+  assert.ok(validateJsonSchema(schema, v12).length > 0, "v1.2 evalSuite must reject traversal");
+  assert.ok(validateJsonSchema(schema, {
+    ...v11,
+    artifacts: { ...v11.artifacts, routingVocabulary: "C:\\outside.json" },
+  }).length > 0, "v1.1 routingVocabulary must reject a drive-qualified path");
+  assert.ok(validateJsonSchema(schema, {
+    ...v12,
+    artifacts: { ...v12.artifacts, evalSuite: "C:/outside.json" },
+  }).length > 0, "v1.2 evalSuite must reject a drive-qualified path");
+  assert.deepEqual(validateJsonSchema(schema, {
+    ...v11,
+    artifacts: { ...v11.artifacts, routingVocabulary: "routing.vocabulary.json" },
+  }), []);
+  assert.deepEqual(validateJsonSchema(schema, {
+    ...v12,
+    artifacts: { ...v12.artifacts, evalSuite: "evals/frontend.json" },
+  }), []);
+});
+
 test("public router types are independent from MCP transport types", async () => {
   const source = await readFile("src/router/types.ts", "utf8");
   assert.doesNotMatch(source, /from\s+["'][^"']*mcp/i);

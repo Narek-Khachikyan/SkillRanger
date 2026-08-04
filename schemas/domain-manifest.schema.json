@@ -69,7 +69,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "pattern": "^(?![\\\\/])(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$"
+      "pattern": "^(?![\\\\/])(?![A-Za-z]:)(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$"
     },
     "artifactsV10": {
       "type": "object",
@@ -100,7 +100,7 @@
         "validators": { "$ref": "#/$defs/paths" },
         "evalSuite": { "$ref": "#/$defs/path" },
         "capabilityRecords": { "$ref": "#/$defs/paths" },
-        "routingVocabulary": { "type": "string", "minLength": 1, "maxLength": 256 }
+        "routingVocabulary": { "$ref": "#/$defs/path" }
       },
       "additionalProperties": false
     },
@@ -115,7 +115,7 @@
         "examples": { "$ref": "#/$defs/paths" },
         "workflows": { "$ref": "#/$defs/paths" },
         "validators": { "$ref": "#/$defs/paths" },
-        "evalSuite": { "type": "string", "minLength": 1 },
+        "evalSuite": { "$ref": "#/$defs/path" },
         "capabilityRecords": { "$ref": "#/$defs/paths" },
         "releaseManifest": { "$ref": "#/$defs/path" },
         "routingVocabulary": { "$ref": "#/$defs/path" }

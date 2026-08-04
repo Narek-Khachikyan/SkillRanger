@@ -1,6 +1,7 @@
 import { lstatSync, readFileSync } from "node:fs";
 import { isCompleteVisualOperationalEvidence } from "./operational.ts";
 import { visualCriteria } from "./suite.ts";
+import { assertVisualBenchmarkEvidence } from "./evidence.ts";
 import { canonicalJson, computeVisualBenchmarkResultDigest, computeVisualBlindReviewPackageDigest, isOpaqueReviewLabel, validateHumanReview, type VisualBlindReviewMapping, type VisualBlindReviewPackage } from "./review.ts";
 import type { VisualBenchmarkMetricSet, VisualBenchmarkReport, VisualBenchmarkRunResult, VisualCandidateMetricSet, VisualHumanReview, VisualPromotionVerdict } from "./types.ts";
 
@@ -15,6 +16,7 @@ const pathIsUnsafe = (value: string) => value.startsWith("/") || value.split(/[\
 const digestPattern = /^[a-f0-9]{64}$/;
 const assertImmutableResults = (results: VisualBenchmarkRunResult[]) => {
   for (const result of results) {
+    assertVisualBenchmarkEvidence(result);
     if (typeof result.resultPath !== "string" || !result.resultPath) throw new Error(`immutable benchmark result path missing for ${result.runId}`);
     const info = lstatSync(result.resultPath, { throwIfNoEntry: false });
     if (!info?.isFile() || info.isSymbolicLink() || info.size === 0) throw new Error(`immutable benchmark result missing for ${result.runId}`);
@@ -145,30 +147,40 @@ export const aggregateVisualBenchmark = (input: { results: VisualBenchmarkRunRes
   const results = new Map(input.results.map((result) => [result.runId, result]));
   const mapping = new Map(input.privateMapping.pairs.map((pair) => [pair.pairId, pair]));
   const scoreRows = new Map<string, { vectors: number[][]; catastrophic: boolean[] }>();
-  const preferenceByCandidate = new Map<string, PreferenceCounts>();
+  const preferenceByReviewer = new Map<string, PreferenceCounts>();
+  const preferenceByReviewerAndCandidate = new Map<string, Map<string, PreferenceCounts>>();
   const overallPreference = emptyPreferenceCounts();
-  for (const review of input.reviews) for (const judgment of review.judgments) {
-    const pair = mapping.get(judgment.pairId)!;
-    for (const side of ["A", "B"] as const) {
-      const run = pair[side];
-      const scores = judgment[`scores${side}`];
-      const row = scoreRows.get(run.runId) ?? { vectors: [], catastrophic: [] };
-      row.vectors.push(visualCriteria.map((criterion) => scores[criterion]));
-      row.catastrophic.push(judgment[`catastrophic${side}`]);
-      scoreRows.set(run.runId, row);
+  const orderedReviewerIds: string[] = [];
+  for (const review of input.reviews) {
+    const reviewerId = review.reviewerId.trim();
+    const reviewerPreference = emptyPreferenceCounts();
+    const reviewerCandidatePreferences = new Map<string, PreferenceCounts>();
+    for (const judgment of review.judgments) {
+      const pair = mapping.get(judgment.pairId)!;
+      for (const side of ["A", "B"] as const) {
+        const run = pair[side];
+        const scores = judgment[`scores${side}`];
+        const row = scoreRows.get(run.runId) ?? { vectors: [], catastrophic: [] };
+        row.vectors.push(visualCriteria.map((criterion) => scores[criterion]));
+        row.catastrophic.push(judgment[`catastrophic${side}`]);
+        scoreRows.set(run.runId, row);
+      }
+      const sourceResult = results.get(pair.A.runId)!;
+      const reviewerBucket = reviewerCandidatePreferences.get(sourceResult.capabilityCandidateId) ?? emptyPreferenceCounts();
+      const updatePreference = (counts: PreferenceCounts) => {
+        if (judgment.preference === "tie") counts.ties++;
+        else if (judgment.preference === "abstain") counts.abstentions++;
+        else if (pair[judgment.preference].arm === "with-skillranger") counts.candidateWins++;
+        else counts.comparatorWins++;
+      };
+      updatePreference(overallPreference);
+      updatePreference(reviewerPreference);
+      updatePreference(reviewerBucket);
+      reviewerCandidatePreferences.set(sourceResult.capabilityCandidateId, reviewerBucket);
     }
-    const sourceResult = results.get(pair.A.runId)!;
-    const bucket = preferenceByCandidate.get(sourceResult.capabilityCandidateId) ?? emptyPreferenceCounts();
-    if (judgment.preference === "tie") {
-      overallPreference.ties++; bucket.ties++;
-    } else if (judgment.preference === "abstain") {
-      overallPreference.abstentions++; bucket.abstentions++;
-    } else if (pair[judgment.preference].arm === "with-skillranger") {
-      overallPreference.candidateWins++; bucket.candidateWins++;
-    } else {
-      overallPreference.comparatorWins++; bucket.comparatorWins++;
-    }
-    preferenceByCandidate.set(sourceResult.capabilityCandidateId, bucket);
+    orderedReviewerIds.push(reviewerId);
+    preferenceByReviewer.set(reviewerId, reviewerPreference);
+    preferenceByReviewerAndCandidate.set(reviewerId, reviewerCandidatePreferences);
   }
   const records: ScoredRun[] = [...scoreRows].map(([runId, row]) => {
     const result = results.get(runId)!;
@@ -176,7 +188,8 @@ export const aggregateVisualBenchmark = (input: { results: VisualBenchmarkRunRes
     return { result, vector, quality: mean(vector) / 5, catastrophic: row.catastrophic.some(Boolean) };
   });
   if (records.length !== 96) throw new Error("reviews did not score every run");
-  const preference = preferenceShare(overallPreference);
+  const equalWeightedPreference = (counts: PreferenceCounts[]) => mean(counts.map(preferenceShare));
+  const preference = equalWeightedPreference(orderedReviewerIds.map((reviewerId) => preferenceByReviewer.get(reviewerId)!));
   const byArm = {
     "without-skillranger": metricSet(records.filter((record) => record.result.arm === "without-skillranger"), preference),
     "with-skillranger": metricSet(records.filter((record) => record.result.arm === "with-skillranger"), preference),
@@ -192,9 +205,10 @@ export const aggregateVisualBenchmark = (input: { results: VisualBenchmarkRunRes
   const candidateMetric = (candidateId: "weak" | "medium" | "strong"): VisualCandidateMetricSet => {
     // Runtime calibration is based on the SkillRanger arm only: eight briefs x two repetitions = 16 samples.
     const candidateRecords = records.filter((record) => record.result.capabilityCandidateId === candidateId && record.result.arm === "with-skillranger");
-    const pref = preferenceByCandidate.get(candidateId) ?? emptyPreferenceCounts();
+    const pref = equalWeightedPreference(orderedReviewerIds.map((reviewerId) =>
+      preferenceByReviewerAndCandidate.get(reviewerId)?.get(candidateId) ?? emptyPreferenceCounts()));
     return {
-      ...metricSet(candidateRecords, preferenceShare(pref)),
+      ...metricSet(candidateRecords, pref),
       modelIds: [...new Set(candidateRecords.map(({ result }) => result.modelId))],
       successfulRecipeIds: successfulRecipes(candidateRecords),
       evidencePaths: [...new Set(candidateRecords.flatMap(({ result }) => result.artifactPaths))],

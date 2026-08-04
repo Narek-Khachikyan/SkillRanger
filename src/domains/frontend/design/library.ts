@@ -74,8 +74,8 @@ const resolveContainedPath = (root: string, relativePath: string) => {
 };
 
 const validateProvenance = (value: unknown, ruleId: string) => {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error(`Invalid design rule provenance: ${ruleId}`);
+  if (!Array.isArray(value) || value.length < 2) {
+    throw new Error(`Design rule provenance requires two independent sources: ${ruleId}`);
   }
   for (const entry of value) {
     if (!isRecord(entry) || !hasOnlyKeys(entry, provenanceKeys)) {
@@ -99,6 +99,9 @@ const validateProvenance = (value: unknown, ruleId: string) => {
     ) {
       throw new Error(`Invalid design rule provenance: ${ruleId}`);
     }
+  }
+  if (new Set(value.map((entry) => isRecord(entry) ? entry.source : undefined)).size < 2) {
+    throw new Error(`Design rule provenance requires two independent sources: ${ruleId}`);
   }
   return value;
 };

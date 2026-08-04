@@ -4,6 +4,7 @@ import path from "node:path";
 import { validateVisualBenchmarkPlan } from "./runner.ts";
 import { visualCriteria } from "./suite.ts";
 import type { VisualBenchmarkPlan, VisualBenchmarkPlanEntry, VisualBenchmarkRunResult, VisualHumanReview } from "./types.ts";
+import { assertVisualBenchmarkEvidence } from "./evidence.ts";
 
 export type VisualBlindReviewPackage = { schemaVersion: "1.0"; benchmarkVersion: string; reviewPackageDigest: string; criteria: string[]; pairs: Array<{ pairId: string; labelA: string; labelB: string; screenshotsA: string[]; screenshotsB: string[] }> };
 export type VisualBlindReviewMapping = { schemaVersion: "1.0"; benchmarkVersion: string; pairs: Array<{ pairId: string; A: { label: string; runId: string; arm: string; modelId: string; resultDigest: string; sourceArtifactPaths: string[] }; B: { label: string; runId: string; arm: string; modelId: string; resultDigest: string; sourceArtifactPaths: string[] } }> };
@@ -49,6 +50,7 @@ const assertCompleteResults = (plan: VisualBenchmarkPlan, results: VisualBenchma
     if (!result || identityFields.some((field) => result[field] !== entry[field])
       || result.benchmarkVersion !== plan.benchmarkVersion || result.skillRangerVersion !== plan.skillRangerVersion
       || result.skillRangerChecksum !== plan.skillRangerChecksum) throw new Error(`stale or foreign benchmark result ${entry.runId}`);
+    assertVisualBenchmarkEvidence(result);
     if (result.operationalEvidence !== "complete" || typeof result.hardGateFailed !== "boolean"
       || !Number.isInteger(result.criticalFindings) || Number(result.criticalFindings) < 0
       || !Number.isInteger(result.repairIterations) || Number(result.repairIterations) < 0

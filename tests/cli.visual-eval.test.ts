@@ -5,8 +5,14 @@ import { mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { isContained } from "../src/cli/io.ts";
 const run = promisify(execFile);
 const cli = (args: string[]) => run(process.execPath, ["src/cli/index.ts", "eval:visual", ...args]);
+
+test("shared CLI containment handles the filesystem root", () => {
+  assert.equal(isContained("/", "/mapping.json"), true);
+  assert.equal(isContained("/public", "/publicity/mapping.json"), false);
+});
 
 test("eval:visual plans the frozen 96-run matrix and atomically writes it", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "visual-cli-")); const output = path.join(root, "plan.json");

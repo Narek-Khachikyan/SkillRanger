@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { loadVisualBenchmarkSuite, validateVisualBenchmarkSuite, visualCriteria } from "../src/evals/visual/suite.ts";
 import { executeVisualBenchmarkPlan, executeVisualBenchmarkPlanSubsetForTesting, generateVisualBenchmarkPlan, validateVisualCandidates, validateVisualBenchmarkPlan } from "../src/evals/visual/runner.ts";
-import { createBlindReviewPackage, validateHumanReview } from "../src/evals/visual/review.ts";
+import { computeVisualBenchmarkResultDigest, createBlindReviewPackage, validateHumanReview } from "../src/evals/visual/review.ts";
 import { aggregateVisualBenchmark, mean, median, populationVariance } from "../src/evals/visual/metrics.ts";
 import { visualCandidates } from "./helpers/visual-benchmark-fixtures.ts";
 import type { VisualBenchmarkPlan, VisualBenchmarkRunResult, VisualHumanReview } from "../src/evals/visual/types.ts";
@@ -19,20 +19,27 @@ const persistResults = async (results: VisualBenchmarkRunResult[]) => {
 const completedFixture = async () => {
   const plan = generateVisualBenchmarkPlan({ suite: await loadVisualBenchmarkSuite(), candidates: [...visualCandidates] });
   const root = await mkdtemp(path.join(os.tmpdir(), "visual-review-"));
-  const screenshot = path.join(root, "render.png");
-  await writeFile(screenshot, "rendered-pixels");
   const weakCatBriefs = new Set([...new Set(plan.entries.map(({ briefId }) => briefId))].slice(0, 2));
   const results: VisualBenchmarkRunResult[] = plan.entries.map((entry) => {
     const weakFailure = entry.capabilityCandidateId === "weak" && entry.arm === "with-skillranger" && weakCatBriefs.has(entry.briefId);
+    const runRoot = path.join(root, "runs", entry.runId);
+    const stdoutPath = path.join(runRoot, "stdout.txt");
+    const stderrPath = path.join(runRoot, "stderr.txt");
     return ({
     ...entry, benchmarkVersion: plan.benchmarkVersion, skillRangerVersion: plan.skillRangerVersion,
-    skillRangerChecksum: plan.skillRangerChecksum, workspacePath: path.join(root, entry.runId, "workspace"),
-    resultPath: path.join(root, `${entry.runId}.json`), dryRun: false, exitCode: 0, signal: null,
-    durationMs: 1, artifactPaths: [screenshot], operationalEvidence: "complete", hardGateFailed: weakFailure,
+    skillRangerChecksum: plan.skillRangerChecksum, workspacePath: path.join(runRoot, "workspace"),
+    resultPath: path.join(runRoot, "run-result.json"), dryRun: false, exitCode: 0, signal: null,
+    stdoutPath, stderrPath, durationMs: 1, artifactPaths: [stdoutPath, stderrPath, path.join(runRoot, "render.png")], operationalEvidence: "complete", hardGateFailed: weakFailure,
     repairIterations: entry.capabilityCandidateId === "weak" && entry.arm === "with-skillranger" ? (entry.repetition === 1 ? 2 : 3) : 1,
     verificationOutcome: weakFailure ? "failed" : "verified", criticalFindings: 0, completionClaimed: true,
   });
   });
+  await Promise.all(results.map(async ({ workspacePath, artifactPaths }) => {
+    await mkdir(workspacePath, { recursive: true });
+    await writeFile(artifactPaths[0], "stdout");
+    await writeFile(artifactPaths[1], "stderr");
+    await writeFile(artifactPaths[2], "rendered-pixels");
+  }));
   await persistResults(results);
   let n = 0;
   const prepared = createBlindReviewPackage({ plan, results, labelFactory: () => `opaque-${++n}` });
@@ -184,6 +191,90 @@ test("requires complete 96-result rendered review evidence", async () => {
   assert.throws(() => createBlindReviewPackage({ plan: fixture.plan, results: fixture.results, labelFactory: () => "with-skillranger" }), /non-opaque/);
 });
 
+test("rejects benchmark evidence outside the isolated run directory", async () => {
+  const fixture = await completedFixture();
+  const foreignRoot = await mkdtemp(path.join(os.tmpdir(), "visual-foreign-evidence-"));
+  const foreignScreenshot = path.join(foreignRoot, "foreign.png");
+  await writeFile(foreignScreenshot, "foreign-render");
+  const forged = structuredClone(fixture.results);
+  forged[0].artifactPaths = [forged[0].stdoutPath!, forged[0].stderrPath!, foreignScreenshot];
+  assert.throws(
+    () => createBlindReviewPackage({ plan: fixture.plan, results: forged }),
+    /isolated run directory|escaped run directory/,
+  );
+});
+
+test("rejects benchmark results that relocate evidence into a shared parent", async () => {
+  const fixture = await completedFixture();
+  const forged = structuredClone(fixture.results);
+  forged[0].resultPath = path.join(path.dirname(path.dirname(forged[0].resultPath)), "shared-result.json");
+  assert.throws(
+    () => createBlindReviewPackage({ plan: fixture.plan, results: forged }),
+    /isolated run directory/,
+  );
+});
+
+test("rejects benchmark evidence that is not listed by the run artifact manifest", async () => {
+  const fixture = await completedFixture();
+  const runRoot = path.dirname(fixture.results[0].resultPath);
+  const foreignScreenshot = path.join(runRoot, "not-in-manifest.png");
+  await writeFile(path.join(runRoot, "artifact-manifest.json"), JSON.stringify({ schemaVersion: "1.0", artifacts: ["render.png"] }));
+  await writeFile(foreignScreenshot, "foreign-render");
+  const forged = structuredClone(fixture.results);
+  forged[0].artifactPaths = [forged[0].stdoutPath!, forged[0].stderrPath!, foreignScreenshot];
+  assert.throws(
+    () => createBlindReviewPackage({ plan: fixture.plan, results: forged }),
+    /artifact manifest/,
+  );
+});
+
+test("rejects rendered evidence added after the artifact manifest", async () => {
+  const fixture = await completedFixture();
+  const runRoot = path.dirname(fixture.results[0].resultPath);
+  await writeFile(path.join(runRoot, "late-render.png"), "foreign-render");
+  await writeFile(path.join(runRoot, "artifact-manifest.json"), JSON.stringify({ schemaVersion: "1.0", artifacts: ["render.png"] }));
+  assert.throws(
+    () => createBlindReviewPackage({ plan: fixture.plan, results: fixture.results }),
+    /artifact manifest/,
+  );
+});
+
+test("requires retained stdout and stderr evidence for promotion", async () => {
+  const fixture = await completedFixture();
+  const forged = structuredClone(fixture.results);
+  delete forged[0].stdoutPath;
+  delete forged[0].stderrPath;
+  forged[0].artifactPaths = [forged[0].artifactPaths[2]];
+  assert.throws(
+    () => createBlindReviewPackage({ plan: fixture.plan, results: forged }),
+    /run logs must be retained/,
+  );
+});
+
+test("aggregation rejects foreign evidence even when the immutable result and mapping are forged together", async () => {
+  const fixture = await completedFixture();
+  const foreignRoot = await mkdtemp(path.join(os.tmpdir(), "visual-foreign-aggregate-"));
+  const foreignScreenshot = path.join(foreignRoot, "foreign.png");
+  await writeFile(foreignScreenshot, "foreign-render");
+  const results = structuredClone(fixture.results);
+  results[0].artifactPaths = [results[0].stdoutPath!, results[0].stderrPath!, foreignScreenshot];
+  await writeFile(results[0].resultPath, `${JSON.stringify(results[0])}\n`);
+  const privateMapping = structuredClone(fixture.privateMapping);
+  const mapped = privateMapping.pairs.flatMap((pair) => [pair.A, pair.B]).find((entry) => entry.runId === results[0].runId);
+  assert.ok(mapped);
+  mapped.sourceArtifactPaths = [foreignScreenshot];
+  mapped.resultDigest = computeVisualBenchmarkResultDigest(results[0]);
+  assert.throws(
+    () => aggregateVisualBenchmark({
+      results,
+      reviewPackage: fixture.reviewPackage,
+      privateMapping,
+      reviews: aggregateReviews(fixture.review),
+    }),
+    /isolated run directory|escaped run directory/,
+  );
+});
+
 test("validates every human review field and exact pair coverage", async () => {
   const fixture = await completedFixture();
   assert.deepEqual(validateHumanReview(fixture.review, fixture.reviewPackage), []);
@@ -266,23 +357,31 @@ test("uses equal reviewer weight and decisive-only preference at the 60 percent 
   await cleanResults(fixture.results);
   const refreshed = refreshFixtureContracts(fixture);
   const baseReview = cleanReview(refreshed.review);
+  const sparse = (reviewerId: string, candidateWins: number, comparatorWins: number) => {
+    const review = reviewWithCandidateWins(refreshed, baseReview, reviewerId, candidateWins);
+    review.judgments = review.judgments.map((judgment, index) =>
+      index < candidateWins + comparatorWins ? judgment : { ...judgment, preference: "abstain" } as any);
+    return review;
+  };
   const passing = [
     reviewWithCandidateWins(refreshed, baseReview, "human-1", 48),
-    reviewWithCandidateWins(refreshed, baseReview, "human-2", 10),
+    sparse("human-2", 10, 10),
   ];
   const passReport = aggregateVisualBenchmark({ results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: passing });
   assert.equal(passReport.promotion.candidateWins, 58);
-  assert.equal(passReport.promotion.comparatorWins, 38);
-  close(passReport.promotion.candidatePreferenceShare, 58 / 96);
+  assert.equal(passReport.promotion.comparatorWins, 10);
+  assert.equal(passReport.promotion.abstentions, 28);
+  close(passReport.promotion.candidatePreferenceShare, (1 + 0.5) / 2);
   assert.equal(passReport.promotion.verdict, "promotable");
-  close(passReport.metrics.pairwiseSkillRangerPreferenceShare, 58 / 96);
+  close(passReport.metrics.pairwiseSkillRangerPreferenceShare, (1 + 0.5) / 2);
 
   const failing = [
     reviewWithCandidateWins(refreshed, baseReview, "human-1", 48),
-    reviewWithCandidateWins(refreshed, baseReview, "human-2", 9),
+    sparse("human-2", 0, 1),
   ];
   const failReport = aggregateVisualBenchmark({ results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: failing });
-  assert.equal(failReport.promotion.candidateWins, 57);
+  assert.equal(failReport.promotion.candidateWins, 48);
+  close(failReport.promotion.candidatePreferenceShare, (1 + 0) / 2);
   assert.equal(failReport.promotion.verdict, "blocked");
   assert.ok(failReport.promotion.blockingReasons.some((reason) => /60%|preference/i.test(reason)));
 });

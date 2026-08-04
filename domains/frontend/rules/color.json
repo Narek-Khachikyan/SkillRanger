@@ -10,7 +10,10 @@
       "rolesConsumed": ["surface", "text", "border", "accent", "status"], "responsiveBehavior": ["Keep role meaning unchanged across responsive compositions."],
       "accessibility": ["Meet contrast requirements and never communicate state through color alone."], "antiPatterns": ["Raw decorative colors without a product or state role."],
       "verification": ["Inspect computed role usage, contrast, and non-color status cues in every required state."],
-      "provenance": [{ "source": "skillranger://frontend/reference-corpus/0.4.0", "page": "FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "curated normalization from public reference sources", "extractionSchema": "skillranger.frontend.design-rule/1.0", "evidenceStatus": "inferred" }]
+      "provenance": [
+        { "source": "https://styles.refero.design/style/90ce5883-bb24-4466-93f7-801cd617b0d1", "page": "DESIGN.md → Extended", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "normalized semantic reference observation", "extractionSchema": "refero.design/semantic-reference/1.0", "evidenceStatus": "inferred" },
+        { "source": "https://designmd.cc/benchmarks/linear", "page": "Raw extraction", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "independent computed-style triangulation", "extractionSchema": "designmd.cc/raw-extraction/1.0", "evidenceStatus": "inferred" }
+      ]
     },
     {
       "schemaVersion": "1.0", "id": "color.commerce-trust", "version": "1.0.0", "family": "color", "name": "Commerce Trust",
@@ -20,7 +23,10 @@
       "rolesConsumed": ["price", "availability", "fulfillment", "proof"], "responsiveBehavior": ["Preserve evidence roles when product facts wrap or reorder."],
       "accessibility": ["Write availability and fulfillment status explicitly alongside color."], "antiPatterns": ["Invented discount colors or fake urgency."],
       "verification": ["Confirm price, availability, fulfillment, and proof remain distinguishable without color perception."],
-      "provenance": [{ "source": "skillranger://frontend/reference-corpus/0.4.0", "page": "FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "curated normalization from public reference sources", "extractionSchema": "skillranger.frontend.design-rule/1.0", "evidenceStatus": "inferred" }]
+      "provenance": [
+        { "source": "https://styles.refero.design/style/90ce5883-bb24-4466-93f7-801cd617b0d1", "page": "DESIGN.md → Extended", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "normalized semantic reference observation", "extractionSchema": "refero.design/semantic-reference/1.0", "evidenceStatus": "inferred" },
+        { "source": "https://designmd.cc/benchmarks/linear", "page": "Raw extraction", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "independent computed-style triangulation", "extractionSchema": "designmd.cc/raw-extraction/1.0", "evidenceStatus": "inferred" }
+      ]
     },
     {
       "schemaVersion": "1.0", "id": "color.operational-status", "version": "1.0.0", "family": "color", "name": "Operational Status",
@@ -30,7 +36,10 @@
       "rolesConsumed": ["neutral", "active", "warning", "error", "success"], "responsiveBehavior": ["Retain text labels when status indicators become compact."],
       "accessibility": ["Pair every status color with text, iconography, or pattern."], "antiPatterns": ["Rainbow status systems with overlapping meaning."],
       "verification": ["Review every status mapping for unique meaning, contrast, and a non-color cue."],
-      "provenance": [{ "source": "skillranger://frontend/reference-corpus/0.4.0", "page": "FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "curated normalization from public reference sources", "extractionSchema": "skillranger.frontend.design-rule/1.0", "evidenceStatus": "inferred" }]
+      "provenance": [
+        { "source": "https://styles.refero.design/style/90ce5883-bb24-4466-93f7-801cd617b0d1", "page": "DESIGN.md → Extended", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "normalized semantic reference observation", "extractionSchema": "refero.design/semantic-reference/1.0", "evidenceStatus": "inferred" },
+        { "source": "https://designmd.cc/benchmarks/linear", "page": "Raw extraction", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "independent computed-style triangulation", "extractionSchema": "designmd.cc/raw-extraction/1.0", "evidenceStatus": "inferred" }
+      ]
     }
   ]
 }
