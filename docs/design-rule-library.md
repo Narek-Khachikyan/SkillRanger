@@ -18,7 +18,42 @@ Each rule declares:
 - `constraints`, `rolesConsumed`, and `responsiveBehavior` for implementation boundaries;
 - `accessibility` and `antiPatterns` for required safeguards;
 - `verification` for observable completion criteria;
-- `provenance` for source and review date.
+- `provenance` for the source, page/state, review or capture date, extraction method/schema, and evidence status.
+
+The published contract is [`domains/frontend/schemas/design-rule.schema.json`](../domains/frontend/schemas/design-rule.schema.json). It is a closed, normalized SkillRanger shape: raw Google `DESIGN.md`, TypeUI, Tailwind, DTCG, or token payloads are research inputs, not rule records. The loader rejects unknown fields and requires every rule to carry all of the semantic fields above.
+
+## Corpus and Provenance Boundary
+
+The accepted reference corpus is role-separated. It supplies observations and hypotheses; it does not supply copyable product identity or production templates.
+
+| Source role | Accepted use | Not accepted as |
+| --- | --- | --- |
+| Refero semantic reference | Primary source for role vocabulary and observable relationships | A source product's canonical SkillRanger system or drop-in tokens |
+| Neuform public template | Qualitative comparison of hierarchy, density, panels, and rhythm | Proof of visual superiority or a reusable template |
+| DesignMD and designmd.supply | Triangulation extractors for an approved public page | Independent product evidence or unchanged `DESIGN.md` content |
+| getdesign.md | Catalog and follow-up reference | Verified instant public extraction authority |
+| design-md-chrome | Browser capture convenience; retain its TypeUI schema as provenance | Google-format `DESIGN.md` or SkillRanger runtime content |
+
+Each provenance entry has this closed shape:
+
+- `source`: a URL or stable source identifier;
+- optional `page` and `state`, when the inspected route or public UI state is known;
+- `reviewedAt` or `capturedAt` as an ISO calendar date;
+- `extractionMethod` and `extractionSchema`, preserving how the observation was obtained;
+- `evidenceStatus`: `observed`, `inferred`, `assumed`, or `unknown`.
+
+The bundled 0.4.0 rules use the stable source identifier
+`skillranger://frontend/reference-corpus/0.4.0`. Its normalized observations are
+documented in [`docs/FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md`](./FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md), whose source table
+retains the accepted public URLs, inspected pages/states, and extractor roles.
+
+The bundled rules are normalized observations. Exact source tokens, typefaces, geometry, composition, motion, and trade dress remain provenance-labelled worked-example material rather than universal rules.
+
+## Semantic Version Policy
+
+The current 18 rule identifiers are the compatibility boundary. A normative edit to `recipeIds`, `preconditions`, `intent`, `constraints`, `rolesConsumed`, `responsiveBehavior`, `accessibility`, `antiPatterns`, or `verification` requires a new semantic `version` (for example, `1.1.0`). A name, wording, or provenance correction may keep the existing version when the normative digest is unchanged. The loader checks this distinction against the bundled corpus baseline and rejects a same-version normative edit. When a normative revision is released, its new semantic version and digest must be recorded in that baseline in the same change; the baseline is frozen at runtime so callers cannot rewrite the compatibility anchor.
+
+Adding a rule family or silently replacing a stable identifier is a contract change. It requires an explicit corpus/version decision and matching contract and compatibility tests.
 
 ## Selection Contract
 

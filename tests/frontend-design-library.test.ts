@@ -4,6 +4,7 @@ import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  designRuleFamilies,
   frontendRecipeIds,
   loadDesignRuleLibrary,
   loadFrontendRecipes,
@@ -39,12 +40,25 @@ const makeBrief = (input: { domain: string; surfaceType: string }): DesignBrief 
 
 test("loads all six rule families with unique versioned ids", async () => {
   const library = await loadDesignRuleLibrary();
-  assert.deepEqual([...new Set(library.rules.map(({ family }) => family))].sort(),
-    ["color", "layout", "responsive", "signature-move", "state", "typography"]);
+  assert.deepEqual([...new Set(library.rules.map(({ family }) => family))], [
+    "typography", "layout", "responsive", "color", "state", "signature-move",
+  ]);
   assert.equal(library.rules.length, 18);
-  assert.equal(new Set(library.rules.map(({ id }) => id)).size, library.rules.length);
-  assert.ok(library.rules.every((rule) => rule.version === "1.0.0"));
+  assert.deepEqual(library.rules.map(({ id }) => id), [
+    "typography.role-contrast", "typography.editorial-product", "typography.dense-workspace",
+    "layout.action-evidence", "layout.list-detail", "layout.commerce-comparison",
+    "responsive.recompose-not-stack", "responsive.list-detail-drill-in", "responsive.mobile-thumb-zone",
+    "color.semantic-roles", "color.commerce-trust", "color.operational-status",
+    "state.complete-primary-flow", "state.recovery-first", "state.optimistic-offline",
+    "signature.product-data-grammar", "signature.conversion-proof", "signature.repeated-action-feedback",
+  ]);
+  assert.ok(library.rules.every((rule) => /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(rule.version)));
   assert.ok(library.rules.every((rule) => rule.provenance.length > 0 && rule.verification.length > 0));
+  assert.ok(library.rules.every((rule) => rule.provenance.every((entry) =>
+    entry.source.startsWith("skillranger://") && entry.page?.length && entry.state?.length &&
+    entry.extractionMethod.length > 0 && entry.extractionSchema.length > 0 &&
+    entry.evidenceStatus.length > 0 && (entry.reviewedAt || entry.capturedAt))
+  ));
 });
 
 test("selects one compatible rule from every family", async () => {
@@ -97,6 +111,149 @@ test("rejects malformed design rule records at runtime", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+const withRulesFixture = async (mutate: (root: string) => Promise<void> | void, assertion: RegExp) => {
+  const root = await mkdtemp(path.join(tmpdir(), "skillranger-rules-"));
+  try {
+    await cp("domains/frontend/rules", root, { recursive: true });
+    await mutate(root);
+    await assert.rejects(loadDesignRuleLibrary(root), assertion);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+};
+
+test("rejects incomplete provenance metadata", async () => {
+  await withRulesFixture(async (root) => {
+    const file = path.join(root, "typography.json");
+    const source = JSON.parse(await readFile(file, "utf8"));
+    delete source.rules[0].provenance[0].extractionSchema;
+    await writeFile(file, JSON.stringify(source), "utf8");
+  }, /provenance/);
+});
+
+test("rejects an invalid supplied provenance date even when the other date is valid", async () => {
+  await withRulesFixture(async (root) => {
+    const file = path.join(root, "typography.json");
+    const source = JSON.parse(await readFile(file, "utf8"));
+    source.rules[0].provenance[0].reviewedAt = "2026-02-30";
+    source.rules[0].provenance[0].capturedAt = "2026-08-04";
+    await writeFile(file, JSON.stringify(source), "utf8");
+  }, /provenance/);
+});
+
+test("rejects an unnormalized external design payload", async () => {
+  await withRulesFixture(async (root) => {
+    await writeFile(path.join(root, "typography.json"), JSON.stringify({
+      schemaVersion: "1.0",
+      family: "typography",
+      rules: [{
+        name: "External DESIGN.md output",
+        colors: { accent: "#fff" },
+        typography: { body: "Inter" },
+      }],
+    }), "utf8");
+  }, /Invalid design rule contract/);
+});
+
+test("rejects vendor fields added to a normalized rule file envelope", async () => {
+  await withRulesFixture(async (root) => {
+    const file = path.join(root, "typography.json");
+    const source = JSON.parse(await readFile(file, "utf8"));
+    source.tokens = { "--font-body": "Inter" };
+    await writeFile(file, JSON.stringify(source), "utf8");
+  }, /Invalid design rule file/);
+});
+
+test("rejects unknown recipe compatibility ids", async () => {
+  await withRulesFixture(async (root) => {
+    const file = path.join(root, "typography.json");
+    const source = JSON.parse(await readFile(file, "utf8"));
+    source.rules[0].recipeIds = ["un-normalized-external-recipe"];
+    await writeFile(file, JSON.stringify(source), "utf8");
+  }, /Unknown recipe id/);
+});
+
+test("rejects an index that does not preserve all ordered families", async () => {
+  await withRulesFixture(async (root) => {
+    const file = path.join(root, "index.json");
+    const source = JSON.parse(await readFile(file, "utf8"));
+    delete source.files.color;
+    source.files.typography = "color.json";
+    await writeFile(file, JSON.stringify(source), "utf8");
+  }, /all six families|ordered/);
+});
+
+test("rejects duplicate stable rule identifiers", async () => {
+  await withRulesFixture(async (root) => {
+    const file = path.join(root, "layout.json");
+    const source = JSON.parse(await readFile(file, "utf8"));
+    source.rules[1].id = source.rules[0].id;
+    await writeFile(file, JSON.stringify(source), "utf8");
+  }, /Duplicate design rule id/);
+});
+
+test("accepts a normative rule revision only with a semantic version", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "skillranger-rules-"));
+  try {
+    await cp("domains/frontend/rules", root, { recursive: true });
+    const file = path.join(root, "typography.json");
+    const source = JSON.parse(await readFile(file, "utf8"));
+    source.rules[0].version = "1.1.0";
+    source.rules[0].constraints[0] = "The revised normative constraint is explicit.";
+    await writeFile(file, JSON.stringify(source), "utf8");
+    const library = await loadDesignRuleLibrary(root);
+    assert.equal(library.rules.find(({ id }) => id === "typography.role-contrast")?.version, "1.1.0");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("requires a version change for normative edits but permits wording and provenance corrections", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "skillranger-rules-"));
+  try {
+    await cp("domains/frontend/rules", root, { recursive: true });
+    const file = path.join(root, "typography.json");
+    const source = JSON.parse(await readFile(file, "utf8"));
+    source.rules[0].constraints[0] = "A normative edit without a version change.";
+    await writeFile(file, JSON.stringify(source), "utf8");
+    await assert.rejects(loadDesignRuleLibrary(root), /requires an explicit semantic version change/);
+
+    source.rules[0].version = "1.1.0";
+    await writeFile(file, JSON.stringify(source), "utf8");
+    await loadDesignRuleLibrary(root);
+
+    source.rules[0].version = "1.0.0";
+    source.rules[0].name = "A wording correction only";
+    source.rules[0].provenance[0].source = "SkillRanger curated frontend research (corrected label)";
+    source.rules[0].constraints[0] = JSON.parse(await readFile("domains/frontend/rules/typography.json", "utf8")).rules[0].constraints[0];
+    await writeFile(file, JSON.stringify(source), "utf8");
+    await loadDesignRuleLibrary(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("rejects a non-semantic design-rule version", async () => {
+  await withRulesFixture(async (root) => {
+    const file = path.join(root, "typography.json");
+    const source = JSON.parse(await readFile(file, "utf8"));
+    source.rules[0].version = "1.0";
+    await writeFile(file, JSON.stringify(source), "utf8");
+  }, /semantic version/);
+});
+
+test("requires recipe selection to cover the ordered six-family contract", async () => {
+  const library = await loadDesignRuleLibrary();
+  assert.throws(
+    () => selectDesignRules(library, { recipeId: "unknown-recipe", families: [...designRuleFamilies] }),
+    /Unknown frontend recipe/,
+  );
+  assert.throws(
+    () => selectDesignRules(library, { recipeId: frontendRecipeIds[0], families: ["typography", "typography"] }),
+    /exactly one rule from each ordered family/,
+  );
 });
 
 test("validates six selected rule families on a design direction", () => {

@@ -5,11 +5,21 @@
   "required": ["schemaVersion", "id", "version", "family", "name", "recipeIds", "preconditions", "intent", "constraints", "rolesConsumed", "responsiveBehavior", "accessibility", "antiPatterns", "verification", "provenance"],
   "properties": {
     "schemaVersion": { "const": "1.0" },
-    "id": { "type": "string", "minLength": 1 },
-    "version": { "const": "1.0.0" },
+    "id": { "enum": [
+      "typography.role-contrast", "typography.editorial-product", "typography.dense-workspace",
+      "layout.action-evidence", "layout.list-detail", "layout.commerce-comparison",
+      "responsive.recompose-not-stack", "responsive.list-detail-drill-in", "responsive.mobile-thumb-zone",
+      "color.semantic-roles", "color.commerce-trust", "color.operational-status",
+      "state.complete-primary-flow", "state.recovery-first", "state.optimistic-offline",
+      "signature.product-data-grammar", "signature.conversion-proof", "signature.repeated-action-feedback"
+    ] },
+    "version": { "type": "string", "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$" },
     "family": { "enum": ["typography", "layout", "responsive", "color", "state", "signature-move"] },
     "name": { "type": "string", "minLength": 1 },
-    "recipeIds": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "recipeIds": { "type": "array", "minItems": 1, "items": { "enum": [
+      "*", "operational-command-center", "consumer-discovery", "developer-tool", "editorial-content",
+      "marketing-landing", "saas-workspace", "e-commerce", "mobile-consumer-app"
+    ] } },
     "preconditions": { "$ref": "#/$defs/nonEmptyStrings" },
     "intent": { "type": "string", "minLength": 1 },
     "constraints": { "$ref": "#/$defs/nonEmptyStrings" },
@@ -23,8 +33,18 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["source", "reviewedAt"],
-        "properties": { "source": { "type": "string", "minLength": 1 }, "reviewedAt": { "type": "string", "format": "date" } },
+        "required": ["source", "extractionMethod", "extractionSchema", "evidenceStatus"],
+        "properties": {
+          "source": { "type": "string", "minLength": 1 },
+          "page": { "type": "string", "minLength": 1 },
+          "state": { "type": "string", "minLength": 1 },
+          "reviewedAt": { "type": "string", "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "capturedAt": { "type": "string", "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "extractionMethod": { "type": "string", "minLength": 1 },
+          "extractionSchema": { "type": "string", "minLength": 1 },
+          "evidenceStatus": { "enum": ["observed", "inferred", "assumed", "unknown"] }
+        },
+        "anyOf": [{ "required": ["reviewedAt"] }, { "required": ["capturedAt"] }],
         "additionalProperties": false
       }
     }

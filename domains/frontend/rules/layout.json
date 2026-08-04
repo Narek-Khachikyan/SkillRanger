@@ -10,7 +10,7 @@
       "rolesConsumed": ["primary-action", "evidence", "status"], "responsiveBehavior": ["Move action and evidence together when the composition recomposes."],
       "accessibility": ["DOM order must preserve evidence before the dependent action."], "antiPatterns": ["Detached call-to-action bars with missing context."],
       "verification": ["Trace the primary decision at desktop and mobile without crossing unrelated regions."],
-      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+      "provenance": [{ "source": "skillranger://frontend/reference-corpus/0.4.0", "page": "FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "curated normalization from public reference sources", "extractionSchema": "skillranger.frontend.design-rule/1.0", "evidenceStatus": "inferred" }]
     },
     {
       "schemaVersion": "1.0", "id": "layout.list-detail", "version": "1.0.0", "family": "layout", "name": "List Detail",
@@ -20,7 +20,7 @@
       "rolesConsumed": ["list", "selection", "detail", "action"], "responsiveBehavior": ["Convert simultaneous panes into an explicit drill-in sequence."],
       "accessibility": ["Announce selection and preserve focus when detail content changes."], "antiPatterns": ["Nested cards that obscure list-detail ownership."],
       "verification": ["Verify selection, focus, back navigation, and detail identity across viewports."],
-      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+      "provenance": [{ "source": "skillranger://frontend/reference-corpus/0.4.0", "page": "FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "curated normalization from public reference sources", "extractionSchema": "skillranger.frontend.design-rule/1.0", "evidenceStatus": "inferred" }]
     },
     {
       "schemaVersion": "1.0", "id": "layout.commerce-comparison", "version": "1.0.0", "family": "layout", "name": "Commerce Comparison",
@@ -30,7 +30,7 @@
       "rolesConsumed": ["product", "price", "availability", "fulfillment", "action"], "responsiveBehavior": ["Turn wide comparison into a consistent fact sequence without hiding attributes."],
       "accessibility": ["Give repeated products unique accessible names and explicit availability text."], "antiPatterns": ["Identical product cards without comparison cues."],
       "verification": ["Compare two products at desktop and mobile using the same evidence fields."],
-      "provenance": [{ "source": "SkillRanger curated frontend research", "reviewedAt": "2026-07-14" }]
+      "provenance": [{ "source": "skillranger://frontend/reference-corpus/0.4.0", "page": "FRONTEND_DESIGN_PATTERN_DISTILLATION_2026-08-04.md", "state": "normalized-corpus", "reviewedAt": "2026-08-04", "capturedAt": "2026-08-04", "extractionMethod": "curated normalization from public reference sources", "extractionSchema": "skillranger.frontend.design-rule/1.0", "evidenceStatus": "inferred" }]
     }
   ]
 }

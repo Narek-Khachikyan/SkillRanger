@@ -2,7 +2,7 @@
 
 The frontend pack is SkillRanger's reference domain implementation. It owns frontend routing policy, structured design artifacts, eight product recipes, 18 versioned design rules, eight worked example packs, deterministic validation rules, workflows, and frontend eval slices. Core imports only the generic domain interfaces.
 
-The canonical rule index is `rules/index.json`; worked packs are stored at `examples/<recipe-id>/example.json`. Select one compatible rule from each of the six families before material implementation, then compare the direction with the selected recipe's good and bad examples. Generated SVG plates are explanatory evidence, not production templates.
+The canonical rule index is `rules/index.json`; worked packs are stored at `examples/<recipe-id>/example.json`. Select one compatible rule from each of the six families before material implementation, then compare the direction with the selected recipe's good and bad examples. Rule provenance and the accepted source-role/normalization boundary are documented in [`docs/design-rule-library.md`](../../docs/design-rule-library.md). Generated SVG plates are explanatory evidence, not production templates.
 
 The host remains responsible for model execution and project edits. SkillRanger validates artifacts and browser observations, computes outcomes, and emits bounded repair requests. It never silently edits a project through this runtime.
 
