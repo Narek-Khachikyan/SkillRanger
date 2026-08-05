@@ -1,12 +1,26 @@
 import { createHash, randomBytes } from "node:crypto";
-import { copyFileSync, lstatSync, mkdirSync } from "node:fs";
+import { copyFileSync, lstatSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { validateVisualBenchmarkPlan } from "./runner.ts";
 import { visualCriteria } from "./suite.ts";
 import type { VisualBenchmarkPlan, VisualBenchmarkPlanEntry, VisualBenchmarkRunResult, VisualHumanReview } from "./types.ts";
 import { assertVisualBenchmarkEvidence } from "./evidence.ts";
 
-export type VisualBlindReviewPackage = { schemaVersion: "1.0"; benchmarkVersion: string; reviewPackageDigest: string; criteria: string[]; pairs: Array<{ pairId: string; labelA: string; labelB: string; screenshotsA: string[]; screenshotsB: string[] }> };
+export type VisualBlindReviewPackage = {
+  schemaVersion: "1.0";
+  benchmarkVersion: string;
+  reviewPackageDigest: string;
+  criteria: string[];
+  pairs: Array<{
+    pairId: string;
+    labelA: string;
+    labelB: string;
+    screenshotsA: string[];
+    screenshotsB: string[];
+    screenshotDigestsA: string[];
+    screenshotDigestsB: string[];
+  }>;
+};
 export type VisualBlindReviewMapping = { schemaVersion: "1.0"; benchmarkVersion: string; pairs: Array<{ pairId: string; A: { label: string; runId: string; arm: string; modelId: string; resultDigest: string; sourceArtifactPaths: string[] }; B: { label: string; runId: string; arm: string; modelId: string; resultDigest: string; sourceArtifactPaths: string[] } }> };
 
 const exactKeys = (value: Record<string, unknown>, keys: string[]) => {
@@ -22,6 +36,7 @@ const canonicalize = (value: unknown): unknown => {
 };
 export const canonicalJson = (value: unknown) => JSON.stringify(canonicalize(value));
 const digestPattern = /^[a-f0-9]{64}$/;
+const renderedExtension = /\.(png|jpe?g|webp)$/i;
 const packageWithoutDigest = (reviewPackage: VisualBlindReviewPackage | Omit<VisualBlindReviewPackage, "reviewPackageDigest">) => {
   const { reviewPackageDigest: _digest, ...value } = reviewPackage as VisualBlindReviewPackage;
   return value;
@@ -34,7 +49,8 @@ export const isOpaqueReviewLabel = (label: string, secrets: string[]) => {
   return !secrets.filter((secret) => secret.length > 0).some((secret) => normalized.includes(secret.toLowerCase()));
 };
 const keyFor = (run: Pick<VisualBenchmarkRunResult, "briefId" | "capabilityCandidateId" | "repetition">) => `${run.briefId}::${run.capabilityCandidateId}::${run.repetition}`;
-const screenshotPaths = (run: VisualBenchmarkRunResult) => run.artifactPaths.filter((item) => /\.(png|jpe?g|webp)$/i.test(item));
+const screenshotPaths = (run: VisualBenchmarkRunResult) => run.artifactPaths.filter((item) => renderedExtension.test(item));
+const fileSha256 = (filePath: string) => createHash("sha256").update(readFileSync(filePath)).digest("hex");
 const identityFields: Array<keyof VisualBenchmarkPlanEntry> = ["runId", "briefId", "recipeId", "capabilityCandidateId", "modelId", "commandProfile", "arm", "repetition", "prompt", "fixture", "route"];
 
 const assertCompleteResults = (plan: VisualBenchmarkPlan, results: VisualBenchmarkRunResult[]) => {
@@ -80,21 +96,79 @@ export const createBlindReviewPackage = (input: { plan: VisualBenchmarkPlan; res
     const labels = [`option-${factory()}`, `option-${factory()}`];
     const labelSecrets = ordered.flatMap((run) => [run.arm, run.modelId, run.runId, run.capabilityCandidateId]);
     if (!labels.every((label) => isOpaqueReviewLabel(label, labelSecrets))) throw new Error(`blind review pair ${key} has a non-opaque public label`);
-    const publicPaths = ordered.map((run, optionIndex) => screenshotPaths(run).map((source, artifactIndex) => {
+    const sourceScreenshots = ordered.map((run) => screenshotPaths(run));
+    const screenshotDigests = sourceScreenshots.map((sources) => sources.map(fileSha256));
+    const publicPaths = sourceScreenshots.map((sources, optionIndex) => sources.map((source, artifactIndex) => {
       const relative = `${pairId}/${optionIndex === 0 ? "A" : "B"}-${artifactIndex + 1}${path.extname(source).toLowerCase()}`;
       if (input.publicReviewDir) {
         const target = path.join(input.publicReviewDir, relative);
         mkdirSync(path.dirname(target), { recursive: true });
         copyFileSync(source, target);
+        if (fileSha256(target) !== screenshotDigests[optionIndex][artifactIndex]) {
+          throw new Error(`public review screenshot copy failed for ${pairId}/${optionIndex === 0 ? "A" : "B"}-${artifactIndex + 1}`);
+        }
       }
       return relative;
     }));
-    publicPairs.push({ pairId, labelA: labels[0], labelB: labels[1], screenshotsA: publicPaths[0], screenshotsB: publicPaths[1] });
+    publicPairs.push({ pairId, labelA: labels[0], labelB: labels[1], screenshotsA: publicPaths[0], screenshotsB: publicPaths[1], screenshotDigestsA: screenshotDigests[0], screenshotDigestsB: screenshotDigests[1] });
     privatePairs.push({ pairId, A: { label: labels[0], runId: ordered[0].runId, arm: ordered[0].arm, modelId: ordered[0].modelId, resultDigest: computeVisualBenchmarkResultDigest(ordered[0]), sourceArtifactPaths: [...ordered[0].artifactPaths] }, B: { label: labels[1], runId: ordered[1].runId, arm: ordered[1].arm, modelId: ordered[1].modelId, resultDigest: computeVisualBenchmarkResultDigest(ordered[1]), sourceArtifactPaths: [...ordered[1].artifactPaths] } });
   }
   const reviewPackageBase = { schemaVersion: "1.0" as const, benchmarkVersion: input.plan.benchmarkVersion, criteria: [...visualCriteria], pairs: publicPairs };
   const reviewPackage = { ...reviewPackageBase, reviewPackageDigest: computeVisualBlindReviewPackageDigest(reviewPackageBase) } as VisualBlindReviewPackage;
   return { reviewPackage, privateMapping: { schemaVersion: "1.0", benchmarkVersion: input.plan.benchmarkVersion, pairs: privatePairs } as VisualBlindReviewMapping };
+};
+
+const contained = (root: string, candidate: string) => candidate === root || candidate.startsWith(`${root}${path.sep}`);
+const unsafePublicPath = (value: string) => path.isAbsolute(value) || value.includes("\0") || value.replaceAll("\\", "/").split("/").includes("..");
+
+export const assertPublicReviewScreenshotBindings = (input: {
+  reviewPackage: VisualBlindReviewPackage;
+  privateMapping: VisualBlindReviewMapping;
+  results: VisualBenchmarkRunResult[];
+  publicReviewDir: string;
+}): void => {
+  const publicReviewDir = path.resolve(input.publicReviewDir);
+  const directoryInfo = lstatSync(publicReviewDir, { throwIfNoEntry: false });
+  if (!directoryInfo?.isDirectory() || directoryInfo.isSymbolicLink()) {
+    throw new Error(`public review directory must be a real directory: ${publicReviewDir}`);
+  }
+  const canonicalReviewDir = realpathSync(publicReviewDir);
+  const resultsByRunId = new Map(input.results.map((result) => [result.runId, result]));
+  const mappingsByPairId = new Map(input.privateMapping.pairs.map((pair) => [pair.pairId, pair]));
+
+  for (const publicPair of input.reviewPackage.pairs) {
+    const mapping = mappingsByPairId.get(publicPair.pairId);
+    if (!mapping) throw new Error(`public review screenshot mapping is missing for ${publicPair.pairId}`);
+    for (const side of ["A", "B"] as const) {
+      const screenshots = publicPair[`screenshots${side}`];
+      const screenshotDigests = publicPair[`screenshotDigests${side}`];
+      const mapped = mapping[side];
+      if (!resultsByRunId.has(mapped.runId)) throw new Error(`public review screenshot source run is missing for ${publicPair.pairId}/${side}`);
+      const sourceScreenshots = mapped.sourceArtifactPaths.filter((artifact) => renderedExtension.test(artifact));
+      if (screenshots.length !== sourceScreenshots.length || screenshotDigests.length !== screenshots.length) {
+        throw new Error(`public review screenshot count does not match its source artifact for ${publicPair.pairId}/${side}`);
+      }
+      for (const [index, screenshot] of screenshots.entries()) {
+        if (unsafePublicPath(screenshot) || !renderedExtension.test(screenshot)) {
+          throw new Error(`public review screenshot path is unsafe for ${publicPair.pairId}/${side}`);
+        }
+        const publicPath = path.resolve(publicReviewDir, screenshot);
+        if (!contained(publicReviewDir, publicPath)) throw new Error(`public review screenshot escapes its package for ${publicPair.pairId}/${side}`);
+        const publicInfo = lstatSync(publicPath, { throwIfNoEntry: false });
+        if (!publicInfo?.isFile() || publicInfo.isSymbolicLink() || publicInfo.size === 0) {
+          throw new Error(`public review screenshot is missing or invalid for ${publicPair.pairId}/${side}: ${screenshot}`);
+        }
+        const canonicalPublicPath = realpathSync(publicPath);
+        if (!contained(canonicalReviewDir, canonicalPublicPath)) throw new Error(`public review screenshot escapes its package for ${publicPair.pairId}/${side}`);
+        const expectedDigest = screenshotDigests[index];
+        if (!digestPattern.test(expectedDigest)) throw new Error(`public review screenshot digest is invalid for ${publicPair.pairId}/${side}`);
+        const sourcePath = sourceScreenshots[index];
+        const sourceDigest = fileSha256(sourcePath);
+        if (sourceDigest !== expectedDigest) throw new Error(`public review screenshot source binding mismatch for ${publicPair.pairId}/${side}`);
+        if (fileSha256(publicPath) !== expectedDigest) throw new Error(`public review screenshot integrity mismatch for ${publicPair.pairId}/${side}`);
+      }
+    }
+  }
 };
 
 export const validateHumanReview = (review: VisualHumanReview, reviewPackage?: VisualBlindReviewPackage): string[] => {

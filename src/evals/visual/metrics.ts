@@ -2,7 +2,7 @@ import { lstatSync, readFileSync } from "node:fs";
 import { isCompleteVisualOperationalEvidence } from "./operational.ts";
 import { visualCriteria } from "./suite.ts";
 import { assertVisualBenchmarkEvidence } from "./evidence.ts";
-import { canonicalJson, computeVisualBenchmarkResultDigest, computeVisualBlindReviewPackageDigest, isOpaqueReviewLabel, validateHumanReview, type VisualBlindReviewMapping, type VisualBlindReviewPackage } from "./review.ts";
+import { assertPublicReviewScreenshotBindings, canonicalJson, computeVisualBenchmarkResultDigest, computeVisualBlindReviewPackageDigest, isOpaqueReviewLabel, validateHumanReview, type VisualBlindReviewMapping, type VisualBlindReviewPackage } from "./review.ts";
 import type { VisualBenchmarkMetricSet, VisualBenchmarkReport, VisualBenchmarkRunResult, VisualCandidateMetricSet, VisualHumanReview, VisualPromotionVerdict } from "./types.ts";
 
 export const mean = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
@@ -65,7 +65,7 @@ const metricSet = (records: ScoredRun[], preferenceShare = 0): VisualBenchmarkMe
   };
 };
 
-const assertPublishedContracts = (input: { results: VisualBenchmarkRunResult[]; reviewPackage: VisualBlindReviewPackage; privateMapping: VisualBlindReviewMapping }) => {
+const assertPublishedContracts = (input: { results: VisualBenchmarkRunResult[]; reviewPackage: VisualBlindReviewPackage; privateMapping: VisualBlindReviewMapping; publicReviewDir: string }) => {
   if (!input.reviewPackage || typeof input.reviewPackage !== "object" || Array.isArray(input.reviewPackage)
     || !exactKeys(input.reviewPackage as unknown as Record<string, unknown>, ["schemaVersion", "benchmarkVersion", "reviewPackageDigest", "criteria", "pairs"])
     || !input.privateMapping || typeof input.privateMapping !== "object" || Array.isArray(input.privateMapping)
@@ -82,12 +82,16 @@ const assertPublishedContracts = (input: { results: VisualBenchmarkRunResult[]; 
   assertImmutableResults(input.results);
   const labels = new Set<string>();
   for (const pair of input.reviewPackage.pairs) {
-    if (!pair || typeof pair !== "object" || !exactKeys(pair as unknown as Record<string, unknown>, ["pairId", "labelA", "labelB", "screenshotsA", "screenshotsB"])
+    if (!pair || typeof pair !== "object" || !exactKeys(pair as unknown as Record<string, unknown>, ["pairId", "labelA", "labelB", "screenshotsA", "screenshotsB", "screenshotDigestsA", "screenshotDigestsB"])
       || typeof pair.pairId !== "string" || !pair.pairId || typeof pair.labelA !== "string" || !pair.labelA
       || typeof pair.labelB !== "string" || !pair.labelB || !Array.isArray(pair.screenshotsA) || !pair.screenshotsA.length
       || !pair.screenshotsA.every((item) => typeof item === "string" && item.length > 0 && !pathIsUnsafe(item))
       || !Array.isArray(pair.screenshotsB) || !pair.screenshotsB.length
-      || !pair.screenshotsB.every((item) => typeof item === "string" && item.length > 0 && !pathIsUnsafe(item))) throw new Error("invalid public review pair contract");
+      || !pair.screenshotsB.every((item) => typeof item === "string" && item.length > 0 && !pathIsUnsafe(item))
+      || !Array.isArray(pair.screenshotDigestsA) || pair.screenshotDigestsA.length !== pair.screenshotsA.length
+      || !pair.screenshotDigestsA.every((item) => typeof item === "string" && digestPattern.test(item))
+      || !Array.isArray(pair.screenshotDigestsB) || pair.screenshotDigestsB.length !== pair.screenshotsB.length
+      || !pair.screenshotDigestsB.every((item) => typeof item === "string" && digestPattern.test(item))) throw new Error("invalid public review pair contract");
     if (labels.has(pair.labelA) || labels.has(pair.labelB) || pair.labelA === pair.labelB) throw new Error("duplicate public review label");
     labels.add(pair.labelA); labels.add(pair.labelB);
   }
@@ -131,9 +135,10 @@ const assertPublishedContracts = (input: { results: VisualBenchmarkRunResult[]; 
     }
   }
   if (mappedRuns.size !== input.results.length) throw new Error("private mapping does not cover every result exactly once");
+  assertPublicReviewScreenshotBindings(input);
 };
 
-export const aggregateVisualBenchmark = (input: { results: VisualBenchmarkRunResult[]; reviewPackage: VisualBlindReviewPackage; privateMapping: VisualBlindReviewMapping; reviews: VisualHumanReview[] }): VisualBenchmarkReport => {
+export const aggregateVisualBenchmark = (input: { results: VisualBenchmarkRunResult[]; reviewPackage: VisualBlindReviewPackage; privateMapping: VisualBlindReviewMapping; reviews: VisualHumanReview[]; publicReviewDir: string }): VisualBenchmarkReport => {
   assertPublishedContracts(input);
   if (!Array.isArray(input.reviews) || input.reviews.length !== 2) throw new Error("exactly two human reviews are required");
   const reviewerIds = new Set<string>();

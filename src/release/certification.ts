@@ -536,6 +536,7 @@ export type ReleaseVisualEvidence = {
   candidates: VisualCapabilityCandidate[];
   capabilityRecord: ModelCapabilityRecord;
   aggregateReportPath: string;
+  publicReviewDir: string;
   plan: VisualBenchmarkPlan;
   results: VisualBenchmarkRunResult[];
   reviewPackage: VisualBlindReviewPackage;
@@ -702,6 +703,7 @@ export const evaluateReleaseHandoff = (input: ReleaseHandoffEvaluationInput): Re
         reviewPackage: input.visual.reviewPackage,
         privateMapping: input.visual.privateMapping,
         reviews: input.visual.reviews,
+        publicReviewDir: input.visual.publicReviewDir,
       });
       visualReport = aggregate;
       if (canonicalJson(aggregate) !== canonicalJson(input.visual.aggregateReport)) {

@@ -57,11 +57,12 @@ export const handleVisualEvalCommand = async (input: { command?: string; flags: 
   }
   if (actions[0] === "aggregate") {
     const index = await readJson<{ runs: VisualBenchmarkRunResult[] }>(required(flags, "results"));
-    const reviewPackage = await readJson<any>(required(flags, "review-package"));
+    const reviewPackagePath = required(flags, "review-package");
+    const reviewPackage = await readJson<any>(reviewPackagePath);
     const privateMapping = await readJson<any>(required(flags, "private-mapping"));
     const reviewPaths = required(flags, "human-review").split(",").filter(Boolean);
     const reviews = await Promise.all(reviewPaths.map((file) => readJson<VisualHumanReview>(file)));
-    result = aggregateVisualBenchmark({ results: index.runs, reviewPackage, privateMapping, reviews });
+    result = aggregateVisualBenchmark({ results: index.runs, reviewPackage, privateMapping, reviews, publicReviewDir: path.dirname(path.resolve(reviewPackagePath)) });
     if (typeof flags.output === "string") await outputJson(flags.output, result);
   }
   if (actions[0] === "calibrate") {

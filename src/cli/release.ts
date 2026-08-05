@@ -231,7 +231,7 @@ export const handleReleaseCommand = async (input: { command: string; flags: Flag
   ]);
 
   const visual = visualSuite && candidates && plan && results && reviewPackage && privateMapping && capabilityRecord && aggregateReport && reviews.length === 2 && reviews.every(Boolean)
-    ? { suite: visualSuite, candidates, plan, results, reviewPackage, privateMapping, capabilityRecord, aggregateReportPath: visualReportPath!, reviews: reviews as VisualHumanReview[], aggregateReport }
+    ? { suite: visualSuite, candidates, plan, results, reviewPackage, privateMapping, capabilityRecord, aggregateReportPath: visualReportPath!, publicReviewDir: path.dirname(reviewPackagePath!), reviews: reviews as VisualHumanReview[], aggregateReport }
     : undefined;
   const commandProfiles = candidates && visualCandidatesPath
     ? candidates.map((candidate) => ({
