@@ -16,6 +16,9 @@ export const routingProposalLimits = {
   maxBytes: 32_768,
   maxInterpretationItems: 32,
   maxNominations: 16,
+  maxPrimaryNominations: 3,
+  maxCompanionNominations: 2,
+  maxVerificationNominations: 2,
   maxEvidenceBytes: 512,
   maxCatalogReceiptBytes: 8_192,
 } as const;
@@ -344,7 +347,6 @@ export const validateRoutingProposal = (input: {
     const reject = (reasonCode: string, skillId = canonicalSkillId) => rejections.push({ ...(skillId ? { skillId } : {}), reasonCode });
     if (!canonicalSkillId) { reject("non-canonical-skill-id"); continue; }
     if (seenSkills.has(canonicalSkillId)) { reject("duplicate-skill"); continue; }
-    seenSkills.add(canonicalSkillId);
     const card = cards.get(canonicalSkillId);
     if (!card) { reject("skill-not-in-catalog"); continue; }
     if (!nominationRoles.has(nomination.role as RoutingProposalRole)) { reject("role-not-allowed", canonicalSkillId); continue; }
@@ -355,8 +357,11 @@ export const validateRoutingProposal = (input: {
     const normalizedEvidence = normalizeRoutingText(nomination.evidenceText).normalized;
     if (!normalizedEvidence || !normalizedPrompt.includes(normalizedEvidence)) { reject("evidence-not-in-normalized-prompt", canonicalSkillId); continue; }
     const count = roleCounts.get(role) ?? 0;
-    if ((role === "companion" || role === "verification") && count >= 2) { reject("role-limit", canonicalSkillId); continue; }
-    if (role === "primary" && count >= (proposal.ambiguity?.primarySkillIds.length ?? 3)) { reject(proposal.ambiguity ? "role-limit" : "primary-limit", canonicalSkillId); continue; }
+    const roleLimit = role === "primary"
+      ? proposal.ambiguity?.primarySkillIds.length ?? routingProposalLimits.maxPrimaryNominations
+      : role === "companion" ? routingProposalLimits.maxCompanionNominations : routingProposalLimits.maxVerificationNominations;
+    if (count >= roleLimit) { reject(role === "primary" && !proposal.ambiguity ? "primary-limit" : "role-limit", canonicalSkillId); continue; }
+    seenSkills.add(canonicalSkillId);
     roleCounts.set(role, count + 1);
     accepted.push({
       skillId: canonicalSkillId,

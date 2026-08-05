@@ -280,6 +280,7 @@ export type PrepareTaskCommon = {
     routingDate: string;
     registryDigest: string;
     configDigest: string;
+    routingProposal?: RoutingProposalProjection;
   };
   warnings: string[];
 };

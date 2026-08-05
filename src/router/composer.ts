@@ -538,6 +538,26 @@ const strictMissing = (selected: RouterCandidate[], input: ComposeSkillSetInput)
   return missing.filter((item, index, all) => all.findIndex((other) => other.skillId === item.skillId && other.requirement === item.requirement) === index);
 };
 
+const applyNominatedRoles = (result: RetrieveSkillCandidatesResult, nominatedRoles: ComposeSkillSetInput["nominatedRoles"]): RetrieveSkillCandidatesResult => {
+  if (!nominatedRoles) return result;
+  const rejections = [...result.rejections];
+  const candidates = result.candidates.flatMap((candidate) => {
+    const nominatedRole = nominatedRoles.get(canonical(candidate.skill.id));
+    if (nominatedRole === undefined) return [candidate];
+    const eligibleRoles = candidate.eligibleRoles.filter((role) => role === nominatedRole);
+    if (eligibleRoles.length === 0) {
+      rejections.push({ skillId: candidate.skill.id, reason: "nominated-role-ineligible" });
+      return [];
+    }
+    return [{ ...candidate, eligibleRoles }];
+  });
+  return {
+    candidates,
+    primaryCandidates: candidates.filter(({ eligibleRoles }) => eligibleRoles.includes("primary")),
+    rejections,
+  };
+};
+
 export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetResult => {
   const limits = { ...defaultRouterLimits, ...input.limits };
   const nominationOrder = new Map([...new Set([...(input.nominationOrder ?? [])].map(canonical))].map((skillId, index) => [skillId, index]));
@@ -545,11 +565,11 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
   const nominatedPrimarySkillIds = unique(input.nominatedPrimarySkillIds ?? []);
   const proposalDrivenStrictRetrieval = Boolean(input.strict && nominatedPrimarySkillIds.size > 0);
   const requiredPrimarySkillId = input.requiredPrimarySkillId ? canonical(input.requiredPrimarySkillId) : undefined;
-  const retrieved = input.candidates
+  const retrieved = applyNominatedRoles(input.candidates
     ? { candidates: input.candidates, primaryCandidates: input.candidates.filter(({ eligibleRoles }) => eligibleRoles.includes("primary")), rejections: [] }
     : retrieveSkillCandidates(input.strict
       ? { ...input, strict: false, deferRequiredCapabilities: !proposalDrivenStrictRetrieval, nominatedPrimarySkillIds, maxSelectedRisk: limits.maxSelectedRisk }
-      : { ...input, maxSelectedRisk: limits.maxSelectedRisk });
+      : { ...input, maxSelectedRisk: limits.maxSelectedRisk }), input.nominatedRoles);
   const byId = new Map(retrieved.candidates.map((candidate) => [canonical(candidate.skill.id), candidate]));
   const registryById = new Map(input.skills.map((skill) => [canonical(skill.id), skill]));
   const explicitPrimaryFailure = (reason: string): ComposeSkillSetResult => ({
@@ -642,10 +662,11 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
         return right.score - left.score || left.skill.id.localeCompare(right.skill.id);
       });
     const add = (candidate: RouterCandidate, role: Exclude<RouterSkillRole, "primary">) => {
-      if (selectedIds.has(candidate.skill.id)) return;
-      if ([...dedupedRequired].some(({ skill }) => symmetricConflict(skill, candidate.skill))) return;
+      if (selectedIds.has(candidate.skill.id)) return "already-selected" as const;
+      if ([...dedupedRequired].some(({ skill }) => symmetricConflict(skill, candidate.skill))) return "skill-conflict" as const;
       dedupedRequired.push({ ...candidate, role });
       selectedIds.add(candidate.skill.id);
+      return undefined;
     };
     for (const candidate of optional("environment").slice(0, limits.maxEnvironmentSkills)) add(candidate, "environment");
     const conflictingComplement = optional("companion").some(({ skill }) =>
@@ -660,8 +681,12 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
       .filter(([, role]) => role === "companion")
       .map(([skillId]) => canonical(skillId)));
     for (const candidate of optional("companion").filter(({ skill }) => nominatedCompanionIds.has(canonical(skill.id)))) {
-      if (dedupedRequired.filter(({ role }) => role === "companion").length >= limits.maxTaskCompanions) break;
-      add(candidate, "companion");
+      if (dedupedRequired.filter(({ role }) => role === "companion").length >= limits.maxTaskCompanions) {
+        retrieved.rejections.push({ skillId: candidate.skill.id, reason: "role-limit" });
+        continue;
+      }
+      const rejection = add(candidate, "companion");
+      if (rejection && rejection !== "already-selected") retrieved.rejections.push({ skillId: candidate.skill.id, reason: rejection });
     }
     const totalExplicitWeight = explicitRequirements.reduce((sum, requirement) => sum + effectiveRequirementWeight(requirement), 0);
     const requestedActions = dedupeRequirements(input.requirements ?? [])
@@ -703,38 +728,64 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
       ])] };
       add(selectedCompanion, "companion");
     }
+    const nominatedVerificationIds = new Set([...input.nominatedRoles ?? []]
+      .filter(([, role]) => role === "verification")
+      .map(([skillId]) => canonical(skillId)));
     for (const candidate of optional("verification")) {
-      if (dedupedRequired.filter(({ role }) => role === "verification").length >= limits.maxVerificationSkills) break;
-      if (assignSelectedRole({ candidate, requestedRole: "verification", profile: input.profile, fingerprint: input.fingerprint })) add(candidate, "verification");
+      if (dedupedRequired.filter(({ role }) => role === "verification").length >= limits.maxVerificationSkills) {
+        if (nominatedVerificationIds.has(canonical(candidate.skill.id))) retrieved.rejections.push({ skillId: candidate.skill.id, reason: "role-limit" });
+        continue;
+      }
+      if (!assignSelectedRole({ candidate, requestedRole: "verification", profile: input.profile, fingerprint: input.fingerprint })) {
+        if (nominatedVerificationIds.has(canonical(candidate.skill.id))) retrieved.rejections.push({ skillId: candidate.skill.id, reason: "nominated-role-ineligible" });
+        continue;
+      }
+      const rejection = add(candidate, "verification");
+      if (rejection && rejection !== "already-selected" && nominatedVerificationIds.has(canonical(candidate.skill.id))) {
+        retrieved.rejections.push({ skillId: candidate.skill.id, reason: rejection });
+      }
     }
     for (const candidate of optional("agent-context").slice(0, limits.maxAgentContextSkills)) add(candidate, "agent-context");
     const protectedIds = new Set([primary.skill.id, ...closure.closure.map(({ skill }) => skill.id)]);
     const selected = superseded(dedupedRequired, primary.skill.id);
+    const selectedIdsAfterSupersession = new Set(selected.map(({ skill }) => canonical(skill.id)));
+    for (const candidate of dedupedRequired) {
+      if (!selectedIdsAfterSupersession.has(canonical(candidate.skill.id)) && input.nominatedRoles?.has(canonical(candidate.skill.id))) {
+        retrieved.rejections.push({ skillId: candidate.skill.id, reason: "superseded" });
+      }
+    }
     const removableRoles: RouterSkillRole[] = ["agent-context", "companion", "environment", "verification"];
-    const removeWeakest = () => {
+    const removeWeakest = (reason: "skill-limit" | "context-budget-exceeded") => {
       for (const role of removableRoles) {
         if (role === "verification" && input.profile.acceptanceCriteria.length > 0) continue;
         const index = selected
           .map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
           .filter(({ candidate }) => candidate.role === role && !protectedIds.has(candidate.skill.id))
           .sort((left, right) => left.candidate.score - right.candidate.score || right.candidate.skill.id.localeCompare(left.candidate.skill.id))[0]?.candidateIndex;
-        if (index !== undefined) { selected.splice(index, 1); return true; }
+        if (index !== undefined) {
+          const [removed] = selected.splice(index, 1);
+          if (removed && input.nominatedRoles?.has(canonical(removed.skill.id))) {
+            retrieved.rejections.push({ skillId: removed.skill.id, reason });
+          }
+          return true;
+        }
       }
       return false;
     };
-    while (selected.length > limits.maxTotalSelectedSkills && removeWeakest()) { /* remove optional skills in normative order */ }
+    while (selected.length > limits.maxTotalSelectedSkills && removeWeakest("skill-limit")) { /* remove optional skills in normative order */ }
     if (selected.length > limits.maxTotalSelectedSkills) {
       retrieved.rejections.push({ skillId: primary.skill.id, reason: "skill-limit" });
       if (requiredPrimarySkillId === canonical(primary.skill.id)) return explicitPrimaryFailure("skill-limit");
       continue;
     }
     let requiredBytes = selected.reduce((sum, candidate) => sum + (candidate.skill.instructionBytes ?? 0), 0);
-    while (requiredBytes > limits.maxInstructionBytes && removeWeakest()) {
+    while (requiredBytes > limits.maxInstructionBytes && removeWeakest("context-budget-exceeded")) {
       requiredBytes = selected.reduce((sum, candidate) => sum + (candidate.skill.instructionBytes ?? 0), 0);
     }
     if (requiredBytes > limits.maxInstructionBytes) {
       const blockingSkillIds = selected.filter(({ skill }) => protectedIds.has(skill.id)).map(({ skill }) => skill.id);
-      if (nominatedPrimarySkillIds.size === 0 || requiredPrimarySkillId === canonical(primary.skill.id)) {
+      const nominatedPrimary = nominatedPrimarySkillIds.has(canonical(primary.skill.id));
+      if (!nominatedPrimary || requiredPrimarySkillId === canonical(primary.skill.id)) {
         return { status: "context_budget_exceeded", requiredBytes, allowedBytes: limits.maxInstructionBytes, blockingSkillIds, rejections: retrieved.rejections };
       }
       retrieved.rejections.push({ skillId: primary.skill.id, reason: "context-budget-exceeded" });

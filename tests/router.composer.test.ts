@@ -408,6 +408,193 @@ test("retrieval preserves every declared eligible role and selection assigns one
   ]);
 });
 
+test("composer preserves nominated roles when it receives pre-retrieved candidates", () => {
+  const primary = {
+    id: "backend.primary-choice",
+    displayName: "Primary Choice",
+    version: "1.0.0",
+    riskLevel: "low" as const,
+    roles: ["primary", "companion"] as const,
+    domains: ["backend-api"],
+    actions: ["implement"],
+    artifactTypes: ["api"],
+    intentTags: ["api"],
+    technologyTags: [],
+    qualityGoals: ["correctness"],
+    requiredCapabilities: [],
+    optionalCapabilities: [],
+    dependencies: [],
+    conflictsWith: [],
+    supersedes: [],
+    complements: [],
+    score: 0.99,
+  } satisfies RouterSkillMetadata;
+  const fallback = { ...primary, id: "backend.primary-fallback", displayName: "Primary Fallback", score: 0.5, roles: ["primary"] as const } satisfies RouterSkillMetadata;
+  const candidate = (skill: RouterSkillMetadata): RouterCandidate => ({
+    skill,
+    score: skill.score!,
+    eligibleRoles: [...skill.roles!] as RouterCandidate["eligibleRoles"],
+    reasons: [],
+    missingCapabilities: [],
+    missingOptionalCapabilities: [],
+    verificationStatus: "not-required",
+  });
+
+  const result = composeSkillSet({
+    profile: profile(),
+    skills: [primary, fallback],
+    candidates: [candidate(primary), candidate(fallback)],
+    selectedDomainIds: ["backend-api"],
+    nominationOrder: [primary.id, fallback.id],
+    nominatedRoles: new Map([[primary.id, "companion" as const], [fallback.id, "primary" as const]]),
+  });
+
+  assert.equal(result.status, "prepared");
+  if (result.status !== "prepared") return;
+  assert.equal(result.composed.primary.skill.id, fallback.id);
+  assert.ok(result.composed.companions.some(({ skill }) => skill.id === primary.id));
+});
+
+test("composer reports a hard-vetoed nominated companion instead of dropping it silently", () => {
+  const primary: RouterSkillMetadata = {
+    id: "backend.primary-with-conflict", displayName: "Primary", version: "1.0.0", riskLevel: "low", roles: ["primary"],
+    domains: ["backend-api"], actions: ["implement"], artifactTypes: ["api"], intentTags: ["api"], technologyTags: [],
+    qualityGoals: ["correctness"], requiredCapabilities: [], optionalCapabilities: [], dependencies: [], conflictsWith: ["backend.nominated-companion"],
+    supersedes: [], complements: [], score: 0.9,
+  };
+  const companion: RouterSkillMetadata = {
+    id: "backend.nominated-companion", displayName: "Companion", version: "1.0.0", riskLevel: "low", roles: ["companion"],
+    domains: ["backend-api"], actions: ["implement"], artifactTypes: ["api"], intentTags: ["api"], technologyTags: [],
+    qualityGoals: [], requiredCapabilities: [], optionalCapabilities: [], dependencies: [], conflictsWith: [], supersedes: [], complements: [], score: 0.8,
+  };
+  const candidate = (skill: RouterSkillMetadata): RouterCandidate => ({
+    skill,
+    score: skill.score!,
+    eligibleRoles: [...skill.roles!],
+    reasons: [],
+    missingCapabilities: [],
+    missingOptionalCapabilities: [],
+    verificationStatus: "not-required",
+  });
+
+  const result = composeSkillSet({
+    profile: profile(),
+    skills: [primary, companion],
+    candidates: [candidate(primary), candidate(companion)],
+    selectedDomainIds: ["backend-api"],
+    nominationOrder: [primary.id, companion.id],
+    nominatedRoles: new Map([[primary.id, "primary" as const], [companion.id, "companion" as const]]),
+  });
+
+  assert.equal(result.status, "prepared");
+  assert.ok(result.rejections.some(({ skillId, reason }) => skillId === companion.id && reason === "skill-conflict"));
+});
+
+test("composer reports when supersession removes a nominated companion", () => {
+  const primary: RouterSkillMetadata = {
+    id: "backend.superseding-primary", displayName: "Primary", version: "1.0.0", riskLevel: "low", roles: ["primary"],
+    domains: ["backend-api"], actions: ["implement"], artifactTypes: ["api"], intentTags: ["api"], technologyTags: [],
+    qualityGoals: ["correctness"], requiredCapabilities: [], optionalCapabilities: [], dependencies: [], conflictsWith: [],
+    supersedes: ["backend.superseded-companion"], complements: [], score: 0.9,
+  };
+  const companion: RouterSkillMetadata = {
+    id: "backend.superseded-companion", displayName: "Companion", version: "1.0.0", riskLevel: "low", roles: ["companion"],
+    domains: ["backend-api"], actions: ["implement"], artifactTypes: ["api"], intentTags: ["api"], technologyTags: [],
+    qualityGoals: [], requiredCapabilities: [], optionalCapabilities: [], dependencies: [], conflictsWith: [], supersedes: [], complements: [], score: 0.8,
+  };
+  const candidate = (skill: RouterSkillMetadata): RouterCandidate => ({
+    skill,
+    score: skill.score!,
+    eligibleRoles: [...skill.roles!],
+    reasons: [],
+    missingCapabilities: [],
+    missingOptionalCapabilities: [],
+    verificationStatus: "not-required",
+  });
+
+  const result = composeSkillSet({
+    profile: profile(),
+    skills: [primary, companion],
+    candidates: [candidate(primary), candidate(companion)],
+    selectedDomainIds: ["backend-api"],
+    nominationOrder: [primary.id, companion.id],
+    nominatedRoles: new Map([[primary.id, "primary" as const], [companion.id, "companion" as const]]),
+  });
+
+  assert.equal(result.status, "prepared");
+  assert.ok(result.rejections.some(({ skillId, reason }) => skillId === companion.id && reason === "superseded"));
+});
+
+test("composer reports a deterministic fallback budget failure after nominations are exhausted", () => {
+  const nominated: RouterSkillMetadata = {
+    id: "backend.nominated-oversized", displayName: "Nominated", version: "1.0.0", riskLevel: "low", roles: ["primary"],
+    domains: ["backend-api"], actions: ["implement"], artifactTypes: ["api"], intentTags: ["api"], technologyTags: [],
+    qualityGoals: ["correctness"], requiredCapabilities: [], optionalCapabilities: [], dependencies: [], conflictsWith: [],
+    supersedes: [], complements: [], instructionBytes: 200,
+  };
+  const fallback: RouterSkillMetadata = { ...nominated, id: "backend.fallback-oversized", displayName: "Fallback", instructionBytes: 150 };
+  const candidate = (skill: RouterSkillMetadata, score: number): RouterCandidate => ({
+    skill,
+    score,
+    eligibleRoles: ["primary"],
+    reasons: [],
+    missingCapabilities: [],
+    missingOptionalCapabilities: [],
+    verificationStatus: "not-required",
+  });
+
+  const result = composeSkillSet({
+    profile: profile(),
+    skills: [nominated, fallback],
+    candidates: [candidate(nominated, 0.99), candidate(fallback, 0.9)],
+    selectedDomainIds: ["backend-api"],
+    nominatedPrimarySkillIds: [nominated.id],
+    nominationOrder: [nominated.id],
+    limits: { maxInstructionBytes: 100 },
+  });
+
+  assert.equal(result.status, "context_budget_exceeded");
+  if (result.status === "context_budget_exceeded") assert.deepEqual(result.blockingSkillIds, [fallback.id]);
+});
+
+test("composer reports when a nominated companion is removed by the total-skill budget", () => {
+  const primary: RouterSkillMetadata = {
+    id: "backend.budget-primary", displayName: "Primary", version: "1.0.0", riskLevel: "low", roles: ["primary"],
+    domains: ["backend-api"], actions: ["implement"], artifactTypes: ["api"], intentTags: ["api"], technologyTags: [],
+    qualityGoals: ["correctness"], requiredCapabilities: [], optionalCapabilities: [], dependencies: [], conflictsWith: [],
+    supersedes: [], complements: [], instructionBytes: 10,
+  };
+  const companion: RouterSkillMetadata = {
+    ...primary,
+    id: "backend.budget-companion",
+    displayName: "Companion",
+    roles: ["companion"],
+    instructionBytes: 10,
+  };
+  const candidate = (skill: RouterSkillMetadata): RouterCandidate => ({
+    skill,
+    score: 0.9,
+    eligibleRoles: [...skill.roles!],
+    reasons: [],
+    missingCapabilities: [],
+    missingOptionalCapabilities: [],
+    verificationStatus: "not-required",
+  });
+
+  const result = composeSkillSet({
+    profile: profile(),
+    skills: [primary, companion],
+    candidates: [candidate(primary), candidate(companion)],
+    selectedDomainIds: ["backend-api"],
+    nominationOrder: [primary.id, companion.id],
+    nominatedRoles: new Map([[primary.id, "primary" as const], [companion.id, "companion" as const]]),
+    limits: { maxTotalSelectedSkills: 1 },
+  });
+
+  assert.equal(result.status, "prepared");
+  assert.ok(result.rejections.some(({ skillId, reason }) => skillId === companion.id && reason === "skill-limit"));
+});
+
 test("a primary-only dependency cannot become a second primary", () => {
   const dependency: RouterSkillMetadata = {
     id: "backend.primary-dependency", displayName: "Primary Dependency", version: "1.0.0", riskLevel: "low",

@@ -99,6 +99,50 @@ test("a valid proposal is catalog-bound, prompt-grounded, and privacy-projected"
   assert.doesNotMatch(JSON.stringify(result.projection), /build a component/i);
 });
 
+test("an invalid nomination does not consume the duplicate slot of a later valid nomination", async () => {
+  const catalog = await buildSkillCatalog();
+  const proposal = {
+    ...validProposal,
+    catalogDigest: catalog.digest,
+    catalogReceipt: await completeCatalogReceipt(),
+    interpretation: {
+      domains: ["frontend"],
+      actions: ["implement"],
+      artifactTypes: ["component"],
+      intentTags: ["component-design"],
+      technologyTags: ["react"],
+      qualityGoals: ["accessibility"],
+    },
+    nominations: [
+      {
+        skillId: "frontend.react-component-design",
+        role: "environment",
+        confidence: 0.99,
+        evidenceText: "build a component",
+      },
+      {
+        skillId: "frontend.react-component-design",
+        role: "primary",
+        confidence: 0.8,
+        evidenceText: "build a component",
+      },
+    ],
+  };
+
+  const result = validateRoutingProposal({
+    proposal,
+    prompt: "Please build a component with React",
+    catalog,
+  });
+
+  assert.equal(result.status, undefined);
+  if ("status" in result) return;
+  assert.deepEqual(result.nominations.map(({ skillId, role }) => ({ skillId, role })), [
+    { skillId: "frontend.react-component-design", role: "primary" },
+  ]);
+  assert.deepEqual(result.rejections, [{ skillId: "frontend.react-component-design", reasonCode: "role-not-allowed" }]);
+});
+
 test("stale and incomplete catalog bindings request a refresh without fallback validation", async () => {
   const catalog = await buildSkillCatalog();
   const receipt = await completeCatalogReceipt();
@@ -146,6 +190,8 @@ test("explicit skill choice requires an affirmative exact canonical request", ()
 test("explicit skill choice ignores negation, code spans, and URLs", () => {
   const skillId = "frontend.react-component-design";
   assert.equal(detectExplicitSkillChoice(`Do not use ${skillId}`, [skillId]), undefined);
+  assert.equal(detectExplicitSkillChoice(`Do not use ${skillId}, use ${skillId}`, [skillId]), skillId);
+  assert.equal(detectExplicitSkillChoice(`Do not use ${skillId} and use ${skillId}`, [skillId]), skillId);
   assert.equal(detectExplicitSkillChoice(`не используй ${skillId}`, [skillId]), undefined);
   assert.equal(detectExplicitSkillChoice(`Read \`${skillId}\` in the docs`, [skillId]), undefined);
   assert.equal(detectExplicitSkillChoice(`Read https://example.com/${skillId}`, [skillId]), undefined);
