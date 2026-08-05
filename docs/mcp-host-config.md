@@ -53,7 +53,17 @@ If the host supports environment variables, set `SKILLRANGER_PROJECT_ROOT` to th
 
 ## Universal Router
 
-Call `prepare_task` with the complete prompt. Any alias — `@skillranger`, `skillranger`, or `/sr` — activates at the end of the prompt; `@skillranger` and `/sr` also activate at the start, so a host that puts the mention first does not need to rewrite the prompt. A bare leading `skillranger` is not a trigger, because it would turn any sentence starting with the product name into a command. The model cannot select activation mode, project root, registry root, or raw-intent persistence. The router uses the fixed server root and bundled audited registry.
+Use the router only after an explicit trigger: `@skillranger`, `/sr`, or a terminal `skillranger`; `@skillranger` and `/sr` may lead or end the prompt, while a bare leading `skillranger` is not a trigger. The model cannot select activation mode, project root, registry root, or raw-intent persistence. The router uses the fixed server root and bundled audited registry.
+
+For model-assisted routing on a current server, follow this sequence:
+
+1. Call `inspect_skill_catalog` with `{}` after the explicit trigger.
+2. Follow every `nextCursor` with the preceding `catalogDigest` as `expectedCatalogDigest` until `complete: true`. Treat the `catalogReceipt` on that final page as proof of complete delivery, not proof of model comprehension.
+3. Submit a prompt-grounded `routingProposal` to `prepare_task` using that final digest and receipt. If `prepare_task` returns `catalog_refresh_required`, discard the old proposal and receipt, restart catalog inspection with `{}`, and submit a new proposal.
+4. Call `prepare_task` with the complete, unmodified prompt, including its trigger. Do not combine `routingProposal` with legacy `semanticHints`.
+5. For a `prepared` result, call `read_run_skill_file` in `mandatory-next` mode in order until `readStatus.runMandatoryReadsComplete` is true. Only then resolve runtime clarification or begin the returned runtime run.
+
+If `inspect_skill_catalog` is unavailable because the host is connected to a legacy SkillRanger server, use the compatibility path: call `prepare_task` with the complete prompt and omit `routingProposal`. Do not treat an unavailable catalog tool as a routing failure. Once the MCP server is configured, non-strict catalog-assisted routing does not require `skillranger setup`; setup remains useful for strict workflow installation and for writing the managed guidance. That managed guidance is advisory and is not a security boundary.
 
 Normal outcomes are `prepared`, `clarification_required`, `decomposition_required`, `no_matching_skills`, `strict_requirements_unmet`, and `context_budget_exceeded`. Only `prepared` creates a router sidecar and one lifecycle-v1 or strict-v2 runtime record. Clarification provides a short-lived opaque continuation token; resend the same canonical task with `continuationToken` and closed-option `clarificationAnswers`. Decomposition and no-match do not create partial runs.
 

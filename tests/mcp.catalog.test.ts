@@ -51,6 +51,9 @@ test("MCP exposes an explicitly activated, read-only skill catalog", async () =>
   assert.match(definition.description, /@skillranger/);
   assert.match(definition.description, /\/sr/);
   assert.match(definition.description, /nextCursor/);
+  assert.match(definition.description, /catalogReceipt/);
+  assert.match(definition.description, /skillranger setup/);
+  assert.match(definition.description, /legacy SkillRanger server/);
   assert.equal(definition.annotations.readOnlyHint, true);
   assert.equal(definition.annotations.openWorldHint, false);
 

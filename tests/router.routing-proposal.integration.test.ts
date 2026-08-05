@@ -58,6 +58,15 @@ const structured = <T>(value: { structuredContent?: unknown }) => value.structur
 test("prepare_task publishes the closed proposal shape and rejects legacy semantic hints", async () => {
   const definition = mcpTools.find(({ name }) => name === "prepare_task");
   assert.ok(definition);
+  assert.match(definition.description, /explicit @skillranger, skillranger, or \/sr trigger/);
+  assert.match(definition.description, /catalogReceipt/);
+  assert.match(definition.description, /runMandatoryReadsComplete/);
+  assert.match(definition.description, /skillranger setup/);
+  assert.match(definition.description, /legacy SkillRanger server/);
+  const readDefinition = mcpTools.find(({ name }) => name === "read_run_skill_file");
+  assert.ok(readDefinition);
+  assert.match(readDefinition.description, /prepare_task returns prepared/);
+  assert.match(readDefinition.description, /runMandatoryReadsComplete/);
   const inputSchema = definition.inputSchema as { properties?: Record<string, unknown> };
   const proposalSchema = inputSchema.properties?.routingProposal as Record<string, unknown>;
   assert.equal(proposalSchema.additionalProperties, false);

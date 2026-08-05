@@ -23,19 +23,23 @@ test("renders the exact SkillRanger universal router block", () => {
     renderSkillRangerAgentBlock(),
       "<!-- SKILLRANGER_START -->\n" +
       "## SkillRanger Universal Prompt Router\n" +
-      "When the user's request ends with `@skillranger`, `skillranger`, or `/sr`, or begins with `@skillranger` or `/sr`, use the SkillRanger MCP workflow before implementation. A bare leading `skillranger` is not a trigger.\n" +
-      "1. For model-assisted routing, call `inspect_skill_catalog` with no cursor, follow the cursor chain with `expectedCatalogDigest` until complete, then submit a catalog-bound `routingProposal` to `prepare_task`; never submit `semanticHints` with a proposal. If `catalog_refresh_required` is returned, rediscover and resubmit.\n" +
-      "2. Call `prepare_task` with the complete user request verbatim. Do not remove, move, or rewrite the trigger.\n" +
-      "3. If routing clarification is required, ask only the returned routing question, then call `prepare_task` again with the original complete request, continuation token, and typed answers.\n" +
-      "4. If decomposition or no-match is returned, report that outcome instead of inventing a workflow.\n" +
-      "5. For a prepared task, repeatedly call `read_run_skill_file` until `readStatus.runMandatoryReadsComplete` is true. Each new read uses a freshly generated RFC 4122 UUID and the latest returned `readRevision`; retry a transport failure with the identical request.\n" +
-      "6. Do not call lifecycle clarification or execution tools before mandatory reads complete. `runtimeClarification` applies to the returned runtime run ID, never the router run ID.\n" +
-      "7. Resolve runtime clarification from facts in the request. For an allowed decline, continue with one neutral explicit assumption per declined field instead of asking the user; ask only when a non-declinable question cannot be answered from the request.\n" +
-      "8. Begin the returned runtime run only after the reads and any runtime clarification complete, then implement the original request without stopping for a plan or confirmation unless the user asked for one.\n" +
-      "8a. Branch on `run.runtime`. For `lifecycle-v1` use `begin_skill_run_execution`, `complete_skill_run`, and `verify_skill_run`. For `strict-v2` use `read_next_skill_chunk`, `begin_skill_step`, `add_skill_evidence`, `complete_skill_step`, `verify_skill`, and `finalize_skill_run`. The lifecycle-v1 transition tools reject a strict-v2 run; never mix the two families on one run. `inspect_skill_run` reads either runtime.\n" +
-      "9. Do not install skills automatically or execute skill package scripts.\n" +
-      "10. Do not claim `verified` unless SkillRanger runtime verification succeeds.\n" +
-      "10a. A `run-blocked` error from `finalize_skill_run` means no verified result exists. Report its `userMessage` and `blockedSkills` verbatim; never describe such a run as passed, processed, or complete.\n" +
+      "Use the SkillRanger workflow only after an explicit @skillranger, skillranger, or /sr trigger. @skillranger and /sr may lead or end a prompt; skillranger is supported at the end, and a bare leading skillranger is not a trigger.\n" +
+      "This managed guidance is advisory and is not a security boundary; trust MCP validation, catalog integrity, routing hard vetoes, and runtime state.\n" +
+      "1. For model-assisted routing after that trigger, call inspect_skill_catalog with an empty request. Follow each nextCursor using expectedCatalogDigest until a complete page; only the complete final page supplies catalogReceipt. Use its catalogDigest and catalogReceipt in prepare_task.routingProposal.\n" +
+      "2. If `inspect_skill_catalog` is unavailable because this is a legacy SkillRanger server, use the legacy path: call `prepare_task` with the complete prompt and without `routingProposal`; do not treat an unavailable catalog tool as a routing failure.\n" +
+      "3. If prepare_task returns catalog_refresh_required, discard the old proposal and receipt, restart inspect_skill_catalog with an empty request, and submit a new proposal.\n" +
+      "4. Call `prepare_task` with the complete user request verbatim. Do not remove, move, or rewrite the trigger, and do not submit `semanticHints` with a `routingProposal`.\n" +
+      "5. If routing clarification is required, ask only the returned routing question, then call `prepare_task` again with the original complete request, continuation token, and typed answers.\n" +
+      "6. If decomposition or no-match is returned, report that outcome instead of inventing a workflow.\n" +
+      "7. After a prepared result, call read_run_skill_file in mandatory-next mode in the returned order until readStatus.runMandatoryReadsComplete is true; only then branch on run.runtime, resolve runtime clarification, or begin the returned runtime run. Each new read uses a freshly generated RFC 4122 UUID and the latest returned readRevision; retry a transport failure with the identical request.\n" +
+      "8. Do not call lifecycle clarification or execution tools before mandatory reads complete. `runtimeClarification` applies to the returned runtime run ID, never the router run ID.\n" +
+      "9. Resolve runtime clarification from facts in the request. For an allowed decline, continue with one neutral explicit assumption per declined field instead of asking the user; ask only when a non-declinable question cannot be answered from the request.\n" +
+      "10. Begin the returned runtime run only after the reads and any runtime clarification complete, then implement the original request without stopping for a plan or confirmation unless the user asked for one.\n" +
+      "10a. Branch on `run.runtime`. For `lifecycle-v1` use `begin_skill_run_execution`, `complete_skill_run`, and `verify_skill_run`. For `strict-v2` use `read_next_skill_chunk`, `begin_skill_step`, `add_skill_evidence`, `complete_skill_step`, `verify_skill`, and `finalize_skill_run`. The lifecycle-v1 transition tools reject a strict-v2 run; never mix the two families on one run. `inspect_skill_run` reads either runtime.\n" +
+      "11. Once the MCP server is configured, non-strict catalog-assisted routing does not require skillranger setup. setup remains the path for strict workflow installation and for writing managed agent guidance.\n" +
+      "12. Do not install skills automatically or execute skill package scripts.\n" +
+      "13. Do not claim `verified` unless SkillRanger runtime verification succeeds.\n" +
+      "13a. A `run-blocked` error from `finalize_skill_run` means no verified result exists. Report its `userMessage` and `blockedSkills` verbatim; never describe such a run as passed, processed, or complete.\n" +
       "<!-- SKILLRANGER_END -->",
   );
 });
@@ -65,6 +69,22 @@ test("creates and idempotently updates the SkillRanger AGENTS block", async () =
   assert.match(text, /neutral explicit assumption/);
   assert.match(text, /Do not claim `verified`/);
   assert.ok(text.endsWith("\n"));
+});
+
+test("managed guidance covers complete catalog receipt handling and setup boundaries", () => {
+  const guidance = renderSkillRangerAgentBlock();
+  for (const requiredPhrase of [
+    "complete page",
+    "catalogReceipt",
+    "If `inspect_skill_catalog` is unavailable",
+    "legacy SkillRanger server",
+    "without `routingProposal`",
+    "non-strict catalog-assisted routing does not require skillranger setup",
+    "strict workflow installation",
+    "advisory and is not a security boundary",
+  ]) {
+    assert.ok(guidance.includes(requiredPhrase), requiredPhrase);
+  }
 });
 
 test("preserves user text byte-for-byte outside the managed block", async () => {

@@ -1,6 +1,15 @@
 import { callMcpTool, mcpTools } from "./tools.ts";
 import { readSkillRangerVersion } from "../version.ts";
 import { routerContext } from "./router-context.ts";
+import {
+  catalogDiscoveryGuidance,
+  catalogRefreshGuidance,
+  explicitTriggerGuidance,
+  legacyCatalogGuidance,
+  mandatoryReadGuidance,
+  managedGuidanceBoundary,
+  setupBoundaryGuidance,
+} from "../host-guidance.ts";
 
 const protocolVersion = "2025-06-18";
 
@@ -72,10 +81,16 @@ export const handleJsonRpcRequest = async (request: JsonRpcRequest): Promise<Jso
         "This root is fixed for the lifetime of this MCP server.",
         "If it is not the intended project, stop and restart Codex from the target directory.",
         "Do not pass projectRoot to router tools and do not fall back to a local SkillRanger CLI.",
-        "For an explicit SkillRanger task, call inspect_skill_catalog first when using model-assisted routing, follow its cursor chain to a complete receipt, then call prepare_task with the full prompt (including the @skillranger, skillranger, or /sr trigger), catalog-bound routingProposal, and requested strict mode; do not combine routingProposal with semanticHints.",
+        explicitTriggerGuidance,
+        catalogDiscoveryGuidance,
+        legacyCatalogGuidance,
+        catalogRefreshGuidance,
+        "Call prepare_task with the full prompt and requested strict mode; do not combine routingProposal with semanticHints.",
+        setupBoundaryGuidance,
+        managedGuidanceBoundary,
         "Strict mode also requires hostCapabilities and a skillInputs entry for every selected skill; each skill declares its required input object in input.schema.json inside its installed skill directory.",
         "Treat its runtime run ID as authoritative; do not call the low-level start_skill_run after prepare_task.",
-        "Deliver every mandatory skill file with read_run_skill_file, then branch on run.runtime before implementation.",
+        mandatoryReadGuidance,
         "For lifecycle-v1, resolve any required clarifications, call begin_skill_run_execution, and persist results with complete_skill_run and verify_skill_run.",
         "For strict-v2, use read_next_skill_chunk, begin_skill_step, add_skill_evidence, complete_skill_step, verify_skill, and finalize_skill_run; the lifecycle-v1 transition tools reject a strict-v2 run, so never mix the two families on one run.",
         "For material frontend work in strict mode, complete the returned frontend design workflow, capture real browser evidence with capture_ui_evidence, run a compare_design_variants critic exchange with host-attested actor separation, recheck after any repair, and call verify_visual_result.",

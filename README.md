@@ -24,7 +24,7 @@ For example, when you ask an AI agent to review a Next.js application, SkillRang
 
 ## Quick Start
 
-### 1. Run setup inside your project
+### 1. Optional setup inside your project
 
 SkillRanger requires Node.js 20 or newer.
 
@@ -33,7 +33,7 @@ cd your-project
 npx -y skillranger@latest setup
 ```
 
-The interactive setup will:
+The interactive setup is useful when you want repo-local instructions or strict installed workflows. It will:
 
 1. scan the current repository;
 2. ask which AI agents you use;
@@ -46,6 +46,8 @@ You can run diagnostics first when troubleshooting:
 ```bash
 npx -y skillranger@latest doctor
 ```
+
+If your MCP host is already configured, setup is not required for non-strict catalog-assisted routing. The host can discover the trusted catalog and prepare a triggered task directly; setup remains the installation path for strict workflows and the managed `AGENTS.md` guidance.
 
 ### 2. Universal Task Router
 
@@ -67,13 +69,13 @@ skillranger task:read . --router-run <router-run-id> --mandatory-next --expected
 
 > 🌐 **Bilingual Natural Language**: Prompts can be written in English, Russian, or mixed terminology (e.g. *"Создай современный сайт по Bleach с плавной анимацией @skillranger"*). Matching is 100% deterministic using owner-scoped Domain Pack routing vocabularies. Note: End the task with `@skillranger`, `skillranger`, or `/sr` when you want the installed SkillRanger workflow to run.
 
-After setup, open Codex, Claude Code, Cursor, OpenCode, or Gemini CLI in the same repository and write your task as usual:
+With setup, or with a configured MCP host, open Codex, Claude Code, Cursor, OpenCode, or Gemini CLI in the same repository and write your task as usual:
 
 ```text
 Review this Next.js app for accessibility and fix critical keyboard-navigation issues. @skillranger
 ```
 
-SkillRanger's managed agent context activates when your task prompt ends with `@skillranger`, `skillranger`, or `/sr`, guiding the agent on which installed skill instructions must be read before implementation.
+SkillRanger's managed agent context activates when your task prompt ends with `@skillranger`, `skillranger`, or `/sr`, guiding the agent through catalog discovery, proposal submission, preparation, and ordered mandatory reads before implementation. The managed block is advisory; MCP validation and runtime state enforce the security boundary.
 
 You do **not** need to manually run the advanced lifecycle commands for normal interactive use.
 
@@ -188,6 +190,7 @@ The MCP surface can analyze projects, recommend and audit skills, preview or con
 
 - `analyze_project`
 - `recommend_skills`
+- `inspect_skill_catalog`
 - `audit_skill`
 - `plan_skill_install`
 - `install_skill`
