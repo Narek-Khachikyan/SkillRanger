@@ -117,6 +117,51 @@ test("an eligible nomination outranks lexical fallback and persists only the pri
   assert.match(stored.routing.routingProposal?.nominations[0]?.evidenceDigest ?? "", /^sha256:/);
 });
 
+test("an eligible explicit exact choice outranks host nominations", async () => {
+  const root = await temporaryProject();
+  const catalog = await buildSkillCatalog();
+  const binding = await completeReceipt();
+  const result = await prepareTask({
+    projectRoot: root,
+    registry: { kind: "bundled", root: registry },
+    prompt: "Please use frontend.react-component-design to make the page delightful @skillranger",
+    activation: { mode: "explicit" },
+    targetAgent: "codex",
+    routingProposal: proposalFor(catalog.digest, binding.receipt, [{
+      skillId: "frontend.motion-design",
+      role: "primary",
+      confidence: 0.99,
+      evidenceText: "make the page delightful",
+    }]),
+  });
+  assert.equal(result.status, "prepared");
+  if (result.status !== "prepared") return;
+  assert.equal(result.selections.primary.skillId, "frontend.react-component-design");
+});
+
+test("a hard-vetoed explicit exact choice fails closed without a replacement or partial run", async () => {
+  const root = await temporaryProject();
+  const catalog = await buildSkillCatalog();
+  const binding = await completeReceipt();
+  const result = await prepareTask({
+    projectRoot: root,
+    registry: { kind: "bundled", root: registry },
+    prompt: "Please use frontend.design-to-code to make the page delightful @skillranger",
+    activation: { mode: "explicit" },
+    targetAgent: "codex",
+    routingProposal: proposalFor(catalog.digest, binding.receipt, [{
+      skillId: "frontend.motion-design",
+      role: "primary",
+      confidence: 0.99,
+      evidenceText: "make the page delightful",
+    }]),
+  });
+  assert.equal(result.status, "no_matching_skills");
+  if (result.status !== "no_matching_skills") return;
+  assert.equal(result.reasonCode, "explicit-skill-choice-missing-required-evidence:intent:visual-reference");
+  assert.deepEqual(await runFiles(root), { runtime: [], router: [] });
+});
+
 test("stale, expired, and invalid bindings return side-effect-free refresh outcomes", async () => {
   const catalog = await buildSkillCatalog();
   const current = await completeReceipt();

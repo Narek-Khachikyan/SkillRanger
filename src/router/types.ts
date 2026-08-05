@@ -315,7 +315,7 @@ export type PrepareTaskResult =
       expiresAt: string;
     })
   | (PrepareTaskCommon & { status: "decomposition_required"; decomposition: { subtasks: TaskSubtask[] } })
-  | (PrepareTaskCommon & { status: "no_matching_skills"; suggestedAction: string })
+  | (PrepareTaskCommon & { status: "no_matching_skills"; suggestedAction: string; reasonCode?: string })
   | (PrepareTaskCommon & {
       status: "strict_requirements_unmet";
       missing: Array<{
@@ -335,7 +335,7 @@ export type DeterministicRoutingOutcome =
   | { status: "prepared"; selections: PreparedSelections }
   | { status: "clarification_required"; clarification: RouterClarification }
   | { status: "decomposition_required"; decomposition: { subtasks: TaskSubtask[] } }
-  | { status: "no_matching_skills"; suggestedAction: string }
+  | { status: "no_matching_skills"; suggestedAction: string; reasonCode?: string }
   | {
       status: "strict_requirements_unmet";
       missing: Array<{

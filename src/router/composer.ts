@@ -552,12 +552,25 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
       : { ...input, maxSelectedRisk: limits.maxSelectedRisk });
   const byId = new Map(retrieved.candidates.map((candidate) => [canonical(candidate.skill.id), candidate]));
   const registryById = new Map(input.skills.map((skill) => [canonical(skill.id), skill]));
-  const primaryCandidates = sortedPrimary(retrieved.primaryCandidates, input.requirements, input.routingContext, primaryNominationOrder);
   const explicitPrimaryFailure = (reason: string): ComposeSkillSetResult => ({
     status: "no_matching_skills",
     reasonCode: `explicit-skill-choice-${reason}`,
     rejections: retrieved.rejections,
   });
+  const sortedPrimaryCandidates = sortedPrimary(retrieved.primaryCandidates, input.requirements, input.routingContext, primaryNominationOrder);
+  const primaryCandidates = requiredPrimarySkillId
+    ? [
+      ...sortedPrimaryCandidates.filter(({ skill }) => canonical(skill.id) === requiredPrimarySkillId),
+      ...sortedPrimaryCandidates.filter(({ skill }) => canonical(skill.id) !== requiredPrimarySkillId),
+    ]
+    : sortedPrimaryCandidates;
+  if (requiredPrimarySkillId) {
+    const rejection = retrieved.rejections.find(({ skillId }) => canonical(skillId) === requiredPrimarySkillId);
+    if (rejection) return explicitPrimaryFailure(rejection.reason);
+    const explicitCandidate = retrieved.candidates.find(({ skill }) => canonical(skill.id) === requiredPrimarySkillId);
+    if (!explicitCandidate) return explicitPrimaryFailure("candidate-not-found");
+    if (!explicitCandidate.eligibleRoles.includes("primary")) return explicitPrimaryFailure("primary-role-ineligible");
+  }
   const requiredDecomposition = decomposition(input.profile, retrieved.candidates, input.skills);
   if (requiredDecomposition) return { status: "decomposition_required", subtasks: requiredDecomposition, rejections: retrieved.rejections };
   if (primaryCandidates.length === 0) {

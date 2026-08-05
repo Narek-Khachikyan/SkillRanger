@@ -23,6 +23,7 @@
     "expiresAt": { "type": "string", "format": "date-time" },
     "decomposition": { "$ref": "#/$defs/decomposition" },
     "suggestedAction": { "type": "string", "minLength": 1 },
+    "reasonCode": { "type": "string", "minLength": 1 },
     "missing": { "type": "array", "items": { "$ref": "#/$defs/missing" } },
     "installationSuggestions": { "type": "array", "items": { "$ref": "#/$defs/installationSuggestion" } },
     "requiredBytes": { "type": "integer", "minimum": 0 },

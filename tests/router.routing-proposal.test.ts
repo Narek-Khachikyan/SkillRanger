@@ -132,9 +132,19 @@ test("a catalog receipt must prove delivery of the complete current catalog", as
   );
 });
 
-test("explicit skill choice ignores negation, code spans, and URLs", () => {
+test("explicit skill choice requires an affirmative exact canonical request", () => {
   const skillId = "frontend.react-component-design";
   assert.equal(detectExplicitSkillChoice(`Use ${skillId} for this task`, [skillId]), skillId);
+  assert.equal(detectExplicitSkillChoice(`Use: ${skillId} for this task`, [skillId]), skillId);
+  assert.equal(detectExplicitSkillChoice(`Please select ${skillId} as the primary workflow`, [skillId]), skillId);
+  assert.equal(detectExplicitSkillChoice(`The relevant workflow is ${skillId}`, [skillId]), undefined);
+  assert.equal(detectExplicitSkillChoice(`Use React Component Design for this task`, [skillId]), undefined);
+  assert.equal(detectExplicitSkillChoice(`Use frontend for this task`, [skillId]), undefined);
+  assert.equal(detectExplicitSkillChoice(`Use FRONTEND.REACT-COMPONENT-DESIGN for this task`, [skillId]), undefined);
+});
+
+test("explicit skill choice ignores negation, code spans, and URLs", () => {
+  const skillId = "frontend.react-component-design";
   assert.equal(detectExplicitSkillChoice(`Do not use ${skillId}`, [skillId]), undefined);
   assert.equal(detectExplicitSkillChoice(`не используй ${skillId}`, [skillId]), undefined);
   assert.equal(detectExplicitSkillChoice(`Read \`${skillId}\` in the docs`, [skillId]), undefined);

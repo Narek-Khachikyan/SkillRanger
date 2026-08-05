@@ -430,10 +430,26 @@ const isNegatedChoice = (source: string, start: number) => {
     source.lastIndexOf("!", start - 1),
     source.lastIndexOf("?", start - 1),
     source.lastIndexOf("\n", start - 1),
+    source.lastIndexOf(",", start - 1),
+    source.lastIndexOf(";", start - 1),
   ) + 1;
   const prefix = source.slice(sentenceStart, start);
   return /\b(?:do\s+not|don't|dont|avoid|never|not|without|exclude|skip)\b[^.!?\n]{0,80}$/iu.test(prefix) ||
-    /(?:^|\s)(?:не|без)\s+(?:используй|использовать|бери|брать|нужен|нужно|выбирай|выбирать)?\s*$/iu.test(prefix);
+    /(?:^|\s)(?:не|без)\s+(?:(?:используй|использовать|используйте|бери|брать|нужен|нужно|выбирай|выбирать|применяй|применить)\s*)?$/iu.test(prefix);
+};
+
+const isAffirmativeChoice = (source: string, start: number) => {
+  const clauseStart = Math.max(
+    source.lastIndexOf(".", start - 1),
+    source.lastIndexOf("!", start - 1),
+    source.lastIndexOf("?", start - 1),
+    source.lastIndexOf("\n", start - 1),
+    source.lastIndexOf(",", start - 1),
+    source.lastIndexOf(";", start - 1),
+  ) + 1;
+  const prefix = source.slice(clauseStart, start);
+  return /(?:^|\s)(?:please\s+)?(?:use|select|choose|pick|apply|run|route(?:\s+(?:this|it))?\s+through|work\s+with)\s*:?\s+(?:(?:the|an?|exact|canonical|this)\s+)*(?:skill\s+)?(?:id\s+)?$/iu.test(prefix) ||
+    /(?:^|\s)(?:пожалуйста\s+)?(?:используй|использовать|используйте|выбери|выбрать|выбирай|примени|применить|бери|брать|работай\s+с|через)\s*:?\s+(?:(?:этот|эту|точный|канонический)\s+)*(?:навык\s+)?(?:идентификатор\s+)?$/iu.test(prefix);
 };
 
 const isUrlOrCompoundToken = (source: string, start: number, end: number) => {
@@ -451,12 +467,14 @@ export const detectExplicitSkillChoice = (prompt: string, skillIds: Iterable<str
   const source = prompt.normalize("NFKC");
   const ranges = codeRanges(source);
   const occurrences: Array<{ skillId: string; start: number }> = [];
-  for (const skillId of [...new Set(skillIds)].sort((left, right) => left.length - right.length || left.localeCompare(right))) {
-    const expression = new RegExp(`(^|[^\\p{L}\\p{N}_])(${escapedRegExp(skillId)})(?=$|[^\\p{L}\\p{N}_])`, "giu");
+  for (const skillId of [...new Set(skillIds)]
+    .filter((value) => canonicalIdPattern.test(value) && value.normalize("NFKC").toLowerCase() === value)
+    .sort((left, right) => left.length - right.length || left.localeCompare(right))) {
+    const expression = new RegExp(`(^|[^\\p{L}\\p{N}_.-])(${escapedRegExp(skillId)})(?=$|[^\\p{L}\\p{N}_.-])`, "gu");
     for (const match of source.matchAll(expression)) {
       const start = (match.index ?? 0) + match[1].length;
       const end = start + skillId.length;
-      if (inRange(start, ranges) || isUrlOrCompoundToken(source, start, end) || isNegatedChoice(source, start)) continue;
+      if (inRange(start, ranges) || isUrlOrCompoundToken(source, start, end) || isNegatedChoice(source, start) || !isAffirmativeChoice(source, start)) continue;
       occurrences.push({ skillId, start });
     }
   }

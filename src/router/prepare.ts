@@ -691,7 +691,7 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
       const outcome = { status: composed.status, requiredBytes: composed.requiredBytes, allowedBytes: composed.allowedBytes, blockingSkillIds: composed.blockingSkillIds };
       return { ...resultCommon(resultDomains, outcome), ...outcome };
     }
-    const outcome = { status: "no_matching_skills" as const, suggestedAction: "Proceed without a SkillRanger workflow or add an audited domain pack." };
+    const outcome = { status: "no_matching_skills" as const, suggestedAction: "Proceed without a SkillRanger workflow or add an audited domain pack.", ...(composed.reasonCode ? { reasonCode: composed.reasonCode } : {}) };
     return { ...resultCommon(resultDomains, outcome), ...outcome };
   }
   const selectedSkillIds = new Set(composed.composed.all.map(({ skill }) => skill.id));
