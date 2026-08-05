@@ -19,6 +19,11 @@ const secondIdentity: ProcessIdentity = {
   value: "200",
 };
 
+// Keep the age margins above the coarse directory mtime precision on Windows.
+const seededStaleAgeMs = 3_000;
+const seededExpiredAgeMs = 6_000;
+const unknownOwnerMaxAgeMs = 5_000;
+
 const provider = (state: ProcessIdentityState): ProcessIdentityProvider => ({
   lookup: async () => state,
 });
@@ -34,7 +39,7 @@ const makeLock = (
   identityProvider,
   lockTimeoutMs: 75,
   staleLockMs: 20,
-  unknownOwnerMaxAgeMs: 500,
+  unknownOwnerMaxAgeMs,
 });
 
 const ownerV2 = (identity?: ProcessIdentity) => ({
@@ -118,7 +123,7 @@ for (const location of ["final lock", "guard entry"] as const) {
   test(`${location} reclaims a stale live PID with mismatched known identity`, async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "run-lock-mismatch-"));
     const lockPath = path.join(root, "run.lock");
-    await seedOwner(location, lockPath, ownerV2(firstIdentity), 40);
+    await seedOwner(location, lockPath, ownerV2(firstIdentity), seededStaleAgeMs);
     const lock = makeLock(lockPath, provider({ status: "known", identity: secondIdentity }));
 
     const acquired = await lock.acquire("run");
@@ -129,7 +134,7 @@ for (const location of ["final lock", "guard entry"] as const) {
   test(`${location} retains a stale live PID with matching known identity`, async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "run-lock-match-"));
     const lockPath = path.join(root, "run.lock");
-    await seedOwner(location, lockPath, ownerV2(firstIdentity), 540);
+    await seedOwner(location, lockPath, ownerV2(firstIdentity), seededExpiredAgeMs);
     const lock = makeLock(lockPath, provider({ status: "known", identity: firstIdentity }));
 
     await assert.rejects(lock.acquire("run"), /Timed out waiting for run lock/);
@@ -139,11 +144,11 @@ for (const location of ["final lock", "guard entry"] as const) {
   test(`${location} bounds recovery when process identity is unknown`, async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "run-lock-unknown-"));
     const lockPath = path.join(root, "run.lock");
-    await seedOwner(location, lockPath, ownerV2(firstIdentity), 40);
+    await seedOwner(location, lockPath, ownerV2(firstIdentity), seededStaleAgeMs);
     const lock = makeLock(lockPath, provider({ status: "unknown" }));
 
     await assert.rejects(lock.acquire("run"), /Timed out waiting for run lock/);
-    await ageSeededOwner(location, lockPath, 540);
+    await ageSeededOwner(location, lockPath, seededExpiredAgeMs);
     const acquired = await lock.acquire("run");
 
     await lock.release(acquired);
@@ -152,11 +157,11 @@ for (const location of ["final lock", "guard entry"] as const) {
   test(`${location} treats legacy metadata as unknown with the same recovery bound`, async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "run-lock-legacy-"));
     const lockPath = path.join(root, "run.lock");
-    await seedOwner(location, lockPath, { token: "seed-owner", pid: process.pid }, 40);
+    await seedOwner(location, lockPath, { token: "seed-owner", pid: process.pid }, seededStaleAgeMs);
     const lock = makeLock(lockPath, provider({ status: "known", identity: secondIdentity }));
 
     await assert.rejects(lock.acquire("run"), /Timed out waiting for run lock/);
-    await ageSeededOwner(location, lockPath, 540);
+    await ageSeededOwner(location, lockPath, seededExpiredAgeMs);
     const acquired = await lock.acquire("run");
 
     await lock.release(acquired);
