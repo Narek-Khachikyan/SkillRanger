@@ -1,5 +1,5 @@
 import { lstatSync, readFileSync } from "node:fs";
-import { isCompleteVisualOperationalEvidence } from "./operational.ts";
+import { isCompleteVisualOperationalEvidence, isSuccessfulVisualBenchmarkExecution, visualBenchmarkExecutionFailureReason } from "./operational.ts";
 import { visualCriteria } from "./suite.ts";
 import { assertVisualBenchmarkEvidence } from "./evidence.ts";
 import { assertPublicReviewScreenshotBindings, canonicalJson, computeVisualBenchmarkResultDigest, computeVisualBlindReviewPackageDigest, isOpaqueReviewLabel, validateHumanReview, type VisualBlindReviewMapping, type VisualBlindReviewPackage } from "./review.ts";
@@ -60,8 +60,8 @@ const metricSet = (records: ScoredRun[], preferenceShare = 0): VisualBenchmarkMe
     catastrophicFailureRate: mean(records.map(({ catastrophic }) => catastrophic ? 1 : 0)),
     hardGateFailureRate: mean(records.map(({ result }) => result.hardGateFailed === true ? 1 : 0)),
     meanRepairIterations: mean(records.map(({ result }) => result.repairIterations as number)),
-    verificationSuccessRate: mean(records.map(({ result }) => result.verificationOutcome === "verified" ? 1 : 0)),
-    falseCompletionRate: mean(records.filter(({ result }) => result.completionClaimed === true).map(({ result }) => result.verificationOutcome !== "verified" ? 1 : 0)),
+    verificationSuccessRate: mean(records.map(({ result }) => result.verificationOutcome === "verified" && isSuccessfulVisualBenchmarkExecution(result) ? 1 : 0)),
+    falseCompletionRate: mean(records.filter(({ result }) => result.completionClaimed === true).map(({ result }) => result.verificationOutcome !== "verified" || !isSuccessfulVisualBenchmarkExecution(result) ? 1 : 0)),
   };
 };
 
@@ -204,7 +204,7 @@ export const aggregateVisualBenchmark = (input: { results: VisualBenchmarkRunRes
     for (const record of candidateRecords) byRecipe.set(record.result.recipeId, [...(byRecipe.get(record.result.recipeId) ?? []), record]);
     return [...byRecipe].filter(([, recipeRecords]) => recipeRecords.length === 2
       && new Set(recipeRecords.map(({ result }) => result.repetition)).size === 2
-      && recipeRecords.every(({ result, catastrophic }) => !catastrophic && result.hardGateFailed === false && result.verificationOutcome === "verified"))
+      && recipeRecords.every(({ result, catastrophic }) => !catastrophic && isSuccessfulVisualBenchmarkExecution(result) && result.hardGateFailed === false && result.verificationOutcome === "verified"))
       .map(([recipeId]) => recipeId).sort();
   };
   const candidateMetric = (candidateId: "weak" | "medium" | "strong"): VisualCandidateMetricSet => {
@@ -232,7 +232,11 @@ export const aggregateVisualBenchmark = (input: { results: VisualBenchmarkRunRes
   const unverifiedOutcomes = input.results.filter(({ verificationOutcome }) => verificationOutcome !== "verified").length;
   const criticalFindings = input.results.reduce((total, result) => total + (result.criticalFindings ?? 0), 0);
   const falseCompletionClaims = input.results.filter(({ completionClaimed, verificationOutcome }) => completionClaimed === true && verificationOutcome !== "verified").length;
+  const unsuccessfulExecutions = input.results
+    .map(visualBenchmarkExecutionFailureReason)
+    .filter((reason): reason is string => reason !== undefined);
   if (catastrophicFindings > 0) blockingReasons.push(`${catastrophicFindings} catastrophic finding(s) detected`);
+  blockingReasons.push(...unsuccessfulExecutions);
   if (unverifiedOutcomes > 0) blockingReasons.push(`${unverifiedOutcomes} unverified outcome(s) detected`);
   if (hardGateFailures > 0) blockingReasons.push(`${hardGateFailures} hard-gate failure(s) detected`);
   if (criticalFindings > 0) blockingReasons.push(`${criticalFindings} critical finding(s) detected`);
@@ -252,7 +256,7 @@ export const aggregateVisualBenchmark = (input: { results: VisualBenchmarkRunRes
     schemaVersion: "1.0", benchmarkVersion: input.reviewPackage.benchmarkVersion,
     metrics: { ...metricSet(records, preference), runSlots: input.results.length }, byCapability, byArm, skillRangerDeltas: delta,
     modelIds: [...new Set(input.results.map(({ modelId }) => modelId))],
-    successfulRecipeIds: [...new Set(records.filter(({ result, catastrophic }) => !catastrophic && !result.hardGateFailed && result.verificationOutcome === "verified").map(({ result }) => result.recipeId))],
+    successfulRecipeIds: [...new Set(records.filter(({ result, catastrophic }) => !catastrophic && isSuccessfulVisualBenchmarkExecution(result) && !result.hardGateFailed && result.verificationOutcome === "verified").map(({ result }) => result.recipeId))],
     evidencePaths: [...new Set(input.results.flatMap(({ artifactPaths }) => artifactPaths))],
     promotion,
   };

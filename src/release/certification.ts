@@ -25,6 +25,7 @@ import {
   type VisualBlindReviewPackage,
 } from "../evals/visual/review.ts";
 import { aggregateVisualBenchmark } from "../evals/visual/metrics.ts";
+import { visualBenchmarkExecutionFailureReason } from "../evals/visual/operational.ts";
 import {
   loadVisualBenchmarkSuite,
   validateVisualBenchmarkSuite,
@@ -650,6 +651,8 @@ const validateVisualEvidenceIdentity = (input: {
     if (result.skillRangerVersion !== input.plan.skillRangerVersion) issues.push(`visual result ${result.runId} release identity does not match the plan`);
     if (result.skillRangerChecksum !== input.plan.skillRangerChecksum) issues.push(`visual result ${result.runId} checksum does not match the plan`);
     if (!result.commandProfileDigest) issues.push(`visual result ${result.runId} is missing its command-profile digest`);
+    const executionFailure = visualBenchmarkExecutionFailureReason(result);
+    if (executionFailure) issues.push(executionFailure);
   }
   for (const runId of planByRunId.keys()) if (!resultsByRunId.has(runId)) issues.push(`visual plan entry ${runId} has no retained result`);
   return issues;

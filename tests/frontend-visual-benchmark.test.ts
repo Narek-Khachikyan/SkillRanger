@@ -19,6 +19,8 @@ const persistResults = async (results: VisualBenchmarkRunResult[]) => {
 const completedFixture = async () => {
   const plan = generateVisualBenchmarkPlan({ suite: await loadVisualBenchmarkSuite(), candidates: [...visualCandidates] });
   const root = await mkdtemp(path.join(os.tmpdir(), "visual-review-"));
+  const publicReviewDir = path.join(root, "public");
+  await mkdir(publicReviewDir, { recursive: true });
   const weakCatBriefs = new Set([...new Set(plan.entries.map(({ briefId }) => briefId))].slice(0, 2));
   const results: VisualBenchmarkRunResult[] = plan.entries.map((entry) => {
     const weakFailure = entry.capabilityCandidateId === "weak" && entry.arm === "with-skillranger" && weakCatBriefs.has(entry.briefId);
@@ -42,7 +44,7 @@ const completedFixture = async () => {
   }));
   await persistResults(results);
   let n = 0;
-  const prepared = createBlindReviewPackage({ plan, results, labelFactory: () => `opaque-${++n}` });
+  const prepared = createBlindReviewPackage({ plan, results, labelFactory: () => `opaque-${++n}`, publicReviewDir });
   const byRun = new Map(results.map((result) => [result.runId, result]));
   const byPair = new Map(prepared.privateMapping.pairs.map((pair) => [pair.pairId, pair]));
   const review: VisualHumanReview = {
@@ -57,7 +59,7 @@ const completedFixture = async () => {
       return { pairId, scoresA: Object.fromEntries(visualCriteria.map((criterion) => [criterion, score("A")])) as any, scoresB: Object.fromEntries(visualCriteria.map((criterion) => [criterion, score("B")])) as any, preference: mapping.A.arm === "with-skillranger" ? "A" : "B", catastrophicA: catastrophic("A"), catastrophicB: catastrophic("B"), notes: [] };
     }),
   };
-  return { plan, results, ...prepared, review };
+  return { plan, results, publicReviewDir, ...prepared, review };
 };
 
 const secondHumanReview = (review: VisualHumanReview): VisualHumanReview => ({
@@ -69,7 +71,7 @@ const aggregateReviews = (review: VisualHumanReview): VisualHumanReview[] => [re
 
 const refreshFixtureContracts = (fixture: Awaited<ReturnType<typeof completedFixture>>) => {
   let n = 0;
-  const prepared = createBlindReviewPackage({ plan: fixture.plan, results: fixture.results, labelFactory: () => `opaque-${++n}` });
+  const prepared = createBlindReviewPackage({ plan: fixture.plan, results: fixture.results, labelFactory: () => `opaque-${++n}`, publicReviewDir: fixture.publicReviewDir });
   return {
     ...fixture,
     ...prepared,
@@ -153,6 +155,41 @@ test("discovers rendered artifacts and persists immutable resume evidence", asyn
   assert.deepEqual(await readFile(first.runs[0].resultPath), bytesBefore);
 });
 
+test("retains complete evidence for failed and timed-out commands without certifying execution", async () => {
+  const full = generateVisualBenchmarkPlan({ suite: await loadVisualBenchmarkSuite(), candidates: [...visualCandidates] });
+  const plan: VisualBenchmarkPlan = { ...full, entries: full.entries.slice(0, 1) };
+  const root = await mkdtemp(path.join(os.tmpdir(), "visual-command-status-"));
+  const agent = path.join(root, "agent.cjs");
+  const metadata = JSON.stringify({ schemaVersion: "1.0", hardGateFailed: false, criticalFindings: 0, repairIterations: 0, verificationOutcome: "verified", completionClaimed: true });
+  await writeFile(agent, [
+    "const fs=require('fs'),path=require('path'),d=process.argv[2];",
+    "fs.writeFileSync(path.join(d,'screen.png'),'pixels');",
+    `fs.writeFileSync(path.join(d,'run-metadata.json'),${JSON.stringify(metadata)});`,
+    "if (process.argv[3] === 'fail') process.exit(23);",
+    "if (process.argv[3] === 'timeout') process.on('SIGTERM', () => process.exit(0));",
+    "setTimeout(() => {}, 1000);",
+  ].join("\n"));
+
+  const failed = await executeVisualBenchmarkPlanSubsetForTesting({
+    plan,
+    commandTemplate: `${process.execPath} ${agent} {{outputDir}} fail`,
+    outputDir: path.join(root, "failed"),
+  });
+  assert.equal(failed.runs[0].exitCode, 23);
+  assert.equal(failed.runs[0].signal, null);
+  assert.equal(failed.runs[0].operationalEvidence, "complete");
+
+  const timedOut = await executeVisualBenchmarkPlanSubsetForTesting({
+    plan,
+    commandTemplate: `${process.execPath} ${agent} {{outputDir}} timeout`,
+    outputDir: path.join(root, "timed-out"),
+    timeoutPerRunMs: 250,
+  });
+  assert.equal(timedOut.runs[0].exitCode, null);
+  assert.equal(timedOut.runs[0].signal, "SIGTERM");
+  assert.equal(timedOut.runs[0].operationalEvidence, "complete");
+});
+
 test("rejects traversal, absolute, duplicate, and forged frozen plans before creating runs", async () => {
   const plan = generateVisualBenchmarkPlan({ suite: await loadVisualBenchmarkSuite(), candidates: [...visualCandidates] });
   const outputDir = await mkdtemp(path.join(os.tmpdir(), "visual-plan-guard-"));
@@ -186,9 +223,21 @@ test("requires complete 96-result rendered review evidence", async () => {
   assert.equal(fixture.reviewPackage.pairs.length, 48);
   assert.doesNotMatch(JSON.stringify(fixture.reviewPackage), /with-skillranger|without-skillranger|provider\//);
   assert.ok(fixture.reviewPackage.pairs.every((pair) => pair.screenshotsA.length && pair.screenshotsB.length));
+  assert.ok(fixture.reviewPackage.pairs.every((pair) => pair.screenshotDigestsA.length === pair.screenshotsA.length && pair.screenshotDigestsB.length === pair.screenshotsB.length));
+  assert.ok(fixture.reviewPackage.pairs.every((pair) => [...pair.screenshotDigestsA, ...pair.screenshotDigestsB].every((digest) => /^[a-f0-9]{64}$/.test(digest))));
   assert.throws(() => createBlindReviewPackage({ plan: fixture.plan, results: fixture.results.slice(0, 2) }), /all 96 plan slots/);
   assert.throws(() => createBlindReviewPackage({ plan: fixture.plan, results: [...fixture.results.slice(0, -1), fixture.results[0]] }), /duplicate run ids|stale or foreign/);
   assert.throws(() => createBlindReviewPackage({ plan: fixture.plan, results: fixture.results, labelFactory: () => "with-skillranger" }), /non-opaque/);
+});
+
+test("rejects a public screenshot replaced at the same path before aggregation", async () => {
+  const fixture = await completedFixture();
+  const screenshot = path.join(fixture.publicReviewDir, fixture.reviewPackage.pairs[0].screenshotsA[0]);
+  await writeFile(screenshot, "substituted-rendered-pixels");
+  assert.throws(
+    () => aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review), publicReviewDir: fixture.publicReviewDir }),
+    /public review screenshot integrity mismatch/,
+  );
 });
 
 test("rejects benchmark evidence outside the isolated run directory", async () => {
@@ -270,6 +319,7 @@ test("aggregation rejects foreign evidence even when the immutable result and ma
       reviewPackage: fixture.reviewPackage,
       privateMapping,
       reviews: aggregateReviews(fixture.review),
+      publicReviewDir: fixture.publicReviewDir,
     }),
     /isolated run directory|escaped run directory/,
   );
@@ -284,13 +334,13 @@ test("validates every human review field and exact pair coverage", async () => {
   const stalePackage = structuredClone(fixture.reviewPackage); stalePackage.pairs[0].labelA = "option-stale";
   assert.ok(validateHumanReview(fixture.review, stalePackage).includes("public review package digest is invalid"));
   const partial = structuredClone(fixture.review); partial.judgments.pop();
-  assert.throws(() => aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: [partial, secondHumanReview(fixture.review)] }), /Invalid human review.*cover every public pair/);
+  assert.throws(() => aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: [partial, secondHumanReview(fixture.review)], publicReviewDir: fixture.publicReviewDir }), /Invalid human review.*cover every public pair/);
 });
 
 test("computes exact quality, median, population variance, divergence, deltas, and operational rates", async () => {
   assert.equal(mean([1, 2, 3]), 2); assert.equal(median([4, 1, 3, 2]), 2.5); close(populationVariance([1, 3]), 1);
   const fixture = await completedFixture();
-  const report = aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review) });
+  const report = aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review), publicReviewDir: fixture.publicReviewDir });
   assert.equal(report.metrics.runSlots, 96); close(report.metrics.meanQuality, .7); close(report.metrics.medianQuality, .7);
   close(report.metrics.pairwiseSkillRangerPreferenceShare, 1); close(report.metrics.withinConditionVariance, 0); close(report.metrics.repeatDesignAxisDivergence, 0);
   close(report.byArm["with-skillranger"].meanQuality, .8); close(report.byArm["without-skillranger"].meanQuality, .6); close(report.skillRangerDeltas.meanQuality, .2);
@@ -299,22 +349,44 @@ test("computes exact quality, median, population variance, divergence, deltas, a
   assert.deepEqual(report.byCapability.medium.modelIds, ["provider/model-b@pinned"]); assert.ok(report.byCapability.medium.successfulRecipeIds.length > 0);
 });
 
+test("blocks complete rendered evidence when the benchmark command fails", async () => {
+  for (const status of [
+    { exitCode: 23, signal: null, expected: /exit code 23/ },
+    { exitCode: null, signal: "SIGTERM", expected: /termination signal SIGTERM/ },
+  ] as const) {
+    const fixture = await completedFixture();
+    fixture.results[0].exitCode = status.exitCode;
+    fixture.results[0].signal = status.signal;
+    await persistResults(fixture.results);
+    const refreshed = refreshFixtureContracts(fixture);
+    const report = aggregateVisualBenchmark({
+      results: refreshed.results,
+      reviewPackage: refreshed.reviewPackage,
+      privateMapping: refreshed.privateMapping,
+      reviews: aggregateReviews(refreshed.review),
+      publicReviewDir: refreshed.publicReviewDir,
+    });
+    assert.equal(report.promotion.verdict, "blocked");
+    assert.ok(report.promotion.blockingReasons.some((reason) => reason.includes(fixture.results[0].runId) && status.expected.test(reason)));
+  }
+});
+
 test("candidate recipe success requires both repetitions to pass", async () => {
   const fixture = await completedFixture();
   const target = fixture.results.find((result) => result.capabilityCandidateId === "medium" && result.arm === "with-skillranger" && result.repetition === 2)!;
   target.verificationOutcome = "failed";
   await persistResults(fixture.results);
   const refreshed = refreshFixtureContracts(fixture);
-  const report = aggregateVisualBenchmark({ results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: aggregateReviews(refreshed.review) });
+  const report = aggregateVisualBenchmark({ results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: aggregateReviews(refreshed.review), publicReviewDir: refreshed.publicReviewDir });
   assert.equal(report.byCapability.medium.successfulRecipeIds.includes(target.recipeId), false);
 });
 
 test("rejects mismatched public/private mappings before aggregation", async () => {
   const fixture = await completedFixture();
   const forged = structuredClone(fixture.privateMapping); forged.pairs[0].A.modelId = "provider/forged@pinned";
-  assert.throws(() => aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: forged, reviews: aggregateReviews(fixture.review) }), /run mapping mismatch/);
+  assert.throws(() => aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: forged, reviews: aggregateReviews(fixture.review), publicReviewDir: fixture.publicReviewDir }), /run mapping mismatch/);
   const forgedResults = structuredClone(fixture.results); forgedResults[0].criticalFindings = 1;
-  assert.throws(() => aggregateVisualBenchmark({ results: forgedResults, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review) }), /immutable benchmark result mismatch/);
+  assert.throws(() => aggregateVisualBenchmark({ results: forgedResults, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review), publicReviewDir: fixture.publicReviewDir }), /immutable benchmark result mismatch/);
 });
 
 test("rejects llm judges and incomplete scores", () => {
@@ -333,6 +405,7 @@ test("accepts explicit abstention and requires two distinct complete human revie
     reviewPackage: refreshed.reviewPackage,
     privateMapping: refreshed.privateMapping,
     reviews: [abstaining, secondHumanReview(abstaining)],
+    publicReviewDir: refreshed.publicReviewDir,
   });
   assert.equal(report.promotion.verdict, "blocked");
   assert.equal(report.promotion.abstentions, 96);
@@ -343,12 +416,14 @@ test("accepts explicit abstention and requires two distinct complete human revie
     reviewPackage: refreshed.reviewPackage,
     privateMapping: refreshed.privateMapping,
     reviews: [abstaining],
+    publicReviewDir: refreshed.publicReviewDir,
   }), /exactly two human reviews/);
   assert.throws(() => aggregateVisualBenchmark({
     results: refreshed.results,
     reviewPackage: refreshed.reviewPackage,
     privateMapping: refreshed.privateMapping,
     reviews: [abstaining, structuredClone(abstaining)],
+    publicReviewDir: refreshed.publicReviewDir,
   }), /distinct reviewer identities/);
 });
 
@@ -367,7 +442,7 @@ test("uses equal reviewer weight and decisive-only preference at the 60 percent 
     reviewWithCandidateWins(refreshed, baseReview, "human-1", 48),
     sparse("human-2", 10, 10),
   ];
-  const passReport = aggregateVisualBenchmark({ results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: passing });
+  const passReport = aggregateVisualBenchmark({ results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: passing, publicReviewDir: refreshed.publicReviewDir });
   assert.equal(passReport.promotion.candidateWins, 58);
   assert.equal(passReport.promotion.comparatorWins, 10);
   assert.equal(passReport.promotion.abstentions, 28);
@@ -379,7 +454,7 @@ test("uses equal reviewer weight and decisive-only preference at the 60 percent 
     reviewWithCandidateWins(refreshed, baseReview, "human-1", 48),
     sparse("human-2", 0, 1),
   ];
-  const failReport = aggregateVisualBenchmark({ results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: failing });
+  const failReport = aggregateVisualBenchmark({ results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: failing, publicReviewDir: refreshed.publicReviewDir });
   assert.equal(failReport.promotion.candidateWins, 48);
   close(failReport.promotion.candidatePreferenceShare, (1 + 0) / 2);
   assert.equal(failReport.promotion.verdict, "blocked");
@@ -401,7 +476,7 @@ test("preserves every promotion blocker even when the analytical averages are st
     reviewWithCandidateWins(refreshed, refreshed.review, "human-2", 48),
   ];
   reviews[0].judgments[0].catastrophicA = true;
-  const report = aggregateVisualBenchmark({ results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews });
+  const report = aggregateVisualBenchmark({ results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews, publicReviewDir: refreshed.publicReviewDir });
   assert.equal(report.promotion.verdict, "blocked");
   for (const expected of ["catastrophic", "hard-gate", "unverified", "critical", "false completion"]) {
     assert.ok(report.promotion.blockingReasons.some((reason) => reason.toLowerCase().includes(expected)), expected);

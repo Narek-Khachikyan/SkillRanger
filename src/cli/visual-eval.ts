@@ -68,6 +68,9 @@ export const handleVisualEvalCommand = async (input: { command?: string; flags: 
   if (actions[0] === "calibrate") {
     const reportPath = required(flags, "report");
     const report = await readJson<VisualBenchmarkReport>(reportPath);
+    if (report.promotion?.verdict !== "promotable") {
+      throw new Error("visual benchmark report is not promotable; calibration requires promotion.verdict=promotable");
+    }
     const candidateId = required(flags, "candidate");
     if (!["weak", "medium", "strong"].includes(candidateId)) throw new Error(`candidate not found: ${candidateId}`);
     const metrics = report.byCapability[candidateId as keyof typeof report.byCapability];
