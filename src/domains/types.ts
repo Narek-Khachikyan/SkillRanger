@@ -81,6 +81,7 @@ export type DomainPackArtifactsV12 = DomainPackArtifactsV11 & {
 export type DomainPackManifestBase<TArtifacts extends DomainPackArtifactsBase> = {
   id: string;
   displayName: string;
+  description?: string;
   version: string;
   coreApi: string;
   skillIdPrefix: string;

@@ -73,12 +73,13 @@ The persisted task profile contains canonical routing vocabulary and digests, no
 
 ## Tool Surface
 
-SkillRanger exposes 33 tools in four effect classes, each with a distinct host approval boundary.
+SkillRanger exposes 34 tools in four effect classes, each with a distinct host approval boundary.
 
-### Read-only (17)
+### Read-only (18)
 
 - `analyze_project` scans a project and returns a stack fingerprint.
 - `recommend_skills` ranks registry skills for a project and target agent, with optional `lane` and `limitPerLane` filters.
+- `inspect_skill_catalog` delivers the complete trusted bundled skill catalog through digest-bound pages without scanning project state.
 - `audit_skill` audits one local registry skill package for MVP security findings.
 - `list_installed_skills` reads `skillranger.lock.json`.
 - `plan_skill_install` returns a dry-run installer plan with intended writes and does not modify files.

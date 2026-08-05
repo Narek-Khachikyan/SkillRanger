@@ -86,7 +86,13 @@ export type McpToolErrorCode =
   | "hard-gate-failed"
   | "repair-limit"
   | "semantic-hint-invalid"
-  | "run-not-finalizable";
+  | "run-not-finalizable"
+  | "catalog-integrity"
+  | "catalog-cursor-invalid"
+  | "catalog-digest-mismatch"
+  | "catalog-page-limit-invalid"
+  | "catalog-page-limit-too-small"
+  | "catalog-receipt-invalid";
 
 export class McpToolError extends Error {
   code: McpToolErrorCode;

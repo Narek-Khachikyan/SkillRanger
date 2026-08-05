@@ -74,6 +74,24 @@ export {
 } from "./store.ts";
 export { prepareTask, createRouterReader, createRouterRuntimeStore, deterministicRoutingKey, RouterPrepareError, routerAlgorithmVersion } from "./prepare.ts";
 export {
+  assertValidCatalogReceipt,
+  buildSkillCatalog,
+  inspectSkillCatalog,
+  isCatalogReceiptValid,
+  SkillCatalogError,
+  skillCatalogLimits,
+  skillCatalogSchemaVersion,
+} from "./catalog.ts";
+export type {
+  CatalogErrorCode,
+  InspectSkillCatalogInput,
+  SkillCatalogCard,
+  SkillCatalogDomain,
+  SkillCatalogLoaders,
+  SkillCatalogPage,
+  SkillCatalogSourceOptions,
+} from "./catalog.ts";
+export {
   createSkillSourceSnapshot,
   createSkillSourceSnapshots,
   computeSourcePackageChecksum,

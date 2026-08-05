@@ -11,6 +11,10 @@ import {
   registryToolHandlers,
 } from "./tools/registry.ts";
 import {
+  catalogToolDefinitions,
+  catalogToolHandlers,
+} from "./tools/catalog.ts";
+import {
   domainToolDefinitions,
   domainToolHandlers,
 } from "./tools/domains.ts";
@@ -40,6 +44,7 @@ export type {
 
 export const mcpTools: McpToolDefinition[] = [
   ...projectToolDefinitions,
+  ...catalogToolDefinitions,
   ...registryToolDefinitions,
   ...installToolDefinitions,
   ...domainToolDefinitions,
@@ -50,6 +55,7 @@ export const mcpTools: McpToolDefinition[] = [
 
 const mcpToolHandlers: Record<string, McpToolHandler> = {
   ...projectToolHandlers,
+  ...catalogToolHandlers,
   ...registryToolHandlers,
   ...installToolHandlers,
   ...domainToolHandlers,

@@ -43,6 +43,7 @@ test("MCP exposes the project, install, and domain workflow tool set", () => {
     [
       "analyze_project",
       "recommend_skills",
+      "inspect_skill_catalog",
       "audit_skill",
       "list_installed_skills",
       "plan_skill_install",

@@ -384,7 +384,7 @@ test("MCP tools publish complete effect and confirmation metadata", async () => 
 
   const expectedGroups = {
     "read-only": [
-      "analyze_project", "recommend_skills", "audit_skill", "list_installed_skills",
+      "analyze_project", "recommend_skills", "inspect_skill_catalog", "audit_skill", "list_installed_skills",
       "plan_skill_install", "list_domains", "inspect_domain", "create_frontend_design_brief",
       "recommend_frontend_recipe", "validate_frontend_result", "compile_frontend_design_spec",
       "verify_frontend_result", "repair_frontend_result", "run_domain_eval", "inspect_skill_run",
@@ -418,7 +418,7 @@ test("MCP tools publish complete effect and confirmation metadata", async () => 
     },
   } as const;
 
-  assert.equal(tools.length, 33);
+  assert.equal(tools.length, 34);
   for (const [effect, expectedNames] of Object.entries(expectedGroups)) {
     const matchingTools = tools.filter((tool) => tool._meta?.["skillranger/effect"] === effect);
     assert.deepEqual(matchingTools.map(({ name }) => name).sort(), [...expectedNames].sort(), effect);

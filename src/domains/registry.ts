@@ -25,7 +25,7 @@ const capabilities = new Set<DomainCapability>([
   "repair",
   "evaluation",
 ]);
-const domainFields = new Set(["schemaVersion", "id", "displayName", "version", "releaseVersion", "coreApi", "skillIdPrefix", "capabilities", "artifacts", "ownership", "routing"]);
+const domainFields = new Set(["schemaVersion", "id", "displayName", "description", "version", "releaseVersion", "coreApi", "skillIdPrefix", "capabilities", "artifacts", "ownership", "routing"]);
 const artifactFields = new Set(["intents", "schemas", "recipes", "rules", "examples", "workflows", "validators", "evalSuite", "capabilityRecords"]);
 const artifactFieldsV11 = new Set([...artifactFields, "routingVocabulary"]);
 const artifactFieldsV12 = new Set([...artifactFieldsV11, "releaseManifest"]);
@@ -59,6 +59,9 @@ export const validateDomainPackManifest = (input: unknown): string[] => {
   if (schemaVersion !== "1.0" && schemaVersion !== "1.1" && schemaVersion !== "1.2") issues.push("schemaVersion must be 1.0, 1.1, or 1.2");
   for (const key of ["id", "displayName", "version", "coreApi", "skillIdPrefix"] as const) {
     if (typeof input[key] !== "string" || !input[key].trim()) issues.push(`${key} is required`);
+  }
+  if (input.description !== undefined && (typeof input.description !== "string" || !input.description.trim())) {
+    issues.push("description must be a non-empty string when provided");
   }
   if (schemaVersion === "1.2") {
     if (typeof input.releaseVersion !== "string" || !input.releaseVersion.trim()) issues.push("releaseVersion is required for schemaVersion 1.2");

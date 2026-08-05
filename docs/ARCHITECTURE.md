@@ -52,7 +52,7 @@ only through the compiled `dist/` output, which is why CI has a dedicated `node2
 graph TD
   subgraph Surfaces
     CLI["src/cli/<br/>43 commands"]
-    MCP["src/mcp/<br/>33 tools"]
+    MCP["src/mcp/<br/>34 tools"]
   end
   subgraph Orchestration
     ROUTER["src/router/<br/>prepareTask + reader + store"]
@@ -110,9 +110,9 @@ graph TD
 | `mcp/server.ts` | stdio readline loop |
 | `mcp/protocol.ts` | JSON-RPC 2.0 framing, `initialize` / `tools/list` / `tools/call` |
 | `mcp/tools.ts` | Tool aggregation and `callMcpTool` dispatch with argument validation |
-| `mcp/tools/*.ts` | The seven tool groups plus shared `types.ts` / `utils.ts` |
+| `mcp/tools/*.ts` | The eight tool groups plus shared `types.ts` / `utils.ts` |
 | `mcp/router-context.ts` | The fixed, canonicalized project root for router tools |
-| `router/` | 25 modules; see [§7](#7-router-lifecycle) |
+| `router/` | 28 modules; see [§7](#7-router-lifecycle) |
 | `runtime/skill-run/` | Lifecycle v1 state machine, store, verification |
 | `runtime/strict/` | Strict v2 state machine, contracts, evidence, certification |
 | `runtime/run-lock.ts` | The file lock shared by every store |
@@ -218,11 +218,12 @@ stdin line
 lifetime. Router tools therefore take **no** `projectRoot` argument; supplying one returns
 `project-root-unauthorized`.
 
-The 33 tools, by group:
+The 34 tools, by group:
 
 | Group (`src/mcp/tools/…`) | Tools |
 | :--- | :--- |
 | `project.ts` | `analyze_project`, `recommend_skills` |
+| `catalog.ts` | `inspect_skill_catalog` |
 | `registry.ts` | `audit_skill` |
 | `install.ts` | `list_installed_skills`, `plan_skill_install`, `install_skill` |
 | `domains.ts` | `list_domains`, `inspect_domain`, `create_frontend_design_brief`, `recommend_frontend_recipe`, `validate_frontend_result`, `compile_frontend_design_spec`, `verify_frontend_result`, `repair_frontend_result`, `run_domain_eval` |
@@ -682,5 +683,5 @@ Recorded as observed, not repaired:
   verbatim.
 - [ADR 0001](adr/0001-universal-prompt-router-boundaries.md) cites
   `SkillRanger-Universal-Prompt-Router-TZ-Plan.md`, which is not in the repository.
-- `README.md` lists seven MCP tools. That is a curated subset for readers, not the full surface of 33 —
+- `README.md` lists seven MCP tools. That is a curated subset for readers, not the full surface of 34 —
   it is a simplification, not an error.
