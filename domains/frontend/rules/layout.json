@@ -3,7 +3,7 @@
   "family": "layout",
   "rules": [
     {
-      "schemaVersion": "1.0", "id": "layout.action-evidence", "version": "1.0.0", "family": "layout", "name": "Action and Evidence",
+      "schemaVersion": "1.1", "id": "layout.action-evidence", "version": "1.0.0", "family": "layout", "name": "Action and Evidence",
       "recipeIds": ["*"], "preconditions": ["A primary action and the evidence needed to take it are known."],
       "intent": "Place the primary action beside the evidence and state that justify it.",
       "constraints": ["Keep decision evidence in the same visual region as its action.", "Reserve the strongest hierarchy for the primary flow."],
@@ -16,7 +16,7 @@
       ]
     },
     {
-      "schemaVersion": "1.0", "id": "layout.list-detail", "version": "1.0.0", "family": "layout", "name": "List Detail",
+      "schemaVersion": "1.1", "id": "layout.list-detail", "version": "1.0.0", "family": "layout", "name": "List Detail",
       "recipeIds": ["operational-command-center", "developer-tool", "saas-workspace", "mobile-consumer-app"], "preconditions": ["Users select a repeated object and inspect or update its details."],
       "intent": "Use the real work object as the stable bridge between overview and detail.",
       "constraints": ["Keep selection state visible.", "Do not duplicate the full detail inside each list row."],
@@ -29,7 +29,7 @@
       ]
     },
     {
-      "schemaVersion": "1.0", "id": "layout.commerce-comparison", "version": "1.0.0", "family": "layout", "name": "Commerce Comparison",
+      "schemaVersion": "1.1", "id": "layout.commerce-comparison", "version": "1.0.0", "family": "layout", "name": "Commerce Comparison",
       "recipeIds": ["e-commerce", "consumer-discovery"], "preconditions": ["Comparable products or catalogue objects have real differentiating evidence."],
       "intent": "Structure repeated products around evidence that supports comparison and commitment.",
       "constraints": ["Align comparable facts across items.", "Keep availability and fulfillment adjacent to the action."],

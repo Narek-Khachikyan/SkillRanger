@@ -55,7 +55,7 @@ const ruleKeys = [
 ] as const;
 
 const provenanceKeys = [
-  "source", "page", "state", "reviewedAt", "capturedAt", "extractionMethod",
+  "source", "page", "state", "productId", "reviewedAt", "capturedAt", "extractionMethod",
   "extractionSchema", "evidenceStatus",
 ] as const;
 
@@ -90,6 +90,7 @@ const validateProvenance = (value: unknown, ruleId: string) => {
       !isNonEmptyString(entry.source) ||
       (entry.page !== undefined && !isNonEmptyString(entry.page)) ||
       (entry.state !== undefined && !isNonEmptyString(entry.state)) ||
+      (entry.productId !== undefined && !isNonEmptyString(entry.productId)) ||
       !suppliedDatesAreValid ||
       !hasReviewOrCaptureDate ||
       !isNonEmptyString(entry.extractionMethod) ||
@@ -114,7 +115,7 @@ const validateRule = (value: unknown, family: DesignRuleFamily): DesignRule => {
     throw new Error("Invalid design rule contract: unknown");
   }
   if (
-    value.schemaVersion !== "1.0" ||
+    value.schemaVersion !== "1.1" ||
     typeof value.version !== "string" ||
     !semanticVersionPattern.test(value.version) ||
     value.family !== family ||
@@ -151,8 +152,14 @@ const validateRule = (value: unknown, family: DesignRuleFamily): DesignRule => {
 const validateNormativeVersions = (rules: DesignRule[]) => {
   for (const rule of rules) {
     const expected = designRuleNormativeBaselines[rule.id as DesignRuleId];
-    if (expected && expected.version === rule.version && expected.digest !== normativeDigest(rule)) {
-      throw new Error(`Normative change to ${rule.id} requires an explicit semantic version change`);
+    if (expected && expected.digest !== normativeDigest(rule)) {
+      if (expected.version === rule.version) {
+        throw new Error(`Normative change to ${rule.id} requires an explicit semantic version change`);
+      }
+      const productIds = new Set(rule.provenance.map(({ productId }) => productId).filter(isNonEmptyString));
+      if (productIds.size < 2) {
+        throw new Error(`Normative change to ${rule.id} requires evidence from two independent products`);
+      }
     }
   }
 };

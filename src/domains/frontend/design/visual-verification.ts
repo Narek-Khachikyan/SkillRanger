@@ -173,76 +173,77 @@ export const verifyVisualResult = (input: {
     ...validateDesignDirection(input.brief, input.direction),
   ];
   const selectedVariantId = input.variant.id;
-  const executionTrace = input.executionTrace ?? input.visualRun.executionTrace;
-  const materialExecution = Boolean(
-    executionTrace
-    || input.examplePack
-    || Array.isArray(input.direction.selectedRuleIds),
-  );
-
-  if (materialExecution) {
-    findings.push(...validateMaterialVisualExecution({
-      brief: input.brief,
-      direction: input.direction,
-      examplePack: input.examplePack,
-      policy: input.policy,
-      trace: executionTrace,
-    }));
-    if (!input.visualRun.executionTrace) {
-      findings.push(hardFinding(
-        "visual-run-trace-missing",
-        "The material execution trace is not persisted on the visual run.",
-        [selectedVariantId],
-        "Persist the immutable design execution trace on the visual run before implementation and verification.",
-        selectedVariantId,
-      ));
-    }
-    if (input.executionTrace && input.visualRun.executionTrace
-      && input.executionTrace.id !== input.visualRun.executionTrace.id) {
-      findings.push(hardFinding(
-        "visual-execution-trace-mismatch",
-        "The supplied execution trace does not match the trace persisted on the visual run.",
-        [input.executionTrace.id, input.visualRun.executionTrace.id],
-        "Verify the visual run and every downstream artifact against one immutable execution trace.",
-        selectedVariantId,
-      ));
-    }
-    if (executionTrace) {
-      try {
-        findings.push(...validateDesignVariantAgainstTrace({
-          trace: executionTrace,
-          direction: input.direction,
-          variant: input.variant,
-        }));
-      } catch (error) {
-        findings.push(hardFinding(
-          "visual-variant-trace-invalid",
-          "The selected visual variant cannot be checked against the execution trace.",
-          [error instanceof Error ? error.message : String(error)],
-          "Persist a complete variant metadata record derived from the traced direction.",
-          selectedVariantId,
-        ));
-      }
-      const candidateIds = Array.isArray(input.criticReport.candidateVariantIds)
-        ? input.criticReport.candidateVariantIds
-        : [];
-      const expectedCandidateIds = input.visualRun.variantIds;
-      if (candidateIds.length !== expectedCandidateIds.length
-        || expectedCandidateIds.some((variantId) => !candidateIds.includes(variantId))) {
-        findings.push(hardFinding(
-          "visual-critic-trace-mismatch",
-          "The critic report does not cover exactly the variants in the traced visual run.",
-          [...candidateIds, ...expectedCandidateIds],
-          "Run the independent critic against every variant recorded by the traced visual run.",
-          selectedVariantId,
-        ));
-      }
-      findings.push(...validateRepairTrace({
-        request: input.boundedRepairRequest,
-        targetVariantId: selectedVariantId,
-        sourceEvidenceId: input.initialEvidence.id,
+  const executionTrace = input.visualRun.executionTrace;
+  findings.push(...validateMaterialVisualExecution({
+    brief: input.brief,
+    direction: input.direction,
+    examplePack: input.examplePack,
+    policy: input.policy,
+    trace: executionTrace,
+  }));
+  if (!input.visualRun.executionTrace) {
+    findings.push(hardFinding(
+      "visual-run-trace-missing",
+      "The material execution trace is not persisted on the visual run.",
+      [selectedVariantId],
+      "Persist the immutable design execution trace on the visual run before implementation and verification.",
+      selectedVariantId,
+    ));
+  }
+  if (input.executionTrace && input.visualRun.executionTrace
+    && (
+      input.executionTrace.schemaVersion !== input.visualRun.executionTrace.schemaVersion
+      || input.executionTrace.id !== input.visualRun.executionTrace.id
+      || input.executionTrace.directionPath !== input.visualRun.executionTrace.directionPath
+      || input.executionTrace.directionDigest !== input.visualRun.executionTrace.directionDigest
+      || input.executionTrace.recipeId !== input.visualRun.executionTrace.recipeId
+      || input.executionTrace.examplePackPath !== input.visualRun.executionTrace.examplePackPath
+      || input.executionTrace.examplePackDigest !== input.visualRun.executionTrace.examplePackDigest
+      || input.executionTrace.ruleSelectionDigest !== input.visualRun.executionTrace.ruleSelectionDigest
+    )) {
+    findings.push(hardFinding(
+      "visual-execution-trace-mismatch",
+      "The supplied execution trace does not match the trace persisted on the visual run.",
+      [input.executionTrace.id, input.visualRun.executionTrace.id],
+      "Verify the visual run and every downstream artifact against one immutable execution trace.",
+      selectedVariantId,
+    ));
+  }
+  if (executionTrace) {
+    try {
+      findings.push(...validateDesignVariantAgainstTrace({
+        trace: executionTrace,
+        direction: input.direction,
+        variant: input.variant,
       }));
+    } catch (error) {
+      findings.push(hardFinding(
+        "visual-variant-trace-invalid",
+        "The selected visual variant cannot be checked against the execution trace.",
+        [error instanceof Error ? error.message : String(error)],
+        "Persist a complete variant metadata record derived from the traced direction.",
+        selectedVariantId,
+      ));
     }
+    const candidateIds = Array.isArray(input.criticReport.candidateVariantIds)
+      ? input.criticReport.candidateVariantIds
+      : [];
+    const expectedCandidateIds = input.visualRun.variantIds;
+    if (candidateIds.length !== expectedCandidateIds.length
+      || expectedCandidateIds.some((variantId) => !candidateIds.includes(variantId))) {
+      findings.push(hardFinding(
+        "visual-critic-trace-mismatch",
+        "The critic report does not cover exactly the variants in the traced visual run.",
+        [...candidateIds, ...expectedCandidateIds],
+        "Run the independent critic against every variant recorded by the traced visual run.",
+        selectedVariantId,
+      ));
+    }
+    findings.push(...validateRepairTrace({
+      request: input.boundedRepairRequest,
+      targetVariantId: selectedVariantId,
+      sourceEvidenceId: input.initialEvidence.id,
+    }));
   }
 
   if (input.visualRun.state !== "final-audited") {
@@ -388,7 +389,7 @@ export const verifyVisualResult = (input: {
     verificationStatus: hardFailures ? "failed" : "passed",
     findings,
     evidence: [
-      ...(materialExecution && executionTrace
+      ...(executionTrace
         ? [
             { kind: "design-execution-trace", path: executionTrace.directionPath, description: `Design execution trace ${executionTrace.id}` },
             { kind: "worked-example-pack", path: executionTrace.examplePackPath, description: `Worked example pack for ${executionTrace.recipeId}` },

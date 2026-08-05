@@ -351,6 +351,45 @@ test("final verification rejects a detached trace even when the caller supplies 
   assert.ok(result.findings.some(({ code }) => code === "visual-run-trace-missing"));
 });
 
+test("final verification rejects a caller trace that reuses the persisted trace id", async () => {
+  const pack = (await loadRecipeExamplePacks()).find(({ recipeId }) => recipeId === "developer-tool");
+  assert.ok(pack);
+  const selectedDirection = direction();
+  const persistedTrace = createDesignExecutionTrace({
+    id: "design-trace-reused-id",
+    directionPath: ".design/variants/v1/direction.json",
+    examplePackPath: "domains/frontend/examples/developer-tool/example.json",
+    direction: selectedDirection,
+    examplePack: pack,
+  });
+  const lateDirection = { ...selectedDirection, thesis: "A late direction that was not persisted before implementation." };
+  const callerTrace = createDesignExecutionTrace({
+    id: persistedTrace.id,
+    directionPath: persistedTrace.directionPath,
+    examplePackPath: persistedTrace.examplePackPath,
+    direction: lateDirection,
+    examplePack: pack,
+  });
+  const input = makeVerificationInput({
+    initialEvidence: makeBundle({ id: "e1", variantId: "v1", sourceIdentity: "git:initial" }),
+    recheckEvidence: makeBundle({ id: "e2", variantId: "v1", sourceIdentity: "git:repair" }),
+  });
+  input.visualRun.executionTrace = persistedTrace;
+  input.executionTrace = callerTrace;
+  input.variant = {
+    ...input.variant,
+    recipeId: lateDirection.recipeId,
+    directionPath: callerTrace.directionPath,
+    ruleIds: [...lateDirection.selectedRuleIds!],
+  };
+  input.direction = lateDirection;
+  input.examplePack = pack;
+
+  const result = verifyVisualResult(input);
+  assert.equal(result.report.outcome, "failed");
+  assert.ok(result.findings.some(({ code }) => code === "visual-execution-trace-mismatch"));
+});
+
 test("publishes one versioned execution-trace contract without a second rule-selection schema", async () => {
   const manifest = JSON.parse(await readFile("domains/frontend/domain.manifest.json", "utf8")) as {
     artifacts: { schemas: string[] };

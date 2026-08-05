@@ -84,6 +84,8 @@ test("rejects a public blind-review screenshot substituted at the same path", as
     })),
   });
   const input = {
+    suite,
+    plan,
     results,
     reviewPackage: prepared.reviewPackage,
     privateMapping: prepared.privateMapping,

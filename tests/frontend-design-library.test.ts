@@ -40,6 +40,9 @@ const makeBrief = (input: { domain: string; surfaceType: string }): DesignBrief 
 
 test("loads all six rule families with unique versioned ids", async () => {
   const library = await loadDesignRuleLibrary();
+  assert.ok(library.rules.every((rule) => rule.schemaVersion === "1.1"));
+  const publishedSchema = JSON.parse(await readFile("domains/frontend/schemas/design-rule.schema.json", "utf8"));
+  assert.equal(publishedSchema.properties.schemaVersion.const, "1.1");
   assert.deepEqual([...new Set(library.rules.map(({ family }) => family))], [
     "typography", "layout", "responsive", "color", "state", "signature-move",
   ]);
@@ -209,7 +212,7 @@ test("rejects duplicate stable rule identifiers", async () => {
   }, /Duplicate design rule id/);
 });
 
-test("accepts a normative rule revision only with a semantic version", async () => {
+test("accepts a normative rule revision only with a semantic version and independent products", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "skillranger-rules-"));
   try {
     await cp("domains/frontend/rules", root, { recursive: true });
@@ -217,12 +220,26 @@ test("accepts a normative rule revision only with a semantic version", async () 
     const source = JSON.parse(await readFile(file, "utf8"));
     source.rules[0].version = "1.1.0";
     source.rules[0].constraints[0] = "The revised normative constraint is explicit.";
+    source.rules[0].provenance[0].productId = "linear";
+    source.rules[0].provenance[1].productId = "stripe";
     await writeFile(file, JSON.stringify(source), "utf8");
     const library = await loadDesignRuleLibrary(root);
     assert.equal(library.rules.find(({ id }) => id === "typography.role-contrast")?.version, "1.1.0");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("rejects a normative rule revision backed only by two extractors of one product", async () => {
+  await withRulesFixture(async (root) => {
+    const file = path.join(root, "typography.json");
+    const source = JSON.parse(await readFile(file, "utf8"));
+    source.rules[0].version = "1.1.0";
+    source.rules[0].constraints[0] = "A revision backed only by repeated Linear extraction.";
+    source.rules[0].provenance[0].productId = "linear";
+    source.rules[0].provenance[1].productId = "linear";
+    await writeFile(file, JSON.stringify(source), "utf8");
+  }, /two independent products/);
 });
 
 test("requires a version change for normative edits but permits wording and provenance corrections", async () => {
@@ -236,6 +253,8 @@ test("requires a version change for normative edits but permits wording and prov
     await assert.rejects(loadDesignRuleLibrary(root), /requires an explicit semantic version change/);
 
     source.rules[0].version = "1.1.0";
+    source.rules[0].provenance[0].productId = "linear";
+    source.rules[0].provenance[1].productId = "stripe";
     await writeFile(file, JSON.stringify(source), "utf8");
     await loadDesignRuleLibrary(root);
 

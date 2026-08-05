@@ -23,7 +23,7 @@ npm run eval:visual -- --plan --candidates tests/fixtures/visual-candidates.json
 npm run eval:visual -- --run --candidates candidates.json --command 'agent run "{{prompt}}" --output {{outputDir}}' --output results --json
 # Optional split layout: add --artifacts results/artifacts and use --output results/index.json
 npm run eval:visual -- --prepare-review --plan-file plan.json --results results/index.json --public-review-output review/public/package.json --private-mapping-output private/mapping.json --json
-npm run eval:visual -- --aggregate --results results/index.json --review-package review/public/package.json --private-mapping private/mapping.json --human-review reviews/alice.json,reviews/bob.json --output report.json --json
+npm run eval:visual -- --aggregate --plan-file plan.json --results results/index.json --review-package review/public/package.json --private-mapping private/mapping.json --human-review reviews/alice.json,reviews/bob.json --output report.json --json
 npm run eval:visual -- --calibrate --report report.json --candidate medium --output capability.json --json
 ```
 

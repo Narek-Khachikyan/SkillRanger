@@ -17,7 +17,8 @@ const persistResults = async (results: VisualBenchmarkRunResult[]) => {
 };
 
 const completedFixture = async () => {
-  const plan = generateVisualBenchmarkPlan({ suite: await loadVisualBenchmarkSuite(), candidates: [...visualCandidates] });
+  const suite = await loadVisualBenchmarkSuite();
+  const plan = generateVisualBenchmarkPlan({ suite, candidates: [...visualCandidates] });
   const root = await mkdtemp(path.join(os.tmpdir(), "visual-review-"));
   const publicReviewDir = path.join(root, "public");
   await mkdir(publicReviewDir, { recursive: true });
@@ -59,7 +60,7 @@ const completedFixture = async () => {
       return { pairId, scoresA: Object.fromEntries(visualCriteria.map((criterion) => [criterion, score("A")])) as any, scoresB: Object.fromEntries(visualCriteria.map((criterion) => [criterion, score("B")])) as any, preference: mapping.A.arm === "with-skillranger" ? "A" : "B", catastrophicA: catastrophic("A"), catastrophicB: catastrophic("B"), notes: [] };
     }),
   };
-  return { plan, results, publicReviewDir, ...prepared, review };
+  return { suite, plan, results, publicReviewDir, ...prepared, review };
 };
 
 const secondHumanReview = (review: VisualHumanReview): VisualHumanReview => ({
@@ -235,8 +236,32 @@ test("rejects a public screenshot replaced at the same path before aggregation",
   const screenshot = path.join(fixture.publicReviewDir, fixture.reviewPackage.pairs[0].screenshotsA[0]);
   await writeFile(screenshot, "substituted-rendered-pixels");
   assert.throws(
-    () => aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review), publicReviewDir: fixture.publicReviewDir }),
+    () => aggregateVisualBenchmark({ suite: fixture.suite, plan: fixture.plan, results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review), publicReviewDir: fixture.publicReviewDir }),
     /public review screenshot integrity mismatch/,
+  );
+});
+
+test("aggregation binds results to the supplied frozen plan", async () => {
+  const fixture = await completedFixture();
+  const foreignPlan = structuredClone(fixture.plan);
+  for (const entry of foreignPlan.entries) {
+    if (entry.capabilityCandidateId === "weak") entry.modelId = "provider/foreign@pinned";
+  }
+  assert.doesNotThrow(() => validateVisualBenchmarkPlan(foreignPlan));
+  assert.throws(
+    () => aggregateVisualBenchmark({ suite: fixture.suite, plan: foreignPlan, results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review), publicReviewDir: fixture.publicReviewDir }),
+    /does not match frozen plan/,
+  );
+});
+
+test("aggregation binds the supplied plan to the canonical frozen suite", async () => {
+  const fixture = await completedFixture();
+  const changedSuite = structuredClone(fixture.suite);
+  changedSuite.briefs[0].prompt += " Extra silently changed instruction.";
+  assert.deepEqual(validateVisualBenchmarkSuite(changedSuite), []);
+  assert.throws(
+    () => aggregateVisualBenchmark({ suite: changedSuite, plan: fixture.plan, results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review), publicReviewDir: fixture.publicReviewDir }),
+    /does not match the checked-in frozen suite/,
   );
 });
 
@@ -315,6 +340,8 @@ test("aggregation rejects foreign evidence even when the immutable result and ma
   mapped.resultDigest = computeVisualBenchmarkResultDigest(results[0]);
   assert.throws(
     () => aggregateVisualBenchmark({
+      suite: fixture.suite,
+      plan: fixture.plan,
       results,
       reviewPackage: fixture.reviewPackage,
       privateMapping,
@@ -334,13 +361,13 @@ test("validates every human review field and exact pair coverage", async () => {
   const stalePackage = structuredClone(fixture.reviewPackage); stalePackage.pairs[0].labelA = "option-stale";
   assert.ok(validateHumanReview(fixture.review, stalePackage).includes("public review package digest is invalid"));
   const partial = structuredClone(fixture.review); partial.judgments.pop();
-  assert.throws(() => aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: [partial, secondHumanReview(fixture.review)], publicReviewDir: fixture.publicReviewDir }), /Invalid human review.*cover every public pair/);
+  assert.throws(() => aggregateVisualBenchmark({ suite: fixture.suite, plan: fixture.plan, results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: [partial, secondHumanReview(fixture.review)], publicReviewDir: fixture.publicReviewDir }), /Invalid human review.*cover every public pair/);
 });
 
 test("computes exact quality, median, population variance, divergence, deltas, and operational rates", async () => {
   assert.equal(mean([1, 2, 3]), 2); assert.equal(median([4, 1, 3, 2]), 2.5); close(populationVariance([1, 3]), 1);
   const fixture = await completedFixture();
-  const report = aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review), publicReviewDir: fixture.publicReviewDir });
+  const report = aggregateVisualBenchmark({ suite: fixture.suite, plan: fixture.plan, results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review), publicReviewDir: fixture.publicReviewDir });
   assert.equal(report.metrics.runSlots, 96); close(report.metrics.meanQuality, .7); close(report.metrics.medianQuality, .7);
   close(report.metrics.pairwiseSkillRangerPreferenceShare, 1); close(report.metrics.withinConditionVariance, 0); close(report.metrics.repeatDesignAxisDivergence, 0);
   close(report.byArm["with-skillranger"].meanQuality, .8); close(report.byArm["without-skillranger"].meanQuality, .6); close(report.skillRangerDeltas.meanQuality, .2);
@@ -360,6 +387,8 @@ test("blocks complete rendered evidence when the benchmark command fails", async
     await persistResults(fixture.results);
     const refreshed = refreshFixtureContracts(fixture);
     const report = aggregateVisualBenchmark({
+      suite: refreshed.suite,
+      plan: refreshed.plan,
       results: refreshed.results,
       reviewPackage: refreshed.reviewPackage,
       privateMapping: refreshed.privateMapping,
@@ -377,16 +406,16 @@ test("candidate recipe success requires both repetitions to pass", async () => {
   target.verificationOutcome = "failed";
   await persistResults(fixture.results);
   const refreshed = refreshFixtureContracts(fixture);
-  const report = aggregateVisualBenchmark({ results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: aggregateReviews(refreshed.review), publicReviewDir: refreshed.publicReviewDir });
+  const report = aggregateVisualBenchmark({ suite: refreshed.suite, plan: refreshed.plan, results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: aggregateReviews(refreshed.review), publicReviewDir: refreshed.publicReviewDir });
   assert.equal(report.byCapability.medium.successfulRecipeIds.includes(target.recipeId), false);
 });
 
 test("rejects mismatched public/private mappings before aggregation", async () => {
   const fixture = await completedFixture();
   const forged = structuredClone(fixture.privateMapping); forged.pairs[0].A.modelId = "provider/forged@pinned";
-  assert.throws(() => aggregateVisualBenchmark({ results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: forged, reviews: aggregateReviews(fixture.review), publicReviewDir: fixture.publicReviewDir }), /run mapping mismatch/);
+  assert.throws(() => aggregateVisualBenchmark({ suite: fixture.suite, plan: fixture.plan, results: fixture.results, reviewPackage: fixture.reviewPackage, privateMapping: forged, reviews: aggregateReviews(fixture.review), publicReviewDir: fixture.publicReviewDir }), /run mapping mismatch/);
   const forgedResults = structuredClone(fixture.results); forgedResults[0].criticalFindings = 1;
-  assert.throws(() => aggregateVisualBenchmark({ results: forgedResults, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review), publicReviewDir: fixture.publicReviewDir }), /immutable benchmark result mismatch/);
+  assert.throws(() => aggregateVisualBenchmark({ suite: fixture.suite, plan: fixture.plan, results: forgedResults, reviewPackage: fixture.reviewPackage, privateMapping: fixture.privateMapping, reviews: aggregateReviews(fixture.review), publicReviewDir: fixture.publicReviewDir }), /immutable benchmark result mismatch/);
 });
 
 test("rejects llm judges and incomplete scores", () => {
@@ -401,6 +430,8 @@ test("accepts explicit abstention and requires two distinct complete human revie
   const abstaining = reviewWithCandidateWins(refreshed, refreshed.review, "human-1", 0, "abstain");
   assert.deepEqual(validateHumanReview(abstaining, refreshed.reviewPackage), []);
   const report = aggregateVisualBenchmark({
+    suite: refreshed.suite,
+    plan: refreshed.plan,
     results: refreshed.results,
     reviewPackage: refreshed.reviewPackage,
     privateMapping: refreshed.privateMapping,
@@ -412,6 +443,8 @@ test("accepts explicit abstention and requires two distinct complete human revie
   assert.equal(report.promotion.decisiveComparisons, 0);
   assert.ok(report.promotion.blockingReasons.some((reason) => /decisive/i.test(reason)));
   assert.throws(() => aggregateVisualBenchmark({
+    suite: refreshed.suite,
+    plan: refreshed.plan,
     results: refreshed.results,
     reviewPackage: refreshed.reviewPackage,
     privateMapping: refreshed.privateMapping,
@@ -419,6 +452,8 @@ test("accepts explicit abstention and requires two distinct complete human revie
     publicReviewDir: refreshed.publicReviewDir,
   }), /exactly two human reviews/);
   assert.throws(() => aggregateVisualBenchmark({
+    suite: refreshed.suite,
+    plan: refreshed.plan,
     results: refreshed.results,
     reviewPackage: refreshed.reviewPackage,
     privateMapping: refreshed.privateMapping,
@@ -442,7 +477,7 @@ test("uses equal reviewer weight and decisive-only preference at the 60 percent 
     reviewWithCandidateWins(refreshed, baseReview, "human-1", 48),
     sparse("human-2", 10, 10),
   ];
-  const passReport = aggregateVisualBenchmark({ results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: passing, publicReviewDir: refreshed.publicReviewDir });
+  const passReport = aggregateVisualBenchmark({ suite: refreshed.suite, plan: refreshed.plan, results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: passing, publicReviewDir: refreshed.publicReviewDir });
   assert.equal(passReport.promotion.candidateWins, 58);
   assert.equal(passReport.promotion.comparatorWins, 10);
   assert.equal(passReport.promotion.abstentions, 28);
@@ -454,7 +489,7 @@ test("uses equal reviewer weight and decisive-only preference at the 60 percent 
     reviewWithCandidateWins(refreshed, baseReview, "human-1", 48),
     sparse("human-2", 0, 1),
   ];
-  const failReport = aggregateVisualBenchmark({ results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: failing, publicReviewDir: refreshed.publicReviewDir });
+  const failReport = aggregateVisualBenchmark({ suite: refreshed.suite, plan: refreshed.plan, results: refreshed.results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews: failing, publicReviewDir: refreshed.publicReviewDir });
   assert.equal(failReport.promotion.candidateWins, 48);
   close(failReport.promotion.candidatePreferenceShare, (1 + 0) / 2);
   assert.equal(failReport.promotion.verdict, "blocked");
@@ -476,7 +511,7 @@ test("preserves every promotion blocker even when the analytical averages are st
     reviewWithCandidateWins(refreshed, refreshed.review, "human-2", 48),
   ];
   reviews[0].judgments[0].catastrophicA = true;
-  const report = aggregateVisualBenchmark({ results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews, publicReviewDir: refreshed.publicReviewDir });
+  const report = aggregateVisualBenchmark({ suite: refreshed.suite, plan: refreshed.plan, results, reviewPackage: refreshed.reviewPackage, privateMapping: refreshed.privateMapping, reviews, publicReviewDir: refreshed.publicReviewDir });
   assert.equal(report.promotion.verdict, "blocked");
   for (const expected of ["catastrophic", "hard-gate", "unverified", "critical", "false completion"]) {
     assert.ok(report.promotion.blockingReasons.some((reason) => reason.toLowerCase().includes(expected)), expected);

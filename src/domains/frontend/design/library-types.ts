@@ -76,6 +76,8 @@ export type DesignRuleProvenance = {
   page?: string;
   /** The public UI state when it is known. */
   state?: string;
+  /** Stable product identity used to distinguish cross-product recurrence from two extractors of one product. */
+  productId?: string;
   /** The date a curator reviewed the normalized observation. */
   reviewedAt?: string;
   /** The date the source observation was captured, when it is known. */
@@ -89,7 +91,7 @@ export type DesignRuleProvenance = {
 };
 
 export type DesignRule = {
-  schemaVersion: "1.0";
+  schemaVersion: "1.1";
   id: string;
   version: string;
   family: DesignRuleFamily;

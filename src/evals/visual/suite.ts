@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { packageRoot } from "../../paths.ts";
 import type { VisualBenchmarkBrief, VisualBenchmarkSuite, VisualCriterion } from "./types.ts";
@@ -34,6 +35,19 @@ export const loadVisualBenchmarkSuite = async (suitePath = defaultSuitePath): Pr
   const briefs = await Promise.all(manifest.briefs.map(async (entry) => typeof entry === "string"
     ? JSON.parse(await readFile(path.resolve(base, entry), "utf8")) as VisualBenchmarkBrief
     : entry));
+  const suite = { ...manifest, briefs } as VisualBenchmarkSuite;
+  const issues = validateVisualBenchmarkSuite(suite);
+  if (issues.length) throw new Error(`Invalid visual benchmark suite: ${issues.join("; ")}`);
+  return suite;
+};
+
+export const loadVisualBenchmarkSuiteSync = (suitePath = defaultSuitePath): VisualBenchmarkSuite => {
+  const resolved = path.resolve(suitePath);
+  const manifest = JSON.parse(readFileSync(resolved, "utf8")) as Omit<VisualBenchmarkSuite, "briefs"> & { briefs: Array<string | VisualBenchmarkBrief> };
+  const base = path.dirname(resolved);
+  const briefs = manifest.briefs.map((entry) => typeof entry === "string"
+    ? JSON.parse(readFileSync(path.resolve(base, entry), "utf8")) as VisualBenchmarkBrief
+    : entry);
   const suite = { ...manifest, briefs } as VisualBenchmarkSuite;
   const issues = validateVisualBenchmarkSuite(suite);
   if (issues.length) throw new Error(`Invalid visual benchmark suite: ${issues.join("; ")}`);

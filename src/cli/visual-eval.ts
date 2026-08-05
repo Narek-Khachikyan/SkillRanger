@@ -56,13 +56,16 @@ export const handleVisualEvalCommand = async (input: { command?: string; flags: 
     result = { publicReviewOutput: path.resolve(publicOutput), privateMappingOutput: path.resolve(privateOutput), pairs: prepared.reviewPackage.pairs.length };
   }
   if (actions[0] === "aggregate") {
-    const index = await readJson<{ runs: VisualBenchmarkRunResult[] }>(required(flags, "results"));
     const reviewPackagePath = required(flags, "review-package");
+    const privateMappingPath = required(flags, "private-mapping");
+    await assertReviewOutputsSeparated(reviewPackagePath, privateMappingPath);
+    const plan = await readJson<VisualBenchmarkPlan>(required(flags, "plan-file"));
+    const index = await readJson<{ runs: VisualBenchmarkRunResult[] }>(required(flags, "results"));
     const reviewPackage = await readJson<any>(reviewPackagePath);
-    const privateMapping = await readJson<any>(required(flags, "private-mapping"));
+    const privateMapping = await readJson<any>(privateMappingPath);
     const reviewPaths = required(flags, "human-review").split(",").filter(Boolean);
     const reviews = await Promise.all(reviewPaths.map((file) => readJson<VisualHumanReview>(file)));
-    result = aggregateVisualBenchmark({ results: index.runs, reviewPackage, privateMapping, reviews, publicReviewDir: path.dirname(path.resolve(reviewPackagePath)) });
+    result = aggregateVisualBenchmark({ suite, plan, results: index.runs, reviewPackage, privateMapping, reviews, publicReviewDir: path.dirname(path.resolve(reviewPackagePath)) });
     if (typeof flags.output === "string") await outputJson(flags.output, result);
   }
   if (actions[0] === "calibrate") {

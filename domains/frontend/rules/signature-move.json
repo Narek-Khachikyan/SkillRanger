@@ -3,7 +3,7 @@
   "family": "signature-move",
   "rules": [
     {
-      "schemaVersion": "1.0", "id": "signature.product-data-grammar", "version": "1.0.0", "family": "signature-move", "name": "Product Data Grammar",
+      "schemaVersion": "1.1", "id": "signature.product-data-grammar", "version": "1.0.0", "family": "signature-move", "name": "Product Data Grammar",
       "recipeIds": ["*"], "preconditions": ["A real product object, lifecycle, evidence type, or content structure is known."],
       "intent": "Derive one memorable visual behavior from real product data instead of generic decoration.",
       "constraints": ["Tie the move to a recurring product meaning.", "Use the move consistently and sparingly."],
@@ -16,7 +16,7 @@
       ]
     },
     {
-      "schemaVersion": "1.0", "id": "signature.conversion-proof", "version": "1.0.0", "family": "signature-move", "name": "Conversion Proof Rhythm",
+      "schemaVersion": "1.1", "id": "signature.conversion-proof", "version": "1.0.0", "family": "signature-move", "name": "Conversion Proof Rhythm",
       "recipeIds": ["marketing-landing", "e-commerce", "consumer-discovery", "editorial-content"], "preconditions": ["Supplied proof or concrete product evidence supports a claim or choice."],
       "intent": "Turn the claim-to-evidence-to-action sequence into the composition rhythm.",
       "constraints": ["Use only supplied proof.", "Keep evidence adjacent to the claim or choice it supports."],
@@ -29,7 +29,7 @@
       ]
     },
     {
-      "schemaVersion": "1.0", "id": "signature.repeated-action-feedback", "version": "1.0.0", "family": "signature-move", "name": "Repeated Action Feedback",
+      "schemaVersion": "1.1", "id": "signature.repeated-action-feedback", "version": "1.0.0", "family": "signature-move", "name": "Repeated Action Feedback",
       "recipeIds": ["mobile-consumer-app", "saas-workspace", "operational-command-center", "developer-tool"], "preconditions": ["Users repeat a meaningful action on a primary object."],
       "intent": "Make immediate state feedback for the repeated action the recognizable product behavior.",
       "constraints": ["Feedback must reveal the resulting object state.", "Keep duration and motion proportional to action frequency."],

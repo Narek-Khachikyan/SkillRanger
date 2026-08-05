@@ -169,6 +169,10 @@ test("fails stale, incomplete, or mismatched evidence", () => {
   input.visualRun.policyDigest = digestDesignExecutionPolicy(input.policy);
   const result = verifyVisualResult(input);
   assert.deepEqual(result.findings.map(({ code }) => code), [
+    "direction-rule-selection-missing",
+    "visual-execution-example-pack-missing",
+    "visual-execution-trace-missing",
+    "visual-run-trace-missing",
     "visual-evidence-stale",
     "visual-variant-evidence-mismatch",
     "visual-evidence-source-stale",
@@ -177,13 +181,15 @@ test("fails stale, incomplete, or mismatched evidence", () => {
   assert.equal(result.report.outcome, "failed");
 });
 
-test("verifies only a complete fresh correction cycle", () => {
+test("does not certify a legacy correction cycle without a material trace", () => {
   const result = verifyVisualResult(makeVerificationInput({
     initialEvidence: makeBundle({ id: "e1", variantId: "v1", sourceIdentity: "git:abc" }),
     recheckEvidence: makeBundle({ id: "e2", variantId: "v1", sourceIdentity: "git:def" }),
   }));
-  assert.equal(result.findings.length, 0);
-  assert.equal(result.report.outcome, "verified");
+  assert.equal(result.report.outcome, "failed");
+  assert.ok(result.findings.some(({ code }) => code === "direction-rule-selection-missing"));
+  assert.ok(result.findings.some(({ code }) => code === "visual-execution-trace-missing"));
+  assert.ok(result.findings.some(({ code }) => code === "visual-run-trace-missing"));
   assert.equal(result.report.evidence.filter(({ kind }) => kind === "screenshot").length, 12);
   assert.ok(result.report.evidence.some(({ kind, description }) =>
     kind === "visual-critique" && description.includes("host-attested actor separation")));

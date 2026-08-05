@@ -702,6 +702,8 @@ export const evaluateReleaseHandoff = (input: ReleaseHandoffEvaluationInput): Re
       const capabilityIssues = validateCapabilityRecord(input.visual.capabilityRecord);
       visualReasons.push(...capabilityIssues.map((issue) => `capability record: ${issue}`));
       const aggregate = aggregateVisualBenchmark({
+        suite: input.visual.suite,
+        plan: input.visual.plan,
         results: input.visual.results,
         reviewPackage: input.visual.reviewPackage,
         privateMapping: input.visual.privateMapping,

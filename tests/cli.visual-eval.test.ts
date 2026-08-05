@@ -84,6 +84,21 @@ test("eval:visual prevents private mapping inside a public tree through symlink 
   await assert.rejects(() => cli(["--prepare-review", "--plan-file", plan, "--results", results, "--public-review-output", path.join(publicDir, "package.json"), "--private-mapping-output", path.join(alias, "private.json")]), (error: any) => /outside the public review tree/.test(error.stderr));
 });
 
+test("eval:visual aggregate prevents a private mapping inside the public review tree", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "visual-cli-aggregate-separation-"));
+  const publicDir = path.join(root, "public");
+  const { mkdir } = await import("node:fs/promises");
+  await mkdir(publicDir);
+  const reviewPackage = path.join(publicDir, "package.json");
+  const privateMapping = path.join(publicDir, "private.json");
+  await writeFile(reviewPackage, "{}");
+  await writeFile(privateMapping, "{}");
+  await assert.rejects(
+    () => cli(["--aggregate", "--plan-file", path.join(root, "plan.json"), "--results", path.join(root, "results.json"), "--review-package", reviewPackage, "--private-mapping", privateMapping, "--human-review", path.join(root, "review.json")]),
+    (error: any) => /outside the public review tree/.test(error.stderr),
+  );
+});
+
 test("eval:visual runs, prepares, and aggregates runner-produced operational evidence end to end", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "visual-cli-e2e-"));
   const agent = path.join(root, "agent.cjs");
@@ -99,11 +114,11 @@ test("eval:visual runs, prepares, and aggregates runner-produced operational evi
     "fs.writeFileSync(path.join(d,'run-metadata.json'),JSON.stringify({schemaVersion:'1.0',hardGateFailed:false,criticalFindings:0,repairIterations:1,verificationOutcome:'verified',completionClaimed:true}));",
     "if (runId !== target) process.exit(0);",
     "process.on('SIGTERM', () => process.exit(0));",
-    "setTimeout(() => {}, 1000);",
+    "setTimeout(() => {}, 10000);",
   ].join("\n"));
   const timeoutResults = path.join(root, "timeout-results.json");
   const timeoutTarget = resultIndex.runs[0].runId;
-  await cli(["--run", "--candidates", "tests/fixtures/visual-candidates.json", "--command", `${process.execPath} ${timeoutAgent} {{outputDir}} ${timeoutTarget} {{runId}}`, "--artifacts", path.join(root, "timeout-artifacts"), "--output", timeoutResults, "--timeout", "250", "--json"]);
+  await cli(["--run", "--candidates", "tests/fixtures/visual-candidates.json", "--command", `${process.execPath} ${timeoutAgent} {{outputDir}} ${timeoutTarget} {{runId}}`, "--artifacts", path.join(root, "timeout-artifacts"), "--output", timeoutResults, "--timeout", "2000", "--json"]);
   const timeoutResult = JSON.parse(await readFile(timeoutResults, "utf8")).runs[0];
   assert.equal(timeoutResult.runId, timeoutTarget);
   assert.equal(timeoutResult.exitCode, null);
@@ -118,7 +133,7 @@ test("eval:visual runs, prepares, and aggregates runner-produced operational evi
   assert.equal(mappingByPair.size, 48);
   const reviewPath = path.join(root, "review.json"); const secondReviewPath = path.join(root, "review-2.json"); const reportPath = path.join(root, "report.json");
   await writeFile(reviewPath, JSON.stringify(review)); await writeFile(secondReviewPath, JSON.stringify({ ...review, reviewerId: "human-e2e-2" }));
-  await cli(["--aggregate", "--results", results, "--review-package", publicPackage, "--private-mapping", privateMapping, "--human-review", `${reviewPath},${secondReviewPath}`, "--output", reportPath, "--json"]);
+  await cli(["--aggregate", "--plan-file", plan, "--results", results, "--review-package", publicPackage, "--private-mapping", privateMapping, "--human-review", `${reviewPath},${secondReviewPath}`, "--output", reportPath, "--json"]);
   const report = JSON.parse(await readFile(reportPath, "utf8")); assert.equal(report.metrics.runSlots, 96); assert.equal(report.metrics.verificationSuccessRate, 1); assert.equal(report.metrics.meanRepairIterations, 1); assert.equal(report.promotion.verdict, "promotable");
   const capabilityPath = path.join(root, "capability.json");
   await cli(["--calibrate", "--report", reportPath, "--candidate", "medium", "--output", capabilityPath, "--json"]);
@@ -145,7 +160,7 @@ test("eval:visual runs, prepares, and aggregates runner-produced operational evi
     { name: "timeout", exitCode: timeoutResult.exitCode, signal: timeoutResult.signal, expected: /termination signal SIGTERM/ },
   ] as const) {
     await setFirstResultExecutionStatus(status.exitCode, status.signal);
-    await cli(["--aggregate", "--results", results, "--review-package", publicPackage, "--private-mapping", privateMapping, "--human-review", `${reviewPath},${secondReviewPath}`, "--output", reportPath, "--json"]);
+    await cli(["--aggregate", "--plan-file", plan, "--results", results, "--review-package", publicPackage, "--private-mapping", privateMapping, "--human-review", `${reviewPath},${secondReviewPath}`, "--output", reportPath, "--json"]);
     const failedReport = JSON.parse(await readFile(reportPath, "utf8"));
     assert.equal(failedReport.promotion.verdict, "blocked", `${status.name} must block aggregation`);
     assert.equal(failedReport.metrics.verificationSuccessRate, 95 / 96, `${status.name} must not count as a successful verification`);
@@ -156,10 +171,10 @@ test("eval:visual runs, prepares, and aggregates runner-produced operational evi
     assert.ok(handoff.gates.visual.blockingReasons.some((reason: string) => status.expected.test(reason)), `${status.name} must block release certification`);
   }
   await setFirstResultExecutionStatus(0, null);
-  await cli(["--aggregate", "--results", results, "--review-package", publicPackage, "--private-mapping", privateMapping, "--human-review", `${reviewPath},${secondReviewPath}`, "--output", reportPath, "--json"]);
+  await cli(["--aggregate", "--plan-file", plan, "--results", results, "--review-package", publicPackage, "--private-mapping", privateMapping, "--human-review", `${reviewPath},${secondReviewPath}`, "--output", reportPath, "--json"]);
   await writeFile(path.join(root, "public", publicValue.pairs[0].screenshotsA[0]), "substituted-rendered-pixels");
   await assert.rejects(
-    () => cli(["--aggregate", "--results", results, "--review-package", publicPackage, "--private-mapping", privateMapping, "--human-review", `${reviewPath},${secondReviewPath}`, "--output", path.join(root, "substituted-report.json"), "--json"]),
+    () => cli(["--aggregate", "--plan-file", plan, "--results", results, "--review-package", publicPackage, "--private-mapping", privateMapping, "--human-review", `${reviewPath},${secondReviewPath}`, "--output", path.join(root, "substituted-report.json"), "--json"]),
     (error: any) => /public review screenshot integrity mismatch/.test(error.stderr),
   );
   const handoffPath = path.join(root, "release-handoff.json");

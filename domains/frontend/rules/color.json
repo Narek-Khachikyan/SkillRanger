@@ -3,7 +3,7 @@
   "family": "color",
   "rules": [
     {
-      "schemaVersion": "1.0", "id": "color.semantic-roles", "version": "1.0.0", "family": "color", "name": "Semantic Color Roles",
+      "schemaVersion": "1.1", "id": "color.semantic-roles", "version": "1.0.0", "family": "color", "name": "Semantic Color Roles",
       "recipeIds": ["*"], "preconditions": ["Surface, text, action, border, and status roles are identified."],
       "intent": "Assign color to stable semantic roles so hierarchy and state survive theme and viewport changes.",
       "constraints": ["Name colors by role rather than pigment.", "Use accent color only for meaningful emphasis or action."],
@@ -16,7 +16,7 @@
       ]
     },
     {
-      "schemaVersion": "1.0", "id": "color.commerce-trust", "version": "1.0.0", "family": "color", "name": "Commerce Trust",
+      "schemaVersion": "1.1", "id": "color.commerce-trust", "version": "1.0.0", "family": "color", "name": "Commerce Trust",
       "recipeIds": ["e-commerce", "marketing-landing", "consumer-discovery"], "preconditions": ["Price, availability, fulfillment, or supplied proof affects commitment."],
       "intent": "Use restrained semantic color to clarify product evidence and commitment state.",
       "constraints": ["Keep price and fulfillment readable without promotional color noise.", "Reserve warning color for actual unavailability or recovery."],
@@ -29,7 +29,7 @@
       ]
     },
     {
-      "schemaVersion": "1.0", "id": "color.operational-status", "version": "1.0.0", "family": "color", "name": "Operational Status",
+      "schemaVersion": "1.1", "id": "color.operational-status", "version": "1.0.0", "family": "color", "name": "Operational Status",
       "recipeIds": ["operational-command-center", "developer-tool", "saas-workspace", "mobile-consumer-app"], "preconditions": ["Real lifecycle, exception, permission, or connectivity states exist."],
       "intent": "Map operational color to real state severity and recovery priority.",
       "constraints": ["Use a finite documented status palette.", "Do not apply severe color to neutral selection or decoration."],

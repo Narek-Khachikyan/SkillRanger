@@ -1,9 +1,10 @@
 import { lstatSync, readFileSync } from "node:fs";
 import { isCompleteVisualOperationalEvidence, isSuccessfulVisualBenchmarkExecution, visualBenchmarkExecutionFailureReason } from "./operational.ts";
-import { visualCriteria } from "./suite.ts";
+import { loadVisualBenchmarkSuiteSync, validateVisualBenchmarkSuite, visualCriteria } from "./suite.ts";
 import { assertVisualBenchmarkEvidence } from "./evidence.ts";
 import { assertPublicReviewScreenshotBindings, canonicalJson, computeVisualBenchmarkResultDigest, computeVisualBlindReviewPackageDigest, isOpaqueReviewLabel, validateHumanReview, type VisualBlindReviewMapping, type VisualBlindReviewPackage } from "./review.ts";
-import type { VisualBenchmarkMetricSet, VisualBenchmarkReport, VisualBenchmarkRunResult, VisualCandidateMetricSet, VisualHumanReview, VisualPromotionVerdict } from "./types.ts";
+import { validateVisualBenchmarkPlan } from "./runner.ts";
+import type { VisualBenchmarkMetricSet, VisualBenchmarkPlan, VisualBenchmarkPlanEntry, VisualBenchmarkReport, VisualBenchmarkRunResult, VisualBenchmarkSuite, VisualCandidateMetricSet, VisualHumanReview, VisualPromotionVerdict } from "./types.ts";
 
 export const mean = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
 export const median = (values: number[]) => { if (!values.length) return 0; const sorted = [...values].sort((a, b) => a - b); const middle = Math.floor(sorted.length / 2); return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2; };
@@ -14,6 +15,43 @@ const exactKeys = (value: Record<string, unknown>, keys: string[]) => {
 };
 const pathIsUnsafe = (value: string) => value.startsWith("/") || value.split(/[\\/]/).includes("..");
 const digestPattern = /^[a-f0-9]{64}$/;
+const checkedInFrozenSuite = loadVisualBenchmarkSuiteSync();
+const planIdentityFields = ["runId", "briefId", "recipeId", "capabilityCandidateId", "modelId", "commandProfile", "commandProfileDigest", "arm", "repetition", "prompt", "fixture", "route"] as const satisfies readonly (keyof VisualBenchmarkPlanEntry)[];
+const assertPlanMatchesFrozenSuite = (suite: VisualBenchmarkSuite, plan: VisualBenchmarkPlan) => {
+  const suiteIssues = validateVisualBenchmarkSuite(suite);
+  if (suiteIssues.length > 0) throw new Error(`invalid frozen visual benchmark suite: ${suiteIssues.join("; ")}`);
+  if (canonicalJson(suite) !== canonicalJson(checkedInFrozenSuite)) {
+    throw new Error("visual benchmark suite does not match the checked-in frozen suite");
+  }
+  if (plan.benchmarkVersion !== suite.version
+    || plan.skillRangerVersion !== suite.skillRangerVersion
+    || plan.skillRangerChecksum !== suite.skillRangerChecksum) {
+    throw new Error("benchmark plan does not match frozen suite identity");
+  }
+  const briefs = new Map(suite.briefs.map((brief) => [brief.id, brief]));
+  for (const entry of plan.entries) {
+    const brief = briefs.get(entry.briefId);
+    if (!brief || entry.recipeId !== brief.recipeId || entry.prompt !== brief.prompt
+      || entry.fixture !== brief.fixture || entry.route !== brief.route) {
+      throw new Error(`benchmark plan does not match frozen suite brief: ${entry.briefId}`);
+    }
+  }
+};
+const assertResultsMatchFrozenPlan = (plan: VisualBenchmarkPlan, results: VisualBenchmarkRunResult[]) => {
+  validateVisualBenchmarkPlan(plan);
+  if (results.length !== plan.entries.length) throw new Error("aggregate results must cover every frozen plan slot exactly once");
+  const resultsByRunId = new Map(results.map((result) => [result.runId, result]));
+  if (resultsByRunId.size !== results.length) throw new Error("aggregate results contain duplicate run ids");
+  for (const entry of plan.entries) {
+    const result = resultsByRunId.get(entry.runId);
+    if (!result || planIdentityFields.some((field) => result[field] !== entry[field])
+      || result.benchmarkVersion !== plan.benchmarkVersion
+      || result.skillRangerVersion !== plan.skillRangerVersion
+      || result.skillRangerChecksum !== plan.skillRangerChecksum) {
+      throw new Error(`benchmark result does not match frozen plan: ${entry.runId}`);
+    }
+  }
+};
 const assertImmutableResults = (results: VisualBenchmarkRunResult[]) => {
   for (const result of results) {
     assertVisualBenchmarkEvidence(result);
@@ -65,7 +103,7 @@ const metricSet = (records: ScoredRun[], preferenceShare = 0): VisualBenchmarkMe
   };
 };
 
-const assertPublishedContracts = (input: { results: VisualBenchmarkRunResult[]; reviewPackage: VisualBlindReviewPackage; privateMapping: VisualBlindReviewMapping; publicReviewDir: string }) => {
+const assertPublishedContracts = (input: { suite: VisualBenchmarkSuite; plan: VisualBenchmarkPlan; results: VisualBenchmarkRunResult[]; reviewPackage: VisualBlindReviewPackage; privateMapping: VisualBlindReviewMapping; publicReviewDir: string }) => {
   if (!input.reviewPackage || typeof input.reviewPackage !== "object" || Array.isArray(input.reviewPackage)
     || !exactKeys(input.reviewPackage as unknown as Record<string, unknown>, ["schemaVersion", "benchmarkVersion", "reviewPackageDigest", "criteria", "pairs"])
     || !input.privateMapping || typeof input.privateMapping !== "object" || Array.isArray(input.privateMapping)
@@ -75,6 +113,9 @@ const assertPublishedContracts = (input: { results: VisualBenchmarkRunResult[]; 
   if (typeof input.reviewPackage.reviewPackageDigest !== "string" || !digestPattern.test(input.reviewPackage.reviewPackageDigest)
     || input.reviewPackage.reviewPackageDigest !== computeVisualBlindReviewPackageDigest(input.reviewPackage)) throw new Error("invalid public review package digest");
   if (input.reviewPackage.benchmarkVersion !== input.privateMapping.benchmarkVersion) throw new Error("blind review benchmarkVersion mismatch");
+  assertPlanMatchesFrozenSuite(input.suite, input.plan);
+  assertResultsMatchFrozenPlan(input.plan, input.results);
+  if (input.plan.benchmarkVersion !== input.reviewPackage.benchmarkVersion) throw new Error("benchmark plan identity does not match public review package");
   if (input.results.length !== 96 || input.reviewPackage.pairs.length !== 48 || input.privateMapping.pairs.length !== 48) throw new Error("aggregate requires 96 results and 48 complete pairs");
   for (const result of input.results) {
     if (result.operationalEvidence !== "complete" || !isCompleteVisualOperationalEvidence(result)) throw new Error(`incomplete operational evidence for ${result.runId}`);
@@ -138,7 +179,7 @@ const assertPublishedContracts = (input: { results: VisualBenchmarkRunResult[]; 
   assertPublicReviewScreenshotBindings(input);
 };
 
-export const aggregateVisualBenchmark = (input: { results: VisualBenchmarkRunResult[]; reviewPackage: VisualBlindReviewPackage; privateMapping: VisualBlindReviewMapping; reviews: VisualHumanReview[]; publicReviewDir: string }): VisualBenchmarkReport => {
+export const aggregateVisualBenchmark = (input: { suite: VisualBenchmarkSuite; plan: VisualBenchmarkPlan; results: VisualBenchmarkRunResult[]; reviewPackage: VisualBlindReviewPackage; privateMapping: VisualBlindReviewMapping; reviews: VisualHumanReview[]; publicReviewDir: string }): VisualBenchmarkReport => {
   assertPublishedContracts(input);
   if (!Array.isArray(input.reviews) || input.reviews.length !== 2) throw new Error("exactly two human reviews are required");
   const reviewerIds = new Set<string>();

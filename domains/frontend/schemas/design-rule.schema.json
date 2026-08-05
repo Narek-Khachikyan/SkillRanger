@@ -4,7 +4,7 @@
   "type": "object",
   "required": ["schemaVersion", "id", "version", "family", "name", "recipeIds", "preconditions", "intent", "constraints", "rolesConsumed", "responsiveBehavior", "accessibility", "antiPatterns", "verification", "provenance"],
   "properties": {
-    "schemaVersion": { "const": "1.0" },
+    "schemaVersion": { "const": "1.1" },
     "id": { "enum": [
       "typography.role-contrast", "typography.editorial-product", "typography.dense-workspace",
       "layout.action-evidence", "layout.list-detail", "layout.commerce-comparison",
@@ -39,6 +39,7 @@
           "source": { "type": "string", "minLength": 1 },
           "page": { "type": "string", "minLength": 1 },
           "state": { "type": "string", "minLength": 1 },
+          "productId": { "type": "string", "minLength": 1 },
           "reviewedAt": { "type": "string", "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
           "capturedAt": { "type": "string", "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
           "extractionMethod": { "type": "string", "minLength": 1 },

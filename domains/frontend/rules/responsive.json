@@ -3,7 +3,7 @@
   "family": "responsive",
   "rules": [
     {
-      "schemaVersion": "1.0", "id": "responsive.recompose-not-stack", "version": "1.0.0", "family": "responsive", "name": "Recompose, Not Stack",
+      "schemaVersion": "1.1", "id": "responsive.recompose-not-stack", "version": "1.0.0", "family": "responsive", "name": "Recompose, Not Stack",
       "recipeIds": ["*"], "preconditions": ["Desktop and mobile primary-flow priorities are defined."],
       "intent": "Transform composition around the primary task instead of mechanically stacking desktop regions.",
       "constraints": ["Preserve the primary action and required state context.", "Remove simultaneous regions only with an explicit navigation replacement."],
@@ -16,7 +16,7 @@
       ]
     },
     {
-      "schemaVersion": "1.0", "id": "responsive.list-detail-drill-in", "version": "1.0.0", "family": "responsive", "name": "List Detail Drill-in",
+      "schemaVersion": "1.1", "id": "responsive.list-detail-drill-in", "version": "1.0.0", "family": "responsive", "name": "List Detail Drill-in",
       "recipeIds": ["operational-command-center", "developer-tool", "saas-workspace"], "preconditions": ["A wide viewport presents list and detail simultaneously."],
       "intent": "Preserve list-detail identity through explicit mobile drill-in and return behavior.",
       "constraints": ["Retain the selected object's label in detail.", "Restore the prior list position on return."],
@@ -29,7 +29,7 @@
       ]
     },
     {
-      "schemaVersion": "1.0", "id": "responsive.mobile-thumb-zone", "version": "1.0.0", "family": "responsive", "name": "Mobile Thumb Zone",
+      "schemaVersion": "1.1", "id": "responsive.mobile-thumb-zone", "version": "1.0.0", "family": "responsive", "name": "Mobile Thumb Zone",
       "recipeIds": ["mobile-consumer-app", "e-commerce"], "preconditions": ["A repeated mobile action is central to the product loop."],
       "intent": "Keep the repeated action reachable and pair it with immediate feedback.",
       "constraints": ["Place the primary repeated action in a reachable lower region.", "Keep destructive or unrelated actions spatially separate."],
