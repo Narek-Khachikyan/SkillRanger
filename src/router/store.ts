@@ -89,6 +89,8 @@ const digestValue = (value: unknown, at: string) => {
   return result;
 };
 
+const canonicalIdPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
+
 const dateTime = (value: unknown, at: string) => {
   const result = string(value, at);
   if (!dateTimePattern.test(result) || Number.isNaN(Date.parse(result))) return fail(`${at} must be a valid date-time.`);
@@ -123,6 +125,41 @@ const validateDomain = (value: unknown, at: string) => {
   stringArray(record.reasons, `${at}.reasons`);
   if (!Array.isArray(record.evidence)) fail(`${at}.evidence must be an array.`);
   (record.evidence as unknown[]).forEach((item, index) => validateEvidence(item, `${at}.evidence[${index}]`));
+};
+
+const validateRoutingProposalProjection = (value: unknown, at: string) => {
+  const record = keys(value, ["schemaVersion", "catalogDigest", "proposalDigest", "interpretation", "nominations", "rejections"], ["ambiguity"], at);
+  if (record.schemaVersion !== "routing-proposal/1.0") fail(`${at}.schemaVersion is invalid.`);
+  digestValue(record.catalogDigest, `${at}.catalogDigest`);
+  digestValue(record.proposalDigest, `${at}.proposalDigest`);
+  const interpretation = keys(record.interpretation, ["domains", "actions", "artifactTypes", "intentTags", "technologyTags", "qualityGoals"], [], `${at}.interpretation`);
+  for (const field of ["domains", "actions", "artifactTypes", "intentTags", "technologyTags", "qualityGoals"]) {
+    const values = uniqueStringArray(interpretation[field], `${at}.interpretation.${field}`);
+    if (values.length > 32 || values.some((id) => !canonicalIdPattern.test(id))) fail(`${at}.interpretation.${field} contains an invalid canonical ID.`);
+  }
+  if (!Array.isArray(record.nominations) || record.nominations.length > 16) fail(`${at}.nominations must contain at most 16 items.`);
+  (record.nominations as unknown[]).forEach((item, index) => {
+    const nomination = keys(item, ["skillId", "role", "confidence", "evidenceDigest"], [], `${at}.nominations[${index}]`);
+    const skillId = string(nomination.skillId, `${at}.nominations[${index}].skillId`, true);
+    if (!canonicalIdPattern.test(skillId)) fail(`${at}.nominations[${index}].skillId is not canonical.`);
+    enumeration(nomination.role, new Set(["primary", "companion", "verification"]), `${at}.nominations[${index}].role`);
+    if (typeof nomination.confidence !== "number" || !Number.isFinite(nomination.confidence) || nomination.confidence < 0 || nomination.confidence > 1) fail(`${at}.nominations[${index}].confidence is invalid.`);
+    digestValue(nomination.evidenceDigest, `${at}.nominations[${index}].evidenceDigest`);
+  });
+  if (!Array.isArray(record.rejections) || record.rejections.length > 16) fail(`${at}.rejections must contain at most 16 items.`);
+  (record.rejections as unknown[]).forEach((item, index) => {
+    const rejection = keys(item, ["reasonCode"], ["skillId"], `${at}.rejections[${index}]`);
+    string(rejection.reasonCode, `${at}.rejections[${index}].reasonCode`, true);
+    if (rejection.skillId !== undefined) {
+      const skillId = string(rejection.skillId, `${at}.rejections[${index}].skillId`, true);
+      if (!canonicalIdPattern.test(skillId)) fail(`${at}.rejections[${index}].skillId is not canonical.`);
+    }
+  });
+  if (record.ambiguity !== undefined) {
+    const ambiguity = keys(record.ambiguity, ["primarySkillIds"], [], `${at}.ambiguity`);
+    const ids = uniqueStringArray(ambiguity.primarySkillIds, `${at}.ambiguity.primarySkillIds`);
+    if (ids.length < 2 || ids.length > 3 || ids.some((id) => !canonicalIdPattern.test(id))) fail(`${at}.ambiguity.primarySkillIds is invalid.`);
+  }
 };
 
 const validateTaskProfile = (value: unknown, at: string) => {
@@ -226,7 +263,7 @@ export function assertValidRouterRun(value: unknown): asserts value is RouterRun
   digestValue(record.projectIdentity, "routerRun.projectIdentity");
   validateTaskProfile(record.taskProfile, "routerRun.taskProfile");
 
-  const routing = keys(record.routing, ["targetAgent", "domains", "deterministicKey", "routerAlgorithmVersion", "routingDate", "fingerprintDigest", "registryDigest", "configDigest"], [], "routerRun.routing");
+  const routing = keys(record.routing, ["targetAgent", "domains", "deterministicKey", "routerAlgorithmVersion", "routingDate", "fingerprintDigest", "registryDigest", "configDigest"], ["routingProposal"], "routerRun.routing");
   string(routing.targetAgent, "routerRun.routing.targetAgent", true);
   if (!Array.isArray(routing.domains)) fail("routerRun.routing.domains must be an array.");
   (routing.domains as unknown[]).forEach((item, index) => validateDomain(item, `routerRun.routing.domains[${index}]`));
@@ -236,6 +273,7 @@ export function assertValidRouterRun(value: unknown): asserts value is RouterRun
   digestValue(routing.fingerprintDigest, "routerRun.routing.fingerprintDigest");
   digestValue(routing.registryDigest, "routerRun.routing.registryDigest");
   digestValue(routing.configDigest, "routerRun.routing.configDigest");
+  if (routing.routingProposal !== undefined) validateRoutingProposalProjection(routing.routingProposal, "routerRun.routing.routingProposal");
   validateSelections(record.selections, "routerRun.selections");
 
   if (!Array.isArray(record.sourceInventory)) fail("routerRun.sourceInventory must be an array.");

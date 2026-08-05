@@ -1,3 +1,9 @@
+import type {
+  RoutingProposalInput,
+  RoutingProposalProjection,
+  RoutingProposalRefresh,
+} from "./routing-proposal.ts";
+
 export const taskActionIds = [
   "configure",
   "create",
@@ -109,6 +115,7 @@ export type RouterRoutingSnapshot = {
   fingerprintDigest: string;
   registryDigest: string;
   configDigest: string;
+  routingProposal?: RoutingProposalProjection;
 };
 
 export type RouterReadReceipt = {
@@ -235,6 +242,7 @@ export type PrepareTaskCoreInput = {
   routingDate?: string;
   rawIntentPersistence?: "disabled" | "explicitly-authorized";
   semanticHints?: SemanticHintsInput;
+  routingProposal?: RoutingProposalInput;
 };
 
 export type TriggerParseResult =
@@ -277,6 +285,10 @@ export type PrepareTaskCommon = {
 };
 
 export type PrepareTaskResult =
+  | (RoutingProposalRefresh & {
+      ok: true;
+      schemaVersion: "router-result/1.0";
+    })
   | (PrepareTaskCommon & {
       status: "prepared";
       run: {
@@ -348,6 +360,7 @@ export type DeterministicRoutingProjection = {
   vocabularyDigest: string;
   routingRegistryDigest: string;
   configDigest: string;
+  routingProposalDigest?: string;
   domains: DomainCandidate[];
   outcome: DeterministicRoutingOutcome;
   warnings: string[];
@@ -378,6 +391,7 @@ export type RouterToolErrorCode =
   | "raw-intent-confirmation-required"
   | "routing-integrity"
   | "semantic-hint-invalid"
+  | "routing-proposal-invalid"
   | "run-not-found"
   | "run-integrity";
 

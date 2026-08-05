@@ -28,6 +28,7 @@ export const skillCatalogLimits = {
   maxItems: 64,
   maxBytes: 256_000,
   maxTokenBytes: 8_192,
+  receiptTtlMs: 15 * 60 * 1000,
 } as const;
 
 export type CatalogErrorCode =
@@ -84,6 +85,12 @@ export type SkillCatalogPage = {
   catalogReceipt?: string;
 };
 
+export type SkillCatalogSnapshot = {
+  domains: SkillCatalogDomain[];
+  skills: SkillCatalogCard[];
+  digest: string;
+};
+
 export type InspectSkillCatalogInput = {
   cursor?: string;
   expectedCatalogDigest?: string;
@@ -102,13 +109,10 @@ export type SkillCatalogSourceOptions = {
   registryRoot?: string;
   domainsRoot?: string;
   loaders?: SkillCatalogLoaders;
+  now?: number | Date | (() => number | Date);
 };
 
-type CatalogSnapshot = {
-  domains: SkillCatalogDomain[];
-  skills: SkillCatalogCard[];
-  digest: string;
-};
+type CatalogSnapshot = SkillCatalogSnapshot;
 
 type CursorPayload = {
   kind: "cursor";
@@ -128,6 +132,8 @@ type ReceiptPayload = {
   page: number;
   itemCount: number;
   chainDigest: string;
+  issuedAt: number;
+  expiresAt: number;
 };
 
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
@@ -227,11 +233,22 @@ const validateReceiptPayload = (payload: ReceiptPayload) => {
     !digestPattern.test(payload.catalogDigest) ||
     !Number.isSafeInteger(payload.page) || payload.page < 1 ||
     !Number.isSafeInteger(payload.itemCount) || payload.itemCount < 0 ||
-    !digestPattern.test(payload.chainDigest)
+    !digestPattern.test(payload.chainDigest) ||
+    !Number.isSafeInteger(payload.issuedAt) || payload.issuedAt < 0 ||
+    !Number.isSafeInteger(payload.expiresAt) || payload.expiresAt <= payload.issuedAt
   ) {
     return tokenError("receipt", "Invalid catalog receipt payload.");
   }
   return payload;
+};
+
+const catalogNow = (value?: number | Date | (() => number | Date)) => {
+  const raw = typeof value === "function" ? value() : value;
+  const timestamp = raw instanceof Date ? raw.getTime() : raw ?? Date.now();
+  if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
+    throw new SkillCatalogError("catalog-receipt-invalid", "Catalog receipt clock is invalid.");
+  }
+  return timestamp;
 };
 
 const domainDescription = (pack: BundledRouterPack) =>
@@ -535,6 +552,8 @@ export const inspectSkillCatalog = async (
     bytes,
     previousPageDigest,
   });
+  const issuedAt = catalogNow(options.now);
+  const expiresAt = issuedAt + skillCatalogLimits.receiptTtlMs;
   const nextCursor = complete
     ? null
     : signToken("catalog-cursor.", {
@@ -563,12 +582,23 @@ export const inspectSkillCatalog = async (
         page: pageNumber + 1,
         itemCount: end,
         chainDigest,
+        issuedAt,
+        expiresAt,
       } satisfies ReceiptPayload),
     } : {}),
   };
 };
 
-export const assertValidCatalogReceipt = (receipt: string, catalogDigest: string) => {
+export type CatalogReceiptValidationOptions = {
+  expectedItemCount?: number;
+  now?: number | Date;
+};
+
+export const assertValidCatalogReceipt = (
+  receipt: string,
+  catalogDigest: string,
+  options: CatalogReceiptValidationOptions = {},
+) => {
   const payload = validateReceiptPayload(readToken<ReceiptPayload>(receipt, "catalog-receipt.", "receipt"));
   if (payload.catalogDigest !== assertDigest(catalogDigest, "catalogDigest")) {
     throw new SkillCatalogError("catalog-digest-mismatch", "Catalog receipt belongs to a different catalog digest.", {
@@ -576,12 +606,21 @@ export const assertValidCatalogReceipt = (receipt: string, catalogDigest: string
       currentCatalogDigest: catalogDigest,
     });
   }
+  if (options.expectedItemCount !== undefined && payload.itemCount !== options.expectedItemCount) {
+    throw new SkillCatalogError("catalog-receipt-invalid", "Catalog receipt does not prove delivery of the complete catalog.", {
+      expectedItemCount: options.expectedItemCount,
+      receivedItemCount: payload.itemCount,
+    });
+  }
+  if (catalogNow(options.now) >= payload.expiresAt) {
+    throw new SkillCatalogError("catalog-receipt-invalid", "Catalog receipt has expired.");
+  }
   return payload;
 };
 
-export const isCatalogReceiptValid = (receipt: string, catalogDigest: string) => {
+export const isCatalogReceiptValid = (receipt: string, catalogDigest: string, options: CatalogReceiptValidationOptions = {}) => {
   try {
-    assertValidCatalogReceipt(receipt, catalogDigest);
+    assertValidCatalogReceipt(receipt, catalogDigest, options);
     return true;
   } catch {
     return false;

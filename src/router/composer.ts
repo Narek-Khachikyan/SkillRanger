@@ -121,6 +121,9 @@ export type RetrieveSkillCandidatesInput = {
   routingDate?: string;
   routingIntentTags?: string[];
   maxSelectedRisk?: RouterSelectableRisk;
+  nominatedSkillIds?: Iterable<string>;
+  nominatedPrimarySkillIds?: Iterable<string>;
+  nominatedRoles?: ReadonlyMap<string, "primary" | "companion" | "verification">;
 };
 
 export type CandidateRejection = {
@@ -139,6 +142,9 @@ export type ComposeSkillSetInput = RetrieveSkillCandidatesInput & {
   domainCandidates?: DomainCandidate[];
   fingerprint?: ProjectFingerprint;
   limits?: Partial<RouterLimits>;
+  nominationOrder?: Iterable<string>;
+  primaryNominationOrder?: Iterable<string>;
+  requiredPrimarySkillId?: string;
 };
 
 export type ComposedSkillSet = {
@@ -173,7 +179,8 @@ const sorted = <T extends { skill: RouterSkillMetadata; score: number }>(items: 
   (candidate) => candidate.skill.qualityScore ?? 0,
 );
 
-const sortedPrimary = <T extends RouterCandidate>(items: T[], requirements: CanonicalRequirement[] = [], routingContext?: RoutingContext) => [...items].sort((left, right) =>
+const sortedPrimary = <T extends RouterCandidate>(items: T[], requirements: CanonicalRequirement[] = [], routingContext?: RoutingContext, nominationOrder?: ReadonlyMap<string, number>) => [...items].sort((left, right) =>
+  (nominationOrder?.get(canonical(left.skill.id)) ?? Number.POSITIVE_INFINITY) - (nominationOrder?.get(canonical(right.skill.id)) ?? Number.POSITIVE_INFINITY) ||
   right.score - left.score ||
   (right.skill.skillAdjustment ?? 0) - (left.skill.skillAdjustment ?? 0) ||
   calculateRequirementCoverage({ requirements, skill: right.skill, routingContext }).coveredWeight - calculateRequirementCoverage({ requirements, skill: left.skill, routingContext }).coveredWeight ||
@@ -295,6 +302,7 @@ export const retrieveSkillCandidates = (input: RetrieveSkillCandidatesInput): Re
   const selectedDomains = unique(input.selectedDomainIds ?? input.profile.domains.filter(({ available }) => available).map(({ id }) => id));
   const primaryDomainId = input.primaryDomainId ? canonical(input.primaryDomainId) : undefined;
   const threshold = input.primaryThreshold ?? 0.60;
+  const nominatedPrimarySkillIds = unique(input.nominatedPrimarySkillIds ?? input.nominatedSkillIds ?? []);
   const availableEvidence = collectAvailableEvidence({ matchedSignals: input.matchedSignals ?? [] });
   const rejections: CandidateRejection[] = [];
   const candidates = input.skills.flatMap((skill) => {
@@ -359,7 +367,12 @@ export const retrieveSkillCandidates = (input: RetrieveSkillCandidatesInput): Re
     const missingOptional = optionalCapabilities(skill).filter((capability) => !capabilities.has(canonical(capability)));
     if (missingRouting.length > 0 && eligibleRoles.some((role) => role !== "verification") && !input.deferRequiredCapabilities) { rejections.push({ skillId: skill.id, reason: "required-capability-missing" }); return []; }
     const scored = scoreSkill(input.profile, skill, selectedDomains, input.fingerprint, input.routingDate, input.routingIntentTags);
-    if (eligibleRoles.includes("primary") && scored.score < threshold) {
+    const nominatedRole = input.nominatedRoles?.get(canonical(skill.id));
+    if (nominatedRole !== undefined) {
+      eligibleRoles = eligibleRoles.filter((role) => role === nominatedRole);
+      if (eligibleRoles.length === 0) { rejections.push({ skillId: skill.id, reason: "nominated-role-ineligible" }); return []; }
+    }
+    if (eligibleRoles.includes("primary") && scored.score < threshold && !nominatedPrimarySkillIds.has(canonical(skill.id))) {
       eligibleRoles = eligibleRoles.filter((role) => role !== "primary");
       if (eligibleRoles.length === 0) { rejections.push({ skillId: skill.id, reason: "primary-score-below-threshold" }); return []; }
     }
@@ -527,17 +540,30 @@ const strictMissing = (selected: RouterCandidate[], input: ComposeSkillSetInput)
 
 export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetResult => {
   const limits = { ...defaultRouterLimits, ...input.limits };
+  const nominationOrder = new Map([...new Set([...(input.nominationOrder ?? [])].map(canonical))].map((skillId, index) => [skillId, index]));
+  const primaryNominationOrder = new Map([...new Set([...(input.primaryNominationOrder ?? input.nominationOrder ?? [])].map(canonical))].map((skillId, index) => [skillId, index]));
+  const nominatedPrimarySkillIds = unique(input.nominatedPrimarySkillIds ?? []);
+  const proposalDrivenStrictRetrieval = Boolean(input.strict && nominatedPrimarySkillIds.size > 0);
+  const requiredPrimarySkillId = input.requiredPrimarySkillId ? canonical(input.requiredPrimarySkillId) : undefined;
   const retrieved = input.candidates
     ? { candidates: input.candidates, primaryCandidates: input.candidates.filter(({ eligibleRoles }) => eligibleRoles.includes("primary")), rejections: [] }
     : retrieveSkillCandidates(input.strict
-      ? { ...input, strict: false, deferRequiredCapabilities: true, maxSelectedRisk: limits.maxSelectedRisk }
+      ? { ...input, strict: false, deferRequiredCapabilities: !proposalDrivenStrictRetrieval, nominatedPrimarySkillIds, maxSelectedRisk: limits.maxSelectedRisk }
       : { ...input, maxSelectedRisk: limits.maxSelectedRisk });
   const byId = new Map(retrieved.candidates.map((candidate) => [canonical(candidate.skill.id), candidate]));
   const registryById = new Map(input.skills.map((skill) => [canonical(skill.id), skill]));
-  const primaryCandidates = sortedPrimary(retrieved.primaryCandidates, input.requirements, input.routingContext);
+  const primaryCandidates = sortedPrimary(retrieved.primaryCandidates, input.requirements, input.routingContext, primaryNominationOrder);
+  const explicitPrimaryFailure = (reason: string): ComposeSkillSetResult => ({
+    status: "no_matching_skills",
+    reasonCode: `explicit-skill-choice-${reason}`,
+    rejections: retrieved.rejections,
+  });
   const requiredDecomposition = decomposition(input.profile, retrieved.candidates, input.skills);
   if (requiredDecomposition) return { status: "decomposition_required", subtasks: requiredDecomposition, rejections: retrieved.rejections };
   if (primaryCandidates.length === 0) {
+    if (requiredPrimarySkillId) {
+      return explicitPrimaryFailure(retrieved.rejections.find(({ skillId }) => canonical(skillId) === requiredPrimarySkillId)?.reason ?? "ineligible");
+    }
     const subtasks = decomposition(input.profile, retrieved.candidates, input.skills);
     return subtasks
       ? { status: "decomposition_required", subtasks, rejections: retrieved.rejections }
@@ -547,16 +573,19 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
   primaryLoop: for (const primary of primaryCandidates) {
     if (hasCycle(primary.skill, registryById)) {
       retrieved.rejections.push({ skillId: primary.skill.id, reason: "dependency-cycle" });
+      if (requiredPrimarySkillId === canonical(primary.skill.id)) return explicitPrimaryFailure("dependency-cycle");
       continue;
     }
     const closure = dependencyClosure(primary, byId);
     if (closure.missing) {
       retrieved.rejections.push({ skillId: primary.skill.id, reason: "missing-dependency" });
+      if (requiredPrimarySkillId === canonical(primary.skill.id)) return explicitPrimaryFailure("missing-dependency");
       continue;
     }
     const required = [primary, ...closure.closure];
     if (required.some(({ skill }) => skill.riskLevel === "high" || skill.riskLevel === "block" || skill.auditPassed === false)) {
       retrieved.rejections.push({ skillId: primary.skill.id, reason: "dependency-blocked" });
+      if (requiredPrimarySkillId === canonical(primary.skill.id)) return explicitPrimaryFailure("dependency-blocked");
       continue;
     }
     const assignedRequired: SelectedRouterCandidate[] = [{ ...primary, role: "primary" }];
@@ -565,6 +594,7 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
         .find((requestedRole) => assignSelectedRole({ candidate: dependency, requestedRole, profile: input.profile, fingerprint: input.fingerprint }));
       if (!role) {
         retrieved.rejections.push({ skillId: primary.skill.id, reason: "dependency-role-unassignable" });
+        if (requiredPrimarySkillId === canonical(primary.skill.id)) return explicitPrimaryFailure("dependency-role-unassignable");
         continue primaryLoop;
       }
       assignedRequired.push({ ...dependency, role });
@@ -572,10 +602,12 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     const dedupedRequired = superseded([...new Map(assignedRequired.map((candidate) => [candidate.skill.id, candidate])).values()], primary.skill.id);
     if (!dedupedRequired.some(({ role }) => role === "primary")) {
       retrieved.rejections.push({ skillId: primary.skill.id, reason: "primary-superseded" });
+      if (requiredPrimarySkillId === canonical(primary.skill.id)) return explicitPrimaryFailure("primary-superseded");
       continue;
     }
     if (dedupedRequired.some((left, index) => dedupedRequired.slice(index + 1).some((right) => symmetricConflict(left.skill, right.skill)))) {
       retrieved.rejections.push({ skillId: primary.skill.id, reason: "skill-conflict" });
+      if (requiredPrimarySkillId === canonical(primary.skill.id)) return explicitPrimaryFailure("skill-conflict");
       continue;
     }
     const selectedIds = new Set(dedupedRequired.map(({ skill }) => skill.id));
@@ -583,6 +615,12 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     const optional = (role: RouterSkillRole) => retrieved.candidates
       .filter(({ eligibleRoles, skill }) => eligibleRoles.includes(role) && !selectedIds.has(skill.id) && (!input.strict || skill.source === "installed"))
       .sort((left, right) => {
+        const leftNomination = nominationOrder.get(canonical(left.skill.id));
+        const rightNomination = nominationOrder.get(canonical(right.skill.id));
+        if (leftNomination !== undefined || rightNomination !== undefined) {
+          const nominationDelta = (leftNomination ?? Number.POSITIVE_INFINITY) - (rightNomination ?? Number.POSITIVE_INFINITY);
+          if (nominationDelta !== 0) return nominationDelta;
+        }
         if (role === "verification") {
           const leftCover = calculateRequirementCoverage({ requirements: explicitRequirements, skill: left.skill, routingContext: input.routingContext }).covered.length;
           const rightCover = calculateRequirementCoverage({ requirements: explicitRequirements, skill: right.skill, routingContext: input.routingContext }).covered.length;
@@ -601,9 +639,17 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
       (primary.skill.complements ?? []).some((id) => canonical(id) === canonical(skill.id)) && symmetricConflict(primary.skill, skill));
     if (conflictingComplement) {
       retrieved.rejections.push({ skillId: primary.skill.id, reason: "skill-conflict" });
+      if (requiredPrimarySkillId === canonical(primary.skill.id)) return explicitPrimaryFailure("skill-conflict");
       continue;
     }
     const explicitRequirements = dedupeRequirements(input.requirements ?? []).filter(({ requirementClass }) => requirementClass === "explicit");
+    const nominatedCompanionIds = new Set([...input.nominatedRoles ?? []]
+      .filter(([, role]) => role === "companion")
+      .map(([skillId]) => canonical(skillId)));
+    for (const candidate of optional("companion").filter(({ skill }) => nominatedCompanionIds.has(canonical(skill.id)))) {
+      if (dedupedRequired.filter(({ role }) => role === "companion").length >= limits.maxTaskCompanions) break;
+      add(candidate, "companion");
+    }
     const totalExplicitWeight = explicitRequirements.reduce((sum, requirement) => sum + effectiveRequirementWeight(requirement), 0);
     const requestedActions = dedupeRequirements(input.requirements ?? [])
       .filter(({ kind, requirementClass }) => kind === "action" && requirementClass !== "context");
@@ -666,6 +712,7 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     while (selected.length > limits.maxTotalSelectedSkills && removeWeakest()) { /* remove optional skills in normative order */ }
     if (selected.length > limits.maxTotalSelectedSkills) {
       retrieved.rejections.push({ skillId: primary.skill.id, reason: "skill-limit" });
+      if (requiredPrimarySkillId === canonical(primary.skill.id)) return explicitPrimaryFailure("skill-limit");
       continue;
     }
     let requiredBytes = selected.reduce((sum, candidate) => sum + (candidate.skill.instructionBytes ?? 0), 0);
@@ -674,7 +721,11 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     }
     if (requiredBytes > limits.maxInstructionBytes) {
       const blockingSkillIds = selected.filter(({ skill }) => protectedIds.has(skill.id)).map(({ skill }) => skill.id);
-      return { status: "context_budget_exceeded", requiredBytes, allowedBytes: limits.maxInstructionBytes, blockingSkillIds, rejections: retrieved.rejections };
+      if (nominatedPrimarySkillIds.size === 0 || requiredPrimarySkillId === canonical(primary.skill.id)) {
+        return { status: "context_budget_exceeded", requiredBytes, allowedBytes: limits.maxInstructionBytes, blockingSkillIds, rejections: retrieved.rejections };
+      }
+      retrieved.rejections.push({ skillId: primary.skill.id, reason: "context-budget-exceeded" });
+      continue;
     }
     const missing = strictMissing(selected, input);
     if (missing.length > 0) return { status: "strict_requirements_unmet", missing, rejections: retrieved.rejections };
@@ -704,5 +755,6 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     };
     return { status: "prepared", composed, rejections: retrieved.rejections };
   }
+  if (requiredPrimarySkillId) return explicitPrimaryFailure("candidate-constraints-unsatisfied");
   return { status: "no_matching_skills", reasonCode: "candidate-constraints-unsatisfied", rejections: retrieved.rejections };
 };

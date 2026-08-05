@@ -4,6 +4,7 @@ import { loadRouterFixturePacks, type RouterFixturePack } from "../src/router/fi
 import {
   composeSkillSet,
   retrieveSkillCandidates,
+  type RouterCandidate,
   type RouterSkillMetadata,
 } from "../src/router/composer.ts";
 import type { TaskProfile } from "../src/router/types.ts";
@@ -309,6 +310,68 @@ test("strict composition reports semantic-best feasibility without substituting 
   if (result.status === "strict_requirements_unmet") {
     assert.ok(result.missing.some(({ skillId, requirement }) => skillId === "backend.auth-implementation" && requirement === "installed-skill"));
   }
+});
+
+test("proposal-driven strict retrieval treats missing routing capabilities as a hard veto", () => {
+  const first: RouterSkillMetadata = {
+    id: "backend.semantic-first", displayName: "Semantic First", version: "1.0.0", riskLevel: "low", roles: ["primary"],
+    domains: ["backend-api"], actions: ["implement"], artifactTypes: ["api"], intentTags: ["api"], technologyTags: [], qualityGoals: ["correctness"],
+    requiredCapabilities: ["docker"], routingRequiredCapabilities: ["docker"], optionalCapabilities: [], dependencies: [], conflictsWith: [], supersedes: [], complements: [], score: 0.99,
+  };
+  const second: RouterSkillMetadata = {
+    ...first,
+    id: "backend.semantic-second",
+    displayName: "Semantic Second",
+    requiredCapabilities: [],
+    routingRequiredCapabilities: [],
+    score: 0.8,
+  };
+  const result = composeSkillSet({
+    profile: profile(),
+    skills: [first, second],
+    selectedDomainIds: ["backend-api"],
+    primaryDomainId: "backend-api",
+    capabilities: ["filesystem"],
+    strict: true,
+    nominatedPrimarySkillIds: [first.id, second.id],
+    nominationOrder: [first.id, second.id],
+    primaryNominationOrder: [first.id, second.id],
+  });
+  assert.equal(result.status, "strict_requirements_unmet");
+  assert.ok(result.rejections.some(({ skillId, reason }) => skillId === first.id && reason === "required-capability-missing"));
+  if (result.status === "strict_requirements_unmet") assert.ok(result.missing.some(({ skillId }) => skillId === second.id));
+});
+
+test("proposal-driven composition advances past a primary that exceeds the context budget", () => {
+  const first: RouterSkillMetadata = {
+    id: "backend.oversized-first", displayName: "Oversized First", version: "1.0.0", riskLevel: "low", roles: ["primary"],
+    domains: ["backend-api"], actions: ["implement"], artifactTypes: ["api"], intentTags: ["api"], technologyTags: [], qualityGoals: ["correctness"],
+    requiredCapabilities: [], optionalCapabilities: [], dependencies: [], conflictsWith: [], supersedes: [], complements: [], instructionBytes: 200,
+  };
+  const second: RouterSkillMetadata = { ...first, id: "backend.fits-second", displayName: "Fits Second", instructionBytes: 40 };
+  const candidate = (skill: RouterSkillMetadata, score: number): RouterCandidate => ({
+    skill,
+    score,
+    eligibleRoles: ["primary"],
+    reasons: [],
+    missingCapabilities: [],
+    missingOptionalCapabilities: [],
+    verificationStatus: "not-required",
+  });
+  const result = composeSkillSet({
+    profile: profile(),
+    skills: [first, second],
+    candidates: [candidate(first, 0.99), candidate(second, 0.8)],
+    selectedDomainIds: ["backend-api"],
+    primaryDomainId: "backend-api",
+    nominatedPrimarySkillIds: [first.id, second.id],
+    nominationOrder: [first.id, second.id],
+    primaryNominationOrder: [first.id, second.id],
+    limits: { maxInstructionBytes: 100 },
+  });
+  assert.equal(result.status, "prepared");
+  if (result.status === "prepared") assert.equal(result.composed.primary.skill.id, second.id);
+  assert.ok(result.rejections.some(({ skillId, reason }) => skillId === first.id && reason === "context-budget-exceeded"));
 });
 
 test("composer keeps compatible subtasks together when one primary covers all of them", async () => {

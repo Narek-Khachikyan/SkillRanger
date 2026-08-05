@@ -92,6 +92,15 @@ const capabilities = (value: string | boolean | undefined): string[] => {
 };
 
 const explanationFor = (result: PrepareTaskResult): RouterExplanation => {
+  if (!("routing" in result)) {
+    return {
+      deterministicKey: `sha256:${"0".repeat(64)}`,
+      domains: [],
+      candidates: [],
+      selectedRoles: { environment: [], primary: [], companion: [], verification: [], "agent-context": [] },
+      omitted: [],
+    };
+  }
   const selectedRoles: Record<RouterSkillRole, string[]> = {
     environment: [], primary: [], companion: [], verification: [], "agent-context": [],
   };
@@ -110,7 +119,8 @@ const explanationFor = (result: PrepareTaskResult): RouterExplanation => {
 
 const print = (value: unknown, json: boolean, explain = false) => {
   if (json) {
-    const output = explain ? { ...(value as PrepareTaskResult), explanation: explanationFor(value as PrepareTaskResult) } : value;
+    const result = value as PrepareTaskResult;
+    const output = explain && "routing" in result ? { ...result, explanation: explanationFor(result) } : value;
     console.log(JSON.stringify(output, null, 2));
     return;
   }

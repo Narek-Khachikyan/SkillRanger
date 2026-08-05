@@ -72,7 +72,7 @@ export const handleJsonRpcRequest = async (request: JsonRpcRequest): Promise<Jso
         "This root is fixed for the lifetime of this MCP server.",
         "If it is not the intended project, stop and restart Codex from the target directory.",
         "Do not pass projectRoot to router tools and do not fall back to a local SkillRanger CLI.",
-        "For an explicit SkillRanger task, call prepare_task with the full prompt (including the @skillranger, skillranger, or /sr trigger) and requested strict mode.",
+        "For an explicit SkillRanger task, call inspect_skill_catalog first when using model-assisted routing, follow its cursor chain to a complete receipt, then call prepare_task with the full prompt (including the @skillranger, skillranger, or /sr trigger), catalog-bound routingProposal, and requested strict mode; do not combine routingProposal with semanticHints.",
         "Strict mode also requires hostCapabilities and a skillInputs entry for every selected skill; each skill declares its required input object in input.schema.json inside its installed skill directory.",
         "Treat its runtime run ID as authoritative; do not call the low-level start_skill_run after prepare_task.",
         "Deliver every mandatory skill file with read_run_skill_file, then branch on run.runtime before implementation.",

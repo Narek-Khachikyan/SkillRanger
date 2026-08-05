@@ -65,7 +65,7 @@ export const catalogToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.readOnly,
     name: "inspect_skill_catalog",
     title: "Inspect Trusted Skill Catalog",
-    description: "After an explicit @skillranger, /sr, or skillranger trigger, start with an empty request to discover the complete trusted bundled skill catalog. Follow nextCursor with expectedCatalogDigest until complete; this read-only discovery works before project setup and never scans the project or local skills.",
+    description: "After an explicit @skillranger, /sr, or skillranger trigger, start with an empty request to discover the complete trusted bundled skill catalog. Follow nextCursor with expectedCatalogDigest until complete, then use the final catalogDigest and catalogReceipt in prepare_task.routingProposal; this read-only discovery works before project setup and never scans the project or local skills.",
     inputSchema: {
       type: "object",
       properties: {

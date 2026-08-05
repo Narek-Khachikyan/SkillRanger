@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { createRouterReader, createRouterRuntimeStore, prepareTask, RouterPrepareError } from "../../router/index.ts";
+import { createRouterReader, createRouterRuntimeStore, prepareTask, RouterPrepareError, routingProposalLimits } from "../../router/index.ts";
 import type { PrepareTaskCoreInput, ReadRunSkillFileInput } from "../../router/types.ts";
 import { RouterReaderError } from "../../router/reader.ts";
 import { RouterStore, RouterStoreError } from "../../router/store.ts";
@@ -45,7 +45,7 @@ const prepareTaskOutputSchema = routerToolOutputSchema("router-result/1.0", [
   "run", "selections", "requiredReads", "runtimeClarification", "verification", "clarification",
   "continuationToken", "expiresAt", "decomposition", "suggestedAction", "missing",
   "installationSuggestions", "requiredBytes", "allowedBytes", "blockingSkillIds", "code", "message",
-  "details", "reasonCode", "argument",
+  "details", "reasonCode", "argument", "currentCatalogDigest", "nextTool",
 ]);
 
 const readRunSkillFileOutputSchema = routerToolOutputSchema("router-read-result/1.0", [
@@ -67,6 +67,43 @@ const inputSchema = {
     continuationToken: { type: "string", minLength: 1, maxLength: 4096 },
     clarificationAnswers: { type: "array", maxItems: 8, items: { type: "object", properties: { questionId: { type: "string", minLength: 1, maxLength: 128 }, value: { type: "string", minLength: 1, maxLength: 128 } }, required: ["questionId", "value"], additionalProperties: false } },
     semanticHints: { type: "object" },
+    routingProposal: {
+      type: "object",
+      required: ["schemaVersion", "catalogDigest", "catalogReceipt", "interpretation", "nominations"],
+      properties: {
+        schemaVersion: { const: "routing-proposal/1.0" },
+        catalogDigest: { type: "string", pattern: "^sha256:[a-f0-9]{64}$" },
+        catalogReceipt: { type: "string", minLength: 1, maxLength: routingProposalLimits.maxCatalogReceiptBytes },
+        interpretation: {
+          type: "object",
+          required: ["domains", "actions", "artifactTypes", "intentTags", "technologyTags", "qualityGoals"],
+          properties: Object.fromEntries(["domains", "actions", "artifactTypes", "intentTags", "technologyTags", "qualityGoals"].map((field) => [field, {
+            type: "array", maxItems: routingProposalLimits.maxInterpretationItems, uniqueItems: true,
+            items: { type: "string", pattern: "^[a-z0-9][a-z0-9._-]{0,127}$" },
+          }])),
+          additionalProperties: false,
+        },
+        nominations: {
+          type: "array", minItems: 1, maxItems: routingProposalLimits.maxNominations,
+          items: {
+            type: "object",
+            required: ["skillId", "role", "confidence", "evidenceText"],
+            properties: {
+              skillId: { type: "string", pattern: "^[a-z0-9][a-z0-9._-]{0,127}$" },
+              role: { enum: ["primary", "companion", "verification"] },
+              confidence: { type: "number", minimum: 0, maximum: 1 },
+              evidenceText: { type: "string", minLength: 1, maxLength: routingProposalLimits.maxEvidenceBytes },
+            },
+            additionalProperties: false,
+          },
+        },
+        ambiguity: {
+          type: "object", required: ["primarySkillIds"], additionalProperties: false,
+          properties: { primarySkillIds: { type: "array", minItems: 2, maxItems: 3, uniqueItems: true, items: { type: "string", pattern: "^[a-z0-9][a-z0-9._-]{0,127}$" } } },
+        },
+      },
+      additionalProperties: false,
+    },
     skillInputs: { type: "object", maxProperties: maxSkillInputEntries, additionalProperties: { type: "object" }, description: "Strict-mode only. Maps a bundled skill ID to the input object required by that skill's input.schema.json." },
   },
   required: ["prompt"],
@@ -92,12 +129,12 @@ const readInputSchema = {
 };
 
 export const routerToolDefinitions: McpToolDefinition[] = [
-  { ...mcpToolEffects.runStateWrite, name: "prepare_task", title: "Prepare SkillRanger Task", description: "Canonical authoritative entrypoint for an explicit SkillRanger workflow. Prepare the complete, unmodified user request, including its leading or terminal trigger; read every required instruction before resolving runtime clarification or beginning the returned runtime run.", inputSchema, outputSchema: prepareTaskOutputSchema },
+  { ...mcpToolEffects.runStateWrite, name: "prepare_task", title: "Prepare SkillRanger Task", description: "Canonical authoritative entrypoint for an explicit SkillRanger workflow. Prepare the complete, unmodified user request, including its leading or terminal trigger; read every required instruction before resolving runtime clarification or beginning the returned runtime run. For model-assisted routing, first consume the complete trusted result of inspect_skill_catalog and submit its catalog-bound routingProposal; do not submit semanticHints together with a proposal. On catalog_refresh_required, inspect the catalog again and resubmit.", inputSchema, outputSchema: prepareTaskOutputSchema },
   { ...mcpToolEffects.runStateWrite, annotations: { ...mcpToolEffects.runStateWrite.annotations, idempotentHint: true }, name: "read_run_skill_file", title: "Read Prepared Skill Instructions", description: "Read the next mandatory chunk or an allowed optional text file from a prepared router run. Use a new RFC 4122 UUID for each new read; retry a transport failure with the identical request and its current revision.", inputSchema: readInputSchema, outputSchema: readRunSkillFileOutputSchema },
 ];
 
 const routerErrorCode = (code: string) => {
-  const allowed = new Set(["trigger-required", "empty-intent", "intent-too-large", "router-disabled", "target-agent-unresolved", "project-root-unauthorized", "continuation-invalid", "continuation-expired", "clarification-answer-invalid", "capability-invalid", "router-config-invalid", "raw-intent-confirmation-required", "routing-integrity", "semantic-hint-invalid", "skill-not-selected", "skill-source-unavailable", "skill-file-not-found", "skill-path-blocked", "skill-file-unsupported", "stale-skill-checksum", "read-request-conflict", "read-order-invalid", "context-budget-exceeded", "run-not-found", "run-integrity"]);
+  const allowed = new Set(["trigger-required", "empty-intent", "intent-too-large", "router-disabled", "target-agent-unresolved", "project-root-unauthorized", "continuation-invalid", "continuation-expired", "clarification-answer-invalid", "capability-invalid", "router-config-invalid", "raw-intent-confirmation-required", "routing-integrity", "semantic-hint-invalid", "routing-proposal-invalid", "skill-not-selected", "skill-source-unavailable", "skill-file-not-found", "skill-path-blocked", "skill-file-unsupported", "stale-skill-checksum", "read-request-conflict", "read-order-invalid", "context-budget-exceeded", "run-not-found", "run-integrity"]);
   return allowed.has(code) ? code as never : "run-integrity" as never;
 };
 
@@ -116,7 +153,7 @@ const withRouterErrors = (handler: McpToolHandler): McpToolHandler => async (arg
 
 const prepare: McpToolHandler = async (args) => {
   const context = routerContext();
-  const unknown = Object.keys(args).find((key) => !["prompt", "targetAgent", "hostCapabilities", "strict", "continuationToken", "clarificationAnswers", "semanticHints", "skillInputs"].includes(key));
+  const unknown = Object.keys(args).find((key) => !["prompt", "targetAgent", "hostCapabilities", "strict", "continuationToken", "clarificationAnswers", "semanticHints", "routingProposal", "skillInputs"].includes(key));
   if (unknown) throw new McpToolError(unknown === "projectRoot" || unknown === "registryRoot" ? "project-root-unauthorized" as never : "invalid-arguments", `Unknown router argument: ${unknown}.`, { argument: unknown });
   if (args.skillInputs !== undefined && args.strict !== true) throw new McpToolError("invalid-arguments", "skillInputs is only available with strict: true.", { argument: "skillInputs" });
   const skillInputs = args.skillInputs === undefined
@@ -136,6 +173,7 @@ const prepare: McpToolHandler = async (args) => {
     ...(typeof args.continuationToken === "string" ? { continuationToken: args.continuationToken } : {}),
     ...(Array.isArray(args.clarificationAnswers) ? { clarificationAnswers: args.clarificationAnswers as Array<{ questionId: string; value: string }> } : {}),
     ...(args.semanticHints !== undefined ? { semanticHints: args.semanticHints as PrepareTaskCoreInput["semanticHints"] } : {}),
+    ...(args.routingProposal !== undefined ? { routingProposal: args.routingProposal as PrepareTaskCoreInput["routingProposal"] } : {}),
     ...(skillInputs === undefined ? {} : { skillInputs }),
   };
   return jsonToolResult(await prepareTask(input));

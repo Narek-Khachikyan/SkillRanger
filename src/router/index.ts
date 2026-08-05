@@ -83,14 +83,35 @@ export {
   skillCatalogSchemaVersion,
 } from "./catalog.ts";
 export type {
+  CatalogReceiptValidationOptions,
   CatalogErrorCode,
   InspectSkillCatalogInput,
   SkillCatalogCard,
   SkillCatalogDomain,
   SkillCatalogLoaders,
   SkillCatalogPage,
+  SkillCatalogSnapshot,
   SkillCatalogSourceOptions,
 } from "./catalog.ts";
+export {
+  RoutingProposalError,
+  routingProposalLimits,
+  routingProposalSchemaVersion,
+  validateRoutingProposalCatalogBinding,
+  validateRoutingProposal,
+  validateRoutingProposalShape,
+} from "./routing-proposal.ts";
+export type {
+  RoutingProposalInput,
+  RoutingProposalInterpretation,
+  RoutingProposalNomination,
+  RoutingProposalProjection,
+  RoutingProposalRefresh,
+  RoutingProposalRejection,
+  RoutingProposalRole,
+  ValidatedRoutingProposal,
+  ValidatedRoutingProposalNomination,
+} from "./routing-proposal.ts";
 export {
   createSkillSourceSnapshot,
   createSkillSourceSnapshots,

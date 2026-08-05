@@ -92,7 +92,8 @@ export type McpToolErrorCode =
   | "catalog-digest-mismatch"
   | "catalog-page-limit-invalid"
   | "catalog-page-limit-too-small"
-  | "catalog-receipt-invalid";
+  | "catalog-receipt-invalid"
+  | "routing-proposal-invalid";
 
 export class McpToolError extends Error {
   code: McpToolErrorCode;
