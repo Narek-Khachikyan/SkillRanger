@@ -25,13 +25,13 @@ test("renders the exact SkillRanger universal router block", () => {
       "## SkillRanger Universal Prompt Router\n" +
       "Use the SkillRanger workflow only after an explicit @skillranger, skillranger, or /sr trigger. @skillranger and /sr may lead or end a prompt; skillranger is supported at the end, and a bare leading skillranger is not a trigger.\n" +
       "This managed guidance is advisory and is not a security boundary; trust MCP validation, catalog integrity, routing hard vetoes, and runtime state.\n" +
-      "1. For model-assisted routing after that trigger, call inspect_skill_catalog with an empty request. Follow each nextCursor using expectedCatalogDigest until a complete page; only the complete final page supplies catalogReceipt. Use its catalogDigest and catalogReceipt in prepare_task.routingProposal.\n" +
+      "1. For model-assisted routing after that trigger, call inspect_skill_catalog with an empty request. Follow each nextCursor using expectedCatalogDigest until a complete page; only the complete final page supplies catalogReceipt. If a one-page response is complete without a catalogReceipt, restart with a smaller explicit maxItems or maxBytes to force a cursor chain. Never submit a proposal without the final catalogDigest and catalogReceipt.\n" +
       "2. If `inspect_skill_catalog` is unavailable because this is a legacy SkillRanger server, use the legacy path: call `prepare_task` with the complete prompt and without `routingProposal`; do not treat an unavailable catalog tool as a routing failure.\n" +
       "3. If prepare_task returns catalog_refresh_required, discard the old proposal and receipt, restart inspect_skill_catalog with an empty request, and submit a new proposal.\n" +
       "4. Call `prepare_task` with the complete user request verbatim. Do not remove, move, or rewrite the trigger, and do not submit `semanticHints` with a `routingProposal`.\n" +
       "5. If routing clarification is required, ask only the returned routing question, then call `prepare_task` again with the original complete request, continuation token, and typed answers.\n" +
       "6. If decomposition or no-match is returned, report that outcome instead of inventing a workflow.\n" +
-      "7. After a prepared result, call read_run_skill_file in mandatory-next mode in the returned order until readStatus.runMandatoryReadsComplete is true; only then branch on run.runtime, resolve runtime clarification, or begin the returned runtime run. Each new read uses a freshly generated RFC 4122 UUID and the latest returned readRevision; retry a transport failure with the identical request.\n" +
+      "7. After prepare_task returns prepared, call read_run_skill_file in mandatory-next mode in the returned order until readStatus.runMandatoryReadsComplete is true; only then branch on run.runtime, resolve runtime clarification, or begin the returned runtime run. Each new read uses a freshly generated RFC 4122 UUID and the latest returned readRevision; retry a transport failure with the identical request.\n" +
       "8. Do not call lifecycle clarification or execution tools before mandatory reads complete. `runtimeClarification` applies to the returned runtime run ID, never the router run ID.\n" +
       "9. Resolve runtime clarification from facts in the request. For an allowed decline, continue with one neutral explicit assumption per declined field instead of asking the user; ask only when a non-declinable question cannot be answered from the request.\n" +
       "10. Begin the returned runtime run only after the reads and any runtime clarification complete, then implement the original request without stopping for a plan or confirmation unless the user asked for one.\n" +
@@ -76,6 +76,8 @@ test("managed guidance covers complete catalog receipt handling and setup bounda
   for (const requiredPhrase of [
     "complete page",
     "catalogReceipt",
+    "smaller explicit maxItems or maxBytes",
+    "Never submit a proposal without",
     "If `inspect_skill_catalog` is unavailable",
     "legacy SkillRanger server",
     "without `routingProposal`",

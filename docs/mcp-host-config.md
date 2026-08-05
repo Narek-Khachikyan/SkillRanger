@@ -58,8 +58,8 @@ Use the router only after an explicit trigger: `@skillranger`, `/sr`, or a termi
 For model-assisted routing on a current server, follow this sequence:
 
 1. Call `inspect_skill_catalog` with `{}` after the explicit trigger.
-2. Follow every `nextCursor` with the preceding `catalogDigest` as `expectedCatalogDigest` until `complete: true`. Treat the `catalogReceipt` on that final page as proof of complete delivery, not proof of model comprehension.
-3. Submit a prompt-grounded `routingProposal` to `prepare_task` using that final digest and receipt. If `prepare_task` returns `catalog_refresh_required`, discard the old proposal and receipt, restart catalog inspection with `{}`, and submit a new proposal.
+2. Follow every `nextCursor` with the preceding `catalogDigest` as `expectedCatalogDigest` until `complete: true`. Treat the `catalogReceipt` on that final page as proof of complete delivery, not proof of model comprehension. If a one-page response is complete without a receipt, restart with a smaller explicit `maxItems` or `maxBytes` to force a cursor chain.
+3. Submit a prompt-grounded `routingProposal` to `prepare_task` using that final digest and receipt; never submit a proposal without both. If `prepare_task` returns `catalog_refresh_required`, discard the old proposal and receipt, restart catalog inspection with `{}`, and submit a new proposal.
 4. Call `prepare_task` with the complete, unmodified prompt, including its trigger. Do not combine `routingProposal` with legacy `semanticHints`.
 5. For a `prepared` result, call `read_run_skill_file` in `mandatory-next` mode in order until `readStatus.runMandatoryReadsComplete` is true. Only then resolve runtime clarification or begin the returned runtime run.
 

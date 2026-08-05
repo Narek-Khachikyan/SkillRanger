@@ -138,7 +138,7 @@ const readInputSchema = {
 
 export const routerToolDefinitions: McpToolDefinition[] = [
   { ...mcpToolEffects.runStateWrite, name: "prepare_task", title: "Prepare SkillRanger Task", description: `Canonical authoritative entrypoint after an ${explicitTriggerGuidance.replace(/^Use the SkillRanger workflow only after an /, "") } Preserve the complete, unmodified user request, including its leading or terminal trigger. ${catalogDiscoveryGuidance} ${legacyCatalogGuidance} ${catalogRefreshGuidance} Do not submit semanticHints together with a routingProposal. ${mandatoryReadGuidance} ${setupBoundaryGuidance}`, inputSchema, outputSchema: prepareTaskOutputSchema },
-  { ...mcpToolEffects.runStateWrite, annotations: { ...mcpToolEffects.runStateWrite.annotations, idempotentHint: true }, name: "read_run_skill_file", title: "Read Prepared Skill Instructions", description: "After prepare_task returns prepared, read the next mandatory chunk from the returned router run in mandatory-next mode and order until readStatus.runMandatoryReadsComplete is true; only then begin runtime work. Use a new RFC 4122 UUID for each new read; retry a transport failure with the identical request and its current revision.", inputSchema: readInputSchema, outputSchema: readRunSkillFileOutputSchema },
+  { ...mcpToolEffects.runStateWrite, annotations: { ...mcpToolEffects.runStateWrite.annotations, idempotentHint: true }, name: "read_run_skill_file", title: "Read Prepared Skill Instructions", description: `${mandatoryReadGuidance} Use a new RFC 4122 UUID for each new read; retry a transport failure with the identical request and its current revision.`, inputSchema: readInputSchema, outputSchema: readRunSkillFileOutputSchema },
 ];
 
 const routerErrorCode = (code: string) => {
