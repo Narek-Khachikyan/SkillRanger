@@ -46,7 +46,7 @@ test("MCP protocol initializes with tool capability", async () => {
     "inspect_skill_run",
     "Never report that SkillRanger or strict visual verification passed unless the persisted run is verified",
   ]) {
-    assert.match(instructions, new RegExp(requiredInstruction));
+    assert.ok(instructions.includes(requiredInstruction), requiredInstruction);
   }
   // prepare_task creates a strict-v2 runtime for strict tasks, so the lifecycle-v1 transition
   // tools must never be named as the unconditional continuation of a prepared run.

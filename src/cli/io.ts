@@ -4,8 +4,11 @@ import path from "node:path";
 export const readJson = async <T>(file: string): Promise<T> =>
   JSON.parse(await readFile(path.resolve(file), "utf8")) as T;
 
-export const isContained = (root: string, candidate: string) =>
-  candidate === root || candidate.startsWith(root.endsWith(path.sep) ? root : `${root}${path.sep}`);
+export const isContained = (root: string, candidate: string) => {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return relative === ""
+    || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+};
 
 /** Resolve an existing path, or the first existing ancestor plus its missing tail. */
 export const canonicalPath = async (target: string): Promise<string> => {
