@@ -374,6 +374,79 @@ test("proposal-driven composition advances past a primary that exceeds the conte
   assert.ok(result.rejections.some(({ skillId, reason }) => skillId === first.id && reason === "context-budget-exceeded"));
 });
 
+test("proposal-driven primary fallback can cross the selected domain after a hard veto", () => {
+  const first: RouterSkillMetadata = {
+    id: "backend.hard-vetoed-first", displayName: "Hard-vetoed First", version: "1.0.0", riskLevel: "high", roles: ["primary"],
+    domains: ["backend-api"], actions: ["implement"], artifactTypes: ["api"], intentTags: ["api"], technologyTags: [], qualityGoals: ["correctness"],
+    requiredCapabilities: [], optionalCapabilities: [], dependencies: [], conflictsWith: [], supersedes: [], complements: [],
+  };
+  const second: RouterSkillMetadata = {
+    ...first,
+    id: "frontend.valid-second",
+    displayName: "Valid Second",
+    riskLevel: "low",
+    domains: ["frontend"],
+  };
+  const result = composeSkillSet({
+    profile: profile({ domains: [
+      { id: "backend-api", confidence: 1, role: "primary", available: true, reasons: [], evidence: [] },
+      { id: "frontend", confidence: 0.8, role: "supporting", available: true, reasons: [], evidence: [] },
+    ] }),
+    skills: [first, second],
+    selectedDomainIds: ["backend-api", "frontend"],
+    primaryDomainId: "backend-api",
+    nominatedPrimarySkillIds: [first.id, second.id],
+    nominationOrder: [first.id, second.id],
+    primaryNominationOrder: [first.id, second.id],
+  });
+
+  assert.equal(result.status, "prepared");
+  if (result.status === "prepared") assert.equal(result.composed.primary.skill.id, second.id);
+  assert.ok(result.rejections.some(({ skillId, reason }) => skillId === first.id && reason === "risk-blocked"));
+});
+
+test("strict proposal workflows report uninstalled nominated companions and verification", () => {
+  const primary: RouterSkillMetadata = {
+    id: "backend.strict-primary", displayName: "Strict Primary", version: "1.0.0", riskLevel: "low", roles: ["primary"],
+    domains: ["backend-api"], actions: ["implement"], artifactTypes: ["api"], intentTags: ["api"], technologyTags: [], qualityGoals: ["correctness"],
+    requiredCapabilities: [], optionalCapabilities: [], dependencies: [], conflictsWith: [], supersedes: [], complements: [],
+  };
+  const companion: RouterSkillMetadata = {
+    ...primary,
+    id: "backend.strict-companion",
+    displayName: "Strict Companion",
+    roles: ["companion"],
+  };
+  const verification: RouterSkillMetadata = {
+    ...primary,
+    id: "backend.strict-verification",
+    displayName: "Strict Verification",
+    roles: ["verification"],
+    intentTags: ["tests-pass"],
+  };
+  const result = composeSkillSet({
+    profile: profile({ acceptanceCriteria: ["tests-pass"] }),
+    skills: [primary, companion, verification],
+    selectedDomainIds: ["backend-api"],
+    primaryDomainId: "backend-api",
+    strict: true,
+    installedSkillIds: [],
+    nominatedPrimarySkillIds: [primary.id],
+    nominatedRoles: new Map([
+      [primary.id, "primary" as const],
+      [companion.id, "companion" as const],
+      [verification.id, "verification" as const],
+    ]),
+    nominationOrder: [primary.id, companion.id, verification.id],
+    primaryNominationOrder: [primary.id],
+  });
+
+  assert.equal(result.status, "strict_requirements_unmet");
+  if (result.status !== "strict_requirements_unmet") return;
+  assert.ok(result.missing.some(({ skillId, requirement }) => skillId === companion.id && requirement === "installed-skill"));
+  assert.ok(result.missing.some(({ skillId, requirement }) => skillId === verification.id && requirement === "installed-skill"));
+});
+
 test("composer keeps compatible subtasks together when one primary covers all of them", async () => {
   const primarySkill: RouterSkillMetadata = {
     id: "backend.general", displayName: "Backend General", version: "1.0.0", riskLevel: "low", roles: ["primary"],

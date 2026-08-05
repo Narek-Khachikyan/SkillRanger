@@ -310,7 +310,7 @@ export const retrieveSkillCandidates = (input: RetrieveSkillCandidatesInput): Re
     if (eligibleRoles.length === 0) { rejections.push({ skillId: skill.id, reason: "router-metadata-incomplete" }); return []; }
     const domainMatch = skill.domains.some((domain) => selectedDomains.has(canonical(domain)));
     if (!domainMatch) { rejections.push({ skillId: skill.id, reason: "domain-mismatch" }); return []; }
-    if (primaryDomainId && eligibleRoles.includes("primary") && !skill.domains.some((domain) => canonical(domain) === primaryDomainId)) {
+    if (primaryDomainId && eligibleRoles.includes("primary") && !nominatedPrimarySkillIds.has(canonical(skill.id)) && !skill.domains.some((domain) => canonical(domain) === primaryDomainId)) {
       eligibleRoles = eligibleRoles.filter((role) => role !== "primary");
       if (eligibleRoles.length === 0) { rejections.push({ skillId: skill.id, reason: "primary-domain-mismatch" }); return []; }
     }
@@ -646,7 +646,7 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     const selectedIds = new Set(dedupedRequired.map(({ skill }) => skill.id));
     const warnings: string[] = [];
     const optional = (role: RouterSkillRole) => retrieved.candidates
-      .filter(({ eligibleRoles, skill }) => eligibleRoles.includes(role) && !selectedIds.has(skill.id) && (!input.strict || skill.source === "installed"))
+      .filter(({ eligibleRoles, skill }) => eligibleRoles.includes(role) && !selectedIds.has(skill.id) && (!input.strict || skill.source === "installed" || input.nominatedRoles?.get(canonical(skill.id)) === role))
       .sort((left, right) => {
         const leftNomination = nominationOrder.get(canonical(left.skill.id));
         const rightNomination = nominationOrder.get(canonical(right.skill.id));
@@ -691,7 +691,7 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     const totalExplicitWeight = explicitRequirements.reduce((sum, requirement) => sum + effectiveRequirementWeight(requirement), 0);
     const requestedActions = dedupeRequirements(input.requirements ?? [])
       .filter(({ kind, requirementClass }) => kind === "action" && requirementClass !== "context");
-    const primaryDomain = canonical(input.primaryDomainId ?? primary.skill.domains[0] ?? "");
+    const primaryDomain = canonical(primary.skill.domains.find((domain) => canonical(domain) === canonical(input.primaryDomainId ?? "")) ?? primary.skill.domains[0] ?? input.primaryDomainId ?? "");
     const coverageKeys = (selectedCandidates: SelectedRouterCandidate[]) => new Set(selectedCandidates.flatMap((selectedCandidate) =>
       calculateRequirementCoverage({ requirements: explicitRequirements, skill: selectedCandidate.skill, routingContext: input.routingContext }).covered.map(requirementKey)));
     while (totalExplicitWeight > 0 && dedupedRequired.filter(({ role }) => role === "companion").length < limits.maxTaskCompanions) {
