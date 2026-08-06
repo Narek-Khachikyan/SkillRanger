@@ -1,0 +1,561 @@
+{
+  "schemaVersion": "router-model-assisted/1.0",
+  "cases": [
+    {
+      "id": "implicit-responsive-layout",
+      "source": "implicit-intent",
+      "vocabularyMiss": true,
+      "prompt": "Make the interface stop feeling cramped on phones @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["modify"],
+          "artifactTypes": ["web-interface"],
+          "intentTags": ["responsive-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["responsiveness"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.visual-design-polish",
+            "role": "primary",
+            "confidence": 0.92,
+            "evidenceText": "Make the interface stop feeling cramped on phones"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.visual-design-polish",
+        "fallbackStatus": "no_matching_skills",
+        "allowedSkillIds": ["frontend.visual-design-polish", "frontend.performance-review"],
+        "forbiddenSkillIds": []
+      }
+    },
+    {
+      "id": "implicit-performance-regression",
+      "source": "implicit-intent",
+      "vocabularyMiss": true,
+      "prompt": "Make this dashboard less sluggish when users scroll @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["investigate"],
+          "artifactTypes": ["web-application"],
+          "intentTags": ["performance"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["performance"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.performance-review",
+            "role": "primary",
+            "confidence": 0.9,
+            "evidenceText": "Make this dashboard less sluggish when users scroll"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.performance-review",
+        "fallbackStatus": "no_matching_skills",
+        "allowedSkillIds": ["frontend.performance-review", "frontend.motion-design", "frontend.motion-audit", "frontend.audit"],
+        "forbiddenSkillIds": []
+      }
+    },
+    {
+      "id": "implicit-keyboard-completion",
+      "source": "implicit-intent",
+      "vocabularyMiss": true,
+      "prompt": "Turn the checkout form into something keyboard users can finish @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["review"],
+          "artifactTypes": ["form"],
+          "intentTags": ["accessibility"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["accessibility"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.audit",
+            "role": "primary",
+            "confidence": 0.88,
+            "evidenceText": "Turn the checkout form into something keyboard users can finish"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.audit",
+        "fallbackStatus": "no_matching_skills",
+        "allowedSkillIds": ["frontend.audit", "frontend.accessibility-review", "frontend.motion-audit"],
+        "forbiddenSkillIds": []
+      }
+    },
+    {
+      "id": "implicit-motion-language",
+      "source": "implicit-intent",
+      "vocabularyMiss": true,
+      "prompt": "Make the card transitions feel intentional and calm @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["transitions"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.motion-design",
+            "role": "primary",
+            "confidence": 0.91,
+            "evidenceText": "Make the card transitions feel intentional and calm"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.motion-design",
+        "fallbackStatus": "no_matching_skills",
+        "allowedSkillIds": ["frontend.motion-design", "frontend.motion-audit"],
+        "forbiddenSkillIds": []
+      }
+    },
+    {
+      "id": "implicit-loading-truthfulness",
+      "source": "implicit-intent",
+      "vocabularyMiss": true,
+      "prompt": "Keep the app from lying when data is loading @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["modify"],
+          "artifactTypes": ["interaction"],
+          "intentTags": ["loading-state"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["usability"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.interaction-polish",
+            "role": "primary",
+            "confidence": 0.86,
+            "evidenceText": "Keep the app from lying when data is loading"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.interaction-polish",
+        "fallbackStatus": "no_matching_skills",
+        "allowedSkillIds": ["frontend.interaction-polish"],
+        "forbiddenSkillIds": []
+      }
+    },
+    {
+      "id": "implicit-stale-route-diagnosis",
+      "source": "implicit-intent",
+      "vocabularyMiss": true,
+      "prompt": "Track down why the route keeps going stale @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["investigate"],
+          "artifactTypes": ["route"],
+          "intentTags": ["caching"],
+          "technologyTags": ["nextjs"],
+          "qualityGoals": ["correctness"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.next-app-router-review",
+            "role": "primary",
+            "confidence": 0.87,
+            "evidenceText": "Track down why the route keeps going stale"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.next-app-router-review",
+        "fallbackStatus": "no_matching_skills",
+        "allowedSkillIds": ["frontend.next-app-router-review", "frontend.performance-review", "frontend.audit"],
+        "forbiddenSkillIds": []
+      }
+    },
+    {
+      "id": "hard-paraphrase-visual-language",
+      "source": "hard-paraphrase",
+      "vocabularyMiss": false,
+      "prompt": "The page needs a coherent visual language and spacing rhythm @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["web-interface"],
+          "intentTags": ["visual-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.visual-design-polish",
+            "role": "primary",
+            "confidence": 0.84,
+            "evidenceText": "coherent visual language and spacing rhythm"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.visual-design-polish",
+        "fallbackStatus": "prepared",
+        "fallbackPrimarySkillId": "frontend.visual-design-polish",
+        "allowedSkillIds": ["frontend.visual-design-polish", "frontend.motion-audit"],
+        "forbiddenSkillIds": []
+      }
+    },
+    {
+      "id": "hard-paraphrase-component-api",
+      "source": "hard-paraphrase",
+      "vocabularyMiss": false,
+      "prompt": "Make the component API easier for future changes @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["modify"],
+          "artifactTypes": ["component-api"],
+          "intentTags": ["component-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["maintainability"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.react-component-design",
+            "role": "primary",
+            "confidence": 0.83,
+            "evidenceText": "Make the component API easier for future changes"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.react-component-design",
+        "fallbackStatus": "prepared",
+        "fallbackPrimarySkillId": "frontend.react-component-design",
+        "allowedSkillIds": ["frontend.react-component-design", "frontend.testing-strategy"],
+        "forbiddenSkillIds": []
+      }
+    },
+    {
+      "id": "hard-veto-does-not-select-reference-workflow",
+      "source": "hard-paraphrase",
+      "vocabularyMiss": true,
+      "prompt": "Rebuild this UI from the supplied reference image @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["implement"],
+          "artifactTypes": ["web-interface"],
+          "intentTags": ["visual-reference"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-fidelity"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.design-to-code",
+            "role": "primary",
+            "confidence": 0.99,
+            "evidenceText": "Rebuild this UI from the supplied reference image"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.motion-design",
+        "fallbackStatus": "no_matching_skills",
+        "allowedSkillIds": ["frontend.motion-design"],
+        "forbiddenSkillIds": ["frontend.design-to-code"]
+      }
+    },
+    {
+      "id": "invalid-item-falls-back-without-regression",
+      "source": "hard-paraphrase",
+      "vocabularyMiss": false,
+      "prompt": "The page needs a coherent visual language and spacing rhythm @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["web-interface"],
+          "intentTags": ["visual-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.not-in-catalog",
+            "role": "primary",
+            "confidence": 0.99,
+            "evidenceText": "coherent visual language and spacing rhythm"
+          },
+          {
+            "skillId": "frontend.visual-design-polish",
+            "role": "primary",
+            "confidence": 0.8,
+            "evidenceText": "coherent visual language and spacing rhythm"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.visual-design-polish",
+        "fallbackStatus": "prepared",
+        "fallbackPrimarySkillId": "frontend.visual-design-polish",
+        "fallbackNotWorse": true,
+        "allowedSkillIds": ["frontend.visual-design-polish", "frontend.motion-audit"],
+        "forbiddenSkillIds": []
+      }
+    },
+    {
+      "id": "invalid-item-recovers-from-no-match",
+      "source": "implicit-intent",
+      "vocabularyMiss": true,
+      "prompt": "Make the interface stop feeling cramped on phones @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["modify"],
+          "artifactTypes": ["web-interface"],
+          "intentTags": ["responsive-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["responsiveness"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.not-in-catalog",
+            "role": "primary",
+            "confidence": 0.99,
+            "evidenceText": "Make the interface stop feeling cramped on phones"
+          },
+          {
+            "skillId": "frontend.visual-design-polish",
+            "role": "primary",
+            "confidence": 0.8,
+            "evidenceText": "Make the interface stop feeling cramped on phones"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.visual-design-polish",
+        "fallbackStatus": "no_matching_skills",
+        "fallbackNotWorse": true,
+        "allowedSkillIds": ["frontend.visual-design-polish", "frontend.performance-review"],
+        "forbiddenSkillIds": []
+      }
+    },
+    {
+      "id": "absent-proposal-keeps-fallback",
+      "source": "hard-paraphrase",
+      "vocabularyMiss": false,
+      "prompt": "The page needs a coherent visual language and spacing rhythm @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "absent",
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.visual-design-polish",
+        "fallbackStatus": "prepared",
+        "fallbackPrimarySkillId": "frontend.visual-design-polish",
+        "fallbackUnchanged": true,
+        "allowedSkillIds": ["frontend.visual-design-polish"],
+        "forbiddenSkillIds": []
+      }
+    },
+    {
+      "id": "malformed-proposal-is-rejected-without-state",
+      "source": "hard-paraphrase",
+      "vocabularyMiss": false,
+      "prompt": "The page needs a coherent visual language and spacing rhythm @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "malformed",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "not-a-digest",
+        "catalogReceipt": "not-a-receipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["web-interface"],
+          "intentTags": ["visual-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.visual-design-polish",
+            "role": "primary",
+            "confidence": 0.9,
+            "evidenceText": "coherent visual language and spacing rhythm"
+          }
+        ]
+      },
+      "expected": {
+        "status": "error",
+        "errorCode": "routing-proposal-invalid",
+        "malformedRejected": true,
+        "allowedSkillIds": [],
+        "forbiddenSkillIds": []
+      }
+    },
+    {
+      "id": "stale-proposal-is-a-catalog-integrity-stop",
+      "source": "hard-paraphrase",
+      "vocabularyMiss": false,
+      "prompt": "Please make the page delightful @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "stale",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$staleCatalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["web-interface"],
+          "intentTags": ["visual-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.visual-design-polish",
+            "role": "primary",
+            "confidence": 0.9,
+            "evidenceText": "make the page delightful"
+          }
+        ]
+      },
+      "expected": {
+        "status": "catalog_refresh_required",
+        "catalogIntegrityException": true,
+        "allowedSkillIds": [],
+        "forbiddenSkillIds": []
+      }
+    },
+    {
+      "id": "strict-proposal-does-not-substitute",
+      "source": "hard-paraphrase",
+      "vocabularyMiss": false,
+      "prompt": "Please make the page delightful @skillranger",
+      "strict": true,
+      "capabilities": ["filesystem"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["motion-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.motion-design",
+            "role": "primary",
+            "confidence": 0.99,
+            "evidenceText": "make the page delightful"
+          },
+          {
+            "skillId": "frontend.visual-design-polish",
+            "role": "primary",
+            "confidence": 0.8,
+            "evidenceText": "make the page delightful"
+          }
+        ]
+      },
+      "expected": {
+        "status": "strict_requirements_unmet",
+        "allowedSkillIds": [],
+        "forbiddenSkillIds": []
+      }
+    }
+  ]
+}

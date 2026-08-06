@@ -1,0 +1,207 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { callMcpTool } from "../src/mcp/tools.ts";
+import { initializeRouterContext } from "../src/mcp/router-context.ts";
+import {
+  evaluateModelAssistedRouter,
+  loadRoutingProposalBenchmarkFixtures,
+  loadRoutingProposalContractFixtures,
+} from "../src/evals/router/model-assisted.ts";
+import { buildSkillCatalog, inspectSkillCatalog } from "../src/router/catalog.ts";
+import { createRouterReader, prepareTask } from "../src/router/prepare.ts";
+import { RouterStore } from "../src/router/store.ts";
+import type { PrepareTaskResult, ReadRunSkillFileResult } from "../src/router/types.ts";
+
+const structured = <T>(value: { structuredContent?: unknown }) => value.structuredContent as T;
+
+test("the frozen routing-proposal contract corpus covers every accepted boundary", async () => {
+  const fixture = await loadRoutingProposalContractFixtures("evals/router/contracts.json");
+  assert.deepEqual(
+    [...new Set(fixture.cases.map(({ kind }) => kind))].sort(),
+    [
+      "ambiguity",
+      "catalog",
+      "hard-veto",
+      "item-rejection",
+      "precedence",
+      "privacy-replay",
+      "proposal-absent",
+      "proposal-grounding",
+      "proposal-ownership",
+      "refresh",
+      "strict",
+    ],
+  );
+  assert.equal(fixture.schemaVersion, "router-eval-contracts/1.0");
+});
+
+test("the model-assisted benchmark is captured-proposal-only and meets its promotion bar", async () => {
+  const fixture = await loadRoutingProposalBenchmarkFixtures("evals/router/model-assisted.json");
+  assert.equal(fixture.schemaVersion, "router-model-assisted/1.0");
+  assert.ok(fixture.cases.some(({ source }) => source === "implicit-intent"));
+  assert.ok(fixture.cases.some(({ source }) => source === "hard-paraphrase"));
+
+  const report = await evaluateModelAssistedRouter(process.cwd());
+  assert.equal(report.execution, "captured-proposals-only");
+  assert.equal(report.promotion.verdict, "promotable");
+  assert.equal(report.promotion.blockingReasons.length, 0);
+  assert.equal(report.benchmark.metrics.caseFailures, 0);
+  assert.ok(report.benchmark.metrics.vocabularyMissRecovery >= 0.8);
+  assert.equal(report.benchmark.metrics.forbiddenSelectionRate, 0);
+  assert.equal(report.benchmark.metrics.privacyLeakageCount, 0);
+  assert.equal(report.benchmark.metrics.hardVetoFailures, 0);
+  assert.equal(report.benchmark.metrics.invalidProposalFallbackNotWorse, true);
+  assert.equal(report.benchmark.metrics.absentProposalFallbackUnchanged, true);
+  assert.equal(report.benchmark.metrics.deterministicReplay, true);
+  assert.equal(report.contracts.passed, report.contracts.caseCount);
+});
+
+test("a captured proposal still follows the mandatory-read ledger", async () => {
+  const benchmark = await loadRoutingProposalBenchmarkFixtures("evals/router/model-assisted.json");
+  const captured = benchmark.cases.find(({ id }) => id === "implicit-motion-language");
+  assert.ok(captured?.proposal);
+  const firstPage = await inspectSkillCatalog({ maxItems: 2, maxBytes: 256_000 });
+  let page = firstPage;
+  while (!page.complete) {
+    page = await inspectSkillCatalog({ cursor: page.nextCursor!, expectedCatalogDigest: page.catalogDigest });
+  }
+  assert.ok(page.catalogReceipt);
+  const catalog = await buildSkillCatalog();
+  const proposal = structuredClone(captured.proposal);
+  proposal.catalogDigest = catalog.digest;
+  proposal.catalogReceipt = page.catalogReceipt;
+  const root = await mkdtemp(path.join(os.tmpdir(), "skillranger-model-assisted-read-"));
+  try {
+    const prepared = await prepareTask({
+      projectRoot: root,
+      registry: { kind: "bundled", root: path.resolve("registry") },
+      prompt: captured.prompt,
+      activation: { mode: "explicit" },
+      targetAgent: "codex",
+      capabilities: captured.capabilities.map((id) => ({ id, source: "host-reported" as const })),
+      routingDate: "2026-07-19",
+      routingProposal: proposal,
+    });
+    assert.equal(prepared.status, "prepared");
+    if (prepared.status !== "prepared") return;
+    const store = new RouterStore(root);
+    const reader = createRouterReader(root, path.resolve("registry"), store);
+    let readRevision = 0;
+    let lastRead: Awaited<ReturnType<typeof reader.read>> | undefined;
+    for (let attempt = 0; attempt < prepared.requiredReads.length * 4 + 4; attempt += 1) {
+      lastRead = await reader.read({
+        routerRunId: prepared.run.routerRunId,
+        readRequestId: randomUUID(),
+        expectedReadRevision: readRevision,
+        mode: "mandatory-next",
+      });
+      readRevision = lastRead.readRevision;
+      if (lastRead.readStatus.runMandatoryReadsComplete) break;
+    }
+    assert.equal(lastRead?.readStatus.runMandatoryReadsComplete, true);
+    const persisted = await store.read(prepared.run.routerRunId);
+    assert.equal(persisted.state, "ready");
+    assert.equal(persisted.readRevision, readRevision);
+    assert.ok(persisted.readLedger.length > 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("proposal-backed preparation preserves lifecycle evidence gates", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "skillranger-model-assisted-runtime-"));
+  const previousProjectRoot = process.env.SKILLRANGER_PROJECT_ROOT;
+  process.env.SKILLRANGER_PROJECT_ROOT = root;
+  initializeRouterContext();
+  try {
+    const pageOptions = { maxItems: 2, maxBytes: 256_000 };
+    let page = await inspectSkillCatalog(pageOptions);
+    while (!page.complete) page = await inspectSkillCatalog({ ...pageOptions, cursor: page.nextCursor!, expectedCatalogDigest: page.catalogDigest });
+    assert.ok(page.catalogReceipt);
+    const catalog = await buildSkillCatalog();
+    const prompt = "Review and fix accessibility in this web interface, then verify the result. @skillranger";
+    const routingProposal = {
+      schemaVersion: "routing-proposal/1.0" as const,
+      catalogDigest: catalog.digest,
+      catalogReceipt: page.catalogReceipt,
+      interpretation: {
+        domains: ["frontend"],
+        actions: ["review"],
+        artifactTypes: ["web-interface"],
+        intentTags: ["accessibility"],
+        technologyTags: ["react"],
+        qualityGoals: ["accessibility"],
+      },
+      nominations: [{
+        skillId: "frontend.accessibility-review",
+        role: "primary",
+        confidence: 0.95,
+        evidenceText: "Review and fix accessibility in this web interface, then verify the result",
+      }],
+    };
+    const preparedResponse = await callMcpTool("prepare_task", {
+      prompt,
+      targetAgent: "codex",
+      hostCapabilities: ["browser", "screenshots", "filesystem", "terminal"],
+      routingProposal,
+    });
+    assert.equal(preparedResponse.isError, false);
+    const prepared = structured<PrepareTaskResult>(preparedResponse);
+    assert.equal(prepared.status, "prepared");
+    if (prepared.status !== "prepared") return;
+
+    const unread = await callMcpTool("begin_skill_run_execution", { projectRoot: root, runId: prepared.run.runtimeRunId });
+    assert.equal(unread.isError, true);
+    let readRevision = 0;
+    let readResult: ReadRunSkillFileResult | undefined;
+    for (let attempt = 0; attempt < prepared.requiredReads.length * 4 + 4; attempt += 1) {
+      readResult = structured<ReadRunSkillFileResult>(await callMcpTool("read_run_skill_file", {
+        routerRunId: prepared.run.routerRunId,
+        readRequestId: randomUUID(),
+        expectedReadRevision: readRevision,
+        mode: "mandatory-next",
+      }));
+      readRevision = readResult.readRevision;
+      if (readResult.readStatus.runMandatoryReadsComplete) break;
+    }
+    assert.equal(readResult?.readStatus.runMandatoryReadsComplete, true);
+    const running = structured<{ state: string }>(await callMcpTool("begin_skill_run_execution", { projectRoot: root, runId: prepared.run.runtimeRunId }));
+    assert.equal(running.state, "running");
+    await mkdir(path.join(root, "artifacts"), { recursive: true });
+    await writeFile(path.join(root, "artifacts", "result.json"), "ok\n");
+    await callMcpTool("complete_skill_run", {
+      projectRoot: root,
+      runId: prepared.run.runtimeRunId,
+      status: "implemented",
+      artifacts: [{ kind: "result", path: "artifacts/result.json", description: "Accessibility fixes" }],
+    });
+    const verified = structured<{ state: string }>(await callMcpTool("verify_skill_run", {
+      projectRoot: root,
+      runId: prepared.run.runtimeRunId,
+      reportPath: "verification.json",
+      report: {
+        schemaVersion: "1.0",
+        domain: "frontend",
+        workflowId: "frontend-accessibility-review",
+        iteration: 0,
+        capabilityStatus: "ready",
+        executionStatus: "implemented",
+        verificationStatus: "passed",
+        outcome: "verified",
+        findings: [],
+        gates: { hardPassed: true, criticalFindings: 0, highFindings: 0 },
+        evidence: [{ kind: "test", path: "artifacts/result.json", description: "Accessibility checks passed" }],
+        residualRisks: [],
+      },
+    }));
+    assert.equal(verified.state, "verified");
+  } finally {
+    if (previousProjectRoot === undefined) delete process.env.SKILLRANGER_PROJECT_ROOT;
+    else process.env.SKILLRANGER_PROJECT_ROOT = previousProjectRoot;
+    await rm(root, { recursive: true, force: true });
+  }
+});

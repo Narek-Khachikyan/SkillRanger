@@ -15,6 +15,7 @@ import { canonicalSkillRoutingDocument } from "../../router/metadata.ts";
 import { coreRoutingVocabulary } from "../../router/vocabulary/core.ts";
 import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "../../router/vocabulary/load.ts";
 import { canonicalizeJson } from "../../router/store.ts";
+import { evaluateModelAssistedRouter } from "./model-assisted.ts";
 
 const digest = (value: string) => `sha256:${value.padEnd(64, "0").slice(0, 64)}`;
 export const routerEvalThresholds = {
@@ -352,6 +353,32 @@ const summarizeNaturalLanguage = (cases: RouterGoldenCase[], results: Awaited<Re
   };
 };
 
+const deterministicRouterGatePassed = (
+  metrics: ReturnType<typeof summarize>,
+  naturalLanguageMetrics: ReturnType<typeof summarizeNaturalLanguage>,
+) => (
+  metrics.failed === 0 &&
+  metrics.statusAccuracy >= routerEvalThresholds.statusAccuracy &&
+  metrics.primaryAccuracy >= routerEvalThresholds.primaryAccuracy &&
+  metrics.domainPrecision >= routerEvalThresholds.domainPrecision &&
+  metrics.domainRecall >= routerEvalThresholds.domainRecall &&
+  metrics.companionUsefulness >= routerEvalThresholds.companionUsefulness &&
+  metrics.irrelevantSelectionRate <= routerEvalThresholds.irrelevantSelectionRate &&
+  metrics.noMatchCorrectness >= routerEvalThresholds.noMatchCorrectness &&
+  metrics.clarificationCorrectness >= routerEvalThresholds.clarificationCorrectness &&
+  metrics.decompositionCorrectness >= routerEvalThresholds.decompositionCorrectness &&
+  metrics.strictEligibilityCorrectness >= routerEvalThresholds.strictEligibilityCorrectness &&
+  naturalLanguageMetrics.naturalLanguageSignalRecall >= routerEvalThresholds.naturalLanguageSignalRecall &&
+  naturalLanguageMetrics.naturalLanguagePrimarySkillAccuracy >= routerEvalThresholds.naturalLanguagePrimarySkillAccuracy &&
+  naturalLanguageMetrics.requiredCompanionRecall >= routerEvalThresholds.requiredCompanionRecall &&
+  naturalLanguageMetrics.forbiddenSelectionRate <= routerEvalThresholds.forbiddenSelectionRate &&
+  naturalLanguageMetrics.falsePositiveCompanionRate <= routerEvalThresholds.falsePositiveCompanionRate &&
+  naturalLanguageMetrics.sameDomainDecompositionErrors <= routerEvalThresholds.sameDomainDecompositionErrors &&
+  naturalLanguageMetrics.crossDomainDecompositionCorrectness >= routerEvalThresholds.crossDomainDecompositionCorrectness &&
+  metrics.privacyLeakageCount <= routerEvalThresholds.privacyLeakageCount &&
+  metrics.deterministic === routerEvalThresholds.deterministic
+);
+
 export const evaluateRouterFixtures = async (
   root = process.cwd(),
   options: { includeQuarantine?: boolean } = {},
@@ -366,6 +393,9 @@ export const evaluateRouterFixtures = async (
   const metrics = summarize([...cases, ...quarantineCases], [...results, ...quarantineResults]);
   const shippedIndexes = cases.flatMap((input, index) => input.registry === "bundled" ? [index] : []);
   const syntheticIndexes = cases.flatMap((input, index) => input.registry === "test-fixture" ? [index] : []);
+  const modelAssisted = await evaluateModelAssistedRouter(root, {
+    deterministicCorpusRegression: deterministicRouterGatePassed(metrics, naturalLanguageMetrics),
+  });
   return {
     schemaVersion: "router-eval/1.0" as const,
     caseCount: cases.length + quarantineCases.length,
@@ -399,7 +429,10 @@ export const evaluateRouterFixtures = async (
           ])),
         })),
       },
+      modelAssisted: modelAssisted.benchmark,
     },
+    modelAssisted,
+    promotion: modelAssisted.promotion,
     results: cases.map((input, index) => ({
       id: input.id,
       expected: input.expected.status,
@@ -417,28 +450,7 @@ if (isMain) {
   if (unknown) throw new Error(`Unknown router eval option: ${unknown}`);
   const report = await evaluateRouterFixtures(process.cwd(), { includeQuarantine: args.includes("--include-quarantine") });
   console.log(JSON.stringify(report, null, 2));
-  if (
-    report.metrics.failed > 0 ||
-    report.metrics.statusAccuracy < report.thresholds.statusAccuracy ||
-    report.metrics.primaryAccuracy < report.thresholds.primaryAccuracy ||
-    report.metrics.domainPrecision < report.thresholds.domainPrecision ||
-    report.metrics.domainRecall < report.thresholds.domainRecall ||
-    report.metrics.companionUsefulness < report.thresholds.companionUsefulness ||
-    report.metrics.irrelevantSelectionRate > report.thresholds.irrelevantSelectionRate ||
-    report.metrics.noMatchCorrectness < report.thresholds.noMatchCorrectness ||
-    report.metrics.clarificationCorrectness < report.thresholds.clarificationCorrectness ||
-    report.metrics.decompositionCorrectness < report.thresholds.decompositionCorrectness ||
-    report.metrics.strictEligibilityCorrectness < report.thresholds.strictEligibilityCorrectness ||
-    report.suites.naturalLanguage.metrics.naturalLanguageSignalRecall < report.thresholds.naturalLanguageSignalRecall ||
-    report.suites.naturalLanguage.metrics.naturalLanguagePrimarySkillAccuracy < report.thresholds.naturalLanguagePrimarySkillAccuracy ||
-    report.suites.naturalLanguage.metrics.requiredCompanionRecall < report.thresholds.requiredCompanionRecall ||
-    report.suites.naturalLanguage.metrics.forbiddenSelectionRate > report.thresholds.forbiddenSelectionRate ||
-    report.suites.naturalLanguage.metrics.falsePositiveCompanionRate > report.thresholds.falsePositiveCompanionRate ||
-    report.suites.naturalLanguage.metrics.sameDomainDecompositionErrors > report.thresholds.sameDomainDecompositionErrors ||
-    report.suites.naturalLanguage.metrics.crossDomainDecompositionCorrectness < report.thresholds.crossDomainDecompositionCorrectness ||
-    report.metrics.privacyLeakageCount > report.thresholds.privacyLeakageCount ||
-    report.metrics.deterministic !== report.thresholds.deterministic
-  ) {
+  if (!deterministicRouterGatePassed(report.metrics, report.suites.naturalLanguage.metrics) || report.promotion.verdict !== "promotable") {
     process.exitCode = 1;
   }
 }

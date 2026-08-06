@@ -1,0 +1,871 @@
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import {
+  assertValidCatalogReceipt,
+  buildSkillCatalog,
+  inspectSkillCatalog,
+  type SkillCatalogPage,
+  type SkillCatalogSnapshot,
+} from "../../router/catalog.ts";
+import { parseTrigger } from "../../router/trigger.ts";
+import {
+  validateRoutingProposal,
+  type RoutingProposalInput,
+} from "../../router/routing-proposal.ts";
+import { prepareTask, RouterPrepareError } from "../../router/prepare.ts";
+import type { PrepareTaskResult } from "../../router/types.ts";
+import { canonicalizeJson } from "../../router/store.ts";
+
+const contractSchemaVersion = "router-eval-contracts/1.0" as const;
+const benchmarkSchemaVersion = "router-model-assisted/1.0" as const;
+const canonicalIdPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
+const contractKinds = new Set([
+  "catalog",
+  "proposal-grounding",
+  "proposal-ownership",
+  "item-rejection",
+  "precedence",
+  "hard-veto",
+  "strict",
+  "ambiguity",
+  "refresh",
+  "privacy-replay",
+  "proposal-absent",
+] as const);
+type EvaluatedStatus = "prepared" | "clarification_required" | "decomposition_required" | "no_matching_skills" | "strict_requirements_unmet" | "context_budget_exceeded" | "catalog_refresh_required" | "error";
+type EvaluationErrorCode = RouterPrepareError["code"] | "evaluation-error";
+const benchmarkSources = new Set(["implicit-intent", "hard-paraphrase"] as const);
+const proposalModes = new Set(["current", "absent", "malformed", "stale"] as const);
+const resultStatuses = new Set<EvaluatedStatus>([
+  "prepared",
+  "clarification_required",
+  "decomposition_required",
+  "no_matching_skills",
+  "strict_requirements_unmet",
+  "context_budget_exceeded",
+  "catalog_refresh_required",
+  "error",
+] as const);
+const routerPrepareErrorCodes = new Set<RouterPrepareError["code"]>([
+  "trigger-required",
+  "empty-intent",
+  "intent-too-large",
+  "router-disabled",
+  "target-agent-unresolved",
+  "project-root-unauthorized",
+  "continuation-invalid",
+  "continuation-expired",
+  "clarification-answer-invalid",
+  "capability-invalid",
+  "router-config-invalid",
+  "routing-integrity",
+  "semantic-hint-invalid",
+  "routing-proposal-invalid",
+  "raw-intent-confirmation-required",
+]);
+
+export type RoutingProposalContractKind =
+  | "catalog"
+  | "proposal-grounding"
+  | "proposal-ownership"
+  | "item-rejection"
+  | "precedence"
+  | "hard-veto"
+  | "strict"
+  | "ambiguity"
+  | "refresh"
+  | "privacy-replay"
+  | "proposal-absent";
+
+export type CapturedRoutingProposal = {
+  schemaVersion: "routing-proposal/1.0";
+  catalogDigest: string;
+  catalogReceipt: string;
+  interpretation: {
+    domains: string[];
+    actions: string[];
+    artifactTypes: string[];
+    intentTags: string[];
+    technologyTags: string[];
+    qualityGoals: string[];
+  };
+  nominations: Array<{
+    skillId: string;
+    role: string;
+    confidence: number;
+    evidenceText: string;
+  }>;
+  ambiguity?: { primarySkillIds: string[] };
+};
+
+export type RoutingProposalContractCase = {
+  id: string;
+  kind: RoutingProposalContractKind;
+  prompt?: string;
+  proposal?: CapturedRoutingProposal;
+  strict?: boolean;
+  capabilities?: string[];
+  expected: Record<string, unknown>;
+};
+
+export type RoutingProposalContractFixture = {
+  schemaVersion: typeof contractSchemaVersion;
+  catalog: {
+    expectedDomainIds: string[];
+    expectedSkillIds: string[];
+    pageMaxItems: number;
+  };
+  cases: RoutingProposalContractCase[];
+};
+
+export type ModelAssistedBenchmarkSource = "implicit-intent" | "hard-paraphrase";
+export type ModelAssistedProposalMode = "current" | "absent" | "malformed" | "stale";
+
+export type ModelAssistedBenchmarkExpected = {
+  status: EvaluatedStatus;
+  primarySkillId?: string;
+  fallbackStatus?: EvaluatedStatus;
+  fallbackPrimarySkillId?: string;
+  fallbackUnchanged?: boolean;
+  fallbackNotWorse?: boolean;
+  malformedRejected?: boolean;
+  catalogIntegrityException?: boolean;
+  errorCode?: EvaluationErrorCode;
+  allowedSkillIds: string[];
+  forbiddenSkillIds: string[];
+};
+
+export type ModelAssistedBenchmarkCase = {
+  id: string;
+  source: ModelAssistedBenchmarkSource;
+  vocabularyMiss: boolean;
+  prompt: string;
+  strict: boolean;
+  capabilities: string[];
+  proposalMode: ModelAssistedProposalMode;
+  proposal?: CapturedRoutingProposal;
+  expected: ModelAssistedBenchmarkExpected;
+};
+
+export type ModelAssistedBenchmarkFixture = {
+  schemaVersion: typeof benchmarkSchemaVersion;
+  cases: ModelAssistedBenchmarkCase[];
+};
+
+type CatalogBinding = {
+  catalogDigest: string;
+  catalogReceipt: string;
+};
+
+type PreparedEvaluation = {
+  status: EvaluatedStatus;
+  primarySkillId?: string;
+  selectedSkillIds: string[];
+  selectedSkillCount: number;
+  instructionBytes: number;
+  warnings: string[];
+  reasonCode?: string;
+  errorCode?: EvaluationErrorCode;
+  runFileCount: number;
+  privacyLeakageCount: number;
+  deterministicKey?: string;
+  questionIds: string[];
+};
+
+type CatalogEvaluation = {
+  domainsOnFirstPage: boolean;
+  skillsExactlyOnce: boolean;
+  canonicalOrder: boolean;
+  completeReceipt: boolean;
+  multiplePages: boolean;
+  pageSizesBounded: boolean;
+  cursorChainValid: boolean;
+  deterministicReplay: boolean;
+};
+
+export const modelAssistedEvalThresholds = {
+  vocabularyMissRecovery: 0.8,
+  benchmarkCaseFailures: 0,
+  irrelevantSelectionRate: 0,
+  forbiddenSelectionRate: 0,
+  privacyLeakageCount: 0,
+  hardVetoFailures: 0,
+  malformedProposalRejectionRate: 1,
+  invalidProposalFallbackNotWorse: true,
+  absentProposalFallbackUnchanged: true,
+  deterministicReplay: true,
+  contractFailures: 0,
+} as const;
+
+export type ModelAssistedEvalReport = {
+  schemaVersion: "router-model-assisted-eval/1.0";
+  execution: "captured-proposals-only";
+  thresholds: typeof modelAssistedEvalThresholds;
+  deterministicCorpusRegression: boolean;
+  contracts: {
+    schemaVersion: "router-contract-eval/1.0";
+    caseCount: number;
+    passed: number;
+    failed: number;
+    results: Array<{
+      id: string;
+      kind: RoutingProposalContractKind;
+      passed: boolean;
+      observed?: Record<string, unknown>;
+      errorCode?: EvaluationErrorCode;
+    }>;
+  };
+  benchmark: {
+    schemaVersion: "router-model-assisted-benchmark/1.0";
+    caseCount: number;
+    results: Array<{
+      id: string;
+      source: ModelAssistedBenchmarkSource;
+      proposalMode: ModelAssistedProposalMode;
+      passed: boolean;
+      fallback: Omit<PreparedEvaluation, "privacyLeakageCount">;
+      assisted: Omit<PreparedEvaluation, "privacyLeakageCount">;
+      fallbackUnchanged: boolean;
+      fallbackNotWorse: boolean;
+      privacyLeakageCount: number;
+      forbiddenSelectedSkillIds: string[];
+      irrelevantSelectedSkillIds: string[];
+      deterministicReplay: boolean;
+    }>;
+    metrics: {
+      caseFailures: number;
+      primaryAccuracy: number;
+      vocabularyMissRecovery: number;
+      irrelevantSelectionRate: number;
+      forbiddenSelectionRate: number;
+      averageSelectedSkillCount: number;
+      instructionByteCost: number;
+      averageInstructionByteCost: number;
+      malformedProposalFallbackBehavior: number;
+      invalidProposalFallbackNotWorse: boolean;
+      absentProposalFallbackUnchanged: boolean;
+      hardVetoFailures: number;
+      privacyLeakageCount: number;
+      deterministicReplay: boolean;
+    };
+  };
+  promotion: {
+    verdict: "promotable" | "blocked";
+    blockingReasons: string[];
+  };
+};
+
+const fail = (message: string): never => {
+  throw new Error(message);
+};
+
+const contractExpectedFields: Record<RoutingProposalContractKind, { required: string[]; optional: string[] }> = {
+  catalog: { required: ["domainsOnFirstPage", "skillsExactlyOnce", "canonicalOrder", "completeReceipt", "multiplePages", "pageSizesBounded", "cursorChainValid", "deterministicReplay"], optional: [] },
+  "proposal-grounding": { required: ["acceptedSkillIds", "rejections"], optional: [] },
+  "proposal-ownership": { required: ["errorCode", "noPersistence"], optional: [] },
+  "item-rejection": { required: ["acceptedSkillIds", "rejections"], optional: [] },
+  precedence: { required: ["fallbackPrimarySkillId", "assistedStatus", "assistedPrimarySkillId", "noPersistenceOnFailure"], optional: [] },
+  "hard-veto": { required: ["assistedStatus", "noForbiddenSelection"], optional: ["assistedPrimarySkillId", "reasonCode", "noPersistence"] },
+  strict: { required: ["assistedStatus", "noPersistenceOnFailure"], optional: ["assistedPrimarySkillId", "rejectedSkillId", "missingSkillId", "doesNotSubstitute"] },
+  ambiguity: { required: ["assistedStatus", "noPersistence", "questionId"], optional: [] },
+  refresh: { required: ["assistedStatus", "reasonCode", "noPersistence", "refreshStatus", "recoveredPrimarySkillId"], optional: [] },
+  "privacy-replay": { required: ["assistedStatus", "assistedPrimarySkillId", "privacyLeakageCount", "deterministicReplay"], optional: [] },
+  "proposal-absent": { required: ["fallbackPrimarySkillId", "assistedStatus", "assistedPrimarySkillId", "unchanged"], optional: [] },
+};
+
+const record = (value: unknown, at: string): Record<string, unknown> => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) fail(`${at} must be an object.`);
+  return value as Record<string, unknown>;
+};
+
+const exactKeys = (value: Record<string, unknown>, required: string[], optional: string[], at: string) => {
+  const allowed = new Set([...required, ...optional]);
+  const unknown = Object.keys(value).find((key) => !allowed.has(key));
+  if (unknown) fail(`${at}.${unknown} is not allowed.`);
+  const missing = required.find((key) => !Object.hasOwn(value, key));
+  if (missing) fail(`${at}.${missing} is required.`);
+};
+
+const stringValue = (value: unknown, at: string, nonEmpty = true): string => {
+  if (typeof value !== "string" || (nonEmpty && value.length === 0)) fail(`${at} must be a non-empty string.`);
+  return value as string;
+};
+
+const canonicalId = (value: unknown, at: string) => {
+  const result = stringValue(value, at);
+  if (!canonicalIdPattern.test(result)) fail(`${at} must be a canonical ID.`);
+  return result;
+};
+
+const stringArray = (value: unknown, at: string, ids = false): string[] => {
+  if (!Array.isArray(value)) fail(`${at} must be an array.`);
+  const result = (value as unknown[]).map((item, index) => ids ? canonicalId(item, `${at}[${index}]`) : stringValue(item, `${at}[${index}]`));
+  if (new Set(result).size !== result.length) fail(`${at} must contain unique values.`);
+  return result;
+};
+
+const bool = (value: unknown, at: string): boolean => {
+  if (typeof value !== "boolean") fail(`${at} must be a boolean.`);
+  return value as boolean;
+};
+
+const numberValue = (value: unknown, at: string): number => {
+  if (typeof value !== "number" || !Number.isFinite(value)) fail(`${at} must be a finite number.`);
+  return value as number;
+};
+
+const validateCapturedProposal = (value: unknown, at: string): CapturedRoutingProposal => {
+  const proposal = record(value, at);
+  exactKeys(proposal, ["schemaVersion", "catalogDigest", "catalogReceipt", "interpretation", "nominations"], ["ambiguity"], at);
+  if (proposal.schemaVersion !== "routing-proposal/1.0") fail(`${at}.schemaVersion is invalid.`);
+  stringValue(proposal.catalogDigest, `${at}.catalogDigest`);
+  stringValue(proposal.catalogReceipt, `${at}.catalogReceipt`);
+  const interpretation = record(proposal.interpretation, `${at}.interpretation`);
+  const interpretationFields = ["domains", "actions", "artifactTypes", "intentTags", "technologyTags", "qualityGoals"];
+  exactKeys(interpretation, interpretationFields, [], `${at}.interpretation`);
+  for (const field of interpretationFields) stringArray(interpretation[field], `${at}.interpretation.${field}`, true);
+  if (!Array.isArray(proposal.nominations) || proposal.nominations.length === 0) fail(`${at}.nominations must not be empty.`);
+  for (const [index, rawNomination] of (proposal.nominations as unknown[]).entries()) {
+    const nomination = record(rawNomination, `${at}.nominations[${index}]`);
+    exactKeys(nomination, ["skillId", "role", "confidence", "evidenceText"], [], `${at}.nominations[${index}]`);
+    canonicalId(nomination.skillId, `${at}.nominations[${index}].skillId`);
+    stringValue(nomination.role, `${at}.nominations[${index}].role`);
+    const confidence = numberValue(nomination.confidence, `${at}.nominations[${index}].confidence`);
+    if (confidence < 0 || confidence > 1) fail(`${at}.nominations[${index}].confidence is outside [0, 1].`);
+    stringValue(nomination.evidenceText, `${at}.nominations[${index}].evidenceText`);
+  }
+  if (proposal.ambiguity !== undefined) {
+    const ambiguity = record(proposal.ambiguity, `${at}.ambiguity`);
+    exactKeys(ambiguity, ["primarySkillIds"], [], `${at}.ambiguity`);
+    stringArray(ambiguity.primarySkillIds, `${at}.ambiguity.primarySkillIds`, true);
+  }
+  return structuredClone(value) as CapturedRoutingProposal;
+};
+
+const readJson = async (filePath: string) => {
+  try {
+    return JSON.parse(await readFile(filePath, "utf8")) as unknown;
+  } catch (error) {
+    throw new Error(`Could not read router evaluation fixture ${filePath}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+};
+
+export const loadRoutingProposalContractFixtures = async (filePath: string): Promise<RoutingProposalContractFixture> => {
+  const root = record(await readJson(filePath), "router contract fixture");
+  exactKeys(root, ["schemaVersion", "catalog", "cases"], [], "router contract fixture");
+  if (root.schemaVersion !== contractSchemaVersion) fail("router contract fixture has an unsupported schemaVersion.");
+  const catalog = record(root.catalog, "router contract fixture.catalog");
+  exactKeys(catalog, ["expectedDomainIds", "expectedSkillIds", "pageMaxItems"], [], "router contract fixture.catalog");
+  const expectedDomainIds = stringArray(catalog.expectedDomainIds, "router contract fixture.catalog.expectedDomainIds", true);
+  const expectedSkillIds = stringArray(catalog.expectedSkillIds, "router contract fixture.catalog.expectedSkillIds", true);
+  if (typeof catalog.pageMaxItems !== "number" || !Number.isSafeInteger(catalog.pageMaxItems) || catalog.pageMaxItems < 1) fail("router contract fixture.catalog.pageMaxItems must be a positive integer.");
+  if (!Array.isArray(root.cases) || root.cases.length === 0) fail("router contract fixture.cases must not be empty.");
+  const cases = (root.cases as unknown[]).map((rawCase, index) => {
+    const value = record(rawCase, `router contract fixture.cases[${index}]`);
+    exactKeys(value, ["id", "kind", "expected"], ["prompt", "proposal", "strict", "capabilities"], `router contract fixture.cases[${index}]`);
+    const id = canonicalId(value.id, `router contract fixture.cases[${index}].id`);
+    if (typeof value.kind !== "string" || !contractKinds.has(value.kind as RoutingProposalContractKind)) fail(`router contract fixture.cases[${index}].kind is invalid.`);
+    const kind = value.kind as RoutingProposalContractKind;
+    const prompt = value.prompt === undefined ? undefined : stringValue(value.prompt, `router contract fixture.cases[${index}].prompt`);
+    const proposal = value.proposal === undefined ? undefined : validateCapturedProposal(value.proposal, `router contract fixture.cases[${index}].proposal`);
+    if (value.strict !== undefined) bool(value.strict, `router contract fixture.cases[${index}].strict`);
+    const capabilities = value.capabilities === undefined ? undefined : stringArray(value.capabilities, `router contract fixture.cases[${index}].capabilities`, true);
+    const expected = record(value.expected, `router contract fixture.cases[${index}].expected`);
+    const expectedFields = contractExpectedFields[kind as RoutingProposalContractKind];
+    exactKeys(expected, expectedFields.required, expectedFields.optional, `router contract fixture.cases[${index}].expected`);
+    if (kind !== "catalog" && prompt === undefined) fail(`router contract fixture.cases[${index}].prompt is required for ${kind}.`);
+    if (kind !== "proposal-absent" && kind !== "catalog" && proposal === undefined) fail(`router contract fixture.cases[${index}].proposal is required for ${kind}.`);
+    return { id, kind, ...(prompt === undefined ? {} : { prompt }), ...(proposal === undefined ? {} : { proposal }), ...(value.strict === undefined ? {} : { strict: value.strict as boolean }), ...(capabilities === undefined ? {} : { capabilities }), expected: structuredClone(expected) };
+  });
+  if (new Set(cases.map(({ id }) => id)).size !== cases.length) fail("router contract fixture case IDs must be unique.");
+  return { schemaVersion: contractSchemaVersion, catalog: { expectedDomainIds, expectedSkillIds, pageMaxItems: catalog.pageMaxItems as number }, cases };
+};
+
+export const loadRoutingProposalBenchmarkFixtures = async (filePath: string): Promise<ModelAssistedBenchmarkFixture> => {
+  const root = record(await readJson(filePath), "router model-assisted fixture");
+  exactKeys(root, ["schemaVersion", "cases"], [], "router model-assisted fixture");
+  if (root.schemaVersion !== benchmarkSchemaVersion) fail("router model-assisted fixture has an unsupported schemaVersion.");
+  if (!Array.isArray(root.cases) || root.cases.length === 0) fail("router model-assisted fixture.cases must not be empty.");
+  const cases = (root.cases as unknown[]).map((rawCase, index) => {
+    const value = record(rawCase, `router model-assisted fixture.cases[${index}]`);
+    exactKeys(value, ["id", "source", "vocabularyMiss", "prompt", "strict", "capabilities", "proposalMode", "expected"], ["proposal"], `router model-assisted fixture.cases[${index}]`);
+    const id = canonicalId(value.id, `router model-assisted fixture.cases[${index}].id`);
+    if (typeof value.source !== "string" || !benchmarkSources.has(value.source as ModelAssistedBenchmarkSource)) fail(`router model-assisted fixture.cases[${index}].source is invalid.`);
+    const source = value.source as ModelAssistedBenchmarkSource;
+    const vocabularyMiss = bool(value.vocabularyMiss, `router model-assisted fixture.cases[${index}].vocabularyMiss`);
+    const prompt = stringValue(value.prompt, `router model-assisted fixture.cases[${index}].prompt`);
+    const strict = bool(value.strict, `router model-assisted fixture.cases[${index}].strict`);
+    const capabilities = stringArray(value.capabilities, `router model-assisted fixture.cases[${index}].capabilities`, true);
+    if (typeof value.proposalMode !== "string" || !proposalModes.has(value.proposalMode as ModelAssistedProposalMode)) fail(`router model-assisted fixture.cases[${index}].proposalMode is invalid.`);
+    const proposalMode = value.proposalMode as ModelAssistedProposalMode;
+    const proposal = value.proposal === undefined ? undefined : validateCapturedProposal(value.proposal, `router model-assisted fixture.cases[${index}].proposal`);
+    if (proposalMode === "absent" && proposal !== undefined) fail(`router model-assisted fixture.cases[${index}] must omit proposal in absent mode.`);
+    if (proposalMode !== "absent" && proposal === undefined) fail(`router model-assisted fixture.cases[${index}] requires proposal in ${proposalMode} mode.`);
+    const expectedRecord = record(value.expected, `router model-assisted fixture.cases[${index}].expected`);
+    exactKeys(expectedRecord, ["status", "allowedSkillIds", "forbiddenSkillIds"], ["primarySkillId", "fallbackStatus", "fallbackPrimarySkillId", "fallbackUnchanged", "fallbackNotWorse", "malformedRejected", "catalogIntegrityException", "errorCode"], `router model-assisted fixture.cases[${index}].expected`);
+    const status = stringValue(expectedRecord.status, `router model-assisted fixture.cases[${index}].expected.status`);
+    if (!resultStatuses.has(status as EvaluatedStatus)) fail(`router model-assisted fixture.cases[${index}].expected.status is invalid.`);
+    const fallbackStatus = expectedRecord.fallbackStatus === undefined ? undefined : stringValue(expectedRecord.fallbackStatus, `router model-assisted fixture.cases[${index}].expected.fallbackStatus`);
+    if (fallbackStatus !== undefined && !resultStatuses.has(fallbackStatus as EvaluatedStatus)) fail(`router model-assisted fixture.cases[${index}].expected.fallbackStatus is invalid.`);
+    const errorCode = expectedRecord.errorCode === undefined ? undefined : stringValue(expectedRecord.errorCode, `router model-assisted fixture.cases[${index}].expected.errorCode`);
+    if (errorCode !== undefined && errorCode !== "evaluation-error" && !routerPrepareErrorCodes.has(errorCode as RouterPrepareError["code"])) fail(`router model-assisted fixture.cases[${index}].expected.errorCode is invalid.`);
+    const allowedSkillIds = stringArray(expectedRecord.allowedSkillIds, `router model-assisted fixture.cases[${index}].expected.allowedSkillIds`, true);
+    const forbiddenSkillIds = stringArray(expectedRecord.forbiddenSkillIds, `router model-assisted fixture.cases[${index}].expected.forbiddenSkillIds`, true);
+    const expected: ModelAssistedBenchmarkExpected = {
+      status: status as EvaluatedStatus,
+      allowedSkillIds,
+      forbiddenSkillIds,
+      ...(expectedRecord.primarySkillId === undefined ? {} : { primarySkillId: canonicalId(expectedRecord.primarySkillId, `router model-assisted fixture.cases[${index}].expected.primarySkillId`) }),
+      ...(fallbackStatus === undefined ? {} : { fallbackStatus: fallbackStatus as EvaluatedStatus }),
+      ...(expectedRecord.fallbackPrimarySkillId === undefined ? {} : { fallbackPrimarySkillId: canonicalId(expectedRecord.fallbackPrimarySkillId, `router model-assisted fixture.cases[${index}].expected.fallbackPrimarySkillId`) }),
+      ...(expectedRecord.fallbackUnchanged === undefined ? {} : { fallbackUnchanged: bool(expectedRecord.fallbackUnchanged, `router model-assisted fixture.cases[${index}].expected.fallbackUnchanged`) }),
+      ...(expectedRecord.fallbackNotWorse === undefined ? {} : { fallbackNotWorse: bool(expectedRecord.fallbackNotWorse, `router model-assisted fixture.cases[${index}].expected.fallbackNotWorse`) }),
+      ...(expectedRecord.malformedRejected === undefined ? {} : { malformedRejected: bool(expectedRecord.malformedRejected, `router model-assisted fixture.cases[${index}].expected.malformedRejected`) }),
+      ...(expectedRecord.catalogIntegrityException === undefined ? {} : { catalogIntegrityException: bool(expectedRecord.catalogIntegrityException, `router model-assisted fixture.cases[${index}].expected.catalogIntegrityException`) }),
+      ...(errorCode === undefined ? {} : { errorCode: errorCode as EvaluationErrorCode }),
+    };
+    return { id, source, vocabularyMiss, prompt, strict, capabilities, proposalMode, ...(proposal === undefined ? {} : { proposal }), expected };
+  });
+  if (new Set(cases.map(({ id }) => id)).size !== cases.length) fail("router model-assisted fixture case IDs must be unique.");
+  return { schemaVersion: benchmarkSchemaVersion, cases };
+};
+
+const sourceOptions = (root: string) => ({
+  registryRoot: path.join(root, "registry"),
+  domainsRoot: path.join(root, "domains"),
+});
+
+const collectCatalog = async (root: string, maxItems: number, now: number) => {
+  const options = sourceOptions(root);
+  const pages: SkillCatalogPage[] = [];
+  let page = await inspectSkillCatalog({ maxItems, maxBytes: 256_000 }, { ...options, now });
+  pages.push(page);
+  while (!page.complete) {
+    page = await inspectSkillCatalog({ cursor: page.nextCursor!, expectedCatalogDigest: page.catalogDigest }, { ...options, now });
+    pages.push(page);
+  }
+  const snapshot = await buildSkillCatalog(options);
+  return { pages, snapshot };
+};
+
+const currentCatalogBinding = async (root: string): Promise<CatalogBinding> => {
+  const now = Date.now();
+  const { pages } = await collectCatalog(root, 2, now);
+  const page = pages.at(-1);
+  if (page === undefined) throw new Error("complete catalog evaluation did not produce a page.");
+  const receipt = page.catalogReceipt;
+  if (receipt === undefined) throw new Error("complete catalog evaluation did not produce a receipt.");
+  assertValidCatalogReceipt(receipt, page.catalogDigest, { expectedItemCount: pages.reduce((sum, item) => sum + item.skills.length, 0), now });
+  return { catalogDigest: page.catalogDigest, catalogReceipt: receipt };
+};
+
+const materializeProposal = (captured: CapturedRoutingProposal, binding: CatalogBinding): RoutingProposalInput => {
+  const value = structuredClone(captured) as unknown as Record<string, unknown>;
+  if (value.catalogDigest === "$catalogDigest") value.catalogDigest = binding.catalogDigest;
+  if (value.catalogDigest === "$staleCatalogDigest") value.catalogDigest = `sha256:${"0".repeat(64)}`;
+  if (value.catalogReceipt === "$catalogReceipt") value.catalogReceipt = binding.catalogReceipt;
+  return value as unknown as RoutingProposalInput;
+};
+
+const intentFor = (prompt: string) => {
+  const parsed = parseTrigger({ prompt, mode: "explicit" });
+  if (!("normalizedIntent" in parsed)) throw new Error(`evaluation prompt is not explicitly activated: ${parsed.reason}`);
+  return parsed.normalizedIntent;
+};
+
+const canariesFor = (prompt: string) => [...new Set([
+  ...(prompt.match(/SECRET_[A-Z0-9_]+/g) ?? []),
+  ...(prompt.match(/https?:\/\/[^\s]+/g) ?? []).map((value) => value.replace(/[.,;!?]+$/, "")),
+])];
+
+const isMissingFile = (error: unknown) => error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT";
+
+const readDirectoryEntries = async (directory: string) => {
+  try {
+    return await readdir(directory);
+  } catch (error) {
+    if (isMissingFile(error)) return [] as string[];
+    throw error;
+  }
+};
+
+const runFileCount = async (root: string) => {
+  const runtime = await readDirectoryEntries(path.join(root, ".skillranger", "runs"));
+  const router = await readDirectoryEntries(path.join(root, ".skillranger", "runs", "router"));
+  return [...runtime, ...router].filter((entry) => entry.endsWith(".json")).length;
+};
+
+const persistedRunPayloads = async (root: string) => {
+  const directories = [path.join(root, ".skillranger", "runs"), path.join(root, ".skillranger", "runs", "router")];
+  const paths = (await Promise.all(directories.map(async (directory) => {
+    const entries = await readDirectoryEntries(directory);
+    return entries.filter((entry) => entry.endsWith(".json")).map((entry) => path.join(directory, entry));
+  }))).flat();
+  return Promise.all(paths.map(async (filePath) => {
+    try {
+      return await readFile(filePath, "utf8");
+    } catch (error) {
+      if (isMissingFile(error)) return "";
+      throw error;
+    }
+  }));
+};
+
+const privacyLeakageCountFor = async (root: string, prompt: string, transientPayloads: string[]) => {
+  const canaries = canariesFor(prompt);
+  const persisted = await persistedRunPayloads(root);
+  return canaries.filter((canary) => transientPayloads.some((payload) => payload.includes(canary)) || persisted.some((payload) => payload.includes(canary))).length;
+};
+
+const summarizePrepareResult = async (root: string, prompt: string, result: PrepareTaskResult): Promise<PreparedEvaluation> => {
+  const selections = result.status === "prepared"
+    ? [result.selections.primary, ...result.selections.environment, ...result.selections.companions, ...result.selections.verification, ...result.selections.agentContext]
+    : [];
+  const serialized = JSON.stringify(result);
+  const privacyLeakageCount = await privacyLeakageCountFor(root, prompt, [serialized]);
+  return {
+    status: result.status,
+    ...(result.status === "prepared" ? { primarySkillId: result.selections.primary.skillId } : {}),
+    selectedSkillIds: selections.map(({ skillId }) => skillId),
+    selectedSkillCount: selections.length,
+    instructionBytes: result.status === "prepared" ? result.requiredReads.reduce((sum, read) => sum + read.bytes, 0) : 0,
+    warnings: "warnings" in result ? result.warnings : [],
+    ...(typeof (result as { reasonCode?: unknown }).reasonCode === "string" ? { reasonCode: (result as { reasonCode: string }).reasonCode } : {}),
+    runFileCount: await runFileCount(root),
+    privacyLeakageCount,
+    ...(typeof (result as { routing?: { deterministicKey?: unknown } }).routing?.deterministicKey === "string" ? { deterministicKey: (result as { routing: { deterministicKey: string } }).routing.deterministicKey } : {}),
+    questionIds: result.status === "clarification_required" ? result.clarification.questions.map(({ id }) => id) : [],
+  };
+};
+
+const errorCodeFor = (error: unknown): EvaluationErrorCode => {
+  if (error instanceof RouterPrepareError) return error.code;
+  const code = (error as { code?: unknown })?.code;
+  return typeof code === "string" && routerPrepareErrorCodes.has(code as RouterPrepareError["code"])
+    ? code as RouterPrepareError["code"]
+    : "evaluation-error";
+};
+
+const runPrepare = async (root: string, input: {
+  prompt: string;
+  strict?: boolean;
+  capabilities?: string[];
+  proposal?: CapturedRoutingProposal;
+}, binding: CatalogBinding): Promise<PreparedEvaluation> => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-router-eval-"));
+  try {
+    const proposal = input.proposal === undefined ? undefined : materializeProposal(input.proposal, binding);
+    try {
+      const result = await prepareTask({
+        projectRoot,
+        registry: { kind: "bundled", root: path.join(root, "registry") },
+        prompt: input.prompt,
+        activation: { mode: "explicit" },
+        targetAgent: "codex",
+        strict: input.strict,
+        capabilities: (input.capabilities ?? []).map((id) => ({ id, source: "host-reported" as const })),
+        routingDate: "2026-07-19",
+        ...(proposal === undefined ? {} : { routingProposal: proposal }),
+      });
+      return await summarizePrepareResult(projectRoot, input.prompt, result);
+    } catch (error) {
+      return {
+        status: "error",
+        selectedSkillIds: [],
+        selectedSkillCount: 0,
+        instructionBytes: 0,
+        warnings: [],
+        errorCode: errorCodeFor(error),
+        runFileCount: await runFileCount(projectRoot),
+        privacyLeakageCount: await privacyLeakageCountFor(projectRoot, input.prompt, [String(error)]),
+        questionIds: [],
+      };
+    }
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+};
+
+const comparable = (result: PreparedEvaluation) => canonicalizeJson({
+  status: result.status,
+  primarySkillId: result.primarySkillId,
+  selectedSkillIds: result.selectedSkillIds,
+  instructionBytes: result.instructionBytes,
+  warnings: result.warnings,
+  reasonCode: result.reasonCode,
+  errorCode: result.errorCode,
+  deterministicKey: result.deterministicKey,
+  questionIds: result.questionIds,
+});
+
+const validatedProposal = (proposal: CapturedRoutingProposal, binding: CatalogBinding, prompt: string, snapshot: SkillCatalogSnapshot) => validateRoutingProposal({
+  proposal: materializeProposal(proposal, binding),
+  prompt: intentFor(prompt),
+  catalog: snapshot,
+});
+
+const runCatalogContract = async (root: string, fixture: RoutingProposalContractFixture): Promise<CatalogEvaluation> => {
+  const now = Date.now();
+  const first = await collectCatalog(root, fixture.catalog.pageMaxItems, now);
+  const replay = await collectCatalog(root, fixture.catalog.pageMaxItems, now);
+  const pages = first.pages;
+  const skillIds = pages.flatMap(({ skills }) => skills.map(({ skillId }) => skillId));
+  const replayIds = replay.pages.flatMap(({ skills }) => skills.map(({ skillId }) => skillId));
+  const finalPage = pages.at(-1);
+  const expectedSkills = fixture.catalog.expectedSkillIds;
+  const expectedDomains = fixture.catalog.expectedDomainIds;
+  const domainsOnFirstPage = canonicalizeJson(pages[0]?.domains.map(({ domainId }) => domainId) ?? []) === canonicalizeJson(expectedDomains) && pages.slice(1).every(({ domains }) => domains.length === 0);
+  const skillsExactlyOnce = skillIds.length === expectedSkills.length && new Set(skillIds).size === skillIds.length && canonicalizeJson([...skillIds].sort()) === canonicalizeJson([...expectedSkills].sort());
+  const canonicalOrder = canonicalizeJson(skillIds) === canonicalizeJson([...skillIds].sort()) && pages.every(({ skills }) => canonicalizeJson(skills.map(({ skillId }) => skillId)) === canonicalizeJson([...skills].map(({ skillId }) => skillId).sort()));
+  const page = finalPage;
+  if (page === undefined) throw new Error("catalog evaluation did not reach a complete receipt page.");
+  const receipt = page.catalogReceipt;
+  if (receipt === undefined) throw new Error("catalog evaluation did not reach a complete receipt page.");
+  const completeReceipt = Boolean(page.complete && receipt);
+  if (completeReceipt) assertValidCatalogReceipt(receipt, page.catalogDigest, { expectedItemCount: skillIds.length, now });
+  const multiplePages = pages.length > 1;
+  const pageSizesBounded = multiplePages && pages.every(({ skills }) => skills.length > 0 && skills.length <= fixture.catalog.pageMaxItems);
+  const cursorChainValid = multiplePages &&
+    pages.slice(0, -1).every(({ complete, nextCursor }) => !complete && typeof nextCursor === "string" && nextCursor.length > 0) &&
+    page.complete && page.nextCursor === null && page.catalogReceipt !== undefined;
+  const deterministicReplay = canonicalizeJson(first.pages) === canonicalizeJson(replay.pages) && canonicalizeJson(skillIds) === canonicalizeJson(replayIds);
+  return { domainsOnFirstPage, skillsExactlyOnce, canonicalOrder, completeReceipt, multiplePages, pageSizesBounded, cursorChainValid, deterministicReplay };
+};
+
+const contractExpected = (kind: RoutingProposalContractKind, expected: Record<string, unknown>, observed: Record<string, unknown>) => {
+  switch (kind) {
+    case "catalog":
+      return Object.entries(expected).every(([key, value]) => observed[key] === value);
+    case "proposal-grounding":
+    case "item-rejection":
+      return canonicalizeJson(observed.acceptedSkillIds) === canonicalizeJson(expected.acceptedSkillIds) && canonicalizeJson(observed.rejections) === canonicalizeJson(expected.rejections);
+    case "proposal-ownership":
+      return observed.errorCode === expected.errorCode && observed.noPersistence === expected.noPersistence;
+    case "precedence":
+    case "hard-veto":
+    case "strict":
+    case "ambiguity":
+    case "refresh":
+    case "privacy-replay":
+    case "proposal-absent":
+      return Object.entries(expected).every(([key, value]) => canonicalizeJson(observed[key]) === canonicalizeJson(value));
+  }
+};
+
+const runContractCase = async (root: string, fixture: RoutingProposalContractFixture, item: RoutingProposalContractCase, binding: CatalogBinding, snapshot: SkillCatalogSnapshot) => {
+  const expected = item.expected;
+  try {
+    if (item.kind === "catalog") {
+      const observed = await runCatalogContract(root, fixture);
+      return { id: item.id, kind: item.kind, passed: contractExpected(item.kind, expected, observed), observed: observed as unknown as Record<string, unknown> };
+    }
+    const prompt = item.prompt;
+    if (prompt === undefined) throw new Error(`${item.id} has no prompt.`);
+    if (item.kind === "proposal-grounding" || item.kind === "item-rejection") {
+      const proposal = item.proposal;
+      if (proposal === undefined) throw new Error(`${item.id} has no proposal.`);
+      const result = validatedProposal(proposal, binding, prompt, snapshot);
+      if ("status" in result) throw new Error(`${item.id} unexpectedly requested a refresh.`);
+      const observed = { acceptedSkillIds: result.nominations.map(({ skillId }) => skillId), rejections: result.rejections };
+      return { id: item.id, kind: item.kind, passed: contractExpected(item.kind, expected, observed), observed };
+    }
+    if (item.kind === "proposal-ownership") {
+      const proposal = item.proposal;
+      if (proposal === undefined) throw new Error(`${item.id} has no proposal.`);
+      const prepared = await runPrepare(root, { prompt, strict: item.strict, capabilities: item.capabilities, proposal }, binding);
+      const observed = { errorCode: prepared.errorCode, noPersistence: prepared.runFileCount === 0 };
+      return { id: item.id, kind: item.kind, passed: contractExpected(item.kind, expected, observed), observed };
+    }
+    if (item.kind === "proposal-absent") {
+      const fallback = await runPrepare(root, { prompt, strict: item.strict, capabilities: item.capabilities }, binding);
+      const assisted = await runPrepare(root, { prompt, strict: item.strict, capabilities: item.capabilities }, binding);
+      const observed = { fallbackPrimarySkillId: fallback.primarySkillId, assistedStatus: assisted.status, assistedPrimarySkillId: assisted.primarySkillId, unchanged: comparable(fallback) === comparable(assisted) };
+      return { id: item.id, kind: item.kind, passed: contractExpected(item.kind, expected, observed), observed };
+    }
+    const proposal = item.proposal;
+    if (proposal === undefined) throw new Error(`${item.id} has no proposal.`);
+    const fallback = await runPrepare(root, { prompt, strict: item.strict, capabilities: item.capabilities }, binding);
+    const assisted = await runPrepare(root, { prompt, strict: item.strict, capabilities: item.capabilities, proposal }, binding);
+    const observed: Record<string, unknown> = {
+      fallbackPrimarySkillId: fallback.primarySkillId,
+      assistedStatus: assisted.status,
+      assistedPrimarySkillId: assisted.primarySkillId,
+      noPersistenceOnFailure: assisted.status === "prepared" || assisted.runFileCount === 0,
+      rejectedSkillId: item.kind === "strict" && !item.strict ? proposal.nominations[0]?.skillId : undefined,
+      missingSkillId: assisted.status === "strict_requirements_unmet" ? assisted.selectedSkillIds[0] ?? proposal.nominations[0]?.skillId : undefined,
+      doesNotSubstitute: assisted.status !== "prepared" || assisted.primarySkillId === proposal.nominations[0]?.skillId,
+      noPersistence: assisted.runFileCount === 0,
+      reasonCode: assisted.reasonCode,
+      questionId: assisted.questionIds[0],
+      privacyLeakageCount: assisted.privacyLeakageCount,
+      deterministicReplay: false,
+    };
+    if (item.kind === "refresh") {
+      const refreshedProposal = structuredClone(proposal);
+      refreshedProposal.catalogDigest = "$catalogDigest";
+      const refreshed = await runPrepare(root, { prompt, strict: item.strict, capabilities: item.capabilities, proposal: refreshedProposal }, binding);
+      observed.refreshStatus = refreshed.status;
+      observed.recoveredPrimarySkillId = refreshed.primarySkillId;
+    }
+    if (item.kind === "hard-veto") {
+      observed.noForbiddenSelection = !assisted.selectedSkillIds.includes("frontend.design-to-code");
+    }
+    if (item.kind === "privacy-replay") {
+      const replay = await runPrepare(root, { prompt, strict: item.strict, capabilities: item.capabilities, proposal }, binding);
+      observed.deterministicReplay = comparable(assisted) === comparable(replay);
+    }
+    return { id: item.id, kind: item.kind, passed: contractExpected(item.kind, expected, observed), observed };
+  } catch (error) {
+    return { id: item.id, kind: item.kind, passed: false, errorCode: errorCodeFor(error) };
+  }
+};
+
+export const evaluateRoutingProposalContracts = async (root = process.cwd()): Promise<ModelAssistedEvalReport["contracts"]> => {
+  const fixture = await loadRoutingProposalContractFixtures(path.join(root, "evals", "router", "contracts.json"));
+  const binding = await currentCatalogBinding(root);
+  const snapshot = await buildSkillCatalog(sourceOptions(root));
+  const results: ModelAssistedEvalReport["contracts"]["results"] = [];
+  for (const item of fixture.cases) results.push(await runContractCase(root, fixture, item, binding, snapshot));
+  return {
+    schemaVersion: "router-contract-eval/1.0",
+    caseCount: results.length,
+    passed: results.filter(({ passed }) => passed).length,
+    failed: results.filter(({ passed }) => !passed).length,
+    results,
+  };
+};
+
+const outcomeNotWorse = (fallback: PreparedEvaluation, assisted: PreparedEvaluation) => {
+  if (assisted.status === "error") return false;
+  if (fallback.status === "prepared") {
+    return assisted.status === "prepared" &&
+      assisted.primarySkillId === fallback.primarySkillId &&
+      fallback.selectedSkillIds.every((skillId) => assisted.selectedSkillIds.includes(skillId));
+  }
+  return true;
+};
+
+const benchmarkExpectedMatch = (expected: ModelAssistedBenchmarkExpected, assisted: PreparedEvaluation) => {
+  if (assisted.status !== expected.status) return false;
+  if (expected.primarySkillId !== undefined && assisted.primarySkillId !== expected.primarySkillId) return false;
+  if (expected.errorCode !== undefined && assisted.errorCode !== expected.errorCode) return false;
+  return true;
+};
+
+const benchmarkFallbackMatch = (expected: ModelAssistedBenchmarkExpected, fallback: PreparedEvaluation) => (
+  (expected.fallbackStatus === undefined || fallback.status === expected.fallbackStatus) &&
+  (expected.fallbackPrimarySkillId === undefined || fallback.primarySkillId === expected.fallbackPrimarySkillId)
+);
+
+const runBenchmarkCase = async (root: string, item: ModelAssistedBenchmarkCase, binding: CatalogBinding) => {
+  const fallback = await runPrepare(root, { prompt: item.prompt, strict: item.strict, capabilities: item.capabilities }, binding);
+  const assisted = await runPrepare(root, { prompt: item.prompt, strict: item.strict, capabilities: item.capabilities, proposal: item.proposal }, binding);
+  const replay = await runPrepare(root, { prompt: item.prompt, strict: item.strict, capabilities: item.capabilities, proposal: item.proposal }, binding);
+  const forbidden = assisted.selectedSkillIds.filter((skillId) => item.expected.forbiddenSkillIds.includes(skillId));
+  const irrelevant = assisted.selectedSkillIds.filter((skillId) => !item.expected.allowedSkillIds.includes(skillId));
+  const fallbackUnchanged = comparable(fallback) === comparable(assisted);
+  const fallbackNotWorse = outcomeNotWorse(fallback, assisted);
+  const deterministicReplay = comparable(assisted) === comparable(replay);
+  const catalogIntegrityCheckPassed = item.expected.catalogIntegrityException === undefined || !item.expected.catalogIntegrityException ||
+    (assisted.status === "catalog_refresh_required" && assisted.runFileCount === 0);
+  const passed = benchmarkExpectedMatch(item.expected, assisted) &&
+    benchmarkFallbackMatch(item.expected, fallback) &&
+    forbidden.length === 0 &&
+    irrelevant.length === 0 &&
+    (!item.expected.fallbackUnchanged || fallbackUnchanged) &&
+    (!item.expected.fallbackNotWorse || fallbackNotWorse) &&
+    (!item.expected.malformedRejected || (assisted.status === "error" && assisted.runFileCount === 0)) &&
+    catalogIntegrityCheckPassed;
+  const { privacyLeakageCount, ...fallbackWithoutPrivacy } = fallback;
+  const { privacyLeakageCount: assistedPrivacyLeakageCount, ...assistedWithoutPrivacy } = assisted;
+  return {
+    id: item.id,
+    source: item.source,
+    proposalMode: item.proposalMode,
+    passed,
+    fallback: fallbackWithoutPrivacy,
+    assisted: assistedWithoutPrivacy,
+    fallbackUnchanged,
+    fallbackNotWorse,
+    privacyLeakageCount: privacyLeakageCount + assistedPrivacyLeakageCount,
+    forbiddenSelectedSkillIds: forbidden,
+    irrelevantSelectedSkillIds: irrelevant,
+    deterministicReplay,
+  };
+};
+
+export const evaluateRoutingProposalBenchmark = async (root = process.cwd()): Promise<ModelAssistedEvalReport["benchmark"]> => {
+  const fixture = await loadRoutingProposalBenchmarkFixtures(path.join(root, "evals", "router", "model-assisted.json"));
+  const binding = await currentCatalogBinding(root);
+  const results: ModelAssistedEvalReport["benchmark"]["results"] = [];
+  for (const item of fixture.cases) results.push(await runBenchmarkCase(root, item, binding));
+  const primaryCases = fixture.cases.filter(({ expected }) => expected.primarySkillId !== undefined);
+  const vocabularyCases = fixture.cases.filter(({ vocabularyMiss }) => vocabularyMiss);
+  const selectedCount = results.reduce((sum, result) => sum + result.assisted.selectedSkillCount, 0);
+  const instructionByteCost = results.reduce((sum, result) => sum + result.assisted.instructionBytes, 0);
+  const selectedTotal = results.reduce((sum, result) => sum + result.assisted.selectedSkillCount, 0);
+  const irrelevantTotal = results.reduce((sum, result) => sum + result.irrelevantSelectedSkillIds.length, 0);
+  const forbiddenTotal = results.reduce((sum, result) => sum + result.forbiddenSelectedSkillIds.length, 0);
+  const forbiddenDenominator = fixture.cases.reduce((sum, item) => sum + item.expected.forbiddenSkillIds.length, 0);
+  const primaryAccuracy = primaryCases.length === 0 ? 0 : Number((primaryCases.filter((item) => results.find(({ id }) => id === item.id)?.assisted.primarySkillId === item.expected.primarySkillId).length / primaryCases.length).toFixed(3));
+  const vocabularyMissRecovery = vocabularyCases.length === 0 ? 0 : Number((vocabularyCases.filter((item) => results.find(({ id }) => id === item.id)?.assisted.status === "prepared" && results.find(({ id }) => id === item.id)?.assisted.primarySkillId === item.expected.primarySkillId).length / vocabularyCases.length).toFixed(3));
+  const malformedCases = results.filter(({ proposalMode }) => proposalMode === "malformed");
+  const invalidCases = fixture.cases.filter(({ expected }) => expected.fallbackNotWorse);
+  const absentCases = fixture.cases.filter(({ expected }) => expected.fallbackUnchanged);
+  const invalidResults = results.filter(({ id }) => invalidCases.some((item) => item.id === id));
+  const absentResults = results.filter(({ id }) => absentCases.some((item) => item.id === id));
+  const metrics = {
+    caseFailures: results.filter(({ passed }) => !passed).length,
+    primaryAccuracy,
+    vocabularyMissRecovery,
+    irrelevantSelectionRate: selectedTotal === 0 ? 0 : Number((irrelevantTotal / selectedTotal).toFixed(3)),
+    forbiddenSelectionRate: forbiddenDenominator === 0 ? 0 : Number((forbiddenTotal / forbiddenDenominator).toFixed(3)),
+    averageSelectedSkillCount: Number((selectedCount / Math.max(results.length, 1)).toFixed(3)),
+    instructionByteCost,
+    averageInstructionByteCost: Number((instructionByteCost / Math.max(results.length, 1)).toFixed(3)),
+    malformedProposalFallbackBehavior: malformedCases.length === 0 ? 1 : Number((malformedCases.filter(({ passed }) => passed).length / malformedCases.length).toFixed(3)),
+    invalidProposalFallbackNotWorse: invalidResults.length === invalidCases.length && invalidResults.every(({ fallbackNotWorse }) => fallbackNotWorse),
+    absentProposalFallbackUnchanged: absentResults.length === absentCases.length && absentResults.every(({ fallbackUnchanged }) => fallbackUnchanged),
+    hardVetoFailures: results.filter(({ id, forbiddenSelectedSkillIds }) => {
+      const item = fixture.cases.find((candidate) => candidate.id === id);
+      return (item?.expected.forbiddenSkillIds.length ?? 0) > 0 && forbiddenSelectedSkillIds.length > 0;
+    }).length,
+    privacyLeakageCount: results.reduce((sum, result) => sum + result.privacyLeakageCount, 0),
+    deterministicReplay: results.every(({ deterministicReplay }) => deterministicReplay),
+  };
+  return {
+    schemaVersion: "router-model-assisted-benchmark/1.0",
+    caseCount: results.length,
+    results,
+    metrics,
+  };
+};
+
+export const evaluateModelAssistedRouter = async (root = process.cwd(), options: { deterministicCorpusRegression?: boolean } = {}): Promise<ModelAssistedEvalReport> => {
+  const contracts = await evaluateRoutingProposalContracts(root);
+  const benchmark = await evaluateRoutingProposalBenchmark(root);
+  const deterministicCorpusRegression = options.deterministicCorpusRegression ?? true;
+  const blockingReasons: string[] = [];
+  if (!deterministicCorpusRegression) blockingReasons.push("deterministic-corpus-regression");
+  if (contracts.failed > modelAssistedEvalThresholds.contractFailures) blockingReasons.push("contract-evaluation-failed");
+  if (benchmark.metrics.caseFailures > modelAssistedEvalThresholds.benchmarkCaseFailures) blockingReasons.push("benchmark-case-failed");
+  if (benchmark.metrics.vocabularyMissRecovery < modelAssistedEvalThresholds.vocabularyMissRecovery) blockingReasons.push("vocabulary-miss-recovery-below-0.80");
+  if (benchmark.metrics.irrelevantSelectionRate > modelAssistedEvalThresholds.irrelevantSelectionRate) blockingReasons.push("irrelevant-selection-rate-nonzero");
+  if (benchmark.metrics.forbiddenSelectionRate > modelAssistedEvalThresholds.forbiddenSelectionRate) blockingReasons.push("forbidden-selection-rate-nonzero");
+  if (benchmark.metrics.privacyLeakageCount > modelAssistedEvalThresholds.privacyLeakageCount) blockingReasons.push("privacy-leakage-detected");
+  if (benchmark.metrics.hardVetoFailures > modelAssistedEvalThresholds.hardVetoFailures) blockingReasons.push("hard-veto-failed");
+  if (benchmark.metrics.malformedProposalFallbackBehavior < modelAssistedEvalThresholds.malformedProposalRejectionRate) blockingReasons.push("malformed-proposal-not-rejected");
+  if (benchmark.metrics.invalidProposalFallbackNotWorse !== modelAssistedEvalThresholds.invalidProposalFallbackNotWorse) blockingReasons.push("invalid-proposal-regressed-fallback");
+  if (benchmark.metrics.absentProposalFallbackUnchanged !== modelAssistedEvalThresholds.absentProposalFallbackUnchanged) blockingReasons.push("proposal-absent-result-changed");
+  if (benchmark.metrics.deterministicReplay !== modelAssistedEvalThresholds.deterministicReplay) blockingReasons.push("proposal-replay-nondeterministic");
+  return {
+    schemaVersion: "router-model-assisted-eval/1.0",
+    execution: "captured-proposals-only",
+    thresholds: modelAssistedEvalThresholds,
+    deterministicCorpusRegression,
+    contracts,
+    benchmark,
+    promotion: { verdict: blockingReasons.length === 0 ? "promotable" : "blocked", blockingReasons },
+  };
+};

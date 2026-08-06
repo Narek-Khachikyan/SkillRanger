@@ -1,12 +1,14 @@
 # Universal Router Evaluations
 
-`npm run eval:router` executes both checked-in legacy and natural-language golden cases through the
-trigger parser, analyzer, domain resolver, candidate composer, and deterministic
-replay check.
+`npm run eval:router` executes the checked-in deterministic corpus and the captured-proposal
+benchmark through the trigger parser, analyzer, domain resolver, candidate composer, and
+deterministic replay checks. SkillRanger never calls a model or the network while evaluating:
+model-assisted cases contain host-captured proposals as frozen JSON.
 
 The report exposes `suites.shipped`, `suites.synthetic`, and the gated
-`suites.naturalLanguage` summary. The legacy `--include-quarantine` option is
-still accepted, but the natural-language corpus is always loaded exactly once.
+`suites.naturalLanguage` summary, plus `suites.modelAssisted`. The legacy
+`--include-quarantine` option is still accepted, but the natural-language corpus is always loaded
+exactly once. The top-level `promotion` result gates the command and release checks.
 Synthetic packs are data-only fixtures loaded by evaluation and test entry
 points; they are never registered as production skills.
 
@@ -20,6 +22,33 @@ The report contains:
 - privacy leakage count for checked-in canaries;
 - per-case expected and actual statuses;
 - deterministic replay status for the same routing date and inputs.
+
+## Model-assisted routing gate
+
+`evals/router/contracts.json` is the frozen contract corpus for catalog completeness and paging,
+proposal grounding and ownership, item rejection, precedence, hard vetoes, strict and non-strict
+behavior, ambiguity, refresh, privacy, replay, and proposal-absent behavior.
+
+`evals/router/model-assisted.json` is a captured-host-proposal benchmark. Its cases cover implicit
+intents where vocabulary recovery matters and hard paraphrases. The evaluator compares each
+proposal-backed result with deterministic fallback, records selected-skill count and instruction
+byte cost, and checks malformed/invalid/absent proposals without persisting rejected runs.
+
+The promotion gate requires:
+
+- deterministic-corpus regression to remain absent;
+- at least `0.800` vocabulary-miss recovery;
+- zero captured benchmark case failures;
+- zero irrelevant or forbidden selections;
+- zero privacy leakage and hard-veto failures;
+- malformed proposals to be rejected;
+- invalid nominations to be no worse than fallback;
+- proposal-absent behavior to remain unchanged; and
+- deterministic replay of captured proposals.
+
+The report uses `router-model-assisted-eval/1.0` and marks the execution mode as
+`captured-proposals-only`, making it explicit that benchmark artifacts are not model or network
+invocations. Contract and benchmark loaders reject unknown fields and malformed fixture data.
 
 Routing uses the fixed date `2026-07-19` in the checked-in eval harness. Golden
 fixtures cover shipped frontend behavior, absent production packs, synthetic

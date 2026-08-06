@@ -1,0 +1,591 @@
+{
+  "schemaVersion": "router-eval-contracts/1.0",
+  "catalog": {
+    "expectedDomainIds": ["frontend"],
+    "expectedSkillIds": [
+      "frontend.accessibility-review",
+      "frontend.agents-md-bootstrap",
+      "frontend.audit",
+      "frontend.design-system",
+      "frontend.design-to-code",
+      "frontend.interaction-polish",
+      "frontend.motion-audit",
+      "frontend.motion-design",
+      "frontend.next-app-router-review",
+      "frontend.performance-review",
+      "frontend.playwright-debug",
+      "frontend.react-app-review",
+      "frontend.react-component-design",
+      "frontend.tailwind-ui-polish",
+      "frontend.testing-strategy",
+      "frontend.ux-critique",
+      "frontend.visual-critic",
+      "frontend.visual-design-polish"
+    ],
+    "pageMaxItems": 2
+  },
+  "cases": [
+    {
+      "id": "catalog-completeness-and-paging",
+      "kind": "catalog",
+      "expected": {
+        "domainsOnFirstPage": true,
+        "skillsExactlyOnce": true,
+        "canonicalOrder": true,
+        "completeReceipt": true,
+        "multiplePages": true,
+        "pageSizesBounded": true,
+        "cursorChainValid": true,
+        "deterministicReplay": true
+      }
+    },
+    {
+      "id": "proposal-grounding-valid",
+      "kind": "proposal-grounding",
+      "prompt": "Make the card transitions feel intentional and calm @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["transitions"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.motion-design",
+            "role": "primary",
+            "confidence": 0.91,
+            "evidenceText": "Make the card transitions feel intentional and calm"
+          }
+        ]
+      },
+      "expected": {
+        "acceptedSkillIds": ["frontend.motion-design"],
+        "rejections": []
+      }
+    },
+    {
+      "id": "proposal-grounding-rejects-unquoted-intent",
+      "kind": "proposal-grounding",
+      "prompt": "Make the card transitions feel intentional and calm @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["transitions"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.motion-design",
+            "role": "primary",
+            "confidence": 0.91,
+            "evidenceText": "a completely unrelated claim"
+          }
+        ]
+      },
+      "expected": {
+        "acceptedSkillIds": [],
+        "rejections": [
+          {
+            "skillId": "frontend.motion-design",
+            "reasonCode": "evidence-not-in-normalized-prompt"
+          }
+        ]
+      }
+    },
+    {
+      "id": "proposal-owner-allowlist",
+      "kind": "proposal-ownership",
+      "prompt": "Make the card transitions feel intentional and calm @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["transitions"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["private-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.motion-design",
+            "role": "primary",
+            "confidence": 0.91,
+            "evidenceText": "Make the card transitions feel intentional and calm"
+          }
+        ]
+      },
+      "expected": {
+        "errorCode": "routing-proposal-invalid",
+        "noPersistence": true
+      }
+    },
+    {
+      "id": "item-rejection-keeps-valid-nomination",
+      "kind": "item-rejection",
+      "prompt": "Make the card transitions feel intentional and calm @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["transitions"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.not-in-catalog",
+            "role": "primary",
+            "confidence": 0.99,
+            "evidenceText": "Make the card transitions feel intentional and calm"
+          },
+          {
+            "skillId": "frontend.motion-design",
+            "role": "primary",
+            "confidence": 0.7,
+            "evidenceText": "Make the card transitions feel intentional and calm"
+          }
+        ]
+      },
+      "expected": {
+        "acceptedSkillIds": ["frontend.motion-design"],
+        "rejections": [
+          {
+            "skillId": "frontend.not-in-catalog",
+            "reasonCode": "skill-not-in-catalog"
+          }
+        ]
+      }
+    },
+    {
+      "id": "precedence-over-deterministic-fallback",
+      "kind": "precedence",
+      "prompt": "Please make the page delightful @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["motion-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.motion-design",
+            "role": "primary",
+            "confidence": 0.51,
+            "evidenceText": "make the page delightful"
+          }
+        ]
+      },
+      "expected": {
+        "fallbackPrimarySkillId": "frontend.visual-design-polish",
+        "assistedStatus": "prepared",
+        "assistedPrimarySkillId": "frontend.motion-design",
+        "noPersistenceOnFailure": true
+      }
+    },
+    {
+      "id": "explicit-choice-outranks-host-nomination",
+      "kind": "precedence",
+      "prompt": "Please use frontend.react-component-design to make the page delightful @skillranger",
+      "capabilities": ["filesystem", "terminal"],
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["motion-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.motion-design",
+            "role": "primary",
+            "confidence": 0.99,
+            "evidenceText": "make the page delightful"
+          }
+        ]
+      },
+      "expected": {
+        "fallbackPrimarySkillId": "frontend.visual-design-polish",
+        "assistedStatus": "prepared",
+        "assistedPrimarySkillId": "frontend.react-component-design",
+        "noPersistenceOnFailure": true
+      }
+    },
+    {
+      "id": "negated-skill-id-is-not-an-explicit-choice",
+      "kind": "precedence",
+      "prompt": "Do not use frontend.react-component-design; make the page delightful @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["motion-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [{
+          "skillId": "frontend.motion-design",
+          "role": "primary",
+          "confidence": 0.99,
+          "evidenceText": "make the page delightful"
+        }]
+      },
+      "expected": {
+        "fallbackPrimarySkillId": "frontend.visual-design-polish",
+        "assistedStatus": "prepared",
+        "assistedPrimarySkillId": "frontend.motion-design",
+        "noPersistenceOnFailure": true
+      }
+    },
+    {
+      "id": "code-span-skill-id-is-not-an-explicit-choice",
+      "kind": "precedence",
+      "prompt": "Read `frontend.react-component-design` in the docs, then make the page delightful @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["motion-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [{
+          "skillId": "frontend.motion-design",
+          "role": "primary",
+          "confidence": 0.99,
+          "evidenceText": "make the page delightful"
+        }]
+      },
+      "expected": {
+        "fallbackPrimarySkillId": "frontend.visual-design-polish",
+        "assistedStatus": "prepared",
+        "assistedPrimarySkillId": "frontend.motion-design",
+        "noPersistenceOnFailure": true
+      }
+    },
+    {
+      "id": "url-skill-id-is-not-an-explicit-choice",
+      "kind": "precedence",
+      "prompt": "Read https://example.com/frontend.react-component-design, then make the page delightful @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["motion-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [{
+          "skillId": "frontend.motion-design",
+          "role": "primary",
+          "confidence": 0.99,
+          "evidenceText": "make the page delightful"
+        }]
+      },
+      "expected": {
+        "fallbackPrimarySkillId": "frontend.visual-design-polish",
+        "assistedStatus": "prepared",
+        "assistedPrimarySkillId": "frontend.motion-design",
+        "noPersistenceOnFailure": true
+      }
+    },
+    {
+      "id": "hard-veto-preserves-routing-evidence-gate",
+      "kind": "hard-veto",
+      "prompt": "Rebuild this UI from the supplied reference image @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["implement"],
+          "artifactTypes": ["web-interface"],
+          "intentTags": ["visual-reference"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-fidelity"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.design-to-code",
+            "role": "primary",
+            "confidence": 0.99,
+            "evidenceText": "Rebuild this UI from the supplied reference image"
+          }
+        ]
+      },
+      "expected": {
+        "assistedStatus": "prepared",
+        "assistedPrimarySkillId": "frontend.motion-design",
+        "noForbiddenSelection": true
+      }
+    },
+    {
+      "id": "explicit-choice-hard-veto-does-not-substitute",
+      "kind": "hard-veto",
+      "prompt": "Please use frontend.design-to-code to make the page delightful @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["motion-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [{
+          "skillId": "frontend.motion-design",
+          "role": "primary",
+          "confidence": 0.99,
+          "evidenceText": "make the page delightful"
+        }]
+      },
+      "expected": {
+        "assistedStatus": "no_matching_skills",
+        "reasonCode": "explicit-skill-choice-missing-required-evidence:intent:visual-reference",
+        "noPersistence": true,
+        "noForbiddenSelection": true
+      }
+    },
+    {
+      "id": "non-strict-tries-next-nomination",
+      "kind": "strict",
+      "strict": false,
+      "capabilities": ["filesystem"],
+      "prompt": "Please make the page delightful @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["implement"],
+          "artifactTypes": ["web-interface"],
+          "intentTags": ["visual-reference"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-fidelity"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.design-to-code",
+            "role": "primary",
+            "confidence": 0.99,
+            "evidenceText": "make the page delightful"
+          },
+          {
+            "skillId": "frontend.motion-design",
+            "role": "primary",
+            "confidence": 0.8,
+            "evidenceText": "make the page delightful"
+          }
+        ]
+      },
+      "expected": {
+        "assistedStatus": "prepared",
+        "assistedPrimarySkillId": "frontend.motion-design",
+        "rejectedSkillId": "frontend.design-to-code",
+        "noPersistenceOnFailure": true
+      }
+    },
+    {
+      "id": "strict-stops-at-first-semantic-choice",
+      "kind": "strict",
+      "strict": true,
+      "capabilities": ["filesystem"],
+      "prompt": "Please make the page delightful @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["motion-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.motion-design",
+            "role": "primary",
+            "confidence": 0.99,
+            "evidenceText": "make the page delightful"
+          },
+          {
+            "skillId": "frontend.visual-design-polish",
+            "role": "primary",
+            "confidence": 0.8,
+            "evidenceText": "make the page delightful"
+          }
+        ]
+      },
+      "expected": {
+        "assistedStatus": "strict_requirements_unmet",
+        "missingSkillId": "frontend.motion-design",
+        "doesNotSubstitute": true,
+        "noPersistenceOnFailure": true
+      }
+    },
+    {
+      "id": "declared-ambiguity-is-clarified",
+      "kind": "ambiguity",
+      "prompt": "Please make the page delightful @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["web-interface"],
+          "intentTags": ["visual-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.motion-design",
+            "role": "primary",
+            "confidence": 0.51,
+            "evidenceText": "make the page delightful"
+          },
+          {
+            "skillId": "frontend.visual-design-polish",
+            "role": "primary",
+            "confidence": 0.99,
+            "evidenceText": "make the page delightful"
+          }
+        ],
+        "ambiguity": {
+          "primarySkillIds": ["frontend.motion-design", "frontend.visual-design-polish"]
+        }
+      },
+      "expected": {
+        "assistedStatus": "clarification_required",
+        "noPersistence": true,
+        "questionId": "primary-skill"
+      }
+    },
+    {
+      "id": "stale-catalog-refreshes-without-state",
+      "kind": "refresh",
+      "prompt": "Please make the page delightful @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$staleCatalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["web-interface"],
+          "intentTags": ["visual-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.visual-design-polish",
+            "role": "primary",
+            "confidence": 0.9,
+            "evidenceText": "make the page delightful"
+          }
+        ]
+      },
+      "expected": {
+        "assistedStatus": "catalog_refresh_required",
+        "reasonCode": "catalog-digest-mismatch",
+        "noPersistence": true,
+        "refreshStatus": "prepared",
+        "recoveredPrimarySkillId": "frontend.visual-design-polish"
+      }
+    },
+    {
+      "id": "privacy-canary-is-not-projected-and-replay-is-stable",
+      "kind": "privacy-replay",
+      "prompt": "Make the page delightful for SECRET_ROUTER_42 at https://private.example/customer @skillranger",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["motion-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.motion-design",
+            "role": "primary",
+            "confidence": 0.9,
+            "evidenceText": "Make the page delightful"
+          }
+        ]
+      },
+      "expected": {
+        "assistedStatus": "prepared",
+        "assistedPrimarySkillId": "frontend.motion-design",
+        "privacyLeakageCount": 0,
+        "deterministicReplay": true
+      }
+    },
+    {
+      "id": "proposal-absent-keeps-deterministic-result",
+      "kind": "proposal-absent",
+      "prompt": "The page needs a coherent visual language and spacing rhythm @skillranger",
+      "expected": {
+        "fallbackPrimarySkillId": "frontend.visual-design-polish",
+        "assistedStatus": "prepared",
+        "assistedPrimarySkillId": "frontend.visual-design-polish",
+        "unchanged": true
+      }
+    }
+  ]
+}
