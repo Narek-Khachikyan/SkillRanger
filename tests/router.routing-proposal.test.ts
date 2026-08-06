@@ -56,6 +56,26 @@ test("routing proposal structure enforces bounded arrays and confidence", () => 
   );
 });
 
+test("ambiguity declarations are closed to two or three unique canonical skill IDs", () => {
+  const valid = validateRoutingProposalShape({
+    ...validProposal,
+    ambiguity: { primarySkillIds: ["frontend.motion-design", "frontend.visual-design-polish"] },
+  });
+  assert.deepEqual(valid.ambiguity, { primarySkillIds: ["frontend.motion-design", "frontend.visual-design-polish"] });
+
+  for (const primarySkillIds of [
+    ["frontend.motion-design"],
+    ["frontend.motion-design", "frontend.visual-design-polish", "frontend.react-component-design", "frontend.design-system"],
+    ["frontend.motion-design", "frontend.motion-design"],
+    ["frontend.motion-design", "FRONTEND.VISUAL-DESIGN-POLISH"],
+  ]) {
+    assert.throws(
+      () => validateRoutingProposalShape({ ...validProposal, ambiguity: { primarySkillIds } }),
+      (error: unknown) => error instanceof RoutingProposalError && error.code === "routing-proposal-invalid",
+    );
+  }
+});
+
 const completeCatalogReceipt = async () => {
   let current = await inspectSkillCatalog({ maxItems: 2, maxBytes: 256_000 });
   while (!current.complete) {

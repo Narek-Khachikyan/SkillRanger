@@ -522,7 +522,6 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
     routingProposal,
     outcome,
   });
-  const projectIdentity = await new RouterStore(input.projectRoot).projectIdentity();
   const promptProjection = { actions: analysis.profile.actions, artifactTypes: analysis.profile.artifactTypes, technologies: analysis.profile.technologies, qualityGoals: analysis.profile.qualityGoals, acceptanceCriteria: analysis.profile.acceptanceCriteria, domains: analysis.profile.domains.map(({ id }) => id), subtasks: analysis.profile.subtasks };
   const explicitSkillId = routingProposal
     ? detectExplicitSkillChoice(parsed.normalizedIntent, allMetadata.map(({ id }) => id))
@@ -566,9 +565,19 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
       maxSelectedRisk: config.router.maxSelectedRisk,
     })
     : undefined;
+  const ineligibleAmbiguityIds = ambiguityProbe
+    ? declaredAmbiguityIds.filter((skillId) => !ambiguityProbe.primaryCandidates.some(({ skill }) => skill.id === skillId))
+    : [];
+  if (ineligibleAmbiguityIds.length > 0) {
+    throw new RouterPrepareError(
+      "routing-proposal-invalid",
+      `Declared primary ambiguity choices are not eligible primary nominations: ${ineligibleAmbiguityIds.join(", ")}.`,
+    );
+  }
   const skillAmbiguityIds = ambiguityProbe && declaredAmbiguityIds.every((skillId) => ambiguityProbe.primaryCandidates.some(({ skill }) => skill.id === skillId))
     ? declaredAmbiguityIds
     : [];
+  const projectIdentity = await new RouterStore(input.projectRoot).projectIdentity();
   const continuationBinding = {
     fingerprintDigest: digest(fingerprint),
     registryDigest,
@@ -665,7 +674,13 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
     nominatedRoles,
     nominationOrder: effectiveNominationOrder,
     primaryNominationOrder: effectivePrimaryNominationOrder,
-    ...(explicitSkillId ? { requiredPrimarySkillId: explicitSkillId } : {}),
+    // A continuation answer is a closed host choice; a later composer veto must not silently
+    // replace it with another nominated or lexical primary.
+    ...(explicitSkillId
+      ? { requiredPrimarySkillId: explicitSkillId }
+      : selectedNominationPrimary
+        ? { requiredPrimarySkillId: selectedNominationPrimary }
+        : {}),
     limits: { ...defaultRouterLimits, maxSelectedRisk: config.router.maxSelectedRisk, maxEnvironmentSkills: config.router.maxEnvironmentSkills, maxTaskCompanions: config.router.maxTaskCompanions, maxVerificationSkills: config.router.maxVerificationSkills, maxAgentContextSkills: config.router.maxAgentContextSkills, maxTotalSelectedSkills: config.router.maxTotalSelectedSkills, maxInstructionBytes: config.router.maxInstructionBytes, maxAdditionalReadBytes: config.router.maxAdditionalReadBytes, maxSingleFileBytes: config.router.maxSingleFileBytes },
   });
   if (routingProposal) {

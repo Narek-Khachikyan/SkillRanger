@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir } from "node:fs/promises";
+import { mkdtemp, readdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { callMcpTool, mcpTools } from "../src/mcp/tools.ts";
+import { defaultRouterConfig } from "../src/config/index.ts";
 import { initializeRouterContext } from "../src/mcp/router-context.ts";
 import { buildSkillCatalog, inspectSkillCatalog } from "../src/router/catalog.ts";
-import { prepareTask } from "../src/router/prepare.ts";
+import { prepareTask, RouterPrepareError } from "../src/router/prepare.ts";
 import { RouterStore } from "../src/router/store.ts";
 import { validateJsonSchema } from "../src/runtime/strict/json-schema.ts";
 
@@ -341,4 +342,142 @@ test("declared primary ambiguity uses typed continuation and honors the selected
   assert.equal(continued.status, "prepared");
   if (continued.status !== "prepared") return;
   assert.equal(continued.selections.primary.skillId, selected);
+});
+
+test("malformed or inconsistent ambiguity declarations fail before creating run state", async () => {
+  const catalog = await buildSkillCatalog();
+  const binding = await completeReceipt();
+  const cases = [
+    { primarySkillIds: ["frontend.motion-design"] },
+    { primarySkillIds: ["frontend.motion-design", "frontend.not-in-catalog"] },
+  ];
+  for (const ambiguity of cases) {
+    const root = await temporaryProject();
+    await assert.rejects(
+      () => prepareTask({
+        projectRoot: root,
+        registry: { kind: "bundled", root: registry },
+        prompt: "Please make the page delightful @skillranger",
+        activation: { mode: "explicit" },
+        targetAgent: "codex",
+        routingProposal: {
+          ...proposalFor(catalog.digest, binding.receipt, [
+            { skillId: "frontend.motion-design", role: "primary", confidence: 0.9, evidenceText: "make the page delightful" },
+            { skillId: "frontend.visual-design-polish", role: "primary", confidence: 0.89, evidenceText: "make the page delightful" },
+          ]),
+          ambiguity,
+        },
+      }),
+      (error: unknown) => error instanceof RouterPrepareError && error.code === "routing-proposal-invalid",
+    );
+    assert.deepEqual(await runFiles(root), { runtime: [], router: [] });
+  }
+});
+
+test("an explicit exact user choice outranks a declared primary ambiguity", async () => {
+  const root = await temporaryProject();
+  const catalog = await buildSkillCatalog();
+  const binding = await completeReceipt();
+  const result = await prepareTask({
+    projectRoot: root,
+    registry: { kind: "bundled", root: registry },
+    prompt: "Please use frontend.motion-design to make the page delightful @skillranger",
+    activation: { mode: "explicit" },
+    targetAgent: "codex",
+    routingProposal: {
+      ...proposalFor(catalog.digest, binding.receipt, [
+        { skillId: "frontend.visual-design-polish", role: "primary", confidence: 0.99, evidenceText: "make the page delightful" },
+        { skillId: "frontend.motion-design", role: "primary", confidence: 0.51, evidenceText: "make the page delightful" },
+      ]),
+      ambiguity: { primarySkillIds: ["frontend.visual-design-polish", "frontend.motion-design"] },
+    },
+  });
+  assert.equal(result.status, "prepared");
+  if (result.status !== "prepared") return;
+  assert.equal(result.selections.primary.skillId, "frontend.motion-design");
+});
+
+test("without a declaration, nomination order wins and close confidence never creates ambiguity", async () => {
+  const root = await temporaryProject();
+  const catalog = await buildSkillCatalog();
+  const binding = await completeReceipt();
+  const result = await prepareTask({
+    projectRoot: root,
+    registry: { kind: "bundled", root: registry },
+    prompt: "Please make the page delightful @skillranger",
+    activation: { mode: "explicit" },
+    targetAgent: "codex",
+    routingProposal: proposalFor(catalog.digest, binding.receipt, [
+      { skillId: "frontend.motion-design", role: "primary", confidence: 0.51, evidenceText: "make the page delightful" },
+      { skillId: "frontend.visual-design-polish", role: "primary", confidence: 0.99, evidenceText: "make the page delightful" },
+    ]),
+  });
+  assert.equal(result.status, "prepared");
+  if (result.status !== "prepared") return;
+  assert.equal(result.selections.primary.skillId, "frontend.motion-design");
+});
+
+test("an ineligible ambiguity choice is rejected before persisting run state", async () => {
+  const root = await temporaryProject();
+  const catalog = await buildSkillCatalog();
+  const binding = await completeReceipt();
+  await assert.rejects(
+    () => prepareTask({
+      projectRoot: root,
+      registry: { kind: "bundled", root: registry },
+      prompt: "Please make the page delightful @skillranger",
+      activation: { mode: "explicit" },
+      targetAgent: "codex",
+      routingProposal: {
+        ...proposalFor(catalog.digest, binding.receipt, [
+          { skillId: "frontend.design-to-code", role: "primary", confidence: 0.99, evidenceText: "make the page delightful" },
+          { skillId: "frontend.motion-design", role: "primary", confidence: 0.8, evidenceText: "make the page delightful" },
+        ]),
+        ambiguity: { primarySkillIds: ["frontend.design-to-code", "frontend.motion-design"] },
+      },
+    }),
+    (error: unknown) => error instanceof RouterPrepareError && error.code === "routing-proposal-invalid",
+  );
+  assert.deepEqual(await runFiles(root), { runtime: [], router: [] });
+});
+
+test("an ambiguity continuation cannot substitute another nomination after a selected-choice veto", async () => {
+  const root = await temporaryProject();
+  const config = structuredClone(defaultRouterConfig);
+  config.router.maxInstructionBytes = 10_000;
+  await writeFile(path.join(root, "skillranger.config.json"), JSON.stringify(config));
+  const catalog = await buildSkillCatalog();
+  const binding = await completeReceipt();
+  const routingProposal = {
+    ...proposalFor(catalog.digest, binding.receipt, [
+      { skillId: "frontend.visual-design-polish", role: "primary", confidence: 0.9, evidenceText: "make the page delightful" },
+      { skillId: "frontend.motion-design", role: "primary", confidence: 0.89, evidenceText: "make the page delightful" },
+    ]),
+    ambiguity: { primarySkillIds: ["frontend.visual-design-polish", "frontend.motion-design"] },
+  };
+  const initial = await prepareTask({
+    projectRoot: root,
+    registry: { kind: "bundled", root: registry },
+    prompt: "Please make the page delightful @skillranger",
+    activation: { mode: "explicit" },
+    targetAgent: "codex",
+    routingProposal,
+  });
+  assert.equal(initial.status, "clarification_required");
+  if (initial.status !== "clarification_required") return;
+
+  const continued = await prepareTask({
+    projectRoot: root,
+    registry: { kind: "bundled", root: registry },
+    prompt: "Please make the page delightful @skillranger",
+    activation: { mode: "explicit" },
+    targetAgent: "codex",
+    routingProposal,
+    continuationToken: initial.continuationToken,
+    clarificationAnswers: [{ questionId: "primary-skill", value: "frontend.visual-design-polish" }],
+  });
+  assert.equal(continued.status, "context_budget_exceeded");
+  if (continued.status !== "context_budget_exceeded") return;
+  assert.deepEqual(continued.blockingSkillIds, ["frontend.visual-design-polish"]);
+  assert.deepEqual(await runFiles(root), { runtime: [], router: [] });
 });
