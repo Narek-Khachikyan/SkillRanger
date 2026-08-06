@@ -374,7 +374,7 @@ test("proposal-driven composition advances past a primary that exceeds the conte
   assert.ok(result.rejections.some(({ skillId, reason }) => skillId === first.id && reason === "context-budget-exceeded"));
 });
 
-test("proposal-driven primary fallback can cross the selected domain after a hard veto", () => {
+test("proposal-driven primary fallback can cross an unobserved domain after a hard veto", () => {
   const first: RouterSkillMetadata = {
     id: "backend.hard-vetoed-first", displayName: "Hard-vetoed First", version: "1.0.0", riskLevel: "high", roles: ["primary"],
     domains: ["backend-api"], actions: ["implement"], artifactTypes: ["api"], intentTags: ["api"], technologyTags: [], qualityGoals: ["correctness"],
@@ -390,10 +390,9 @@ test("proposal-driven primary fallback can cross the selected domain after a har
   const result = composeSkillSet({
     profile: profile({ domains: [
       { id: "backend-api", confidence: 1, role: "primary", available: true, reasons: [], evidence: [] },
-      { id: "frontend", confidence: 0.8, role: "supporting", available: true, reasons: [], evidence: [] },
     ] }),
     skills: [first, second],
-    selectedDomainIds: ["backend-api", "frontend"],
+    selectedDomainIds: ["backend-api"],
     primaryDomainId: "backend-api",
     nominatedPrimarySkillIds: [first.id, second.id],
     nominationOrder: [first.id, second.id],

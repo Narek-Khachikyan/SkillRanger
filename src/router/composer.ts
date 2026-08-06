@@ -309,8 +309,13 @@ export const retrieveSkillCandidates = (input: RetrieveSkillCandidatesInput): Re
     let eligibleRoles = rolesFor(skill);
     if (eligibleRoles.length === 0) { rejections.push({ skillId: skill.id, reason: "router-metadata-incomplete" }); return []; }
     const domainMatch = skill.domains.some((domain) => selectedDomains.has(canonical(domain)));
-    if (!domainMatch) { rejections.push({ skillId: skill.id, reason: "domain-mismatch" }); return []; }
-    if (primaryDomainId && eligibleRoles.includes("primary") && !nominatedPrimarySkillIds.has(canonical(skill.id)) && !skill.domains.some((domain) => canonical(domain) === primaryDomainId)) {
+    const nominatedPrimary = nominatedPrimarySkillIds.has(canonical(skill.id));
+    // A catalog-bound primary nomination is already prompt-grounded and may name a
+    // domain that lexical routing did not detect. Keep all other eligibility gates
+    // intact, but do not let the lexical domain filter erase the nomination before
+    // ordered hard-veto fallback can consider it.
+    if (!domainMatch && !nominatedPrimary) { rejections.push({ skillId: skill.id, reason: "domain-mismatch" }); return []; }
+    if (primaryDomainId && eligibleRoles.includes("primary") && !nominatedPrimary && !skill.domains.some((domain) => canonical(domain) === primaryDomainId)) {
       eligibleRoles = eligibleRoles.filter((role) => role !== "primary");
       if (eligibleRoles.length === 0) { rejections.push({ skillId: skill.id, reason: "primary-domain-mismatch" }); return []; }
     }
