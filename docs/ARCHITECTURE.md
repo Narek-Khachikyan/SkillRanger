@@ -220,6 +220,10 @@ lifetime. Router tools therefore take **no** `projectRoot` argument; supplying o
 
 The 34 tools, by group:
 
+Catalog discovery is a dedicated read-only boundary: `inspect_skill_catalog` delivers the complete
+trusted bundled skill catalog before a host submits a catalog-bound routing proposal to `prepare_task`.
+The final catalog receipt proves delivery of that snapshot, not model comprehension.
+
 | Group (`src/mcp/tools/…`) | Tools |
 | :--- | :--- |
 | `project.ts` | `analyze_project`, `recommend_skills` |
@@ -683,5 +687,5 @@ Recorded as observed, not repaired:
   verbatim.
 - [ADR 0001](adr/0001-universal-prompt-router-boundaries.md) cites
   `SkillRanger-Universal-Prompt-Router-TZ-Plan.md`, which is not in the repository.
-- `README.md` lists seven MCP tools. That is a curated subset for readers, not the full surface of 34 —
-  it is a simplification, not an error.
+- `README.md` lists eight curated MCP tools, including `inspect_skill_catalog`. That is a curated
+  subset for readers, not the full surface of 34 — it is a simplification, not an error.

@@ -183,10 +183,10 @@ Add SkillRanger as a stdio MCP server:
 }
 ```
 
-The MCP surface can analyze projects, recommend and audit skills, preview or confirm installations, prepare routed tasks, and serve mandatory skill instructions to an agent host.
+The MCP surface can analyze projects, recommend and audit skills, discover the trusted skill catalog, preview or confirm installations, prepare routed tasks, and serve mandatory skill instructions to an agent host.
 
 <details>
-<summary><strong>Available MCP tools</strong></summary>
+<summary><strong>Available MCP tools (8 curated tools)</strong></summary>
 
 - `analyze_project`
 - `recommend_skills`
