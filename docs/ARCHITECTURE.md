@@ -590,7 +590,7 @@ Error surfaces are typed, not stringly: `McpToolErrorCode` (`src/mcp/tools/types
 CLI renders the same codes with remediation text (`remediationByCode` in `src/cli/runs.ts`) that MCP
 returns as structured error details.
 
-Further reading: [`SECURITY.md`](SECURITY.md), [`threat-model.md`](threat-model.md).
+Further reading: [`SECURITY.md`](SECURITY.md).
 
 ---
 
@@ -616,7 +616,7 @@ Evals run outside `node --test`: `pnpm eval:router`, `pnpm eval:frontend`, `pnpm
 `pnpm eval:visual`. Only the routing modes of `eval:frontend` and `eval:router` are blocking gates
 inside `release:check`; task and visual evals need an external agent command and are run manually.
 See [`router-evals.md`](router-evals.md), [`evaluation-and-promotion.md`](evaluation-and-promotion.md),
-[`visual-benchmark.md`](visual-benchmark.md), [`TESTING.md`](TESTING.md).
+[`visual-benchmark.md`](visual-benchmark.md).
 
 ---
 
@@ -679,12 +679,6 @@ Recorded as observed, not repaired:
   installer adapters, and MCP tools named `install_skills`, `generate_skill_from_goal`,
   `update_registry`, and `explain_recommendation`. None of those exist. If you find that shape quoted
   elsewhere, it is stale.
-- [`TESTING.md`](TESTING.md) lists fixture projects `expo-react-native` and `monorepo`; neither exists,
-  and it does not mention the real `backend-node` fixture or `tests/fixtures/router-packs/`.
-- [`PRODUCT.md`](PRODUCT.md) links to a root `PLAN.md` that was replaced by `TASKS.md`. `TASKS.md`
-  itself is a stale day-one scaffolding checklist and should not be read as current scope.
-- [`threat-model.md`](threat-model.md) duplicates the opening section of [`SECURITY.md`](SECURITY.md)
-  verbatim.
 - [ADR 0001](adr/0001-universal-prompt-router-boundaries.md) cites
   `SkillRanger-Universal-Prompt-Router-TZ-Plan.md`, which is not in the repository.
 - `README.md` lists eight curated MCP tools, including `inspect_skill_catalog`. That is a curated

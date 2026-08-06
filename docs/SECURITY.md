@@ -1,6 +1,6 @@
 # Security
 
-This document is the expanded security model. The shorter MVP threat-model note remains in docs/threat-model.md for quick reference.
+This document is the security model for the current MVP and release surface.
 
 ## Current MVP Threat Model
 

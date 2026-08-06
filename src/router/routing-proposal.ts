@@ -429,8 +429,8 @@ const codeRanges = (source: string) => {
 
 const inRange = (position: number, ranges: Array<[number, number]>) => ranges.some(([start, end]) => position >= start && position < end);
 
-const isNegatedChoice = (source: string, start: number) => {
-  const sentenceStart = Math.max(
+const clauseStartAt = (source: string, start: number) => {
+  let boundary = Math.max(
     source.lastIndexOf(".", start - 1),
     source.lastIndexOf("!", start - 1),
     source.lastIndexOf("?", start - 1),
@@ -438,21 +438,22 @@ const isNegatedChoice = (source: string, start: number) => {
     source.lastIndexOf(",", start - 1),
     source.lastIndexOf(";", start - 1),
   ) + 1;
-  const prefix = source.slice(sentenceStart, start);
+  for (const match of source.matchAll(/(?:^|[^\p{L}\p{N}_])(?:and|or|but|then|и|или|а|но|потом|затем)\s+/giu)) {
+    const end = (match.index ?? 0) + match[0].length;
+    if (end > start) break;
+    boundary = Math.max(boundary, end);
+  }
+  return boundary;
+};
+
+const isNegatedChoice = (source: string, start: number) => {
+  const prefix = source.slice(clauseStartAt(source, start), start);
   return /\b(?:do\s+not|don't|dont|avoid|never|not|without|exclude|skip)\b[^.!?\n]{0,80}$/iu.test(prefix) ||
     /(?:^|\s)(?:не|без)\s+(?:(?:используй|использовать|используйте|бери|брать|нужен|нужно|выбирай|выбирать|применяй|применить)\s*)?$/iu.test(prefix);
 };
 
 const isAffirmativeChoice = (source: string, start: number) => {
-  const clauseStart = Math.max(
-    source.lastIndexOf(".", start - 1),
-    source.lastIndexOf("!", start - 1),
-    source.lastIndexOf("?", start - 1),
-    source.lastIndexOf("\n", start - 1),
-    source.lastIndexOf(",", start - 1),
-    source.lastIndexOf(";", start - 1),
-  ) + 1;
-  const prefix = source.slice(clauseStart, start);
+  const prefix = source.slice(clauseStartAt(source, start), start);
   return /(?:^|\s)(?:please\s+)?(?:use|select|choose|pick|apply|run|route(?:\s+(?:this|it))?\s+through|work\s+with)\s*:?\s+(?:(?:the|an?|exact|canonical|this)\s+)*(?:skill\s+)?(?:id\s+)?$/iu.test(prefix) ||
     /(?:^|\s)(?:пожалуйста\s+)?(?:используй|использовать|используйте|выбери|выбрать|выбирай|примени|применить|бери|брать|работай\s+с|через)\s*:?\s+(?:(?:этот|эту|точный|канонический)\s+)*(?:навык\s+)?(?:идентификатор\s+)?$/iu.test(prefix);
 };

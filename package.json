@@ -25,7 +25,6 @@
     "docs/*.md",
     "docs/adr/",
     "docs/domains/",
-    "docs/superpowers/",
     "README.md",
     "RELEASE.md",
     "LICENSE"

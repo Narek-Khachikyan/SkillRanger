@@ -2,6 +2,28 @@
 
 This glossary defines the project-specific language used for skill execution and frontend visual verification.
 
+## Model-assisted routing
+
+**Skill catalog**:
+The complete bounded metadata view of the audited bundled registry that a host agent receives before it proposes skills. It contains selection metadata, not skill instructions or arbitrary locally discovered files.
+_Avoid_: Search results, installed-skill list, instruction bundle
+
+**Routing proposal**:
+A catalog-bound, prompt-grounded interpretation and ordered set of skill nominations produced by the host agent. It proposes semantic relevance but does not authorize or select a skill.
+_Avoid_: Model selection, routing decision, final skill set
+
+**Skill nomination**:
+A host agent's evidence-grounded claim that one catalog skill should fill one routing role. A nomination remains subject to routing hard vetoes and composition limits.
+_Avoid_: Selected skill, forced skill, recommendation result
+
+**Routing hard veto**:
+A deterministic eligibility or integrity rule that prevents a skill nomination from entering the prepared skill set. It protects audit, risk, compatibility, capability, installation, conflict, and context guarantees; it does not judge semantic relevance.
+_Avoid_: Low relevance score, model disagreement, soft penalty
+
+**Catalog receipt**:
+Proof that the host received every part of one skill catalog snapshot. It proves delivery, not comprehension or correct skill nomination.
+_Avoid_: Model-read proof, catalog approval, verified selection
+
 ## Verification
 
 **Verified outcome**:
