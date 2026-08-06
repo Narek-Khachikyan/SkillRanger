@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { callMcpTool, mcpTools } from "../src/mcp/tools.ts";
@@ -19,19 +19,104 @@ const runFiles = async (root: string) => ({
   router: (await readdir(path.join(root, ".skillranger", "runs", "router")).catch(() => [])).filter((entry) => entry.endsWith(".json")),
 });
 
-const completeReceipt = async (now?: number) => {
+const completeReceipt = async (now?: number, sourceOptions: { registryRoot?: string; domainsRoot?: string } = {}) => {
   const pageOptions = { maxItems: 2, maxBytes: 256_000 };
-  const sourceOptions = now === undefined ? {} : { now };
-  let page = await inspectSkillCatalog(pageOptions, sourceOptions);
+  const catalogOptions = now === undefined ? sourceOptions : { ...sourceOptions, now };
+  let page = await inspectSkillCatalog(pageOptions, catalogOptions);
   while (!page.complete) {
     page = await inspectSkillCatalog({
       ...pageOptions,
       cursor: page.nextCursor!,
       expectedCatalogDigest: page.catalogDigest,
-    }, sourceOptions);
+    }, catalogOptions);
   }
   assert.ok(page.catalogReceipt);
   return { digest: page.catalogDigest, receipt: page.catalogReceipt };
+};
+
+const createCrossDomainBundledFixture = async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "skillranger-cross-domain-proposal-"));
+  const registryRoot = path.join(root, "registry");
+  const domainsRoot = path.join(root, "domains");
+  const sourceSkillRoot = path.resolve("registry/skills/frontend.react-component-design");
+  await mkdir(path.join(registryRoot, "skills"), { recursive: true });
+  await mkdir(domainsRoot, { recursive: true });
+
+  const skills = [
+    { id: "alpha.first", domain: "alpha", riskLevel: "high", roles: ["primary"], dependencies: [] },
+    { id: "beta.second", domain: "beta", riskLevel: "low", roles: ["primary"], dependencies: ["gamma.dependency"] },
+    { id: "gamma.dependency", domain: "gamma", riskLevel: "low", roles: ["companion"], dependencies: [] },
+  ] as const;
+  for (const skill of skills) {
+    const skillRoot = path.join(registryRoot, "skills", skill.id);
+    await cp(sourceSkillRoot, skillRoot, { recursive: true });
+    const manifestPath = path.join(skillRoot, "skill.manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    const routing = manifest.routing as Record<string, unknown>;
+    manifest.id = skill.id;
+    manifest.name = skill.id.replaceAll(".", "-");
+    manifest.displayName = skill.id;
+    manifest.riskLevel = skill.riskLevel;
+    manifest.dependencies = [...skill.dependencies];
+    manifest.source = { ...(manifest.source as Record<string, unknown>), path: `./registry/skills/${skill.id}` };
+    manifest.routing = {
+      ...routing,
+      category: `${skill.domain}-workflow`,
+      roles: [...skill.roles],
+      domains: [skill.domain],
+      actions: ["implement"],
+      artifactTypes: [`${skill.domain}-artifact`],
+      intentTags: [`${skill.domain}-intent`],
+      technologyTags: [`${skill.domain}-tech`],
+      environmentSignals: [],
+      qualityGoals: ["correctness"],
+      requiredCapabilities: ["filesystem"],
+      optionalCapabilities: [],
+      complements: [],
+    };
+    await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+    const skillFile = path.join(skillRoot, "SKILL.md");
+    const skillText = await readFile(skillFile, "utf8");
+    await writeFile(skillFile, skillText.replace(/^name: .*$/mu, `name: ${skill.id.replaceAll(".", "-")}`));
+  }
+
+  for (const skill of skills) {
+    const manifest = {
+      schemaVersion: "1.1",
+      id: skill.domain,
+      displayName: skill.domain,
+      description: `${skill.domain} test domain.`,
+      version: "1.0.0",
+      coreApi: "1.0",
+      skillIdPrefix: `${skill.domain}.`,
+      capabilities: ["intent-routing"],
+      artifacts: {
+        intents: [],
+        schemas: [],
+        recipes: [],
+        workflows: [],
+        validators: [],
+        routingVocabulary: "routing.vocabulary.json",
+      },
+      ownership: [{ intent: `${skill.domain}-intent`, primarySkill: skill.id, supportingSkills: [] }],
+      routing: {
+        aliases: [`${skill.domain}-surface`],
+        intentTags: [`${skill.domain}-intent`],
+        artifactTypes: [`${skill.domain}-artifact`],
+        technologyTags: [`${skill.domain}-tech`],
+        projectTags: [],
+      },
+    };
+    const domainRoot = path.join(domainsRoot, skill.domain);
+    await mkdir(domainRoot, { recursive: true });
+    await writeFile(path.join(domainRoot, "domain.manifest.json"), JSON.stringify(manifest, null, 2));
+    await writeFile(path.join(domainRoot, "routing.vocabulary.json"), JSON.stringify({
+      schemaVersion: "routing-vocabulary/1.0",
+      owner: { kind: "domain", id: skill.domain },
+      entries: [{ kind: "intent", id: `${skill.domain}-intent`, locale: "en", phrases: [`${skill.domain} workflow`] }],
+    }, null, 2));
+  }
+  return { root, registryRoot, domainsRoot };
 };
 
 const proposalFor = (catalogDigest: string, catalogReceipt: string, nominations = [{
@@ -255,6 +340,46 @@ test("a non-strict hard veto advances to the next valid primary nomination", asy
   if (result.status !== "prepared") return;
   assert.equal(result.selections.primary.skillId, "frontend.motion-design");
   assert.ok(result.warnings.some((warning) => warning.startsWith("routing-proposal-rejected:frontend.design-to-code:")));
+});
+
+test("a cross-domain primary fallback carries dependency domains into the persisted run", async () => {
+  const fixture = await createCrossDomainBundledFixture();
+  const root = await temporaryProject();
+  const catalog = await buildSkillCatalog({ registryRoot: fixture.registryRoot, domainsRoot: fixture.domainsRoot });
+  const binding = await completeReceipt(undefined, { registryRoot: fixture.registryRoot, domainsRoot: fixture.domainsRoot });
+  const result = await prepareTask({
+    projectRoot: root,
+    registry: { kind: "bundled", root: fixture.registryRoot },
+    prompt: "Please complete the shared task @skillranger",
+    activation: { mode: "explicit" },
+    targetAgent: "codex",
+    routingProposal: {
+      schemaVersion: "routing-proposal/1.0",
+      catalogDigest: catalog.digest,
+      catalogReceipt: binding.receipt,
+      interpretation: {
+        domains: ["alpha"],
+        actions: ["implement"],
+        artifactTypes: [],
+        intentTags: [],
+        technologyTags: [],
+        qualityGoals: [],
+      },
+      nominations: [
+        { skillId: "alpha.first", role: "primary", confidence: 0.99, evidenceText: "shared task" },
+        { skillId: "beta.second", role: "primary", confidence: 0.98, evidenceText: "shared task" },
+      ],
+    },
+  }, { domainsRoot: fixture.domainsRoot });
+
+  assert.equal(result.status, "prepared");
+  if (result.status !== "prepared") return;
+  assert.equal(result.selections.primary.skillId, "beta.second");
+  assert.ok(result.selections.companions.some(({ skillId }) => skillId === "gamma.dependency"));
+  assert.equal(result.routing.domains.find(({ role }) => role === "primary")?.id, "beta");
+  assert.equal((await new RouterStore(root).read(result.run.routerRunId)).routing.domains.find(({ role }) => role === "primary")?.id, "beta");
+  const runtime = JSON.parse(await readFile(path.join(root, ".skillranger", "runs", `${result.run.runtimeRunId}.json`), "utf8")) as { domain: string };
+  assert.equal(runtime.domain, "beta");
 });
 
 test("strict routing stops at the first nomination that passes routing vetoes", async () => {

@@ -366,7 +366,11 @@ const common = (input: {
 
 const applyClarification = (domainId: string, domains: DomainCandidate[]) => domains.map((domain) => ({ ...domain, role: domain.id === domainId ? "primary" as const : "supporting" as const }));
 
-export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareTaskResult> => {
+export const prepareTask = async (
+  input: PrepareTaskCoreInput,
+  options: { domainsRoot?: string } = {},
+): Promise<PrepareTaskResult> => {
+  const domainsRoot = options.domainsRoot ?? defaultDomainsRoot;
   let configResult;
   try {
     configResult = await loadRouterConfig(input.projectRoot);
@@ -420,7 +424,7 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
       throw error;
     }
     try {
-      catalogSnapshot = await buildSkillCatalog({ registryRoot: input.registry.root, domainsRoot: defaultDomainsRoot });
+      catalogSnapshot = await buildSkillCatalog({ registryRoot: input.registry.root, domainsRoot });
     } catch (error) {
       if (error instanceof SkillCatalogError) throw new RouterPrepareError("routing-integrity", "The trusted catalog could not be validated.");
       throw error;
@@ -439,7 +443,7 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
   const fixturePacks = input.registry.kind === "test-fixture" ? await loadRouterFixturePacks(input.registry.root) : [];
   const packs = input.registry.kind === "test-fixture"
     ? fixturePacks.map(({ domain }) => ({ id: domain.id, displayName: domain.displayName, ...(domain.targetSurface ? { targetSurface: domain.targetSurface } : {}), version: "fixture", coreApi: "fixture", skillIdPrefix: `${domain.id}.`, capabilities: ["intent-routing"] as const, artifacts: { intents: [], schemas: [], recipes: [], workflows: [], validators: [] }, ownership: [], routing: domain.routing, root: input.registry.root }))
-    : await loadBundledRouterPacks(defaultDomainsRoot);
+    : await loadBundledRouterPacks(domainsRoot);
   const skills = input.registry.kind === "test-fixture"
     ? []
     : await loadLocalRegistry(input.registry.root);
@@ -650,9 +654,28 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
   const effectivePrimaryNominationOrder = selectedNominationPrimary
     ? [selectedNominationPrimary, ...primaryNominationOrder.filter((skillId) => skillId !== selectedNominationPrimary)]
     : primaryNominationOrder;
-  const routingCandidates = proposalPrimaryDomain && !resolution.candidates.some(({ id }) => id === proposalPrimaryDomain)
-    ? [...resolution.candidates, { id: proposalPrimaryDomain, confidence: 0.75, role: "supporting" as const, available: true, reasons: ["proposal-domain-binding"], evidence: [] }]
-    : resolution.candidates;
+  const skillById = new Map(allMetadata.map((skill) => [canonical(skill.id), skill]));
+  const nominatedPrimaryDomains: string[] = [];
+  const visitedNominatedSkills = new Set<string>();
+  const pendingNominatedSkills = [...effectivePrimaryNominationOrder];
+  while (pendingNominatedSkills.length > 0) {
+    const skillId = pendingNominatedSkills.shift()!;
+    const normalizedSkillId = canonical(skillId);
+    if (visitedNominatedSkills.has(normalizedSkillId)) continue;
+    visitedNominatedSkills.add(normalizedSkillId);
+    const skill = skillById.get(normalizedSkillId);
+    if (!skill) continue;
+    nominatedPrimaryDomains.push(...skill.domains);
+    pendingNominatedSkills.push(...(skill.dependencies ?? []));
+  }
+  const routingCandidates = [...resolution.candidates];
+  const routingCandidateIds = new Set(routingCandidates.map(({ id }) => canonical(id)));
+  for (const domainId of nominatedPrimaryDomains) {
+    const normalizedDomainId = canonical(domainId);
+    if (routingCandidateIds.has(normalizedDomainId)) continue;
+    routingCandidateIds.add(normalizedDomainId);
+    routingCandidates.push({ id: domainId, confidence: 0.75, role: "supporting", available: true, reasons: ["proposal-domain-binding"], evidence: [] });
+  }
   const composed = composeSkillSet({
     profile: analysis.profile,
     requirements: analysis.requirements,
@@ -692,7 +715,13 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
         .map(({ skillId, reason }) => `routing-proposal-rejected:${skillId}:${reason}`),
     ])];
   }
-  const resultDomains = applyClarification(selectedPrimary, routingCandidates);
+  const composedPrimaryDomain = composed.status === "prepared"
+    ? composed.composed.primary.skill.domains.find((domainId) => canonical(domainId) === canonical(selectedPrimary)) ??
+      composed.composed.primary.skill.domains.find((domainId) => routingCandidateIds.has(canonical(domainId))) ??
+      composed.composed.primary.skill.domains[0] ??
+      selectedPrimary
+    : selectedPrimary;
+  const resultDomains = applyClarification(composedPrimaryDomain, routingCandidates);
   if (composed.status !== "prepared") {
     if (composed.status === "decomposition_required") {
       const outcome = { status: composed.status, decomposition: { subtasks: composed.subtasks } };
@@ -744,7 +773,7 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
   let runtimeClarification: RuntimeClarificationSummary | undefined;
   let runtimePayload: SkillRun | SkillRunV2;
   if (strict) {
-    runtimePayload = await createPreparedStrictSkillRun({ projectRoot: input.projectRoot, targetAgent, domain: selectedPrimary, intent: parsed.normalizedIntent, rawIntent: input.prompt, normalizedGoal: analysis.profile.normalizedGoal, runtimeRunId, selections, metadata: selectedMetadata, fingerprint, skillInputs: input.skillInputs ?? {}, capabilities, storeRawIntent: input.rawIntentPersistence === "explicitly-authorized" });
+    runtimePayload = await createPreparedStrictSkillRun({ projectRoot: input.projectRoot, targetAgent, domain: composedPrimaryDomain, intent: parsed.normalizedIntent, rawIntent: input.prompt, normalizedGoal: analysis.profile.normalizedGoal, runtimeRunId, selections, metadata: selectedMetadata, fingerprint, skillInputs: input.skillInputs ?? {}, capabilities, storeRawIntent: input.rawIntentPersistence === "explicitly-authorized" });
     const blocked = runtimePayload.skillLedgers.filter(({ outcome }) => outcome === "blocked");
     if (blocked.length > 0) {
       const outcome = {
@@ -758,7 +787,7 @@ export const prepareTask = async (input: PrepareTaskCoreInput): Promise<PrepareT
       return { ...resultCommon(resultDomains, outcome), ...outcome };
     }
   } else {
-    const lifecycle = await createLifecyclePayload({ runtimeRunId, domain: selectedPrimary, targetAgent, prompt: analysis.profile.normalizedGoal, rawPrompt: input.prompt, policyIntent: parsed.normalizedIntent, profile: analysis.profile, selections: provisionalBase, rawIntentPersistence: input.rawIntentPersistence === "explicitly-authorized" });
+    const lifecycle = await createLifecyclePayload({ runtimeRunId, domain: composedPrimaryDomain, targetAgent, prompt: analysis.profile.normalizedGoal, rawPrompt: input.prompt, policyIntent: parsed.normalizedIntent, profile: analysis.profile, selections: provisionalBase, rawIntentPersistence: input.rawIntentPersistence === "explicitly-authorized" });
     runtimePayload = lifecycle.payload;
     runtimeClarification = lifecycle.runtimeClarification;
   }
