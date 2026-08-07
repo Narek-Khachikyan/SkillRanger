@@ -11,6 +11,7 @@ import { recommendSkills } from "../../recommender/index.ts";
 import { scanProject } from "../../scanner/index.ts";
 import { assertValidExecutionContract } from "./contract.ts";
 import { evaluateApplicability } from "./contract.ts";
+import { assertSelectionsTrustedValidatorOwnership } from "./validator-registry.ts";
 import { validateJsonSchema } from "./json-schema.ts";
 import { captureSourceControl } from "./git.ts";
 import { createContentChunks, createStrictSkillRun } from "./reducer.ts";
@@ -177,6 +178,7 @@ export const startPreparedStrictSkillRun = async (input: StartPreparedStrictSkil
       skillInput: input.skillInputs?.[skill.manifest.id] ?? {}, hostCapabilities,
     }));
   }
+  assertSelectionsTrustedValidatorOwnership(selectedSkills);
   const intentDigest = sha(input.intent);
   const sourceControl = await captureSourceControl(input.projectRoot);
   const run = createStrictSkillRun({
@@ -217,6 +219,7 @@ export const createPreparedStrictSkillRun = async (input: PreparedStrictSkillInp
       hostCapabilities: new Set(input.capabilities),
     }));
   }
+  assertSelectionsTrustedValidatorOwnership(selectedSkills);
   const sourceControl = await captureSourceControl(input.projectRoot);
   return createStrictSkillRun({
     runId: input.runtimeRunId,

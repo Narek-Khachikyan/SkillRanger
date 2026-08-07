@@ -428,4 +428,9 @@ export const registerFrontendDomainPack = () =>
     routing,
     runPolicy: { evaluate: evaluateFrontendRunPolicy },
     root: `${defaultDomainsRoot}/frontend`,
+    validators: [
+      "frontend/browser-hard-gates",
+      "frontend/tailwind-source",
+      "frontend/performance-claims",
+    ],
   });

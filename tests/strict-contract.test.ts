@@ -62,16 +62,38 @@ test("validates a closed strict execution contract with canonical ids", async ()
   ]);
 });
 
-test("rejects non-canonical ids, unknown rule references, and unregistered validators", () => {
+test("rejects non-canonical ids, unknown rule references, and malformed validator ids", () => {
   const invalid = contract();
   invalid.steps[0].id = "inspect";
   invalid.steps[0].ruleIds = ["frontend.test-skill/rule/missing"];
-  invalid.gates[0].evaluator = { type: "validator", validatorId: "skill-package/arbitrary-code" };
+  invalid.gates[0].evaluator = { type: "validator", validatorId: "arbitrary-code" };
 
   assert.throws(
     () => assertValidExecutionContract(invalid),
     /canonical|unknown rule|validator/i,
   );
+
+  for (const malformed of ["core/", "/name", "Core/name", "core/name/extra", "", "a b/c"]) {
+    const caseContract = contract();
+    caseContract.gates[0].evaluator = { type: "validator", validatorId: malformed };
+    assert.throws(() => assertValidExecutionContract(caseContract), /validator/i, malformed);
+  }
+});
+
+test("phase 1 accepts syntactically valid core and domain validator ids without claiming ownership", () => {
+  for (const validatorId of [
+    "core/artifact-integrity",
+    "core/critic-independence",
+    "frontend/browser-hard-gates",
+    "frontend/tailwind-source",
+    "frontend/performance-claims",
+    "core/new-core-validator",
+    "some-domain/a-validator.2",
+  ]) {
+    const valid = contract();
+    valid.gates[0].evaluator = { type: "validator", validatorId };
+    assert.doesNotThrow(() => assertValidExecutionContract(valid), validatorId);
+  }
 });
 
 test("reserves only the runtime-owned critic system gate id from core contracts", () => {

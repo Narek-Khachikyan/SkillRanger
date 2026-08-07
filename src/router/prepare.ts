@@ -43,7 +43,7 @@ import type {
 import { createSkillRun, reduceSkillRun } from "../runtime/skill-run/reducer.ts";
 import { SkillRunStore, type SkillRun } from "../runtime/skill-run/index.ts";
 import { createPreparedStrictSkillRun } from "../runtime/strict/service.ts";
-import { StrictSkillRunStore, type SkillRunV2 } from "../runtime/strict/index.ts";
+import { StrictSkillRunError, StrictSkillRunStore, type SkillRunV2 } from "../runtime/strict/index.ts";
 import { assertInstalledMatches } from "../runtime/strict/service.ts";
 
 export const routerAlgorithmVersion = "router/2.0" as const;
@@ -773,7 +773,19 @@ export const prepareTask = async (
   let runtimeClarification: RuntimeClarificationSummary | undefined;
   let runtimePayload: SkillRun | SkillRunV2;
   if (strict) {
-    runtimePayload = await createPreparedStrictSkillRun({ projectRoot: input.projectRoot, targetAgent, domain: composedPrimaryDomain, intent: parsed.normalizedIntent, rawIntent: input.prompt, normalizedGoal: analysis.profile.normalizedGoal, runtimeRunId, selections, metadata: selectedMetadata, fingerprint, skillInputs: input.skillInputs ?? {}, capabilities, storeRawIntent: input.rawIntentPersistence === "explicitly-authorized" });
+    try {
+      runtimePayload = await createPreparedStrictSkillRun({ projectRoot: input.projectRoot, targetAgent, domain: composedPrimaryDomain, intent: parsed.normalizedIntent, rawIntent: input.prompt, normalizedGoal: analysis.profile.normalizedGoal, runtimeRunId, selections, metadata: selectedMetadata, fingerprint, skillInputs: input.skillInputs ?? {}, capabilities, storeRawIntent: input.rawIntentPersistence === "explicitly-authorized" });
+    } catch (error) {
+      if (error instanceof StrictSkillRunError && error.code === "strict-contract-missing" && error.details?.reason === "validator-ownership") {
+        const outcome = {
+          status: "strict_requirements_unmet" as const,
+          missing: [{ skillId: typeof error.details.skillId === "string" ? error.details.skillId : undefined, requirement: "strict-contract-v2" as const }],
+          installationSuggestions: [],
+        };
+        return { ...resultCommon(resultDomains, outcome), ...outcome };
+      }
+      throw error;
+    }
     const blocked = runtimePayload.skillLedgers.filter(({ outcome }) => outcome === "blocked");
     if (blocked.length > 0) {
       const outcome = {

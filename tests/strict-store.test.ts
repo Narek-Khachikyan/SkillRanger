@@ -14,6 +14,7 @@ import {
   deriveStrictValidatorResults,
   readNextStrictChunk,
   assertValidStrictSkillRun,
+  TrustedValidatorRegistry,
   type EvidenceArtifact,
   type ExecutionContractV2,
   type SkillRunV2,
@@ -1282,22 +1283,17 @@ test("store finalization rejects a structurally valid forged passing report for 
   );
 });
 
-test("caller constructor callbacks cannot make a failing Tailwind gate pass", async () => {
+test("a caller-supplied trusted registry cannot make a failing Tailwind gate pass", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "strict-tailwind-authority-"));
-  const StoreWithLegacyCallback = StrictSkillRunStore as unknown as new (
-    projectRoot: string,
-    callbacks: Record<string, () => { passed: boolean }>,
-  ) => StrictSkillRunStore;
-  const store = new StoreWithLegacyCallback(root, {
-    "frontend/browser-hard-gates": () => ({ passed: true }),
-  });
+  const store = new StrictSkillRunStore(root, () =>
+    TrustedValidatorRegistry.fromIds(["core/artifact-integrity", "core/critic-independence"]));
   const run = await stageCompletedEvidence(root, store, tailwindValidatorContract);
 
-  const verified = await store.verifySkill(run.runId, tailwindValidatorContract.skillId);
-
-  assert.equal(verified.state, "repair-required");
-  assert.equal(verified.skillLedgers[0].verificationReports[0].gateResults
-    .find(({ gateId }) => gateId.endsWith("/focus-visible"))?.passed, false);
+  await assert.rejects(
+    store.verifySkill(run.runId, tailwindValidatorContract.skillId),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "strict-contract-missing",
+  );
+  assert.equal((await store.read(run.runId)).state, "verifying");
 });
 
 test("strict store reload rejects parseable non-RFC3339 and impossible persisted timestamps", async (t) => {

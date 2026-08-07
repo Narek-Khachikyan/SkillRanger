@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import type { RegistrySkill, ResolvedSharedContract } from "../types.ts";
+import "../domains/bundled.ts";
 import { assertValidExecutionContract } from "../runtime/strict/contract.ts";
+import { assertBundledContractValidatorOwnership } from "../runtime/strict/validator-registry.ts";
 import type { ExecutionContractV2 } from "../runtime/strict/types.ts";
 import { objectDepth, routerMetadataLimits } from "../router/metadata.ts";
 import {
@@ -301,6 +303,7 @@ export const loadLocalRegistry = async (
       const contractPath = path.join(skillRoot, manifest.execution.contract!);
       const parsedContract = JSON.parse(await readFile(contractPath, "utf8")) as unknown;
       assertValidExecutionContract(parsedContract);
+      assertBundledContractValidatorOwnership(parsedContract);
       if (parsedContract.skillId !== manifest.id) throw new Error(`Execution contract skillId must match ${manifest.id}.`);
       if (parsedContract.inputSchema !== manifest.execution.inputSchema || parsedContract.outputSchema !== manifest.execution.outputSchema) {
         throw new Error(`Execution contract schema paths must match the manifest for ${manifest.id}.`);

@@ -132,6 +132,7 @@ export type DomainPack = {
   root: string;
   routing: DomainRoutingPolicy;
   runPolicy?: DomainRunPolicy;
+  validators?: string[];
 };
 
 export type DomainPackRegistration = {
@@ -139,4 +140,5 @@ export type DomainPackRegistration = {
   routing: DomainRoutingPolicy;
   runPolicy?: DomainRunPolicy;
   root?: string;
+  validators?: string[];
 };

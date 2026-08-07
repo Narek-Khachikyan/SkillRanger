@@ -1,14 +1,8 @@
 import path from "node:path";
 import { isReservedStrictSystemGateId } from "./system-gates.ts";
+import { assertValidatorIdSyntax } from "./validator-registry.ts";
 import type { ApplicabilityContext, ApplicabilityPredicate, ExecutionContractV2 } from "./types.ts";
 
-const coreValidators = new Set([
-  "core/artifact-integrity",
-  "core/critic-independence",
-  "frontend/tailwind-source",
-  "frontend/browser-hard-gates",
-  "frontend/performance-claims",
-]);
 const canonicalId = /^[a-z0-9][a-z0-9._-]+\/(?:step|rule|gate)\/[a-z0-9][a-z0-9._-]*$/;
 const safePath = (value: string) => value.length > 0 && !path.isAbsolute(value) && !value.replace(/\\/g, "/").split("/").includes("..");
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -122,7 +116,7 @@ export const assertValidExecutionContract: (input: unknown) => asserts input is 
       if (!["input", "output", "critic-report"].includes(evaluator.schema as string)) throw new Error(`gates[${index}].evaluator.schema is invalid.`);
     } else if (evaluator.type === "validator") {
       ownKeys(evaluator, ["type", "validatorId"], `gates[${index}].evaluator`);
-      if (typeof evaluator.validatorId !== "string" || !coreValidators.has(evaluator.validatorId)) throw new Error(`Gate validator ${String(evaluator.validatorId)} is not registered.`);
+      assertValidatorIdSyntax(evaluator.validatorId, `gates[${index}].evaluator.validatorId`);
     } else {
       throw new Error(`gates[${index}].evaluator.type is not allowlisted.`);
     }

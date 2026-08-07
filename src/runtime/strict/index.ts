@@ -14,5 +14,6 @@ export * from "./store.ts";
 export * from "./critic.ts";
 export * from "./json-schema.ts";
 export * from "./verification.ts";
+export * from "./validator-registry.ts";
 export * from "./git.ts";
 export * from "./service.ts";

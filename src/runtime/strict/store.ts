@@ -8,6 +8,7 @@ import { validateJsonSchema } from "./json-schema.ts";
 import { assertValidStrictSkillRun } from "./validation.ts";
 import { StrictSkillRunError, type EvidenceArtifact, type SkillRunV2 } from "./types.ts";
 import { deriveStrictValidatorResults } from "./verification.ts";
+import { resolveTrustedValidatorRegistry, type TrustedValidatorRegistryResolver } from "./validator-registry.ts";
 import { deriveStrictCertificationProjection, strictCertificationMatches } from "./certification.ts";
 import { captureSourceControl } from "./git.ts";
 import { ContainedFileReadError, readContainedFile } from "./contained-file.ts";
@@ -48,9 +49,14 @@ const finalizeStrictRun = (source: SkillRunV2): SkillRunV2 => {
 export class StrictSkillRunStore {
   private readonly projectRoot: string;
   private readonly lock: RunFileLock;
+  private readonly trustedValidatorRegistry: TrustedValidatorRegistryResolver;
 
-  constructor(projectRoot: string) {
+  constructor(
+    projectRoot: string,
+    trustedValidatorRegistry: TrustedValidatorRegistryResolver = resolveTrustedValidatorRegistry,
+  ) {
     this.projectRoot = projectRoot;
+    this.trustedValidatorRegistry = trustedValidatorRegistry;
     this.lock = new RunFileLock({
       lockPath: (runId) => `${this.runPath(runId).slice(0, -5)}.lock`,
       error: (message) => new StrictSkillRunError("run-integrity", message),
@@ -207,7 +213,8 @@ export class StrictSkillRunStore {
     return this.update(runId, async (run) => {
       const ledger = run.skillLedgers.find((candidate) => candidate.skillId === skillId);
       if (!ledger) throw new StrictSkillRunError("run-integrity", `Unknown selected skill ${skillId}.`);
-      const derivation = await deriveStrictValidatorResults(this.projectRoot, run, ledger);
+      const registry = this.trustedValidatorRegistry(run);
+      const derivation = await deriveStrictValidatorResults(this.projectRoot, run, ledger, undefined, registry);
       return verifyStrictSkill(run, skillId, derivation);
     });
   }
@@ -222,9 +229,10 @@ export class StrictSkillRunStore {
       // last skill's repair budget yields blocked with every outcome terminal before any
       // finalization ran, so blocked runs must always re-run the used-ledger integrity checks.
       if (current.state === "verified") return current;
+      const registry = this.trustedValidatorRegistry(current);
       for (const ledger of current.skillLedgers) {
         if (ledger.outcome !== "used") continue;
-        const derivation = await deriveStrictValidatorResults(this.projectRoot, current, ledger);
+        const derivation = await deriveStrictValidatorResults(this.projectRoot, current, ledger, undefined, registry);
         if (!derivation.artifactIntegrity.passed) {
           throw new StrictSkillRunError(
             "artifact-integrity",

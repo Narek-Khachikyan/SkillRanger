@@ -1,12 +1,18 @@
 import { createHash } from "node:crypto";
 import { realpath } from "node:fs/promises";
 import path from "node:path";
+import { resolveDomainPackForSkill } from "../../domains/registry.ts";
 import { readContainedFile } from "./contained-file.ts";
 import { assertValidCriticReportV2 } from "./critic.ts";
 import { isRfc3339DateTime } from "./date-time.ts";
 import { deriveBrowserGateResults, deriveTailwindSourceResults } from "./frontend-evidence.ts";
 import { deriveVerificationEvidenceIds } from "./report-evidence.ts";
 import { criticSystemGateId } from "./system-gates.ts";
+import {
+  buildTrustedValidatorRegistry,
+  validateValidatorOwnership,
+  type TrustedValidatorRegistry,
+} from "./validator-registry.ts";
 import { StrictSkillRunError, type CriticReportV2, type EvidenceArtifact, type SkillLedger, type SkillRunV2, type StrictSystemGateResult } from "./types.ts";
 
 type Result = { passed: boolean; message?: string };
@@ -230,6 +236,7 @@ export const deriveStrictValidatorResults = async (
   run: SkillRunV2,
   ledger: SkillLedger,
   observer?: StrictValidatorObserver,
+  registry: TrustedValidatorRegistry = buildTrustedValidatorRegistry(run.skillLedgers),
 ): Promise<StrictValidatorDerivation> => {
   const results: Record<string, Result> = {};
   const ids = new Set(deriveVerificationEvidenceIds(ledger, ledger.repairIterations));
@@ -289,9 +296,16 @@ export const deriveStrictValidatorResults = async (
 
   for (const gate of ledger.contract.gates) {
     if (gate.evaluator.type !== "validator") continue;
-    let result: Result = { passed: false, message: `Runtime validator ${gate.evaluator.validatorId} found no valid evidence.` };
-    if (gate.evaluator.validatorId === "core/artifact-integrity") result = { passed: true };
-    else if (gate.evaluator.validatorId === "core/critic-independence") {
+    const validatorId = gate.evaluator.validatorId;
+    validateValidatorOwnership({
+      validatorId,
+      registry,
+      skillId: ledger.skillId,
+      skillDomain: resolveDomainPackForSkill(ledger.skillId)?.manifest.id,
+    });
+    let result: Result = { passed: false, message: `Runtime validator ${validatorId} found no valid evidence.` };
+    if (validatorId === "core/artifact-integrity") result = { passed: true };
+    else if (validatorId === "core/critic-independence") {
       try {
         assertValidCriticReportV2(criticReport, ledger.contract);
         result = {
@@ -300,7 +314,7 @@ export const deriveStrictValidatorResults = async (
         };
       }
       catch (error) { result = { passed: false, message: (error as Error).message }; }
-    } else if (gate.evaluator.validatorId === "frontend/performance-claims") {
+    } else if (validatorId === "frontend/performance-claims") {
       const report = record(output) ? output : undefined;
       const findings = Array.isArray(report?.findings) ? report.findings.filter(record) : [];
       const measurements = Array.isArray(report?.measurementsInspected) ? report.measurementsInspected.filter((item): item is string => typeof item === "string") : [];
@@ -317,8 +331,8 @@ export const deriveStrictValidatorResults = async (
       };
       const passed = report !== undefined && checks[gateSlug(gate.id)] === true;
       result = { passed, ...(passed ? {} : { message: `Performance report failed ${gateSlug(gate.id)}.` }) };
-    } else if (gate.evaluator.validatorId === "frontend/browser-hard-gates" || gate.evaluator.validatorId === "frontend/tailwind-source") {
-      result = gate.evaluator.validatorId === "frontend/browser-hard-gates"
+    } else if (validatorId === "frontend/browser-hard-gates" || validatorId === "frontend/tailwind-source") {
+      result = validatorId === "frontend/browser-hard-gates"
         ? browser[gateSlug(gate.id)]
         : source[gateSlug(gate.id)];
     }
@@ -326,7 +340,7 @@ export const deriveStrictValidatorResults = async (
     if (observer) {
       const observation = structuredClone({
         gateId: gate.id,
-        validatorId: gate.evaluator.validatorId,
+        validatorId,
         skillId: ledger.skillId,
         artifacts,
         evidence: { output, verificationInput, sourceReview, criticReport },

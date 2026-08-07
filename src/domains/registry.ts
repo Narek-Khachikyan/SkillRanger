@@ -203,16 +203,54 @@ export const loadBundledDomainManifestSync = (input: {
 
 const registered = new Map<string, DomainPack>();
 
+export const validatorIdPattern = /^([a-z0-9][a-z0-9._-]*)\/([a-z0-9][a-z0-9._-]*)$/;
+
+export const parseValidatorId = (id: string): { owner: string; name: string } | undefined => {
+  const match = validatorIdPattern.exec(id);
+  if (!match) return undefined;
+  return { owner: match[1], name: match[2] };
+};
+
+export const validateDomainValidatorRegistrations = (input: {
+  domainId: string;
+  validators?: string[];
+}): string[] => {
+  if (input.validators === undefined) return [];
+  const issues: string[] = [];
+  const seen = new Set<string>();
+  for (const [index, id] of input.validators.entries()) {
+    const match = validatorIdPattern.exec(id);
+    if (!match) {
+      issues.push(`validators[${index}] must be a <domain>/<name> validator id`);
+    } else if (match[1] === "core") {
+      issues.push(`validators[${index}] cannot register a core validator`);
+    } else if (match[1] !== input.domainId) {
+      issues.push(`validators[${index}] must be owned by domain ${input.domainId}`);
+    }
+    if (seen.has(id)) issues.push(`duplicate validator id ${id}`);
+    seen.add(id);
+  }
+  return issues;
+};
+
 export const registerDomainPack = (registration: DomainPackRegistration): DomainPack => {
   const issues = validateDomainPackManifest(registration.manifest);
   if (issues.length > 0) throw new Error(`Invalid domain pack ${registration.manifest.id}: ${issues.join("; ")}`);
   if (registered.has(registration.manifest.id)) {
     throw new Error(`Domain pack already registered: ${registration.manifest.id}`);
   }
+  const validatorIssues = validateDomainValidatorRegistrations({
+    domainId: registration.manifest.id,
+    validators: registration.validators,
+  });
+  if (validatorIssues.length > 0) {
+    throw new Error(`Invalid domain pack ${registration.manifest.id}: ${validatorIssues.join("; ")}`);
+  }
   const pack: DomainPack = {
     manifest: registration.manifest,
     routing: registration.routing,
     ...(registration.runPolicy ? { runPolicy: registration.runPolicy } : {}),
+    ...(registration.validators ? { validators: [...registration.validators].sort() } : {}),
     root: registration.root ?? "",
   };
   registered.set(pack.manifest.id, pack);
