@@ -20,11 +20,13 @@ a task, it:
 4. installs them behind a reviewable plan and a checksum lockfile (`src/installers/`, `src/lockfile/`),
 5. serves their instructions to the host agent under a persisted run (`src/runtime/`, `src/router/reader.ts`).
 
-**What it does not do.** SkillRanger never calls a model, never executes a skill's code, and never
-edits application source. Installed skill packages are static instruction files. The host agent —
-Codex, Claude Code, Cursor, OpenCode, Gemini CLI, or any MCP host — owns all model calls and all code
-changes. This boundary is stated in [`workflow-runtime.md`](workflow-runtime.md) and enforced
-structurally: nothing in `src/` spawns a child process except the eval harnesses
+**What it does not do.** SkillRanger itself never calls a model, never executes a skill's code, and
+never edits application source. In catalog-assisted MCP routing, the host agent may use its model to
+submit a prompt-grounded skill nomination; SkillRanger validates that proposal and owns catalog trust,
+hard vetoes, composition, and runtime integrity. Installed skill packages are static instruction
+files. The host agent — Codex, Claude Code, Cursor, OpenCode, Gemini CLI, or any MCP host — owns all
+model calls and all code changes. This boundary is stated in [`workflow-runtime.md`](workflow-runtime.md)
+and enforced structurally: nothing in `src/` spawns a child process except the eval harnesses
 (`src/evals/process.ts`, `src/evals/runner.ts`), the optional host browser adapter
 (`src/domains/frontend/design/adapter.ts`), and strict source-control snapshots
 (`src/runtime/strict/git.ts`), which run read-only `git rev-parse` and `git diff` commands.

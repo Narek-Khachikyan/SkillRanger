@@ -1,6 +1,6 @@
 # Workflow Runtime
 
-SkillRanger v1 is host-managed. Codex, OpenCode, Claude Code, or another agent host invokes the model, grants tools, and applies changes. SkillRanger provides deterministic contracts and checks.
+SkillRanger v1 is host-managed. Codex, OpenCode, Claude Code, or another agent host invokes the model, grants tools, and applies changes. SkillRanger provides deterministic contracts and checks; in catalog-assisted MCP routing, the host model may also submit a prompt-grounded skill nomination for SkillRanger to validate.
 
 The design flow is:
 
@@ -19,11 +19,11 @@ scan project
 -> compile DESIGN.md
 ```
 
-No Core command invokes a model, stores provider credentials, or silently edits application files. This keeps model comparisons portable and makes tool permissions visible in the host.
+No SkillRanger Core command invokes a model, stores provider credentials, or silently edits application files. The host may invoke its model before `prepare_task` to create a catalog-bound routing proposal, while SkillRanger keeps trust, hard-veto, composition, and runtime decisions inside the validated boundary. This keeps model comparisons portable and makes tool permissions visible in the host.
 
 ## Router preparation and reads
 
-The Universal Prompt Router prepares an existing runtime from one complete task. CLI direct mode uses `skillranger task <project> --intent <task>`; MCP explicit mode uses `prepare_task` and requires a terminal SkillRanger trigger. Production routes use the bundled registry and never auto-install or execute selected packages.
+The Universal Prompt Router prepares an existing runtime from one complete task. CLI direct mode uses `skillranger task <project> --intent <task>`; MCP explicit mode uses `prepare_task` and requires a terminal SkillRanger trigger. MCP hosts may first use `inspect_skill_catalog` and submit a `routingProposal`; requests without a proposal retain the deterministic fallback. Production routes use the bundled registry and never auto-install or execute selected packages.
 
 Only `prepared` creates records. Clarification continuation, decomposition, no-match for absent production packs, strict prerequisite failure, and context-budget failure return normal typed outcomes without a partial router or runtime record. A prepared result contains both IDs and an ordered `requiredReads` projection.
 

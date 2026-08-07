@@ -1,6 +1,6 @@
 # Model-Assisted Routing Specification
 
-- Status: Accepted design; implementation pending
+- Status: Implemented in 0.4.0
 - Date: 2026-08-05
 - Related: [ADR 0001](adr/0001-universal-prompt-router-boundaries.md), [ADR 0003](adr/0003-model-assisted-skill-nomination.md), [Routing Vocabulary](ROUTING_VOCABULARY.md), [Router Evaluations](router-evals.md)
 

@@ -1,7 +1,7 @@
 {
   "name": "skillranger",
   "version": "0.4.0",
-  "description": "SkillRanger is a local-first router and package manager for AI agent skills.",
+  "description": "Local-first AI skill router and package manager: a host model proposes skills from a trusted catalog while SkillRanger validates, composes, audits, and installs bounded instructions.",
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
@@ -17,7 +17,10 @@
     "registry/contracts/",
     "domains/",
     "schemas/",
-    "evals/",
+    "evals/router/",
+    "evals/frontend/slices/",
+    "evals/frontend/suite.json",
+    "evals/frontend/visual-benchmark/",
     "tests/fixtures/router-cases.json",
     "tests/fixtures/router-paraphrase-cases.json",
     "tests/fixtures/router-packs/",
