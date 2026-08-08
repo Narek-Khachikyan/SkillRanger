@@ -333,9 +333,13 @@ test("proposal-driven strict retrieval treats missing routing capabilities as a 
     primaryDomainId: "backend-api",
     capabilities: ["filesystem"],
     strict: true,
-    nominatedPrimarySkillIds: [first.id, second.id],
-    nominationOrder: [first.id, second.id],
-    primaryNominationOrder: [first.id, second.id],
+    resolvedNomination: {
+      nominationOrder: [first.id, second.id],
+      primaryNominationOrder: [first.id, second.id],
+      nominatedSkillIds: [first.id, second.id],
+      nominatedPrimarySkillIds: [first.id, second.id],
+      nominatedRoles: new Map([[first.id, "primary"], [second.id, "primary"]]),
+    },
   });
   assert.equal(result.status, "strict_requirements_unmet");
   assert.ok(result.rejections.some(({ skillId, reason }) => skillId === first.id && reason === "required-capability-missing"));
@@ -364,9 +368,13 @@ test("proposal-driven composition advances past a primary that exceeds the conte
     candidates: [candidate(first, 0.99), candidate(second, 0.8)],
     selectedDomainIds: ["backend-api"],
     primaryDomainId: "backend-api",
-    nominatedPrimarySkillIds: [first.id, second.id],
-    nominationOrder: [first.id, second.id],
-    primaryNominationOrder: [first.id, second.id],
+    resolvedNomination: {
+      nominationOrder: [first.id, second.id],
+      primaryNominationOrder: [first.id, second.id],
+      nominatedSkillIds: [first.id, second.id],
+      nominatedPrimarySkillIds: [first.id, second.id],
+      nominatedRoles: new Map([[first.id, "primary"], [second.id, "primary"]]),
+    },
     limits: { maxInstructionBytes: 100 },
   });
   assert.equal(result.status, "prepared");
@@ -394,9 +402,13 @@ test("proposal-driven primary fallback can cross an unobserved domain after a ha
     skills: [first, second],
     selectedDomainIds: ["backend-api"],
     primaryDomainId: "backend-api",
-    nominatedPrimarySkillIds: [first.id, second.id],
-    nominationOrder: [first.id, second.id],
-    primaryNominationOrder: [first.id, second.id],
+    resolvedNomination: {
+      nominationOrder: [first.id, second.id],
+      primaryNominationOrder: [first.id, second.id],
+      nominatedSkillIds: [first.id, second.id],
+      nominatedPrimarySkillIds: [first.id, second.id],
+      nominatedRoles: new Map([[first.id, "primary"], [second.id, "primary"]]),
+    },
   });
 
   assert.equal(result.status, "prepared");
@@ -430,14 +442,17 @@ test("strict proposal workflows report uninstalled nominated companions and veri
     primaryDomainId: "backend-api",
     strict: true,
     installedSkillIds: [],
-    nominatedPrimarySkillIds: [primary.id],
-    nominatedRoles: new Map([
-      [primary.id, "primary" as const],
-      [companion.id, "companion" as const],
-      [verification.id, "verification" as const],
-    ]),
-    nominationOrder: [primary.id, companion.id, verification.id],
-    primaryNominationOrder: [primary.id],
+    resolvedNomination: {
+      nominationOrder: [primary.id, companion.id, verification.id],
+      primaryNominationOrder: [primary.id],
+      nominatedSkillIds: [primary.id, companion.id, verification.id],
+      nominatedPrimarySkillIds: [primary.id],
+      nominatedRoles: new Map([
+        [primary.id, "primary" as const],
+        [companion.id, "companion" as const],
+        [verification.id, "verification" as const],
+      ]),
+    },
   });
 
   assert.equal(result.status, "strict_requirements_unmet");
@@ -517,8 +532,13 @@ test("composer preserves nominated roles when it receives pre-retrieved candidat
     skills: [primary, fallback],
     candidates: [candidate(primary), candidate(fallback)],
     selectedDomainIds: ["backend-api"],
-    nominationOrder: [primary.id, fallback.id],
-    nominatedRoles: new Map([[primary.id, "companion" as const], [fallback.id, "primary" as const]]),
+    resolvedNomination: {
+      nominationOrder: [primary.id, fallback.id],
+      primaryNominationOrder: [],
+      nominatedSkillIds: [primary.id, fallback.id],
+      nominatedPrimarySkillIds: [],
+      nominatedRoles: new Map([[primary.id, "companion" as const], [fallback.id, "primary" as const]]),
+    },
   });
 
   assert.equal(result.status, "prepared");
@@ -554,8 +574,13 @@ test("composer reports a hard-vetoed nominated companion instead of dropping it 
     skills: [primary, companion],
     candidates: [candidate(primary), candidate(companion)],
     selectedDomainIds: ["backend-api"],
-    nominationOrder: [primary.id, companion.id],
-    nominatedRoles: new Map([[primary.id, "primary" as const], [companion.id, "companion" as const]]),
+    resolvedNomination: {
+      nominationOrder: [primary.id, companion.id],
+      primaryNominationOrder: [],
+      nominatedSkillIds: [primary.id, companion.id],
+      nominatedPrimarySkillIds: [],
+      nominatedRoles: new Map([[primary.id, "primary" as const], [companion.id, "companion" as const]]),
+    },
   });
 
   assert.equal(result.status, "prepared");
@@ -589,8 +614,13 @@ test("composer reports when supersession removes a nominated companion", () => {
     skills: [primary, companion],
     candidates: [candidate(primary), candidate(companion)],
     selectedDomainIds: ["backend-api"],
-    nominationOrder: [primary.id, companion.id],
-    nominatedRoles: new Map([[primary.id, "primary" as const], [companion.id, "companion" as const]]),
+    resolvedNomination: {
+      nominationOrder: [primary.id, companion.id],
+      primaryNominationOrder: [],
+      nominatedSkillIds: [primary.id, companion.id],
+      nominatedPrimarySkillIds: [],
+      nominatedRoles: new Map([[primary.id, "primary" as const], [companion.id, "companion" as const]]),
+    },
   });
 
   assert.equal(result.status, "prepared");
@@ -620,8 +650,13 @@ test("composer reports a deterministic fallback budget failure after nominations
     skills: [nominated, fallback],
     candidates: [candidate(nominated, 0.99), candidate(fallback, 0.9)],
     selectedDomainIds: ["backend-api"],
-    nominatedPrimarySkillIds: [nominated.id],
-    nominationOrder: [nominated.id],
+    resolvedNomination: {
+      nominationOrder: [nominated.id],
+      primaryNominationOrder: [nominated.id],
+      nominatedSkillIds: [nominated.id],
+      nominatedPrimarySkillIds: [nominated.id],
+      nominatedRoles: new Map([[nominated.id, "primary" as const]]),
+    },
     limits: { maxInstructionBytes: 100 },
   });
 
@@ -658,8 +693,13 @@ test("composer reports when a nominated companion is removed by the total-skill 
     skills: [primary, companion],
     candidates: [candidate(primary), candidate(companion)],
     selectedDomainIds: ["backend-api"],
-    nominationOrder: [primary.id, companion.id],
-    nominatedRoles: new Map([[primary.id, "primary" as const], [companion.id, "companion" as const]]),
+    resolvedNomination: {
+      nominationOrder: [primary.id, companion.id],
+      primaryNominationOrder: [],
+      nominatedSkillIds: [primary.id, companion.id],
+      nominatedPrimarySkillIds: [],
+      nominatedRoles: new Map([[primary.id, "primary" as const], [companion.id, "companion" as const]]),
+    },
     limits: { maxTotalSelectedSkills: 1 },
   });
 

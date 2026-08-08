@@ -10,7 +10,9 @@ import {
   primarySkillAmbiguityQuestionText,
   resolveDeclaredPrimarySkillAmbiguity,
   resolveExplicitSkillChoice,
+  resolveNomination,
   resolveOrderedPrimaryNominations,
+  type ResolvedNomination,
 } from "../src/router/nomination-resolution.ts";
 import {
   composeSkillSet,
@@ -251,6 +253,14 @@ test("an explicit choice outranks the declared nomination order and lexical scor
   const skills = fixtureSkills(packs);
   const base = skills.find(({ id }) => id === "backend.auth-implementation")!;
   const higherScored = { ...base, id: "backend.higher-scored", displayName: "Higher Scored", score: 0.99 };
+  const resolvedNomination: ResolvedNomination = {
+    requiredPrimarySkillId: base.id,
+    nominationOrder: [higherScored.id, base.id],
+    primaryNominationOrder: [higherScored.id, base.id],
+    nominatedSkillIds: [higherScored.id, base.id],
+    nominatedPrimarySkillIds: [higherScored.id, base.id],
+    nominatedRoles: new Map([[higherScored.id, "primary"], [base.id, "primary"]]),
+  };
   const input = {
     profile: profile(),
     skills: [higherScored, base],
@@ -258,10 +268,7 @@ test("an explicit choice outranks the declared nomination order and lexical scor
     primaryDomainId: "backend-api",
     targetAgent: "codex",
     capabilities: ["filesystem", "terminal"],
-    nominatedPrimarySkillIds: [higherScored.id, base.id],
-    nominationOrder: [higherScored.id, base.id],
-    primaryNominationOrder: [higherScored.id, base.id],
-    requiredPrimarySkillId: base.id,
+    resolvedNomination,
   };
   const result = composeSkillSet(input);
   assert.equal(result.status, "prepared");
@@ -280,10 +287,14 @@ test("an ineligible explicit choice fails composition with the exact reason code
     primaryDomainId: "backend-api",
     targetAgent: "codex",
     capabilities: ["filesystem", "terminal"],
-    nominatedPrimarySkillIds: [highRisk.id],
-    nominationOrder: [highRisk.id],
-    primaryNominationOrder: [highRisk.id],
-    requiredPrimarySkillId: highRisk.id,
+    resolvedNomination: {
+      requiredPrimarySkillId: highRisk.id,
+      nominationOrder: [highRisk.id],
+      primaryNominationOrder: [highRisk.id],
+      nominatedSkillIds: [highRisk.id],
+      nominatedPrimarySkillIds: [highRisk.id],
+      nominatedRoles: new Map([[highRisk.id, "primary"]]),
+    } satisfies ResolvedNomination,
   };
   const result = composeSkillSet(input);
   assert.equal(result.status, "no_matching_skills");
@@ -305,10 +316,14 @@ test("a composition hard veto on the explicit choice returns the exact reason co
     primaryDomainId: "backend-api",
     targetAgent: "codex",
     capabilities: ["filesystem", "terminal"],
-    nominatedPrimarySkillIds: [cycleA.id],
-    nominationOrder: [cycleA.id],
-    primaryNominationOrder: [cycleA.id],
-    requiredPrimarySkillId: cycleA.id,
+    resolvedNomination: {
+      requiredPrimarySkillId: cycleA.id,
+      nominationOrder: [cycleA.id],
+      primaryNominationOrder: [cycleA.id],
+      nominatedSkillIds: [cycleA.id],
+      nominatedPrimarySkillIds: [cycleA.id],
+      nominatedRoles: new Map([[cycleA.id, "primary"]]),
+    } satisfies ResolvedNomination,
   };
   const result = composeSkillSet(input);
   assert.equal(result.status, "no_matching_skills");
@@ -327,9 +342,13 @@ test("an invalid nomination falls through to the next valid nomination in compos
     primaryDomainId: "backend-api",
     targetAgent: "codex",
     capabilities: ["filesystem", "terminal"],
-    nominatedPrimarySkillIds: [highRisk.id, base.id],
-    nominationOrder: [highRisk.id, base.id],
-    primaryNominationOrder: [highRisk.id, base.id],
+    resolvedNomination: {
+      nominationOrder: [highRisk.id, base.id],
+      primaryNominationOrder: [highRisk.id, base.id],
+      nominatedSkillIds: [highRisk.id, base.id],
+      nominatedPrimarySkillIds: [highRisk.id, base.id],
+      nominatedRoles: new Map([[highRisk.id, "primary"], [base.id, "primary"]]),
+    } satisfies ResolvedNomination,
   };
   const result = composeSkillSet(input);
   assert.equal(result.status, "prepared");
@@ -350,9 +369,13 @@ test("composition falls back deterministically when no nomination remains eligib
     primaryDomainId: "backend-api",
     targetAgent: "codex",
     capabilities: ["filesystem", "terminal"],
-    nominatedPrimarySkillIds: [highRisk.id, blocked.id],
-    nominationOrder: [highRisk.id, blocked.id],
-    primaryNominationOrder: [highRisk.id, blocked.id],
+    resolvedNomination: {
+      nominationOrder: [highRisk.id, blocked.id],
+      primaryNominationOrder: [highRisk.id, blocked.id],
+      nominatedSkillIds: [highRisk.id, blocked.id],
+      nominatedPrimarySkillIds: [highRisk.id, blocked.id],
+      nominatedRoles: new Map([[highRisk.id, "primary"], [blocked.id, "primary"]]),
+    } satisfies ResolvedNomination,
   };
   const result = composeSkillSet(input);
   assert.equal(result.status, "prepared");
@@ -375,14 +398,18 @@ test("strict mode never substitutes the explicit choice with another workflow", 
     capabilities: ["filesystem", "terminal"],
     strict: true,
     installedSkillIds: [installed.id],
-    nominatedPrimarySkillIds: [highRisk.id, installed.id],
-    nominationOrder: [highRisk.id, installed.id],
-    primaryNominationOrder: [highRisk.id, installed.id],
+    resolvedNomination: {
+      nominationOrder: [highRisk.id, installed.id],
+      primaryNominationOrder: [highRisk.id, installed.id],
+      nominatedSkillIds: [highRisk.id, installed.id],
+      nominatedPrimarySkillIds: [highRisk.id, installed.id],
+      nominatedRoles: new Map([[highRisk.id, "primary"], [installed.id, "primary"]]),
+    } satisfies ResolvedNomination,
   };
-  const hardVeto = composeSkillSet({ ...input, requiredPrimarySkillId: highRisk.id });
+  const hardVeto = composeSkillSet({ ...input, resolvedNomination: { ...input.resolvedNomination, requiredPrimarySkillId: highRisk.id } });
   assert.equal(hardVeto.status, "no_matching_skills");
   if (hardVeto.status === "no_matching_skills") assert.equal(hardVeto.reasonCode, "explicit-skill-choice-risk-blocked");
-  const uninstalled = composeSkillSet({ ...input, requiredPrimarySkillId: "backend.input-required" });
+  const uninstalled = composeSkillSet({ ...input, resolvedNomination: { ...input.resolvedNomination, requiredPrimarySkillId: "backend.input-required" } });
   assert.equal(uninstalled.status, "strict_requirements_unmet");
   if (uninstalled.status === "strict_requirements_unmet") {
     assert.ok(uninstalled.missing.some(({ skillId, requirement }) => skillId === "backend.input-required" && requirement === "installed-skill"));
@@ -401,7 +428,13 @@ test("a nominationOrder-only caller keeps declared-order primary ranking", async
     primaryDomainId: "backend-api",
     targetAgent: "codex",
     capabilities: ["filesystem", "terminal"],
-    nominationOrder: [base.id, higherScored.id],
+    resolvedNomination: {
+      nominationOrder: [base.id, higherScored.id],
+      primaryNominationOrder: [],
+      nominatedSkillIds: [base.id, higherScored.id],
+      nominatedPrimarySkillIds: [],
+      nominatedRoles: new Map([[base.id, "primary"], [higherScored.id, "primary"]]),
+    },
   });
   assert.equal(result.status, "prepared");
   if (result.status === "prepared") assert.equal(result.composed.primary.skill.id, base.id);
@@ -442,10 +475,102 @@ test("facts-driven nomination decisions match the composition outcome", async ()
     primaryDomainId: "backend-api",
     targetAgent: "codex",
     capabilities: ["filesystem", "terminal"],
-    nominatedPrimarySkillIds,
-    nominationOrder: nominatedPrimarySkillIds,
-    primaryNominationOrder: nominatedPrimarySkillIds,
+    resolvedNomination: {
+      nominationOrder: nominatedPrimarySkillIds,
+      primaryNominationOrder: nominatedPrimarySkillIds,
+      nominatedSkillIds: nominatedPrimarySkillIds,
+      nominatedPrimarySkillIds,
+      nominatedRoles: new Map([[highRisk.id, "primary"], [base.id, "primary"]]),
+    },
   });
   assert.equal(composed.status, "prepared");
   if (composed.status === "prepared") assert.equal(composed.composed.primary.skill.id, base.id);
+});
+
+test("resolveNomination puts the explicit choice first and keeps the declared order for the rest", () => {
+  const resolved = resolveNomination({
+    explicitSkillId: "backend.explicit",
+    declaredNominations: [
+      { skillId: "backend.alpha", role: "primary" },
+      { skillId: "backend.beta", role: "primary" },
+      { skillId: "backend.gamma", role: "companion" },
+    ],
+  });
+  assert.deepEqual(resolved, {
+    requiredPrimarySkillId: "backend.explicit",
+    nominationOrder: ["backend.explicit", "backend.alpha", "backend.beta", "backend.gamma"],
+    primaryNominationOrder: ["backend.explicit", "backend.alpha", "backend.beta"],
+    nominatedSkillIds: ["backend.explicit", "backend.alpha", "backend.beta", "backend.gamma"],
+    nominatedPrimarySkillIds: ["backend.explicit", "backend.alpha", "backend.beta"],
+    nominatedRoles: new Map([
+      ["backend.alpha", "primary"],
+      ["backend.beta", "primary"],
+      ["backend.gamma", "companion"],
+      ["backend.explicit", "primary"],
+    ]),
+  });
+});
+
+test("resolveNomination applies the ambiguity answer by moving it to the front of both orders", () => {
+  const resolved = resolveNomination({
+    selectedNominationPrimary: "backend.beta",
+    declaredNominations: [
+      { skillId: "backend.alpha", role: "primary" },
+      { skillId: "backend.beta", role: "primary" },
+    ],
+  });
+  assert.deepEqual(resolved?.nominationOrder, ["backend.beta", "backend.alpha"]);
+  assert.deepEqual(resolved?.primaryNominationOrder, ["backend.beta", "backend.alpha"]);
+  assert.equal(resolved?.requiredPrimarySkillId, "backend.beta");
+});
+
+test("resolveNomination keeps the declared order and no required primary without an explicit choice or answer", () => {
+  const resolved = resolveNomination({
+    declaredNominations: [
+      { skillId: "backend.alpha", role: "primary" },
+      { skillId: "backend.beta", role: "companion" },
+    ],
+  });
+  assert.deepEqual(resolved, {
+    nominationOrder: ["backend.alpha", "backend.beta"],
+    primaryNominationOrder: ["backend.alpha"],
+    nominatedSkillIds: ["backend.alpha", "backend.beta"],
+    nominatedPrimarySkillIds: ["backend.alpha"],
+    nominatedRoles: new Map([
+      ["backend.alpha", "primary"],
+      ["backend.beta", "companion"],
+    ]),
+  });
+  assert.equal(resolved?.requiredPrimarySkillId, undefined);
+});
+
+test("resolveNomination returns undefined without an explicit choice or declared nominations", () => {
+  assert.equal(resolveNomination({}), undefined);
+  assert.equal(resolveNomination({ explicitSkillId: undefined, declaredNominations: [] }), undefined);
+});
+
+test("the resolved nomination drives composition exactly like the scattered facts it replaces", async () => {
+  const packs = await loadRouterFixturePacks(fixtureRoot);
+  const skills = fixtureSkills(packs);
+  const base = skills.find(({ id }) => id === "backend.auth-implementation")!;
+  const higherScored = { ...base, id: "backend.higher-scored", displayName: "Higher Scored", score: 0.99 };
+  const resolved = resolveNomination({
+    explicitSkillId: base.id,
+    declaredNominations: [
+      { skillId: higherScored.id, role: "primary" },
+      { skillId: base.id, role: "primary" },
+    ],
+  });
+  assert.equal(resolved?.requiredPrimarySkillId, base.id);
+  const result = composeSkillSet({
+    profile: profile(),
+    skills: [higherScored, base],
+    selectedDomainIds: ["backend-api"],
+    primaryDomainId: "backend-api",
+    targetAgent: "codex",
+    capabilities: ["filesystem", "terminal"],
+    resolvedNomination: resolved,
+  });
+  assert.equal(result.status, "prepared");
+  if (result.status === "prepared") assert.equal(result.composed.primary.skill.id, base.id);
 });

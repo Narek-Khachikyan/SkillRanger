@@ -144,13 +144,18 @@ test("composition reusing the precomputed eligibility result matches internal re
     nominatedSkillIds: nominatedIds,
     nominatedPrimarySkillIds: nominatedIds,
     nominatedRoles: new Map(nominated.map(({ id }) => [id, "primary" as const])),
-    nominationOrder: nominatedIds,
-    primaryNominationOrder: nominatedIds,
     maxSelectedRisk: defaultRouterLimits.maxSelectedRisk,
   };
+  const resolvedNomination = {
+    nominationOrder: nominatedIds,
+    primaryNominationOrder: nominatedIds,
+    nominatedSkillIds: nominatedIds,
+    nominatedPrimarySkillIds: nominatedIds,
+    nominatedRoles: new Map(nominated.map(({ id }) => [id, "primary" as const])),
+  };
   const precomputed = retrieveSkillCandidates(retrievalInput);
-  const direct = composeSkillSet(retrievalInput);
-  const reused = composeSkillSet({ ...retrievalInput, retrievalResult: precomputed });
+  const direct = composeSkillSet({ ...retrievalInput, resolvedNomination });
+  const reused = composeSkillSet({ ...retrievalInput, resolvedNomination, retrievalResult: precomputed });
 
   assert.equal(canonicalizeJson(direct), canonicalizeJson(reused));
   assert.equal(direct.status, "prepared");
@@ -175,14 +180,19 @@ test("reused eligibility result preserves base rejection reasons for explicit ch
     nominatedSkillIds: ["backend.high-risk"],
     nominatedPrimarySkillIds: ["backend.high-risk"],
     nominatedRoles: new Map([["backend.high-risk", "primary" as const]]),
-    nominationOrder: ["backend.high-risk"],
-    primaryNominationOrder: ["backend.high-risk"],
-    requiredPrimarySkillId: "backend.high-risk",
     maxSelectedRisk: defaultRouterLimits.maxSelectedRisk,
   };
+  const resolvedNomination = {
+    requiredPrimarySkillId: "backend.high-risk",
+    nominationOrder: ["backend.high-risk"],
+    primaryNominationOrder: ["backend.high-risk"],
+    nominatedSkillIds: ["backend.high-risk"],
+    nominatedPrimarySkillIds: ["backend.high-risk"],
+    nominatedRoles: new Map([["backend.high-risk", "primary" as const]]),
+  };
   const precomputed = retrieveSkillCandidates(retrievalInput);
-  const direct = composeSkillSet(retrievalInput);
-  const reused = composeSkillSet({ ...retrievalInput, retrievalResult: precomputed });
+  const direct = composeSkillSet({ ...retrievalInput, resolvedNomination });
+  const reused = composeSkillSet({ ...retrievalInput, resolvedNomination, retrievalResult: precomputed });
 
   assert.equal(canonicalizeJson(direct), canonicalizeJson(reused));
   assert.equal(direct.status, "no_matching_skills");

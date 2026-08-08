@@ -73,14 +73,17 @@ export {
   primarySkillAmbiguityQuestionText,
   resolveDeclaredPrimarySkillAmbiguity,
   resolveExplicitSkillChoice,
+  resolveNomination,
   resolveOrderedPrimaryNominations,
 } from "./nomination-resolution.ts";
 export type {
   DeclaredPrimarySkillAmbiguity,
   ExplicitSkillChoiceResolution,
+  NominationRole,
   NominatedPrimaryEligibilityFacts,
   OrderedPrimaryNominationResolution,
   PrimarySkillAmbiguityAnswer,
+  ResolvedNomination,
 } from "./nomination-resolution.ts";
 export type * from "./types.ts";
 export {

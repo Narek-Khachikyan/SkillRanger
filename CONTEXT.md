@@ -16,6 +16,10 @@ _Avoid_: Model selection, routing decision, final skill set
 A host agent's evidence-grounded claim that one catalog skill should fill one routing role. A nomination remains subject to routing hard vetoes and composition limits.
 _Avoid_: Selected skill, forced skill, recommendation result
 
+**Nomination resolution**:
+The deterministic routing decision that applies explicit user choice, nomination order, and declared ambiguity to produce a primary workflow or fallback before a run is created.
+_Avoid_: Skill selection, final skill set, composition
+
 **Routing hard veto**:
 A deterministic eligibility or integrity rule that prevents a skill nomination from entering the prepared skill set. It protects audit, risk, compatibility, capability, installation, conflict, and context guarantees; it does not judge semantic relevance.
 _Avoid_: Low relevance score, model disagreement, soft penalty

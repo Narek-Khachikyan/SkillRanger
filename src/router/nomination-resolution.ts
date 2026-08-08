@@ -1,7 +1,13 @@
 import type { RetrieveSkillCandidatesResult } from "./composer.ts";
 import type { RouterClarificationQuestion } from "./continuation.ts";
+import type { RouterSkillRole } from "./types.ts";
 
 const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
+
+// The roles a routing proposal may assign to a nomination. Narrower than
+// RouterSkillRole: environment and agent-context placement is decided by the
+// composer, never declared by a proposal.
+export type NominationRole = Exclude<RouterSkillRole, "environment" | "agent-context">;
 
 // Bounded eligibility facts for the nomination decision: whether a nominated primary
 // candidate may fill the primary role and, if not, the existing base rejection reason.
@@ -75,6 +81,77 @@ export const resolveExplicitSkillChoice = (input: {
     return { kind: "explicit-choice-blocked", reasonCode: explicitSkillChoiceReasonCode(baseRejectionReason), baseRejectionReason };
   }
   return { kind: "explicit-choice-stands", skillId };
+};
+
+// The single resolved nomination result the preparation path hands to the
+// composer. It carries the resolved precedence facts — the required primary
+// (explicit user choice or closed ambiguity answer), the effective nomination
+// orders, and the declared roles — so the composer no longer receives a
+// scattered set of overlapping nomination fields. Candidate eligibility,
+// routing hard vetoes, dependencies, conflicts, roles, limits, budgets, and
+// strict requirements remain owned by the composer.
+export type ResolvedNomination = {
+  // The workflow that must be the primary: the explicit user choice, or the
+  // closed host choice from a declared-primary-skill ambiguity answer. When
+  // set, the composer never substitutes another primary and projects its own
+  // base rejection reasons onto the explicit-skill-choice-* reason code.
+  requiredPrimarySkillId?: string;
+  // Effective full nomination order: the resolved primary first, then the
+  // declared nominations in proposal order. Used for optional-skill ranking.
+  nominationOrder: readonly string[];
+  // Effective primary nomination order: the resolved primary first, then the
+  // declared primary nominations in proposal order. The composer ranks
+  // retrieval-eligible primaries by it and falls back deterministically when
+  // no nomination remains eligible.
+  primaryNominationOrder: readonly string[];
+  // Every nominated skill id (including the resolved primary), for the
+  // retrieval path to keep nomination-grounded candidates visible to ordered
+  // hard-veto fallback.
+  nominatedSkillIds: readonly string[];
+  // The primary-nominated skill ids, for the retrieval path and the
+  // proposal-driven strict retrieval policy.
+  nominatedPrimarySkillIds: readonly string[];
+  // Declared role per nominated skill, including the resolved primary as
+  // primary; role eligibility stays owned by the composer.
+  nominatedRoles: ReadonlyMap<string, NominationRole>;
+};
+
+// Resolves the already-validated routing proposal facts into one deterministic
+// nomination result: explicit choice and ambiguity-answer precedence, the
+// effective nomination orders, and the declared roles. Returns undefined when
+// no explicit choice and no nominations are present, so the caller keeps the
+// deterministic legacy path. Eligibility is never computed here.
+export const resolveNomination = (input: {
+  explicitSkillId?: string;
+  selectedNominationPrimary?: string;
+  declaredNominations?: readonly { skillId: string; role: NominationRole }[];
+}): ResolvedNomination | undefined => {
+  const declared = input.declaredNominations ?? [];
+  if (declared.length === 0 && input.explicitSkillId === undefined) return undefined;
+  const requiredPrimarySkillId = input.explicitSkillId ?? input.selectedNominationPrimary;
+  const declaredIds = declared.map(({ skillId }) => skillId);
+  const declaredPrimaryIds = declared.filter(({ role }) => role === "primary").map(({ skillId }) => skillId);
+  const rest = (ids: readonly string[]) => requiredPrimarySkillId
+    ? ids.filter((skillId) => skillId !== requiredPrimarySkillId)
+    : ids;
+  const nominatedRoles = new Map<string, NominationRole>(
+    declared.map(({ skillId, role }) => [skillId, role]),
+  );
+  if (input.explicitSkillId !== undefined) nominatedRoles.set(input.explicitSkillId, "primary");
+  const nominationOrder = requiredPrimarySkillId
+    ? [requiredPrimarySkillId, ...rest(declaredIds)]
+    : [...declaredIds];
+  const primaryNominationOrder = requiredPrimarySkillId
+    ? [requiredPrimarySkillId, ...rest(declaredPrimaryIds)]
+    : [...declaredPrimaryIds];
+  return {
+    ...(requiredPrimarySkillId ? { requiredPrimarySkillId } : {}),
+    nominationOrder,
+    primaryNominationOrder,
+    nominatedSkillIds: [...new Set([...(requiredPrimarySkillId ? [requiredPrimarySkillId] : []), ...declaredIds])],
+    nominatedPrimarySkillIds: [...new Set(primaryNominationOrder)],
+    nominatedRoles,
+  };
 };
 
 export type OrderedPrimaryNominationResolution =

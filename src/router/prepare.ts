@@ -19,7 +19,7 @@ import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "./vocabulary/
 import { RoutingVocabularyValidationError } from "./vocabulary/validate.ts";
 import { validateSemanticHints } from "./semantic-hints.ts";
 import { analyzeTask } from "./analyzer.ts";
-import { applyPrimarySkillAmbiguityAnswer, buildNominatedPrimaryEligibilityFacts, primarySkillAmbiguityQuestionFor, primarySkillAmbiguityQuestionId, resolveDeclaredPrimarySkillAmbiguity } from "./nomination-resolution.ts";
+import { applyPrimarySkillAmbiguityAnswer, buildNominatedPrimaryEligibilityFacts, primarySkillAmbiguityQuestionFor, primarySkillAmbiguityQuestionId, resolveDeclaredPrimarySkillAmbiguity, resolveNomination } from "./nomination-resolution.ts";
 import { composeSkillSet, defaultRouterLimits, retrieveSkillCandidates, type RouterSkillMetadata } from "./composer.ts";
 import { createContinuationToken, validateContinuation, type RouterClarificationQuestion } from "./continuation.ts";
 import { defaultRouterThresholds, normalizeDomainAlias, resolveDomains } from "./resolver.ts";
@@ -522,23 +522,20 @@ export const prepareTask = async (
   const explicitSkillId = routingProposal
     ? detectExplicitSkillChoice(parsed.normalizedIntent, allMetadata.map(({ id }) => id))
     : undefined;
+  const declaredNominations = routingProposal?.nominations.map(({ skillId, role }) => ({ skillId, role })) ?? [];
+  // The declared nomination order below (with the explicit choice first) is the
+  // continuation binding projection; it must stay byte-identical to the legacy
+  // contract. The resolved nomination carries the effective orders for
+  // composition, including any ambiguity-answer permutation.
   const nominationOrder = [
     ...(explicitSkillId ? [explicitSkillId] : []),
     ...(routingProposal?.nominations.map(({ skillId }) => skillId) ?? []),
   ];
-  const nominatedSkillIds = [...new Set([
-    ...(explicitSkillId ? [explicitSkillId] : []),
-    ...(routingProposal?.nominations.map(({ skillId }) => skillId) ?? []),
-  ])];
-  const primaryNominationOrder = [
-    ...(explicitSkillId ? [explicitSkillId] : []),
-    ...(routingProposal?.nominations.filter(({ role }) => role === "primary").map(({ skillId }) => skillId) ?? []),
-  ];
-  const nominatedPrimarySkillIds = [...new Set(primaryNominationOrder)];
-  const nominatedRoles = new Map<string, "primary" | "companion" | "verification">(
-    routingProposal?.nominations.map(({ skillId, role }) => [skillId, role]) ?? [],
-  );
-  if (explicitSkillId) nominatedRoles.set(explicitSkillId, "primary");
+  const declaredResolution = resolveNomination({ explicitSkillId, declaredNominations });
+  const nominatedSkillIds = declaredResolution?.nominatedSkillIds ?? [];
+  const primaryNominationOrder = declaredResolution?.primaryNominationOrder ?? [];
+  const nominatedPrimarySkillIds = declaredResolution?.nominatedPrimarySkillIds ?? [];
+  const nominatedRoles = declaredResolution?.nominatedRoles;
   const resolution = resolveDomains({ profile: analysis.profile, domains, skills: allMetadata, fingerprint, availableDomainIds: packs.map(({ id }) => id), thresholds: defaultRouterThresholds, routingIntentTags: analysis.routingIntentTags, routingContext, routingSignals: analysis.matchedSignals });
   const declaredAmbiguityIds = routingProposal?.ambiguity?.primarySkillIds ?? [];
   // A continuation answer only permutes the primary nomination order (the selected
@@ -684,12 +681,12 @@ export const prepareTask = async (
     const outcome = { status: "decomposition_required" as const, decomposition: { subtasks: analysis.profile.subtasks } };
     return { ...resultCommon(resolution.candidates, outcome), ...outcome };
   }
-  const effectiveNominationOrder = selectedNominationPrimary
-    ? [selectedNominationPrimary, ...nominationOrder.filter((skillId) => skillId !== selectedNominationPrimary)]
-    : nominationOrder;
-  const effectivePrimaryNominationOrder = selectedNominationPrimary
-    ? [selectedNominationPrimary, ...primaryNominationOrder.filter((skillId) => skillId !== selectedNominationPrimary)]
-    : primaryNominationOrder;
+  // A continuation answer permutes the resolution (the selected nomination
+  // becomes the required primary); without one the declared resolution is the
+  // effective one.
+  const resolvedNomination = selectedNominationPrimary
+    ? resolveNomination({ explicitSkillId, selectedNominationPrimary, declaredNominations })
+    : declaredResolution;
   // The ambiguity probe is the existing candidate retrieval, aligned to the composition
   // retrieval input: the same nomination sets, roles, domains, and primary domain. Its
   // result is reused by composition instead of running a second eligibility pass. The
@@ -713,19 +710,8 @@ export const prepareTask = async (
     routingIntentTags: analysis.routingIntentTags,
     routingContext,
     matchedSignals: analysis.matchedSignals,
-    nominatedSkillIds,
-    nominatedPrimarySkillIds,
-    nominatedRoles,
-    nominationOrder: effectiveNominationOrder,
-    primaryNominationOrder: effectivePrimaryNominationOrder,
+    ...(resolvedNomination ? { resolvedNomination } : {}),
     ...(reuseProbeRetrieval ? { retrievalResult: ambiguityProbe } : {}),
-    // A continuation answer is a closed host choice; a later composer veto must not silently
-    // replace it with another nominated or lexical primary.
-    ...(explicitSkillId
-      ? { requiredPrimarySkillId: explicitSkillId }
-      : selectedNominationPrimary
-        ? { requiredPrimarySkillId: selectedNominationPrimary }
-        : {}),
     limits: { ...defaultRouterLimits, maxSelectedRisk: config.router.maxSelectedRisk, maxEnvironmentSkills: config.router.maxEnvironmentSkills, maxTaskCompanions: config.router.maxTaskCompanions, maxVerificationSkills: config.router.maxVerificationSkills, maxAgentContextSkills: config.router.maxAgentContextSkills, maxTotalSelectedSkills: config.router.maxTotalSelectedSkills, maxInstructionBytes: config.router.maxInstructionBytes, maxAdditionalReadBytes: config.router.maxAdditionalReadBytes, maxSingleFileBytes: config.router.maxSingleFileBytes },
   });
   if (routingProposal) {
