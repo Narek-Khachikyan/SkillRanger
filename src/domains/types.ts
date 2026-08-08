@@ -134,6 +134,7 @@ export type DomainValidatorProjection = {
   validatorId: string;
   skillId: string;
   artifacts: readonly EvidenceArtifact[];
+  input?: unknown;
   output?: unknown;
   verificationInput?: unknown;
   sourceReview?: unknown;

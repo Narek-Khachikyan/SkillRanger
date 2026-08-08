@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { digestDesignExecutionPolicy, isValidStateSynchronization, verifyVisualResult } from "../src/domains/frontend/design/index.ts";
 import type { UiCaptureEntry, VisualCriterion, VisualCriticReport } from "../src/domains/frontend/design/index.ts";
-import { deriveBrowserGateResults } from "../src/runtime/strict/frontend-evidence.ts";
+import { browserResultsFor, createBrowserGateRun } from "./helpers/browser-gate-fixtures.ts";
 import type { EvidenceArtifact } from "../src/runtime/strict/types.ts";
 import { makeBundle, makeVerificationInput } from "./helpers/frontend-visual-fixtures.ts";
 
@@ -10,6 +10,8 @@ const freshCycle = () => makeVerificationInput({
   initialEvidence: makeBundle({ id: "e1", variantId: "v1", sourceIdentity: "git:abc" }),
   recheckEvidence: makeBundle({ id: "e2", variantId: "v1", sourceIdentity: "git:def" }),
 });
+
+const parityLedger = () => createBrowserGateRun().skillLedgers[0];
 
 test("keeps legacy synchronization readable but does not certify it without causal evidence", () => {
   const legacySynchronization = {
@@ -226,19 +228,19 @@ test("strict and visual verification agree on the same canonical weakened eviden
     kind: `browser-screenshot-${viewport.width}`,
     sourcePath: screenshotPath,
   })) as EvidenceArtifact[];
-  assert.ok(Object.values(deriveBrowserGateResults({ observations: strictObservations }, artifacts))
+  assert.ok(Object.values(browserResultsFor(parityLedger(), { observations: strictObservations }, artifacts))
     .every(({ passed }) => passed));
 
   selectedCaptures[0].observation.clippedControls = ["#panel"];
   selectedCaptures[0].checks = [];
   strictObservations[0].clippedControls = ["#panel"];
   const visual = verifyVisualResult(input);
-  const strict = deriveBrowserGateResults({ observations: strictObservations }, artifacts);
+  const strict = browserResultsFor(parityLedger(), { observations: strictObservations }, artifacts);
   assert.equal(visual.report.outcome, "failed");
   assert.ok(visual.findings.some(({ code }) => code === "clipped-content"));
   assert.equal(strict["no-clipped-controls"].passed, false);
 
-  const partialStrict = deriveBrowserGateResults({
+  const partialStrict = browserResultsFor(parityLedger(), {
     observations: strictObservations,
     requiredStates: ["loading", "empty"],
   }, artifacts);
@@ -250,7 +252,7 @@ test("strict and visual verification agree on the same canonical weakened eviden
     capture.checks = [];
   }
   const missingMechanicalVisual = verifyVisualResult(missingMechanicalInput);
-  const missingMechanicalStrict = deriveBrowserGateResults({
+  const missingMechanicalStrict = browserResultsFor(parityLedger(), {
     observations: strictObservations.map(({ mechanicalSnapshot: _mechanicalSnapshot, ...observation }) => observation),
   }, artifacts);
   assert.equal(missingMechanicalVisual.report.outcome, "failed");

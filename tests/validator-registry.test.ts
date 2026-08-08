@@ -432,7 +432,8 @@ test("the trusted registry resolves evaluators only for trusted core ids and imp
   assert.equal(typeof registry.resolveValidator("core/artifact-integrity"), "function");
   assert.equal(typeof registry.resolveValidator("core/critic-independence"), "function");
   assert.equal(typeof registry.resolveValidator("frontend/performance-claims"), "function");
-  assert.equal(registry.resolveValidator("frontend/browser-hard-gates"), undefined);
+  assert.equal(typeof registry.resolveValidator("frontend/browser-hard-gates"), "function");
+  assert.equal(registry.resolveValidator("frontend/tailwind-source"), undefined);
   assert.equal(registry.resolveValidator("core/unknown-core"), undefined);
 
   const bare = TrustedValidatorRegistry.fromIds([]);

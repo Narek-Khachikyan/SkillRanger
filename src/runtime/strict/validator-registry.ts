@@ -65,6 +65,7 @@ export class TrustedValidatorRegistry {
             validatorId: id,
             skillId: context.ledger.skillId,
             artifacts: context.artifacts,
+            input: context.ledger.input,
             output: context.output,
             verificationInput: context.verificationInput,
             sourceReview: context.sourceReview,

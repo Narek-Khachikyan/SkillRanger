@@ -1,7 +1,7 @@
 import { resolveDomainPackForSkill } from "../../domains/registry.ts";
 import { assertValidCriticReportV2 } from "./critic.ts";
 import { atOrAfter, canonicalCriticArtifact, parse, type Result, type ValidatorEvaluationContext } from "./core-validators.ts";
-import { deriveBrowserGateResults, deriveTailwindSourceResults } from "./frontend-evidence.ts";
+import { deriveTailwindSourceResults } from "./frontend-evidence.ts";
 import { deriveVerificationEvidenceIds } from "./report-evidence.ts";
 import { criticSystemGateId } from "./system-gates.ts";
 import {
@@ -41,7 +41,6 @@ export type StrictValidatorObservation = {
   result: Readonly<Result>;
 };
 export type StrictValidatorObserver = (observation: StrictValidatorObservation) => void | Promise<void>;
-const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const gateSlug = (gateId: string) => gateId.slice(gateId.lastIndexOf("/") + 1);
 const repairedAfterFindings = (ledger: SkillLedger, artifactId: string) => ledger.repairRequests.some((request) => {
   if (!request.gateIds.includes(criticSystemGateId)) return false;
@@ -223,17 +222,6 @@ export const deriveStrictValidatorResults = async (
   const sourceReview = parse(implementationDiffs.at(-1), artifactBytes);
   const criticReport = parse<CriticReportV2>(canonicalCriticArtifact(ledger, artifacts), artifactBytes);
   const criticSystemGate = deriveCriticSystemGate(ledger, artifacts, artifactBytes);
-  const requiredStatesFromBrief = (() => {
-    const brief = ledger.input.brief;
-    const surface = record(brief) ? brief.surface : undefined;
-    const requiredStates = record(surface) ? surface.requiredStates : undefined;
-    return Array.isArray(requiredStates)
-      && requiredStates.length > 0
-      && requiredStates.every((state) => typeof state === "string" && state.trim() !== "")
-      ? requiredStates as string[]
-      : undefined;
-  })();
-  const browser = deriveBrowserGateResults(verificationInput, artifacts, { requiredStates: requiredStatesFromBrief });
   const sourceResults = implementationDiffs.map((artifact) =>
     deriveTailwindSourceResults(artifactBytes.get(artifact.artifactId)?.toString("utf8") ?? ""));
   const source = Object.fromEntries([
@@ -261,10 +249,8 @@ export const deriveStrictValidatorResults = async (
     if (evaluator) {
       const context: ValidatorEvaluationContext = { projectRoot, ledger, artifacts, artifactBytes, output, verificationInput, sourceReview, criticReport, gateId: gate.id };
       result = await evaluator(context);
-    } else if (validatorId === "frontend/browser-hard-gates" || validatorId === "frontend/tailwind-source") {
-      result = validatorId === "frontend/browser-hard-gates"
-        ? browser[gateSlug(gate.id)]
-        : source[gateSlug(gate.id)];
+    } else if (validatorId === "frontend/tailwind-source") {
+      result = source[gateSlug(gate.id)];
     } else {
       result = { passed: false, message: `Runtime validator ${validatorId} found no valid evidence.` };
     }

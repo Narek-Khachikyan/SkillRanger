@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -14,10 +14,20 @@ import {
   createStrictSkillRun,
   deriveStrictValidatorResults,
   readNextStrictChunk,
+  type EvidenceArtifact,
   type ExecutionContractV2,
   type SkillLedger,
   type ValidatorEvaluationContext,
 } from "../src/runtime/strict/index.ts";
+import {
+  browserArtifacts,
+  browserContract,
+  browserGateResult,
+  browserGateSlugs,
+  browserObservation,
+  browserResultsFor,
+  createBrowserGateRun,
+} from "./helpers/browser-gate-fixtures.ts";
 
 const sha = (value: string | Buffer) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
 const skillId = "frontend.domain-validators-test";
@@ -279,5 +289,247 @@ test("independently persisted runs re-derive identical failed gate results for i
   );
   for (const slug of performanceGateSlugs) {
     assert.equal(firstDerivation.validatorResults[`${skillId}/gate/${slug}`].message, `Performance report failed ${slug}.`);
+  }
+});
+
+
+test("derives browser gates only from closed observations bound to screenshot evidence", () => {
+  const observations = [390, 768, 1440].map(browserObservation);
+  const ledger = createBrowserGateRun().skillLedgers[0];
+  const valid = browserResultsFor(ledger, { observations }, browserArtifacts);
+  assert.equal(Object.keys(valid).length, 7);
+  assert.ok(Object.values(valid).every(({ passed }) => passed));
+
+  const forged = browserResultsFor(ledger, { checks: { "required-states-covered": true } }, browserArtifacts);
+  // The rejection now carries the contract itself, so an agent can correct the shape instead of
+  // resubmitting self-declared pass flags. Every gate must state the identical contract, naming
+  // the closed observation keys.
+  const forgedMessages = new Set(Object.values(forged).map(({ message }) => message));
+  assert.equal(forgedMessages.size, 1);
+  const [forgedMessage] = [...forgedMessages];
+  assert.ok(Object.values(forged).every(({ passed }) => !passed));
+  assert.match(forgedMessage ?? "", /must be exactly \{ observations: \[\.\.\.\] \}/);
+  assert.match(forgedMessage ?? "", /horizontalOverflow/);
+  assert.match(forgedMessage ?? "", /reducedMotionVerified/);
+  assert.match(forgedMessage ?? "", /Self-declared pass flags are not accepted/);
+
+  const unbound = browserResultsFor(ledger, {
+    observations: observations.map((item, index) => index === 0 ? { ...item, screenshotPath: "evidence/unbound.png" } : item),
+  }, browserArtifacts);
+  assert.ok(Object.values(unbound).every(({ passed, message }) => !passed && /not bound/i.test(message ?? "")));
+
+  const openShape = browserResultsFor(ledger, {
+    observations: [{ ...observations[0], callerApproved: true }, ...observations.slice(1)],
+  }, browserArtifacts);
+  assert.ok(Object.values(openShape).every(({ passed }) => !passed));
+});
+
+test("strict browser gates require rendered action and observed change evidence", () => {
+  const ledger = createBrowserGateRun().skillLedgers[0];
+  const valid = [390, 768, 1440].map(browserObservation);
+  for (const observations of [
+    valid.map((item, index) => index === 0 ? { ...item, stateRendered: false } : item),
+    valid.map((item, index) => index === 0 ? { ...item, action: "" } : item),
+    valid.map((item, index) => index === 0
+      ? { ...item, changes: [{ locator: "#active-state", before: "same", after: "same" }] }
+      : item),
+  ]) {
+    const results = browserResultsFor(ledger, { observations }, browserArtifacts);
+    assert.ok(Object.values(results).every(({ passed }) => !passed));
+  }
+});
+
+test("strict browser gates consume the canonical extended UI evidence shape", () => {
+  const ledger = createBrowserGateRun().skillLedgers[0];
+  const observations = [390, 768, 1440].map((width) => ({
+    ...browserObservation(width),
+    overlaps: [],
+    focusOrderViolations: [],
+    contrastViolations: [],
+    mechanicalSnapshot: browserObservation(390).mechanicalSnapshot,
+  }));
+  const valid = browserResultsFor(ledger, { observations }, browserArtifacts);
+  assert.ok(Object.values(valid).every(({ passed }) => passed));
+
+  const weakened = browserResultsFor(ledger, {
+    observations: observations.map((observation, index) => index === 0
+      ? { ...observation, overlaps: ["#panel"] }
+      : observation),
+  }, browserArtifacts);
+  assert.equal(weakened["no-clipped-controls"].passed, false);
+
+  const missingViewport = browserResultsFor(ledger, { observations: observations.slice(0, 2) }, browserArtifacts);
+  assert.equal(missingViewport["required-states-covered"].passed, false);
+
+  const desynchronized = browserResultsFor(ledger, {
+    observations: observations.map((observation, index) => index === 0
+      ? {
+          ...observation,
+          stateSynchronization: {
+            status: "mismatch",
+            path: "#active-state -> #summary",
+            observations: ["#active-state=next", "#summary=previous"],
+            action: observation.action,
+            changes: observation.changes,
+          },
+        }
+      : observation),
+  }, browserArtifacts);
+  assert.equal(desynchronized["required-states-covered"].passed, false);
+
+  const missingState = browserResultsFor(ledger, {
+    observations,
+    requiredStates: ["default", "empty"],
+  }, browserArtifacts);
+  assert.equal(missingState["required-states-covered"].passed, false);
+});
+
+test("rejects root checks beside otherwise valid browser observations", () => {
+  const observations = [390, 768, 1440].map(browserObservation);
+  const results = browserResultsFor(createBrowserGateRun().skillLedgers[0], {
+    observations,
+    checks: { "required-states-covered": true },
+  }, browserArtifacts);
+  assert.ok(Object.values(results).every(({ passed, message }) => !passed && /closed shape/i.test(message ?? "")));
+});
+
+test("rejects reuse of one screenshot across required browser viewports", () => {
+  const observations = [390, 768, 1440].map((width) => ({
+    ...browserObservation(width),
+    screenshotPath: "evidence/shared.png",
+  }));
+  const artifacts = [390, 768, 1440].map((width) => ({
+    kind: `browser-screenshot-${width}`,
+    sourcePath: "evidence/shared.png",
+  })) as EvidenceArtifact[];
+
+  const results = browserResultsFor(createBrowserGateRun().skillLedgers[0], { observations }, artifacts);
+  assert.ok(Object.values(results).every(({ passed, message }) => !passed && /distinct screenshot/i.test(message ?? "")));
+});
+
+test("binds each browser observation viewport to its screenshot artifact kind", () => {
+  const observations = [390, 768, 1440].map(browserObservation);
+  const mismatched = browserArtifacts.map((artifact, index) => ({
+    ...artifact,
+    kind: `browser-screenshot-${[768, 390, 1440][index]}`,
+  }));
+
+  const results = browserResultsFor(createBrowserGateRun().skillLedgers[0], { observations }, mismatched);
+  assert.ok(Object.values(results).every(({ passed, message }) => !passed && /not bound/i.test(message ?? "")));
+});
+
+test("fails the accessibility hard gate for a critical axe violation", () => {
+  const observations = [390, 768, 1440].map(browserObservation);
+  observations[0].criticalAxeViolations = ["button-name"];
+
+  const results = browserResultsFor(createBrowserGateRun().skillLedgers[0], { observations }, browserArtifacts);
+  assert.equal(results["focus-visible"].passed, false);
+  assert.ok(Object.entries(results)
+    .filter(([gate]) => gate !== "focus-visible")
+    .every(([, result]) => result.passed));
+});
+
+test("console, sticky overlap, and reduced-motion findings fail only their own gates", () => {
+  const consoleObservations = [390, 768, 1440].map(browserObservation);
+  consoleObservations[0].consoleErrors = ["TypeError: undefined is not an object"];
+  const consoleResults = browserResultsFor(createBrowserGateRun().skillLedgers[0], { observations: consoleObservations }, browserArtifacts);
+  assert.equal(consoleResults["no-runtime-console-errors"].passed, false);
+  assert.ok(Object.entries(consoleResults)
+    .filter(([gate]) => gate !== "no-runtime-console-errors")
+    .every(([, result]) => result.passed));
+
+  const stickyObservations = [390, 768, 1440].map(browserObservation).map((observation, index) => index === 0
+    ? { ...observation, stickyOverlaps: ["#header over #content"] }
+    : observation);
+  const stickyResults = browserResultsFor(createBrowserGateRun().skillLedgers[0], { observations: stickyObservations }, browserArtifacts);
+  assert.equal(stickyResults["no-sticky-overlap"].passed, false);
+  assert.ok(Object.entries(stickyResults)
+    .filter(([gate]) => gate !== "no-sticky-overlap")
+    .every(([, result]) => result.passed));
+
+  const motionObservations = [390, 768, 1440].map(browserObservation).map((observation, index) => index === 0
+    ? { ...observation, reducedMotionVerified: false }
+    : observation);
+  const motionResults = browserResultsFor(createBrowserGateRun().skillLedgers[0], { observations: motionObservations }, browserArtifacts);
+  assert.equal(motionResults["reduced-motion-verified"].passed, false);
+  assert.ok(Object.entries(motionResults)
+    .filter(([gate]) => gate !== "reduced-motion-verified")
+    .every(([, result]) => result.passed));
+});
+
+test("required states declared by the run brief input apply through the domain validator seam", () => {
+  const observations = [390, 768, 1440].map(browserObservation);
+  const covered = browserResultsFor(createBrowserGateRun({ brief: { surface: { requiredStates: ["default"] } } }).skillLedgers[0], { observations }, browserArtifacts);
+  assert.ok(Object.values(covered).every(({ passed }) => passed));
+
+  const missingState = browserResultsFor(createBrowserGateRun({ brief: { surface: { requiredStates: ["default", "empty"] } } }).skillLedgers[0], { observations }, browserArtifacts);
+  assert.equal(missingState["required-states-covered"].passed, false);
+  assert.ok(Object.entries(missingState)
+    .filter(([gate]) => gate !== "required-states-covered")
+    .every(([, result]) => result.passed));
+});
+
+test("an unrecognized browser gate slug fails closed", () => {
+  const observations = [390, 768, 1440].map(browserObservation);
+  const result = browserGateResult(createBrowserGateRun().skillLedgers[0], { observations }, browserArtifacts, `${skillId}/gate/unexpected`);
+  assert.deepEqual(result, { passed: false, message: "Browser hard gate unexpected is not a certifying gate." });
+});
+
+test("missing or malformed browser evidence fails every gate with the closed shape contract", () => {
+  const ledger = createBrowserGateRun().skillLedgers[0];
+  for (const verificationInput of [undefined, {}, [], "not browser evidence"]) {
+    const results = browserResultsFor(ledger, verificationInput, browserArtifacts);
+    assert.deepEqual(failedGateIds(results), browserGateSlugs);
+    for (const slug of browserGateSlugs) {
+      assert.match(results[slug].message ?? "", /must be exactly \{ observations: \[\.\.\.\] \}/);
+    }
+  }
+});
+
+test("deriveStrictValidatorResults keys browser gate results by gate id through the integrity seam", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "domain-validators-browser-derive-"));
+  const store = new StrictSkillRunStore(root);
+  const observations = [390, 768, 1440].map(browserObservation);
+  let run = beginStrictStep(
+    readNextStrictChunk(createBrowserGateRun(), browserContract.skillId).run,
+    browserContract.skillId,
+    browserContract.steps[0].id,
+  );
+  await store.create(run);
+  for (const width of [390, 768, 1440]) {
+    const source = path.join(root, "evidence", `${width}.png`);
+    await mkdir(path.dirname(source), { recursive: true });
+    await writeFile(source, `browser-screenshot-${width}\n`);
+    run = await store.ingestEvidence(run.runId, {
+      sourcePath: source,
+      kind: `browser-screenshot-${width}`,
+      attributions: [{
+        skillId: browserContract.skillId,
+        stepId: browserContract.steps[0].id,
+        attempt: 1,
+        relation: "produced",
+        ruleIds: browserContract.rules.map(({ id }) => id),
+      }],
+    });
+  }
+  const inputSource = path.join(root, "verification-input.json");
+  await writeFile(inputSource, `${JSON.stringify({ observations })}\n`);
+  run = await store.ingestEvidence(run.runId, {
+    sourcePath: inputSource,
+    kind: "verification-input",
+    attributions: [{
+      skillId: browserContract.skillId,
+      stepId: browserContract.steps[0].id,
+      attempt: 1,
+      relation: "produced",
+      ruleIds: browserContract.rules.map(({ id }) => id),
+    }],
+  });
+  run = await store.update(run.runId, (current) => completeStrictStep(current, browserContract.skillId, browserContract.steps[0].id));
+
+  const derivation = await deriveStrictValidatorResults(root, run, run.skillLedgers[0]);
+  assert.equal(derivation.artifactIntegrity.passed, true);
+  for (const gate of browserContract.gates) {
+    assert.equal(derivation.validatorResults[gate.id].passed, true, gate.id);
   }
 });
