@@ -669,7 +669,15 @@ export const prepareTask = async (
       throw new RouterPrepareError(code, "Continuation token or clarification answers are invalid.");
     }
   }
-  const proposalPrimarySkillId = selectedNominationPrimary ?? explicitSkillId ?? firstPrimaryNomination?.skillId;
+  // A continuation answer permutes the resolution (the selected nomination
+  // becomes the required primary); without one the declared resolution is the
+  // effective one. The proposal-assisted path consumes this decision for both
+  // the primary-domain binding and composition instead of reconstructing the
+  // same projection from the raw explicit choice and answer sources.
+  const resolvedNomination = selectedNominationPrimary
+    ? resolveNomination({ explicitSkillId, selectedNominationPrimary, declaredNominations })
+    : declaredResolution;
+  const proposalPrimarySkillId = resolvedNomination?.requiredPrimarySkillId ?? firstPrimaryNomination?.skillId;
   const proposalPrimaryDomain = proposalPrimarySkillId
     ? catalogSkill(proposalPrimarySkillId)?.domains[0]
     : undefined;
@@ -682,12 +690,6 @@ export const prepareTask = async (
     const outcome = { status: "decomposition_required" as const, decomposition: { subtasks: analysis.profile.subtasks } };
     return { ...resultCommon(resolution.candidates, outcome), ...outcome };
   }
-  // A continuation answer permutes the resolution (the selected nomination
-  // becomes the required primary); without one the declared resolution is the
-  // effective one.
-  const resolvedNomination = selectedNominationPrimary
-    ? resolveNomination({ explicitSkillId, selectedNominationPrimary, declaredNominations })
-    : declaredResolution;
   // The ambiguity probe is the existing candidate retrieval, aligned to the composition
   // retrieval input: the same nomination sets, roles, domains, and primary domain. Its
   // result is reused by composition instead of running a second eligibility pass. The
