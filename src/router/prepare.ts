@@ -431,6 +431,7 @@ export const prepareTask = async (
   }
 
   const routingDate = input.routingDate ?? new Date().toISOString().slice(0, 10);
+  const catalogSkill = (skillId: string) => catalogSnapshot?.skills.find(({ skillId: id }) => id === skillId);
   const fingerprint = await scanProject(input.projectRoot);
   const fixturePacks = input.registry.kind === "test-fixture" ? await loadRouterFixturePacks(input.registry.root) : [];
   const packs = input.registry.kind === "test-fixture"
@@ -564,8 +565,8 @@ export const prepareTask = async (
     routingCandidates.push({ id: domainId, confidence: 0.75, role: "supporting", available: true, reasons: ["proposal-domain-binding"], evidence: [] });
   }
   const firstPrimaryNomination = routingProposal?.nominations.find(({ role }) => role === "primary");
-  const firstPrimaryNominationDomain = firstPrimaryNomination && catalogSnapshot
-    ? catalogSnapshot.skills.find(({ skillId }) => skillId === firstPrimaryNomination.skillId)?.domains[0]
+  const firstPrimaryNominationDomain = firstPrimaryNomination
+    ? catalogSkill(firstPrimaryNomination.skillId)?.domains[0]
     : undefined;
   const probeSelectedPrimary = routingProposal && firstPrimaryNominationDomain ? firstPrimaryNominationDomain : resolution.primaryDomainId;
   const ambiguityProbe = declaredAmbiguityIds.length > 0 && !explicitSkillId
@@ -591,7 +592,7 @@ export const prepareTask = async (
     })
     : undefined;
   const nominatedPrimaryFacts = ambiguityProbe
-    ? buildNominatedPrimaryEligibilityFacts({ retrieval: ambiguityProbe, nominatedPrimarySkillIds })
+    ? buildNominatedPrimaryEligibilityFacts({ retrieval: ambiguityProbe, skillIds: nominatedPrimarySkillIds })
     : [];
   const declaredAmbiguityResolution = resolveDeclaredPrimarySkillAmbiguity({
     declaredAmbiguityIds,
@@ -634,7 +635,7 @@ export const prepareTask = async (
   const skillAmbiguityQuestion = skillAmbiguityIds.length > 0 && catalogSnapshot
     ? primarySkillAmbiguityQuestionFor({
         skillIds: skillAmbiguityIds,
-        displayNameFor: (skillId) => catalogSnapshot.skills.find(({ skillId: id }) => id === skillId)?.displayName,
+        displayNameFor: (skillId) => catalogSkill(skillId)?.displayName,
       })
     : undefined;
   const questions = [
@@ -669,8 +670,8 @@ export const prepareTask = async (
     }
   }
   const proposalPrimarySkillId = selectedNominationPrimary ?? explicitSkillId ?? firstPrimaryNomination?.skillId;
-  const proposalPrimaryDomain = proposalPrimarySkillId && catalogSnapshot
-    ? catalogSnapshot.skills.find(({ skillId }) => skillId === proposalPrimarySkillId)?.domains[0]
+  const proposalPrimaryDomain = proposalPrimarySkillId
+    ? catalogSkill(proposalPrimarySkillId)?.domains[0]
     : undefined;
   if (routingProposal && proposalPrimaryDomain) selectedPrimary = proposalPrimaryDomain;
   if (!selectedPrimary) {

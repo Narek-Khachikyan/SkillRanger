@@ -38,7 +38,7 @@ const fixtureSkills = (packs: RouterFixturePack[]) => packs.flatMap(({ skills })
   auditPassed: true,
 } satisfies RouterSkillMetadata)));
 
-test("eligibility facts report eligible and ineligible declared primary nominations with exact base rejection reasons", async () => {
+test("eligibility facts report eligible and ineligible declared primary nominations", async () => {
   const packs = await loadRouterFixturePacks(fixtureRoot);
   const skills = fixtureSkills(packs);
   const base = skills.find(({ id }) => id === "backend.auth-implementation")!;
@@ -59,18 +59,15 @@ test("eligibility facts report eligible and ineligible declared primary nominati
     nominatedPrimarySkillIds,
     nominatedRoles: new Map(nominated.map(({ id }) => [id, "primary" as const])),
   });
-  const facts = buildNominatedPrimaryEligibilityFacts({ retrieval, nominatedPrimarySkillIds });
+  const facts = buildNominatedPrimaryEligibilityFacts({ retrieval, skillIds: nominatedPrimarySkillIds });
 
   assert.deepEqual(facts, [
     { skillId: "backend.auth-implementation", primaryRoleEligible: true },
-    { skillId: "backend.high-risk", primaryRoleEligible: false, baseRejectionReason: "risk-blocked" },
-    { skillId: "backend.missing-capability", primaryRoleEligible: false, baseRejectionReason: "required-capability-missing" },
+    { skillId: "backend.high-risk", primaryRoleEligible: false },
+    { skillId: "backend.missing-capability", primaryRoleEligible: false },
   ]);
   for (const fact of facts) {
-    assert.deepEqual(
-      Object.keys(fact).sort(),
-      fact.primaryRoleEligible ? ["primaryRoleEligible", "skillId"] : ["baseRejectionReason", "primaryRoleEligible", "skillId"],
-    );
+    assert.deepEqual(Object.keys(fact).sort(), ["primaryRoleEligible", "skillId"]);
   }
 });
 
@@ -114,12 +111,12 @@ test("eligibility facts are a bounded pure projection of the existing retrieval 
   const snapshot = JSON.parse(JSON.stringify(retrieval)) as unknown;
   const facts = buildNominatedPrimaryEligibilityFacts({
     retrieval,
-    nominatedPrimarySkillIds: ["backend.eligible", "backend.audit-failed", "backend.eligible", "backend.unknown"],
+    skillIds: ["backend.eligible", "backend.audit-failed", "backend.eligible", "backend.unknown"],
   });
 
   assert.deepEqual(facts, [
     { skillId: "backend.eligible", primaryRoleEligible: true },
-    { skillId: "backend.audit-failed", primaryRoleEligible: false, baseRejectionReason: "audit-failed" },
+    { skillId: "backend.audit-failed", primaryRoleEligible: false },
     { skillId: "backend.unknown", primaryRoleEligible: false },
   ]);
   assert.deepEqual(JSON.parse(JSON.stringify(retrieval)) as unknown, snapshot);
@@ -165,7 +162,7 @@ test("composition reusing the precomputed eligibility result matches internal re
   }
 });
 
-test("reused eligibility result preserves base rejection reasons for explicit choices", async () => {
+test("reused eligibility result keeps explicit-choice blocking with the exact reason code", async () => {
   const packs = await loadRouterFixturePacks(fixtureRoot);
   const skills = fixtureSkills(packs);
   const base = skills.find(({ id }) => id === "backend.auth-implementation")!;

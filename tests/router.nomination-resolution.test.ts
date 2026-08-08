@@ -58,28 +58,18 @@ test("explicit choice reason codes preserve the exact prefix and suffix strings"
 });
 
 test("an eligible explicit choice stands above nominations and lexical routing", () => {
-  const resolution = resolveExplicitSkillChoice({
-    explicitSkillId: "backend.auth-implementation",
-    eligibilityFacts: [
-      { skillId: "backend.auth-implementation", primaryRoleEligible: true },
-      { skillId: "backend.semantic-primary", primaryRoleEligible: true },
-    ],
-  });
+  const resolution = resolveExplicitSkillChoice({ explicitSkillId: "backend.auth-implementation" });
   assert.deepEqual(resolution, { kind: "explicit-choice-stands", skillId: "backend.auth-implementation" });
 });
 
 test("without an explicit choice no explicit-choice decision is imposed", () => {
-  assert.equal(resolveExplicitSkillChoice({ explicitSkillId: undefined, eligibilityFacts: [] }), undefined);
-  assert.equal(
-    resolveExplicitSkillChoice({ explicitSkillId: undefined, eligibilityFacts: [], baseRejectionReason: "risk-blocked" }),
-    undefined,
-  );
+  assert.equal(resolveExplicitSkillChoice({}), undefined);
+  assert.equal(resolveExplicitSkillChoice({ baseRejectionReason: "risk-blocked" }), undefined);
 });
 
 test("an ineligible explicit choice is blocked with the composer base reason and never substituted", () => {
   assert.deepEqual(resolveExplicitSkillChoice({
     explicitSkillId: "backend.high-risk",
-    eligibilityFacts: [{ skillId: "backend.high-risk", primaryRoleEligible: false, baseRejectionReason: "risk-blocked" }],
     baseRejectionReason: "risk-blocked",
   }), {
     kind: "explicit-choice-blocked",
@@ -88,22 +78,10 @@ test("an ineligible explicit choice is blocked with the composer base reason and
   });
 });
 
-test("an ineligible explicit choice falls back to fact reasons when no composer base reason is supplied", () => {
-  assert.deepEqual(resolveExplicitSkillChoice({
-    explicitSkillId: "backend.audit-failed",
-    eligibilityFacts: [{ skillId: "backend.audit-failed", primaryRoleEligible: false, baseRejectionReason: "audit-failed" }],
-  }), {
-    kind: "explicit-choice-blocked",
-    reasonCode: "explicit-skill-choice-audit-failed",
-    baseRejectionReason: "audit-failed",
-  });
-  assert.deepEqual(resolveExplicitSkillChoice({
-    explicitSkillId: "backend.unknown",
-    eligibilityFacts: [{ skillId: "backend.unknown", primaryRoleEligible: false }],
-  }), {
-    kind: "explicit-choice-blocked",
-    reasonCode: "explicit-skill-choice-primary-role-ineligible",
-    baseRejectionReason: "primary-role-ineligible",
+test("an explicit choice without a composer base reason stands", () => {
+  assert.deepEqual(resolveExplicitSkillChoice({ explicitSkillId: "backend.unknown" }), {
+    kind: "explicit-choice-stands",
+    skillId: "backend.unknown",
   });
 });
 
@@ -111,7 +89,7 @@ test("valid primary nominations are considered in declared order and ineligible 
   const resolution = resolveOrderedPrimaryNominations({
     primaryNominationOrder: ["backend.high-risk", "backend.auth-implementation", "backend.semantic-primary"],
     eligibilityFacts: [
-      { skillId: "backend.high-risk", primaryRoleEligible: false, baseRejectionReason: "risk-blocked" },
+      { skillId: "backend.high-risk", primaryRoleEligible: false },
       { skillId: "backend.auth-implementation", primaryRoleEligible: true },
       { skillId: "backend.semantic-primary", primaryRoleEligible: true },
     ],
@@ -143,7 +121,7 @@ test("no eligible nominations yields deterministic fallback", () => {
   assert.deepEqual(resolveOrderedPrimaryNominations({
     primaryNominationOrder: ["backend.high-risk", "backend.unknown"],
     eligibilityFacts: [
-      { skillId: "backend.high-risk", primaryRoleEligible: false, baseRejectionReason: "risk-blocked" },
+      { skillId: "backend.high-risk", primaryRoleEligible: false },
       { skillId: "backend.unknown", primaryRoleEligible: false },
     ],
   }), { kind: "no-eligible-nomination" });
@@ -177,11 +155,19 @@ test("an ineligible declared ambiguity is rejected with the ineligible ids in de
     declaredAmbiguityIds: ["backend.semantic-primary", "backend.high-risk", "backend.auth-implementation"],
     eligibilityFacts: [
       { skillId: "backend.auth-implementation", primaryRoleEligible: true },
-      { skillId: "backend.high-risk", primaryRoleEligible: false, baseRejectionReason: "risk-blocked" },
+      { skillId: "backend.high-risk", primaryRoleEligible: false },
       { skillId: "backend.semantic-primary", primaryRoleEligible: true },
     ],
   });
   assert.deepEqual(resolution, { kind: "ambiguity-ineligible", ineligibleSkillIds: ["backend.high-risk"] });
+});
+
+test("a declared ambiguity id absent from the eligibility facts is ineligible", () => {
+  const resolution = resolveDeclaredPrimarySkillAmbiguity({
+    declaredAmbiguityIds: ["backend.auth-implementation", "backend.undeclared"],
+    eligibilityFacts: [{ skillId: "backend.auth-implementation", primaryRoleEligible: true }],
+  });
+  assert.deepEqual(resolution, { kind: "ambiguity-ineligible", ineligibleSkillIds: ["backend.undeclared"] });
 });
 
 test("the explicit user choice outranks a declared ambiguity", () => {
@@ -234,13 +220,13 @@ test("a missing or non-declared answer is rejected", () => {
 
 test("nomination resolution is a pure projection that never mutates its inputs", () => {
   const facts = [
-    { skillId: "backend.high-risk", primaryRoleEligible: false, baseRejectionReason: "risk-blocked" },
+    { skillId: "backend.high-risk", primaryRoleEligible: false },
     { skillId: "backend.auth-implementation", primaryRoleEligible: true },
   ];
   const order = ["backend.high-risk", "backend.auth-implementation"];
   const declared = ["backend.high-risk", "backend.auth-implementation"];
   const snapshot = JSON.parse(JSON.stringify({ facts, order, declared })) as unknown;
-  resolveExplicitSkillChoice({ explicitSkillId: "backend.high-risk", eligibilityFacts: facts, baseRejectionReason: "risk-blocked" });
+  resolveExplicitSkillChoice({ explicitSkillId: "backend.high-risk", baseRejectionReason: "risk-blocked" });
   resolveOrderedPrimaryNominations({ explicitSkillId: "backend.auth-implementation", primaryNominationOrder: order, eligibilityFacts: facts });
   resolveDeclaredPrimarySkillAmbiguity({ declaredAmbiguityIds: declared, eligibilityFacts: facts });
   applyPrimarySkillAmbiguityAnswer({ answer: "backend.auth-implementation", eligibleSkillIds: declared });
@@ -456,11 +442,10 @@ test("facts-driven nomination decisions match the composition outcome", async ()
     nominatedPrimarySkillIds,
     maxSelectedRisk: "medium",
   });
-  const facts = buildNominatedPrimaryEligibilityFacts({ retrieval, nominatedPrimarySkillIds });
+  const facts = buildNominatedPrimaryEligibilityFacts({ retrieval, skillIds: nominatedPrimarySkillIds });
   const explicitResolution = resolveExplicitSkillChoice({
     explicitSkillId: highRisk.id,
-    eligibilityFacts: facts,
-    baseRejectionReason: facts.find(({ skillId }) => skillId === highRisk.id)?.baseRejectionReason,
+    baseRejectionReason: "risk-blocked",
   });
   assert.equal(explicitResolution?.kind, "explicit-choice-blocked");
   if (explicitResolution?.kind === "explicit-choice-blocked") {
@@ -522,6 +507,20 @@ test("resolveNomination applies the ambiguity answer by moving it to the front o
   assert.deepEqual(resolved?.nominationOrder, ["backend.beta", "backend.alpha"]);
   assert.deepEqual(resolved?.primaryNominationOrder, ["backend.beta", "backend.alpha"]);
   assert.equal(resolved?.requiredPrimarySkillId, "backend.beta");
+});
+
+test("resolveNomination rejects an ambiguity answer that is not a declared nomination", () => {
+  assert.equal(resolveNomination({
+    selectedNominationPrimary: "backend.undeclared",
+    declaredNominations: [
+      { skillId: "backend.alpha", role: "primary" },
+      { skillId: "backend.beta", role: "primary" },
+    ],
+  }), undefined);
+  assert.equal(resolveNomination({
+    selectedNominationPrimary: "BACKEND.DELTA",
+    declaredNominations: [{ skillId: "backend.beta", role: "primary" }],
+  }), undefined);
 });
 
 test("resolveNomination keeps the declared order and no required primary without an explicit choice or answer", () => {

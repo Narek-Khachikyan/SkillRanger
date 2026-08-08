@@ -26,6 +26,7 @@ import {
   buildNominatedPrimaryEligibilityFacts,
   explicitSkillChoiceReasonCode,
   resolveExplicitSkillChoice,
+  resolveOrderedPrimaryNominations,
   type ResolvedNomination,
 } from "./nomination-resolution.ts";
 import type { CanonicalRequirement } from "./requirements.ts";
@@ -599,10 +600,7 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
   const registryById = new Map(input.skills.map((skill) => [canonical(skill.id), skill]));
   const eligibilityFacts = buildNominatedPrimaryEligibilityFacts({
     retrieval: retrieved,
-    nominatedPrimarySkillIds: [
-      ...nominatedPrimarySkillIds,
-      ...(requiredPrimarySkillId ? [requiredPrimarySkillId] : []),
-    ],
+    skillIds: nomination ? nomination.nominationOrder : [],
   });
   const explicitPrimaryFailure = (reason: string): ComposeSkillSetResult => ({
     status: "no_matching_skills",
@@ -621,19 +619,23 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
   }
   const explicitResolution = resolveExplicitSkillChoice({
     explicitSkillId: requiredPrimarySkillId,
-    eligibilityFacts,
     baseRejectionReason: explicitBaseRejectionReason,
   });
   if (explicitResolution?.kind === "explicit-choice-blocked") {
     return explicitPrimaryFailure(explicitResolution.baseRejectionReason);
   }
-  // The resolved primary nomination order ranks the primaries that passed
-  // retrieval; entries for ineligible nominations are inert because those
-  // candidates never reach the primary candidate set. When no primary
-  // nomination is declared the full nomination order ranks the optional
-  // companions and the primary falls back deterministically.
-  const effectivePrimaryNominationOrder = nomination && (nomination.primaryNominationOrder.length > 0 || nomination.nominationOrder.length > 0)
-    ? orderMap(nomination.primaryNominationOrder.length > 0 ? nomination.primaryNominationOrder : nomination.nominationOrder)
+  // Project the declared primary order onto the retrieval-eligible primaries (the
+  // required primary is resolved separately); the full nomination order only ranks
+  // when no primary nomination is declared, and score order is the fallback.
+  const orderedPrimaryResolution = nomination
+    ? resolveOrderedPrimaryNominations({
+        explicitSkillId: requiredPrimarySkillId,
+        primaryNominationOrder: nomination.primaryNominationOrder.length > 0 ? nomination.primaryNominationOrder : nomination.nominationOrder,
+        eligibilityFacts,
+      })
+    : undefined;
+  const effectivePrimaryNominationOrder = orderedPrimaryResolution?.kind === "ordered-nominations"
+    ? orderMap(orderedPrimaryResolution.primarySkillIds)
     : undefined;
   const sortedPrimaryCandidates = sortedPrimary(retrieved.primaryCandidates, input.requirements, input.routingContext, effectivePrimaryNominationOrder);
   const primaryCandidates = requiredPrimarySkillId

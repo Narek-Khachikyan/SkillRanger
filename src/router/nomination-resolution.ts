@@ -4,123 +4,74 @@ import type { RouterSkillRole } from "./types.ts";
 
 const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
 
-// The roles a routing proposal may assign to a nomination. Narrower than
-// RouterSkillRole: environment and agent-context placement is decided by the
-// composer, never declared by a proposal.
+// Proposal-declared roles; environment and agent-context placement is a composer decision.
 export type NominationRole = Exclude<RouterSkillRole, "environment" | "agent-context">;
 
-// Bounded eligibility facts for the nomination decision: whether a nominated primary
-// candidate may fill the primary role and, if not, the existing base rejection reason.
-// The shape intentionally exposes no candidate scores, capabilities, project data, or
-// runtime state. It is produced from an existing RetrieveSkillCandidatesResult and never
-// recomputes eligibility rules.
+// Bounded eligibility facts for the nomination decision: whether the skill may fill
+// the primary role. Never recomputed here; produced from a retrieval result.
 export type NominatedPrimaryEligibilityFacts = {
   skillId: string;
   primaryRoleEligible: boolean;
-  baseRejectionReason?: string;
 };
 
 export const buildNominatedPrimaryEligibilityFacts = (input: {
   retrieval: RetrieveSkillCandidatesResult;
-  nominatedPrimarySkillIds: Iterable<string>;
+  skillIds: Iterable<string>;
 }): NominatedPrimaryEligibilityFacts[] => {
   const primaryEligibleIds = new Set(input.retrieval.primaryCandidates.map(({ skill }) => canonical(skill.id)));
-  const firstRejectionBySkillId = new Map<string, string>();
-  for (const { skillId, reason } of input.retrieval.rejections) {
-    const id = canonical(skillId);
-    if (!firstRejectionBySkillId.has(id)) firstRejectionBySkillId.set(id, reason);
-  }
   const seen = new Set<string>();
   const facts: NominatedPrimaryEligibilityFacts[] = [];
-  for (const rawSkillId of input.nominatedPrimarySkillIds) {
+  for (const rawSkillId of input.skillIds) {
     const skillId = canonical(rawSkillId);
     if (seen.has(skillId)) continue;
     seen.add(skillId);
-    const primaryRoleEligible = primaryEligibleIds.has(skillId);
-    const baseRejectionReason = firstRejectionBySkillId.get(skillId);
-    facts.push(primaryRoleEligible || baseRejectionReason === undefined
-      ? { skillId, primaryRoleEligible }
-      : { skillId, primaryRoleEligible, baseRejectionReason });
+    facts.push({ skillId, primaryRoleEligible: primaryEligibleIds.has(skillId) });
   }
   return facts;
 };
 
-// Stable projection of a base eligibility or composition rejection into the public
-// explicit-choice reason code. This is the only producer of the
-// `explicit-skill-choice-*` prefix and suffix strings; the composer remains the owner
-// of the base reason itself.
+// Projects a base rejection reason into the public `explicit-skill-choice-*` code. The
+// composer owns base reasons; this is the only producer of the prefix and suffix strings.
 export const explicitSkillChoiceReasonCode = (baseRejectionReason: string): `explicit-skill-choice-${string}` =>
   `explicit-skill-choice-${baseRejectionReason}`;
 
+// Explicit-choice precedence: the choice stands, or is blocked by a base reason.
 export type ExplicitSkillChoiceResolution =
   | { kind: "explicit-choice-stands"; skillId: string }
   | { kind: "explicit-choice-blocked"; reasonCode: `explicit-skill-choice-${string}`; baseRejectionReason: string };
 
-// Decides explicit-choice precedence: an explicit user choice stands above host
-// nominations and lexical routing unless the precomputed eligibility facts or the
-// composer-supplied base rejection reason block it. A blocked explicit choice is
-// never substituted with another skill. The composer determines the base rejection
-// reason; this module only projects it and owns the precedence decision.
+// The composer determines the base reason; this module only projects it and owns
+// the precedence decision. A blocked choice is never substituted.
 export const resolveExplicitSkillChoice = (input: {
   explicitSkillId?: string;
-  eligibilityFacts: NominatedPrimaryEligibilityFacts[];
   baseRejectionReason?: string;
 }): ExplicitSkillChoiceResolution | undefined => {
   if (!input.explicitSkillId) return undefined;
   const skillId = canonical(input.explicitSkillId);
-  if (input.baseRejectionReason !== undefined) {
-    return {
-      kind: "explicit-choice-blocked",
-      reasonCode: explicitSkillChoiceReasonCode(input.baseRejectionReason),
-      baseRejectionReason: input.baseRejectionReason,
-    };
-  }
-  const fact = input.eligibilityFacts.find(({ skillId: factSkillId }) => canonical(factSkillId) === skillId);
-  if (fact && !fact.primaryRoleEligible) {
-    const baseRejectionReason = fact.baseRejectionReason ?? "primary-role-ineligible";
-    return { kind: "explicit-choice-blocked", reasonCode: explicitSkillChoiceReasonCode(baseRejectionReason), baseRejectionReason };
-  }
-  return { kind: "explicit-choice-stands", skillId };
+  return input.baseRejectionReason !== undefined
+    ? {
+        kind: "explicit-choice-blocked",
+        reasonCode: explicitSkillChoiceReasonCode(input.baseRejectionReason),
+        baseRejectionReason: input.baseRejectionReason,
+      }
+    : { kind: "explicit-choice-stands", skillId };
 };
 
-// The single resolved nomination result the preparation path hands to the
-// composer. It carries the resolved precedence facts — the required primary
-// (explicit user choice or closed ambiguity answer), the effective nomination
-// orders, and the declared roles — so the composer no longer receives a
-// scattered set of overlapping nomination fields. Candidate eligibility,
-// routing hard vetoes, dependencies, conflicts, roles, limits, budgets, and
-// strict requirements remain owned by the composer.
+// The resolved nomination result handed to the composer: the required primary
+// (explicit choice or ambiguity answer), the effective orders, and declared roles.
 export type ResolvedNomination = {
-  // The workflow that must be the primary: the explicit user choice, or the
-  // closed host choice from a declared-primary-skill ambiguity answer. When
-  // set, the composer never substitutes another primary and projects its own
-  // base rejection reasons onto the explicit-skill-choice-* reason code.
   requiredPrimarySkillId?: string;
-  // Effective full nomination order: the resolved primary first, then the
-  // declared nominations in proposal order. Used for optional-skill ranking.
   nominationOrder: readonly string[];
-  // Effective primary nomination order: the resolved primary first, then the
-  // declared primary nominations in proposal order. The composer ranks
-  // retrieval-eligible primaries by it and falls back deterministically when
-  // no nomination remains eligible.
   primaryNominationOrder: readonly string[];
-  // Every nominated skill id (including the resolved primary), for the
-  // retrieval path to keep nomination-grounded candidates visible to ordered
-  // hard-veto fallback.
   nominatedSkillIds: readonly string[];
-  // The primary-nominated skill ids, for the retrieval path and the
-  // proposal-driven strict retrieval policy.
   nominatedPrimarySkillIds: readonly string[];
-  // Declared role per nominated skill, including the resolved primary as
-  // primary; role eligibility stays owned by the composer.
   nominatedRoles: ReadonlyMap<string, NominationRole>;
 };
 
-// Resolves the already-validated routing proposal facts into one deterministic
-// nomination result: explicit choice and ambiguity-answer precedence, the
-// effective nomination orders, and the declared roles. Returns undefined when
-// no explicit choice and no nominations are present, so the caller keeps the
-// deterministic legacy path. Eligibility is never computed here.
+// Resolves proposal facts into one deterministic nomination result: explicit-choice and
+// ambiguity-answer precedence, effective orders, and declared roles. The answer must
+// name a declared nomination; otherwise there is no resolution and the caller keeps the
+// legacy path. Eligibility is never computed here.
 export const resolveNomination = (input: {
   explicitSkillId?: string;
   selectedNominationPrimary?: string;
@@ -128,6 +79,12 @@ export const resolveNomination = (input: {
 }): ResolvedNomination | undefined => {
   const declared = input.declaredNominations ?? [];
   if (declared.length === 0 && input.explicitSkillId === undefined) return undefined;
+  const selectedPrimary = input.selectedNominationPrimary === undefined
+    ? undefined
+    : canonical(input.selectedNominationPrimary);
+  if (selectedPrimary !== undefined && !declared.some(({ skillId }) => canonical(skillId) === selectedPrimary)) {
+    return undefined;
+  }
   const requiredPrimarySkillId = input.explicitSkillId ?? input.selectedNominationPrimary;
   const declaredIds = declared.map(({ skillId }) => skillId);
   const declaredPrimaryIds = declared.filter(({ role }) => role === "primary").map(({ skillId }) => skillId);
@@ -154,15 +111,13 @@ export const resolveNomination = (input: {
   };
 };
 
+// Projects the declared primary nomination order onto the eligible primary
+// nominations; the explicit choice is excluded (resolved separately). When no
+// nomination remains eligible the caller applies deterministic fallback.
 export type OrderedPrimaryNominationResolution =
   | { kind: "ordered-nominations"; primarySkillIds: string[] }
   | { kind: "no-eligible-nomination" };
 
-// Projects the declared primary nomination order onto the eligible primary
-// nominations: valid primary nominations are considered in declared order, with the
-// explicit user choice excluded (it is resolved separately), and invalid or unusable
-// nominations fall through. When no nomination remains eligible the caller applies
-// deterministic fallback.
 export const resolveOrderedPrimaryNominations = (input: {
   explicitSkillId?: string;
   primaryNominationOrder: Iterable<string>;
@@ -185,27 +140,18 @@ export const resolveOrderedPrimaryNominations = (input: {
     : { kind: "no-eligible-nomination" };
 };
 
-// The declared primary-skill ambiguity question is a typed closed-option
-// clarification: the id and text are stable public meanings, and the options are
-// exactly the declared eligible primary nominations. The continuation module owns
-// the cryptographic transport of the question set; this module owns its meaning.
+// Typed closed-option ambiguity question over the declared eligible primaries; the
+// continuation module owns transport, this module owns the meaning.
 export const primarySkillAmbiguityQuestionId = "primary-skill" as const;
 export const primarySkillAmbiguityQuestionText = "Which nominated skill should be the primary workflow?" as const;
 
-// Outcome of deciding a declared primary-skill ambiguity against the precomputed
-// eligibility facts: no ambiguity, a rejected declaration naming the ineligible
-// ids in declared order, or an eligible declaration the caller must clarify.
 export type DeclaredPrimarySkillAmbiguity =
   | { kind: "no-ambiguity" }
   | { kind: "ambiguity-ineligible"; ineligibleSkillIds: string[] }
   | { kind: "ambiguity-eligible"; skillIds: string[] };
 
-// Decides what a declared primary-skill ambiguity means from precomputed
-// eligibility facts. The explicit user choice outranks the declaration, and an
-// empty declaration means no ambiguity. When every declared id is an eligible
-// primary nomination the caller must ask the typed closed-option clarification;
-// when any declared id is not eligible the declaration is rejected as a whole.
-// Eligibility itself is never recomputed here.
+// Every declared id must be facts-eligible or the declaration is rejected as a
+// whole; the explicit choice and empty declarations produce no ambiguity.
 export const resolveDeclaredPrimarySkillAmbiguity = (input: {
   declaredAmbiguityIds: readonly string[];
   explicitSkillId?: string;
@@ -214,18 +160,17 @@ export const resolveDeclaredPrimarySkillAmbiguity = (input: {
   if (input.declaredAmbiguityIds.length === 0 || input.explicitSkillId !== undefined) {
     return { kind: "no-ambiguity" };
   }
-  const ineligibleIds = new Set(
-    input.eligibilityFacts.filter(({ primaryRoleEligible }) => !primaryRoleEligible).map(({ skillId }) => canonical(skillId)),
+  const eligibleIds = new Set(
+    input.eligibilityFacts.filter(({ primaryRoleEligible }) => primaryRoleEligible).map(({ skillId }) => canonical(skillId)),
   );
-  const ineligibleSkillIds = [...new Set(input.declaredAmbiguityIds.filter((skillId) => ineligibleIds.has(canonical(skillId))))];
+  const ineligibleSkillIds = [...new Set(input.declaredAmbiguityIds.filter((skillId) => !eligibleIds.has(canonical(skillId))))];
   return ineligibleSkillIds.length > 0
     ? { kind: "ambiguity-ineligible", ineligibleSkillIds }
     : { kind: "ambiguity-eligible", skillIds: [...new Set(input.declaredAmbiguityIds)] };
 };
 
-// Builds the typed closed-option clarification question for the declared eligible
-// primary nominations. Display labels come from the caller (the catalog), never
-// from this module.
+// Builds the typed closed-option clarification question; display labels come from
+// the catalog, never from this module.
 export const primarySkillAmbiguityQuestionFor = (input: {
   skillIds: readonly string[];
   displayNameFor: (skillId: string) => string | undefined;
@@ -238,17 +183,11 @@ export const primarySkillAmbiguityQuestionFor = (input: {
   })),
 });
 
-// Interpretation of an answer to the declared primary-skill ambiguity: a
-// selection of exactly one declared eligible primary nomination, or a value that
-// does not identify one.
 export type PrimarySkillAmbiguityAnswer =
   | { kind: "selected-primary"; skillId: string }
   | { kind: "not-a-declared-option" };
 
-// Interprets the answer to the declared primary-skill ambiguity: it must name
-// exactly one of the declared eligible primary nominations. The caller applies
-// the existing precedence rules, moving the selection to the front of the
-// effective nomination order and binding it as the required primary.
+// The answer must name exactly one declared eligible primary.
 export const applyPrimarySkillAmbiguityAnswer = (input: {
   answer?: string;
   eligibleSkillIds: readonly string[];
