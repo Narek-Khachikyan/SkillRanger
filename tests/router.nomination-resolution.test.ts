@@ -298,6 +298,24 @@ test("strict mode never substitutes the explicit choice with another workflow", 
   }
 });
 
+test("a nominationOrder-only caller keeps declared-order primary ranking", async () => {
+  const packs = await loadRouterFixturePacks(fixtureRoot);
+  const skills = fixtureSkills(packs);
+  const base = skills.find(({ id }) => id === "backend.auth-implementation")!;
+  const higherScored = { ...base, id: "backend.higher-scored", displayName: "Higher Scored", score: 0.99 };
+  const result = composeSkillSet({
+    profile: profile(),
+    skills: [base, higherScored],
+    selectedDomainIds: ["backend-api"],
+    primaryDomainId: "backend-api",
+    targetAgent: "codex",
+    capabilities: ["filesystem", "terminal"],
+    nominationOrder: [base.id, higherScored.id],
+  });
+  assert.equal(result.status, "prepared");
+  if (result.status === "prepared") assert.equal(result.composed.primary.skill.id, base.id);
+});
+
 test("facts-driven nomination decisions match the composition outcome", async () => {
   const packs = await loadRouterFixturePacks(fixtureRoot);
   const skills = fixtureSkills(packs);

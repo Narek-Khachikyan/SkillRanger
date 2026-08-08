@@ -589,7 +589,7 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     nominatedPrimarySkillIds: [
       ...nominatedPrimarySkillIds,
       ...(requiredPrimarySkillId ? [requiredPrimarySkillId] : []),
-      ...(input.primaryNominationOrder ?? []),
+      ...(input.primaryNominationOrder ?? input.nominationOrder ?? []),
     ],
   });
   const explicitPrimaryFailure = (reason: string): ComposeSkillSetResult => ({
@@ -613,7 +613,7 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     baseRejectionReason: explicitBaseRejectionReason,
   });
   if (explicitResolution?.kind === "explicit-choice-blocked") {
-    return { status: "no_matching_skills", reasonCode: explicitResolution.reasonCode, rejections: retrieved.rejections };
+    return explicitPrimaryFailure(explicitResolution.baseRejectionReason);
   }
   const orderedNominationResolution = resolveOrderedPrimaryNominations({
     explicitSkillId: requiredPrimarySkillId,
