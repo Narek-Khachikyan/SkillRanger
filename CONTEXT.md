@@ -38,6 +38,26 @@ _Avoid_: state assertion, pass flag, interaction claim.
 Different generator and critic identities supplied by the host to record role separation; it does not prove that the two roles ran independently.
 _Avoid_: proven independent execution, independent critic proof.
 
+**Domain validator**:
+A domain-owned check that evaluates the meaning of evidence for one domain and reports whether a declared verification gate passes. It does not own run state, repair, or finalization.
+_Avoid_: generic evaluator, evidence-presence check, finalization policy.
+
+**Generic evaluator**:
+A core-owned check of evidence structure or integrity that does not depend on one domain's meaning.
+_Avoid_: domain validator, domain policy.
+
+**Validator registry**:
+The trusted set of generic evaluators and selected domain validators available to one strict run. It determines whether a declared validator can be evaluated; it does not select skills.
+_Avoid_: global skill registry, executable skill package.
+
+**Gate evidence projection**:
+A bounded view of accepted evidence and the minimal context needed to evaluate one declared verification gate. It does not expose the whole strict run.
+_Avoid_: full run state, arbitrary file access, raw project context.
+
+**Gate result**:
+A deterministic pass or fail outcome for one declared verification gate, with an optional diagnostic. It does not decide run lifecycle, repair, or finalization.
+_Avoid_: verified outcome, repair request, run state.
+
 ## Frontend design research
 
 **Reference corpus**:
