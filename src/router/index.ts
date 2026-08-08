@@ -75,6 +75,7 @@ export {
   resolveExplicitSkillChoice,
   resolveNomination,
   resolveOrderedPrimaryNominations,
+  resolvePrimaryArbitration,
 } from "./nomination-resolution.ts";
 export type {
   DeclaredPrimarySkillAmbiguity,
@@ -82,6 +83,7 @@ export type {
   NominationRole,
   NominatedPrimaryEligibilityFacts,
   OrderedPrimaryNominationResolution,
+  PrimaryArbitrationDecision,
   PrimarySkillAmbiguityAnswer,
   ResolvedNomination,
 } from "./nomination-resolution.ts";

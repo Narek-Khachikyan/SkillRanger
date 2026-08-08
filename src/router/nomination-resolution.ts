@@ -140,6 +140,52 @@ export const resolveOrderedPrimaryNominations = (input: {
     : { kind: "no-eligible-nomination" };
 };
 
+// The one post-retrieval primary arbitration decision consumed by composition.
+// Explicit-choice precedence, ordered eligible nominations, and deterministic
+// fallback are decided together from bounded eligibility facts and the composer
+// base rejection reason; this module never recomputes eligibility or retrieval.
+export type PrimaryArbitrationDecision =
+  | { kind: "explicit-choice-blocked"; reasonCode: `explicit-skill-choice-${string}`; baseRejectionReason: string }
+  | { kind: "explicit-choice-stands"; skillId: string; orderedPrimarySkillIds: readonly string[] }
+  | { kind: "ordered-nominations"; primarySkillIds: readonly string[] }
+  | { kind: "deterministic-fallback" };
+
+export const resolvePrimaryArbitration = (input: {
+  explicitSkillId?: string;
+  baseRejectionReason?: string;
+  eligibilityFacts: NominatedPrimaryEligibilityFacts[];
+  primaryNominationOrder: readonly string[];
+}): PrimaryArbitrationDecision => {
+  const explicitResolution = resolveExplicitSkillChoice({
+    explicitSkillId: input.explicitSkillId,
+    baseRejectionReason: input.baseRejectionReason,
+  });
+  if (explicitResolution?.kind === "explicit-choice-blocked") {
+    return {
+      kind: "explicit-choice-blocked",
+      reasonCode: explicitResolution.reasonCode,
+      baseRejectionReason: explicitResolution.baseRejectionReason,
+    };
+  }
+  const orderedResolution = resolveOrderedPrimaryNominations({
+    explicitSkillId: input.explicitSkillId,
+    primaryNominationOrder: input.primaryNominationOrder,
+    eligibilityFacts: input.eligibilityFacts,
+  });
+  if (orderedResolution.kind === "ordered-nominations") {
+    return explicitResolution?.kind === "explicit-choice-stands"
+      ? {
+          kind: "explicit-choice-stands",
+          skillId: explicitResolution.skillId,
+          orderedPrimarySkillIds: orderedResolution.primarySkillIds,
+        }
+      : { kind: "ordered-nominations", primarySkillIds: orderedResolution.primarySkillIds };
+  }
+  return explicitResolution?.kind === "explicit-choice-stands"
+    ? { kind: "explicit-choice-stands", skillId: explicitResolution.skillId, orderedPrimarySkillIds: [] }
+    : { kind: "deterministic-fallback" };
+};
+
 // Typed closed-option ambiguity question over the declared eligible primaries; the
 // continuation module owns transport, this module owns the meaning.
 export const primarySkillAmbiguityQuestionId = "primary-skill" as const;

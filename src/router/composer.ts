@@ -25,8 +25,7 @@ import { collectAvailableEvidence, evaluateRequiredEvidence, requiredEvidenceFor
 import {
   buildNominatedPrimaryEligibilityFacts,
   explicitSkillChoiceReasonCode,
-  resolveExplicitSkillChoice,
-  resolveOrderedPrimaryNominations,
+  resolvePrimaryArbitration,
   type ResolvedNomination,
 } from "./nomination-resolution.ts";
 import type { CanonicalRequirement } from "./requirements.ts";
@@ -617,26 +616,25 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
       else if (!explicitCandidate.eligibleRoles.includes("primary")) explicitBaseRejectionReason = "primary-role-ineligible";
     }
   }
-  const explicitResolution = resolveExplicitSkillChoice({
+  const explicitResolution = resolvePrimaryArbitration({
     explicitSkillId: requiredPrimarySkillId,
     baseRejectionReason: explicitBaseRejectionReason,
+    eligibilityFacts,
+    primaryNominationOrder: nomination
+      ? nomination.primaryNominationOrder.length > 0 ? nomination.primaryNominationOrder : nomination.nominationOrder
+      : [],
   });
-  if (explicitResolution?.kind === "explicit-choice-blocked") {
+  if (explicitResolution.kind === "explicit-choice-blocked") {
     return explicitPrimaryFailure(explicitResolution.baseRejectionReason);
   }
-  // Project the declared primary order onto the retrieval-eligible primaries (the
-  // required primary is resolved separately); the full nomination order only ranks
-  // when no primary nomination is declared, and score order is the fallback.
-  const orderedPrimaryResolution = nomination
-    ? resolveOrderedPrimaryNominations({
-        explicitSkillId: requiredPrimarySkillId,
-        primaryNominationOrder: nomination.primaryNominationOrder.length > 0 ? nomination.primaryNominationOrder : nomination.nominationOrder,
-        eligibilityFacts,
-      })
-    : undefined;
-  const effectivePrimaryNominationOrder = orderedPrimaryResolution?.kind === "ordered-nominations"
-    ? orderMap(orderedPrimaryResolution.primarySkillIds)
-    : undefined;
+  // One decision supplies the effective primary order: the explicit choice is
+  // moved first below; eligible non-explicit nominations rank in declared order;
+  // deterministic (score then lexical) fallback applies when none remain.
+  const effectivePrimaryNominationOrder = explicitResolution.kind === "ordered-nominations"
+    ? orderMap(explicitResolution.primarySkillIds)
+    : explicitResolution.kind === "explicit-choice-stands"
+      ? orderMap(explicitResolution.orderedPrimarySkillIds)
+      : undefined;
   const sortedPrimaryCandidates = sortedPrimary(retrieved.primaryCandidates, input.requirements, input.routingContext, effectivePrimaryNominationOrder);
   const primaryCandidates = requiredPrimarySkillId
     ? [

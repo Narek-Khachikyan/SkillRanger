@@ -12,6 +12,7 @@ import {
   resolveExplicitSkillChoice,
   resolveNomination,
   resolveOrderedPrimaryNominations,
+  resolvePrimaryArbitration,
   type ResolvedNomination,
 } from "../src/router/nomination-resolution.ts";
 import {
@@ -128,6 +129,86 @@ test("no eligible nominations yields deterministic fallback", () => {
   assert.deepEqual(resolveOrderedPrimaryNominations({ primaryNominationOrder: [], eligibilityFacts: [] }), { kind: "no-eligible-nomination" });
 });
 
+test("primary arbitration blocks an ineligible explicit choice with the exact reason code", () => {
+  assert.deepEqual(resolvePrimaryArbitration({
+    explicitSkillId: "backend.high-risk",
+    baseRejectionReason: "risk-blocked",
+    eligibilityFacts: [
+      { skillId: "backend.high-risk", primaryRoleEligible: false },
+      { skillId: "backend.auth-implementation", primaryRoleEligible: true },
+    ],
+    primaryNominationOrder: ["backend.high-risk", "backend.auth-implementation"],
+  }), {
+    kind: "explicit-choice-blocked",
+    reasonCode: "explicit-skill-choice-risk-blocked",
+    baseRejectionReason: "risk-blocked",
+  });
+});
+
+test("primary arbitration never substitutes a blocked explicit choice", () => {
+  const decision = resolvePrimaryArbitration({
+    explicitSkillId: "backend.auth-implementation",
+    baseRejectionReason: "dependency-cycle",
+    eligibilityFacts: [{ skillId: "backend.auth-implementation", primaryRoleEligible: false }],
+    primaryNominationOrder: ["backend.auth-implementation"],
+  });
+  assert.equal(decision.kind, "explicit-choice-blocked");
+  if (decision.kind === "explicit-choice-blocked") {
+    assert.equal(decision.reasonCode, "explicit-skill-choice-dependency-cycle");
+    assert.equal(decision.baseRejectionReason, "dependency-cycle");
+  }
+});
+
+test("primary arbitration keeps ordered eligible nominations beside a standing explicit choice", () => {
+  assert.deepEqual(resolvePrimaryArbitration({
+    explicitSkillId: "backend.auth-implementation",
+    eligibilityFacts: [
+      { skillId: "backend.high-risk", primaryRoleEligible: false },
+      { skillId: "backend.semantic-primary", primaryRoleEligible: true },
+      { skillId: "backend.auth-implementation", primaryRoleEligible: true },
+    ],
+    primaryNominationOrder: ["backend.high-risk", "backend.semantic-primary", "backend.auth-implementation", "backend.semantic-primary"],
+  }), {
+    kind: "explicit-choice-stands",
+    skillId: "backend.auth-implementation",
+    orderedPrimarySkillIds: ["backend.semantic-primary"],
+  });
+});
+
+test("primary arbitration orders nothing when a standing explicit choice has no other eligible nomination", () => {
+  assert.deepEqual(resolvePrimaryArbitration({
+    explicitSkillId: "backend.auth-implementation",
+    eligibilityFacts: [{ skillId: "backend.auth-implementation", primaryRoleEligible: true }],
+    primaryNominationOrder: ["backend.auth-implementation"],
+  }), {
+    kind: "explicit-choice-stands",
+    skillId: "backend.auth-implementation",
+    orderedPrimarySkillIds: [],
+  });
+});
+
+test("primary arbitration considers eligible non-explicit nominations in declared order", () => {
+  assert.deepEqual(resolvePrimaryArbitration({
+    eligibilityFacts: [
+      { skillId: "backend.high-risk", primaryRoleEligible: false },
+      { skillId: "backend.semantic-primary", primaryRoleEligible: true },
+      { skillId: "backend.auth-implementation", primaryRoleEligible: true },
+    ],
+    primaryNominationOrder: ["backend.high-risk", "backend.semantic-primary", "backend.auth-implementation"],
+  }), {
+    kind: "ordered-nominations",
+    primarySkillIds: ["backend.semantic-primary", "backend.auth-implementation"],
+  });
+});
+
+test("primary arbitration falls back deterministically when no non-explicit nomination remains eligible", () => {
+  assert.deepEqual(resolvePrimaryArbitration({
+    eligibilityFacts: [{ skillId: "backend.high-risk", primaryRoleEligible: false }],
+    primaryNominationOrder: ["backend.high-risk"],
+  }), { kind: "deterministic-fallback" });
+  assert.deepEqual(resolvePrimaryArbitration({ eligibilityFacts: [], primaryNominationOrder: [] }), { kind: "deterministic-fallback" });
+});
+
 test("a declared ambiguity between eligible primary nominations requires a typed closed-option clarification", () => {
   const resolution = resolveDeclaredPrimarySkillAmbiguity({
     declaredAmbiguityIds: ["backend.auth-implementation", "backend.semantic-primary"],
@@ -228,6 +309,12 @@ test("nomination resolution is a pure projection that never mutates its inputs",
   const snapshot = JSON.parse(JSON.stringify({ facts, order, declared })) as unknown;
   resolveExplicitSkillChoice({ explicitSkillId: "backend.high-risk", baseRejectionReason: "risk-blocked" });
   resolveOrderedPrimaryNominations({ explicitSkillId: "backend.auth-implementation", primaryNominationOrder: order, eligibilityFacts: facts });
+  resolvePrimaryArbitration({
+    explicitSkillId: "backend.auth-implementation",
+    baseRejectionReason: "risk-blocked",
+    primaryNominationOrder: order,
+    eligibilityFacts: facts,
+  });
   resolveDeclaredPrimarySkillAmbiguity({ declaredAmbiguityIds: declared, eligibilityFacts: facts });
   applyPrimarySkillAmbiguityAnswer({ answer: "backend.auth-implementation", eligibleSkillIds: declared });
   primarySkillAmbiguityQuestionFor({ skillIds: declared, displayNameFor: (skillId) => skillId });
@@ -470,6 +557,91 @@ test("facts-driven nomination decisions match the composition outcome", async ()
   });
   assert.equal(composed.status, "prepared");
   if (composed.status === "prepared") assert.equal(composed.composed.primary.skill.id, base.id);
+});
+
+test("composition outcome maps one-to-one onto the primary arbitration decision", async () => {
+  const packs = await loadRouterFixturePacks(fixtureRoot);
+  const skills = fixtureSkills(packs);
+  const base = skills.find(({ id }) => id === "backend.auth-implementation")!;
+  const higherScored = { ...base, id: "backend.higher-scored", displayName: "Higher Scored", qualityScore: 0.99, score: 0.99 };
+  const nominatedPrimarySkillIds = [higherScored.id, base.id];
+  const retrieval = retrieveSkillCandidates({
+    profile: profile(),
+    skills: [higherScored, base],
+    selectedDomainIds: ["backend-api"],
+    primaryDomainId: "backend-api",
+    targetAgent: "codex",
+    capabilities: ["filesystem", "terminal"],
+    nominatedPrimarySkillIds,
+    maxSelectedRisk: "medium",
+  });
+  const eligibilityFacts = buildNominatedPrimaryEligibilityFacts({ retrieval, skillIds: nominatedPrimarySkillIds });
+  const decision = resolvePrimaryArbitration({ eligibilityFacts, primaryNominationOrder: nominatedPrimarySkillIds });
+  assert.deepEqual(decision, { kind: "ordered-nominations", primarySkillIds: [higherScored.id, base.id] });
+  const composed = composeSkillSet({
+    profile: profile(),
+    skills: [higherScored, base],
+    selectedDomainIds: ["backend-api"],
+    primaryDomainId: "backend-api",
+    targetAgent: "codex",
+    capabilities: ["filesystem", "terminal"],
+    resolvedNomination: {
+      nominationOrder: nominatedPrimarySkillIds,
+      primaryNominationOrder: nominatedPrimarySkillIds,
+      nominatedSkillIds: nominatedPrimarySkillIds,
+      nominatedPrimarySkillIds,
+      nominatedRoles: new Map([[higherScored.id, "primary"], [base.id, "primary"]]),
+    } satisfies ResolvedNomination,
+  });
+  assert.equal(composed.status, "prepared");
+  if (composed.status === "prepared" && decision.kind === "ordered-nominations") {
+    assert.equal(composed.composed.primary.skill.id, decision.primarySkillIds[0]);
+  }
+});
+
+test("strict routing never substitutes a less relevant installed workflow for the nominated workflow", async () => {
+  const packs = await loadRouterFixturePacks(fixtureRoot);
+  const skills = fixtureSkills(packs);
+  const base = skills.find(({ id }) => id === "backend.auth-implementation")!;
+  const installed = (skill: RouterSkillMetadata, score: number, qualityScore: number): RouterSkillMetadata => ({
+    ...skill,
+    score,
+    qualityScore,
+    installed: true,
+    source: "installed",
+    lockfileMatch: true,
+    installedFileSetMatch: true,
+    strictContract: "valid",
+    contractInputAccepted: true,
+    contractMustRead: ["SKILL.md"],
+  });
+  const nominated = installed(base, 0.7, 0.8);
+  const substitute = installed({ ...base, id: "backend.a-substitute", displayName: "Substitute" }, 0.99, 0.95);
+  const input = {
+    profile: profile(),
+    skills: [substitute, nominated],
+    selectedDomainIds: ["backend-api"],
+    primaryDomainId: "backend-api",
+    targetAgent: "codex",
+    capabilities: ["filesystem", "terminal"],
+    strict: true,
+    installedSkillIds: [nominated.id, substitute.id],
+  };
+  const withoutNomination = composeSkillSet(input);
+  assert.equal(withoutNomination.status, "prepared");
+  if (withoutNomination.status === "prepared") assert.equal(withoutNomination.composed.primary.skill.id, substitute.id);
+  const withNomination = composeSkillSet({
+    ...input,
+    resolvedNomination: {
+      nominationOrder: [nominated.id],
+      primaryNominationOrder: [nominated.id],
+      nominatedSkillIds: [nominated.id],
+      nominatedPrimarySkillIds: [nominated.id],
+      nominatedRoles: new Map([[nominated.id, "primary"]]),
+    } satisfies ResolvedNomination,
+  });
+  assert.equal(withNomination.status, "prepared");
+  if (withNomination.status === "prepared") assert.equal(withNomination.composed.primary.skill.id, nominated.id);
 });
 
 test("resolveNomination puts the explicit choice first and keeps the declared order for the rest", () => {
