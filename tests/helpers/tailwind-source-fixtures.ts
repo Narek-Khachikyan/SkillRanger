@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { sourceGateSlugs } from "../../src/domains/frontend/source-validator.ts";
 import {
   buildTrustedValidatorRegistry,
   createContentChunks,
@@ -11,11 +12,7 @@ import {
 
 const sha = (value: string | Buffer) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
 export const tailwindSkillId = "frontend.tailwind-source-fixture";
-export const tailwindGateSlugs = [
-  "no-dynamic-tailwind-classes",
-  "raw-colors-reviewed",
-  "repeated-class-bundles-reviewed",
-];
+export const tailwindGateSlugs = sourceGateSlugs;
 const implementStep = { id: `${tailwindSkillId}/step/implement`, type: "implement" as const, requiredEvidenceKinds: [] as string[], ruleIds: [`${tailwindSkillId}/rule/evidence`] };
 export const tailwindContract: ExecutionContractV2 = {
   schemaVersion: "2.0", skillId: tailwindSkillId, contractVersion: "2.0.0",
