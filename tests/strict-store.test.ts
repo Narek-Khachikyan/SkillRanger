@@ -98,8 +98,28 @@ const criticValidatorContract: ExecutionContractV2 = {
   }],
 };
 
-const fixtureRun = (executionContract = contract) => createStrictSkillRun({
-  runId: "run_strict_store", domain: "frontend", targetAgent: "codex", locale: "en",
+const coreCriticContract: ExecutionContractV2 = {
+  ...criticRepairContract,
+  gates: [...criticRepairContract.gates, {
+    id: "frontend.store-test/gate/core-critic-independent",
+    level: "hard",
+    evaluator: { type: "validator", validatorId: "core/critic-independence" },
+    ruleIds: ["frontend.store-test/rule/evidence"],
+  }],
+};
+
+const coreCriticGateContract: ExecutionContractV2 = {
+  ...contract,
+  gates: [...contract.gates, {
+    id: "frontend.store-test/gate/core-critic-independent",
+    level: "hard",
+    evaluator: { type: "validator", validatorId: "core/critic-independence" },
+    ruleIds: ["frontend.store-test/rule/evidence"],
+  }],
+};
+
+const fixtureRun = (executionContract = contract, runId = "run_strict_store") => createStrictSkillRun({
+  runId, domain: "frontend", targetAgent: "codex", locale: "en",
   intent: { sha256: sha("store"), normalizedGoal: "store evidence" }, now: "2026-07-15T10:00:00.000Z",
   selectedSkills: [{
     skillId: executionContract.skillId, role: "primary", mandatory: true, version: "1.0.0",
@@ -1773,4 +1793,107 @@ test("rejects symlink evidence before creating an artifact", async () => {
     sourcePath: link, kind: "report",
     attributions: [{ skillId: contract.skillId, stepId: contract.steps[0].id, attempt: 1, relation: "produced", ruleIds: contract.rules.map(({ id }) => id) }],
   }), (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity");
+});
+
+const stageCoreCriticRun = async (root: string, store: StrictSkillRunStore, runId: string) => {
+  let run = readNextStrictChunk(fixtureRun(coreCriticContract, runId), coreCriticContract.skillId).run;
+  await store.create(run);
+  run = await completeStoreStep(root, store, run, coreCriticContract.steps[0].id, [{
+    kind: "critic-report",
+    value: criticReport("clean", "independent"),
+    validatedAs: "critic-report",
+  }]);
+  return completeStoreStep(root, store, run, coreCriticContract.steps[2].id, [
+    { kind: "report", value: {}, validatedAs: "output" },
+  ]);
+};
+
+test("core/critic-independence resolves through the trusted registry and finalizes with host-attested separation", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-core-critic-pass-"));
+  const store = new StrictSkillRunStore(root);
+  const run = await stageCoreCriticRun(root, store, "run_core_critic_pass");
+
+  const derivation = await deriveStrictValidatorResults(root, run, run.skillLedgers[0]);
+  assert.equal(derivation.artifactIntegrity.passed, true);
+  assert.equal(derivation.validatorResults["frontend.store-test/gate/core-critic-independent"].passed, true);
+  assert.match(
+    derivation.validatorResults["frontend.store-test/gate/core-critic-independent"].message ?? "",
+    /host-attested critic\/executor separation.*do not technically prove independent execution/i,
+  );
+
+  const verified = await store.verifySkill(run.runId, coreCriticContract.skillId);
+  assert.equal(verified.skillLedgers[0].outcome, "used");
+  const gateResult = verified.skillLedgers[0].verificationReports.at(-1)!.gateResults
+    .find(({ gateId }) => gateId === "frontend.store-test/gate/core-critic-independent");
+  assert.equal(gateResult?.passed, true);
+  assert.equal((await store.finalizeRun(verified.runId)).state, "verified");
+});
+
+test("core/critic-independence fails without a canonical critic report and preserves the structured failure", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-core-critic-missing-"));
+  const store = new StrictSkillRunStore(root);
+  const run = await stageCompletedEvidence(root, store, coreCriticGateContract);
+
+  const derivation = await deriveStrictValidatorResults(root, run, run.skillLedgers[0]);
+  assert.equal(derivation.validatorResults["frontend.store-test/gate/core-critic-independent"].passed, false);
+  assert.match(
+    derivation.validatorResults["frontend.store-test/gate/core-critic-independent"].message ?? "",
+    /^Critic report must be an object/,
+  );
+
+  await assert.rejects(
+    store.verifySkill(run.runId, coreCriticGateContract.skillId),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "hard-gate-failed",
+  );
+  assert.equal((await store.read(run.runId)).state, "verifying");
+});
+
+test("finalizeRun re-verifies the core/critic-independence evidence blob and rejects tampering", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-core-critic-finalize-"));
+  const store = new StrictSkillRunStore(root);
+  const prepared = await stageCoreCriticRun(root, store, "run_core_critic_finalize");
+  const verified = await store.verifySkill(prepared.runId, coreCriticContract.skillId);
+  assert.equal(verified.skillLedgers[0].outcome, "used");
+
+  const criticArtifact = verified.artifacts.find(({ validatedAs }) => validatedAs === "critic-report")!;
+  await writeFile(path.join(root, criticArtifact.path), "tampered critic report\n");
+
+  await assert.rejects(
+    store.finalizeRun(verified.runId),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "artifact-integrity",
+  );
+});
+
+test("derivation refuses to certify when the trusted registry cannot resolve core/artifact-integrity", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-core-integrity-unresolvable-"));
+  const store = new StrictSkillRunStore(root);
+  const run = await stageCompletedEvidence(root, store);
+
+  await assert.rejects(
+    deriveStrictValidatorResults(root, run, run.skillLedgers[0], undefined, TrustedValidatorRegistry.fromIds([])),
+    (error: unknown) => error instanceof StrictSkillRunError
+      && error.code === "run-integrity"
+      && /cannot resolve core\/artifact-integrity/.test(error.message),
+  );
+});
+
+test("independently persisted runs through the shared store produce identical Core gate results for identical evidence", async () => {
+  const firstRoot = await mkdtemp(path.join(os.tmpdir(), "strict-core-parity-a-"));
+  const secondRoot = await mkdtemp(path.join(os.tmpdir(), "strict-core-parity-b-"));
+  const firstStore = new StrictSkillRunStore(firstRoot);
+  const secondStore = new StrictSkillRunStore(secondRoot);
+  const first = await stageCoreCriticRun(firstRoot, firstStore, "run_core_parity_a");
+  const second = await stageCoreCriticRun(secondRoot, secondStore, "run_core_parity_b");
+
+  const firstReport = (await firstStore.verifySkill(first.runId, coreCriticContract.skillId))
+    .skillLedgers[0].verificationReports.at(-1)!;
+  const secondReport = (await secondStore.verifySkill(second.runId, coreCriticContract.skillId))
+    .skillLedgers[0].verificationReports.at(-1)!;
+
+  assert.equal(firstReport.hardPassed, secondReport.hardPassed);
+  assert.equal(firstReport.hardPassed, true);
+  assert.deepEqual(firstReport.gateResults, secondReport.gateResults);
+  assert.equal(firstReport.evidenceIds.length, secondReport.evidenceIds.length);
+  assert.equal((await firstStore.finalizeRun(first.runId)).state, "verified");
+  assert.equal((await secondStore.finalizeRun(second.runId)).state, "verified");
 });

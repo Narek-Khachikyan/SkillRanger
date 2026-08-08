@@ -426,3 +426,18 @@ test("the default store resolver rebuilds from persisted ledgers and never cache
     (error: unknown) => error instanceof StrictSkillRunError && /not part of the trusted runtime catalog/.test(error.message),
   );
 });
+
+test("the trusted registry resolves evaluators only for trusted core validator ids", () => {
+  const registry = buildTrustedValidatorRegistry([{ skillId: "frontend.performance-review" }]);
+  assert.equal(typeof registry.resolveValidator("core/artifact-integrity"), "function");
+  assert.equal(typeof registry.resolveValidator("core/critic-independence"), "function");
+  assert.equal(registry.resolveValidator("frontend/browser-hard-gates"), undefined);
+  assert.equal(registry.resolveValidator("frontend/performance-claims"), undefined);
+  assert.equal(registry.resolveValidator("core/unknown-core"), undefined);
+
+  const bare = TrustedValidatorRegistry.fromIds([]);
+  assert.equal(bare.resolveValidator("core/artifact-integrity"), undefined);
+  const coreOnly = TrustedValidatorRegistry.fromIds(["core/artifact-integrity"]);
+  assert.equal(typeof coreOnly.resolveValidator("core/artifact-integrity"), "function");
+  assert.equal(coreOnly.resolveValidator("core/critic-independence"), undefined);
+});

@@ -1,10 +1,6 @@
-import { createHash } from "node:crypto";
-import { realpath } from "node:fs/promises";
-import path from "node:path";
 import { resolveDomainPackForSkill } from "../../domains/registry.ts";
-import { readContainedFile } from "./contained-file.ts";
 import { assertValidCriticReportV2 } from "./critic.ts";
-import { isRfc3339DateTime } from "./date-time.ts";
+import { atOrAfter, canonicalCriticArtifact, parse, type Result, type ValidatorEvaluationContext } from "./core-validators.ts";
 import { deriveBrowserGateResults, deriveTailwindSourceResults } from "./frontend-evidence.ts";
 import { deriveVerificationEvidenceIds } from "./report-evidence.ts";
 import { criticSystemGateId } from "./system-gates.ts";
@@ -15,7 +11,6 @@ import {
 } from "./validator-registry.ts";
 import { StrictSkillRunError, type CriticReportV2, type EvidenceArtifact, type SkillLedger, type SkillRunV2, type StrictSystemGateResult } from "./types.ts";
 
-type Result = { passed: boolean; message?: string };
 export { criticSystemGateId };
 export type StrictValidatorDerivation = {
   artifactIntegrity: Result;
@@ -46,33 +41,8 @@ export type StrictValidatorObservation = {
   result: Readonly<Result>;
 };
 export type StrictValidatorObserver = (observation: StrictValidatorObservation) => void | Promise<void>;
-const digest = (bytes: Uint8Array) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
-const parse = <T = unknown>(artifact: EvidenceArtifact | undefined, artifactBytes: Map<string, Buffer>): T | undefined => {
-  if (!artifact) return undefined;
-  try { return JSON.parse(artifactBytes.get(artifact.artifactId)?.toString("utf8") ?? "") as T; }
-  catch { return undefined; }
-};
 const gateSlug = (gateId: string) => gateId.slice(gateId.lastIndexOf("/") + 1);
-const canonicalCriticArtifact = (ledger: SkillLedger, artifacts: EvidenceArtifact[]) => {
-  const criticAttempts = new Set(ledger.steps
-    .filter(({ type }) => type === "critic")
-    .flatMap((step) => {
-      const attempt = step.attempts.at(-1)?.attempt;
-      return attempt === undefined ? [] : [`${step.id}\u0000${attempt}`];
-    }));
-  const candidates = artifacts.filter((artifact) => artifact.validatedAs === "critic-report"
-    && artifact.attributions.some((attribution) => attribution.relation === "produced"
-      && attribution.skillId === ledger.skillId
-      && criticAttempts.has(`${attribution.stepId}\u0000${attribution.attempt}`)));
-  return candidates.at(-1);
-};
-const atOrAfter = (candidate: string, basis: string) => {
-  if (!isRfc3339DateTime(candidate) || !isRfc3339DateTime(basis)) return false;
-  const candidateTime = Date.parse(candidate);
-  const basisTime = Date.parse(basis);
-  return !Number.isNaN(candidateTime) && !Number.isNaN(basisTime) && candidateTime >= basisTime;
-};
 const repairedAfterFindings = (ledger: SkillLedger, artifactId: string) => ledger.repairRequests.some((request) => {
   if (!request.gateIds.includes(criticSystemGateId)) return false;
   const sourceReport = ledger.verificationReports[request.sourceReportIndex];
@@ -220,16 +190,6 @@ const deriveCriticSystemGate = (
     level: "hard",
   };
 };
-const readVerifiedArtifact = async (projectRoot: string, canonicalRoot: string, artifact: EvidenceArtifact) => {
-  const target = path.resolve(projectRoot, artifact.path);
-  try {
-    const { bytes } = await readContainedFile({ projectRoot, canonicalRoot, target, phase: "verification" });
-    if (bytes.byteLength !== artifact.size || digest(bytes) !== artifact.sha256) return undefined;
-    return bytes;
-  } catch {
-    return undefined;
-  }
-};
 
 export const deriveStrictValidatorResults = async (
   projectRoot: string,
@@ -242,18 +202,11 @@ export const deriveStrictValidatorResults = async (
   const ids = new Set(deriveVerificationEvidenceIds(ledger, ledger.repairIterations));
   const artifacts = run.artifacts.filter(({ artifactId }) => ids.has(artifactId));
   const artifactBytes = new Map<string, Buffer>();
-  const canonicalRoot = await realpath(projectRoot).catch(() => undefined);
-  let integrity = canonicalRoot !== undefined;
-  if (canonicalRoot) {
-    for (const artifact of artifacts) {
-      const bytes = await readVerifiedArtifact(projectRoot, canonicalRoot, artifact);
-      if (!bytes) { integrity = false; break; }
-      artifactBytes.set(artifact.artifactId, bytes);
-    }
+  const integrityEvaluator = registry.resolveValidator("core/artifact-integrity");
+  if (!integrityEvaluator) {
+    throw new StrictSkillRunError("run-integrity", "The trusted validator registry cannot resolve core/artifact-integrity.");
   }
-  const artifactIntegrity: Result = integrity
-    ? { passed: true }
-    : { passed: false, message: "Staged artifact digest, size, path, or file type changed." };
+  const artifactIntegrity = await integrityEvaluator({ projectRoot, ledger, artifacts, artifactBytes });
   if (!artifactIntegrity.passed) return registerDerivation({ artifactIntegrity, validatorResults: results, systemGateResults: [] });
 
   const output = parse(artifacts.findLast(({ validatedAs }) => validatedAs === "output"), artifactBytes);
@@ -268,7 +221,7 @@ export const deriveStrictValidatorResults = async (
       && attribution.attempt === latestSourceProducer.attempt))
     : [];
   const sourceReview = parse(implementationDiffs.at(-1), artifactBytes);
-  const criticReport = parse(canonicalCriticArtifact(ledger, artifacts), artifactBytes);
+  const criticReport = parse<CriticReportV2>(canonicalCriticArtifact(ledger, artifacts), artifactBytes);
   const criticSystemGate = deriveCriticSystemGate(ledger, artifacts, artifactBytes);
   const requiredStatesFromBrief = (() => {
     const brief = ledger.input.brief;
@@ -303,17 +256,11 @@ export const deriveStrictValidatorResults = async (
       skillId: ledger.skillId,
       skillDomain: resolveDomainPackForSkill(ledger.skillId)?.manifest.id,
     });
-    let result: Result = { passed: false, message: `Runtime validator ${validatorId} found no valid evidence.` };
-    if (validatorId === "core/artifact-integrity") result = { passed: true };
-    else if (validatorId === "core/critic-independence") {
-      try {
-        assertValidCriticReportV2(criticReport, ledger.contract);
-        result = {
-          passed: true,
-          message: "Distinct invocation IDs provide host-attested critic/executor separation; they do not technically prove independent execution.",
-        };
-      }
-      catch (error) { result = { passed: false, message: (error as Error).message }; }
+    const evaluator = registry.resolveValidator(validatorId);
+    let result: Result;
+    if (evaluator) {
+      const context: ValidatorEvaluationContext = { projectRoot, ledger, artifacts, artifactBytes, output, verificationInput, sourceReview, criticReport };
+      result = await evaluator(context);
     } else if (validatorId === "frontend/performance-claims") {
       const report = record(output) ? output : undefined;
       const findings = Array.isArray(report?.findings) ? report.findings.filter(record) : [];
@@ -335,6 +282,8 @@ export const deriveStrictValidatorResults = async (
       result = validatorId === "frontend/browser-hard-gates"
         ? browser[gateSlug(gate.id)]
         : source[gateSlug(gate.id)];
+    } else {
+      result = { passed: false, message: `Runtime validator ${validatorId} found no valid evidence.` };
     }
     results[gate.id] = result;
     if (observer) {

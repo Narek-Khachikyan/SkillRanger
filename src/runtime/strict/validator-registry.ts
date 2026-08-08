@@ -1,4 +1,5 @@
 import { getDomainPack, listDomainPacks, parseValidatorId, resolveDomainPackForSkill } from "../../domains/registry.ts";
+import { coreValidatorEvaluators, coreValidatorIds, type ValidatorEvaluator } from "./core-validators.ts";
 import {
   StrictSkillRunError,
   type ExecutionContractV2,
@@ -7,12 +8,8 @@ import {
   type StrictSkillSelection,
 } from "./types.ts";
 
+export { coreValidatorIds } from "./core-validators.ts";
 export { parseValidatorId } from "../../domains/registry.ts";
-
-export const coreValidatorIds = [
-  "core/artifact-integrity",
-  "core/critic-independence",
-] as const;
 
 const coreValidatorIdSet = new Set<string>(coreValidatorIds);
 
@@ -51,6 +48,11 @@ export class TrustedValidatorRegistry {
 
   ownerOf(id: string): string | undefined {
     return parseValidatorId(id)?.owner;
+  }
+
+  resolveValidator(id: string): ValidatorEvaluator | undefined {
+    if (!this.ids.has(id)) return undefined;
+    return coreValidatorEvaluators[id];
   }
 
   domainIds(): string[] {
