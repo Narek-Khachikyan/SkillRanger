@@ -65,15 +65,22 @@ export type {
   RouterSkillMetadata,
 } from "./composer.ts";
 export {
+  applyPrimarySkillAmbiguityAnswer,
   buildNominatedPrimaryEligibilityFacts,
   explicitSkillChoiceReasonCode,
+  primarySkillAmbiguityQuestionFor,
+  primarySkillAmbiguityQuestionId,
+  primarySkillAmbiguityQuestionText,
+  resolveDeclaredPrimarySkillAmbiguity,
   resolveExplicitSkillChoice,
   resolveOrderedPrimaryNominations,
 } from "./nomination-resolution.ts";
 export type {
+  DeclaredPrimarySkillAmbiguity,
   ExplicitSkillChoiceResolution,
   NominatedPrimaryEligibilityFacts,
   OrderedPrimaryNominationResolution,
+  PrimarySkillAmbiguityAnswer,
 } from "./nomination-resolution.ts";
 export type * from "./types.ts";
 export {

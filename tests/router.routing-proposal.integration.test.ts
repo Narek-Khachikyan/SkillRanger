@@ -606,3 +606,67 @@ test("an ambiguity continuation cannot substitute another nomination after a sel
   assert.deepEqual(continued.blockingSkillIds, ["frontend.visual-design-polish"]);
   assert.deepEqual(await runFiles(root), { runtime: [], router: [] });
 });
+
+test("invalid or mismatched ambiguity continuation inputs fail closed without run state", async () => {
+  const root = await temporaryProject();
+  const catalog = await buildSkillCatalog();
+  const binding = await completeReceipt();
+  const routingProposal = {
+    ...proposalFor(catalog.digest, binding.receipt, [
+      { skillId: "frontend.motion-design", role: "primary", confidence: 0.9, evidenceText: "make the page delightful" },
+      { skillId: "frontend.visual-design-polish", role: "primary", confidence: 0.89, evidenceText: "make the page delightful" },
+    ]),
+    ambiguity: { primarySkillIds: ["frontend.motion-design", "frontend.visual-design-polish"] },
+  };
+  const initial = await prepareTask({
+    projectRoot: root,
+    registry: { kind: "bundled", root: registry },
+    prompt: "Please make the page delightful @skillranger",
+    activation: { mode: "explicit" },
+    targetAgent: "codex",
+    routingProposal,
+  });
+  assert.equal(initial.status, "clarification_required");
+  if (initial.status !== "clarification_required") return;
+  assert.deepEqual(await runFiles(root), { runtime: [], router: [] });
+
+  await assert.rejects(
+    () => prepareTask({
+      projectRoot: root,
+      registry: { kind: "bundled", root: registry },
+      prompt: "Please make the page delightful @skillranger",
+      activation: { mode: "explicit" },
+      targetAgent: "codex",
+      routingProposal,
+      continuationToken: initial.continuationToken,
+      clarificationAnswers: [{ questionId: "primary-skill", value: "frontend.design-to-code" }],
+    }),
+    (error: unknown) => error instanceof RouterPrepareError && error.code === "clarification-answer-invalid",
+  );
+
+  const otherProposal = {
+    ...proposalFor(catalog.digest, binding.receipt, [
+      { skillId: "frontend.motion-design", role: "primary", confidence: 0.9, evidenceText: "make the page delightful" },
+      { skillId: "frontend.visual-design-polish", role: "primary", confidence: 0.89, evidenceText: "make the page delightful" },
+    ]),
+    interpretation: {
+      ...proposalFor(catalog.digest, binding.receipt).interpretation,
+      qualityGoals: ["performance"],
+    },
+    ambiguity: { primarySkillIds: ["frontend.motion-design", "frontend.visual-design-polish"] },
+  };
+  await assert.rejects(
+    () => prepareTask({
+      projectRoot: root,
+      registry: { kind: "bundled", root: registry },
+      prompt: "Please make the page delightful @skillranger",
+      activation: { mode: "explicit" },
+      targetAgent: "codex",
+      routingProposal: otherProposal,
+      continuationToken: initial.continuationToken,
+      clarificationAnswers: [{ questionId: "primary-skill", value: "frontend.motion-design" }],
+    }),
+    (error: unknown) => error instanceof RouterPrepareError && error.code === "continuation-invalid",
+  );
+  assert.deepEqual(await runFiles(root), { runtime: [], router: [] });
+});

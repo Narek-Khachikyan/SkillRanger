@@ -19,7 +19,7 @@ import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "./vocabulary/
 import { RoutingVocabularyValidationError } from "./vocabulary/validate.ts";
 import { validateSemanticHints } from "./semantic-hints.ts";
 import { analyzeTask } from "./analyzer.ts";
-import { buildNominatedPrimaryEligibilityFacts } from "./nomination-resolution.ts";
+import { applyPrimarySkillAmbiguityAnswer, buildNominatedPrimaryEligibilityFacts, primarySkillAmbiguityQuestionFor, primarySkillAmbiguityQuestionId, resolveDeclaredPrimarySkillAmbiguity } from "./nomination-resolution.ts";
 import { composeSkillSet, defaultRouterLimits, retrieveSkillCandidates, type RouterSkillMetadata } from "./composer.ts";
 import { createContinuationToken, validateContinuation, type RouterClarificationQuestion } from "./continuation.ts";
 import { defaultRouterThresholds, normalizeDomainAlias, resolveDomains } from "./resolver.ts";
@@ -213,15 +213,6 @@ const questionFor = (domains: DomainCandidate[]): RouterClarificationQuestion[] 
   id: "primary-domain",
   text: "Which target surface should be the primary workflow?",
   options: domains.map(({ id }) => ({ value: canonical(id), label: id })),
-}];
-
-const questionForSkills = (skillIds: string[], catalog: Awaited<ReturnType<typeof buildSkillCatalog>>): RouterClarificationQuestion[] => [{
-  id: "primary-skill",
-  text: "Which nominated skill should be the primary workflow?",
-  options: skillIds.map((skillId) => ({
-    value: skillId,
-    label: catalog.skills.find(({ skillId: id }) => id === skillId)?.displayName ?? skillId,
-  })),
 }];
 
 const recommendationsFor = (selections: { primary: PreparedSkillSelection; environment: PreparedSkillSelection[]; companions: PreparedSkillSelection[]; verification: PreparedSkillSelection[]; agentContext: PreparedSkillSelection[] }) => [
@@ -605,16 +596,19 @@ export const prepareTask = async (
   const nominatedPrimaryFacts = ambiguityProbe
     ? buildNominatedPrimaryEligibilityFacts({ retrieval: ambiguityProbe, nominatedPrimarySkillIds })
     : [];
-  const ineligibleSkillIds = new Set(nominatedPrimaryFacts.filter(({ primaryRoleEligible }) => !primaryRoleEligible).map(({ skillId }) => skillId));
-  const ineligibleAmbiguityIds = declaredAmbiguityIds.filter((skillId) => ineligibleSkillIds.has(canonical(skillId)));
-  if (ineligibleAmbiguityIds.length > 0) {
+  const declaredAmbiguityResolution = resolveDeclaredPrimarySkillAmbiguity({
+    declaredAmbiguityIds,
+    explicitSkillId,
+    eligibilityFacts: nominatedPrimaryFacts,
+  });
+  if (declaredAmbiguityResolution.kind === "ambiguity-ineligible") {
     throw new RouterPrepareError(
       "routing-proposal-invalid",
-      `Declared primary ambiguity choices are not eligible primary nominations: ${ineligibleAmbiguityIds.join(", ")}.`,
+      `Declared primary ambiguity choices are not eligible primary nominations: ${declaredAmbiguityResolution.ineligibleSkillIds.join(", ")}.`,
     );
   }
-  const skillAmbiguityIds = ambiguityProbe && ineligibleAmbiguityIds.length === 0
-    ? declaredAmbiguityIds
+  const skillAmbiguityIds = declaredAmbiguityResolution.kind === "ambiguity-eligible"
+    ? declaredAmbiguityResolution.skillIds
     : [];
   const projectIdentity = await new RouterStore(input.projectRoot).projectIdentity();
   const continuationBinding = {
@@ -640,9 +634,15 @@ export const prepareTask = async (
   if (input.continuationToken && !resolution.clarificationRequired && skillAmbiguityIds.length === 0) {
     throw new RouterPrepareError("continuation-invalid", "Continuation input does not match a routing clarification.");
   }
+  const skillAmbiguityQuestion = skillAmbiguityIds.length > 0 && catalogSnapshot
+    ? primarySkillAmbiguityQuestionFor({
+        skillIds: skillAmbiguityIds,
+        displayNameFor: (skillId) => catalogSnapshot.skills.find(({ skillId: id }) => id === skillId)?.displayName,
+      })
+    : undefined;
   const questions = [
     ...(resolution.clarificationRequired ? questionFor(resolution.ambiguousDomainIds.map((id) => resolution.candidates.find((candidate) => candidate.id === id)!).filter(Boolean)) : []),
-    ...(skillAmbiguityIds.length > 0 && catalogSnapshot ? questionForSkills(skillAmbiguityIds, catalogSnapshot) : []),
+    ...(skillAmbiguityQuestion ? [skillAmbiguityQuestion] : []),
   ];
   let selectedPrimary = resolution.primaryDomainId;
   let selectedNominationPrimary: string | undefined;
@@ -659,10 +659,11 @@ export const prepareTask = async (
         selectedPrimary = normalizeDomainAlias(domainAnswer?.value ?? "", domains);
         if (!selectedPrimary || !resolution.ambiguousDomainIds.includes(selectedPrimary)) throw new RouterPrepareError("clarification-answer-invalid", "Clarification answer does not identify an available primary domain.");
       }
-      const skillAnswer = validated.answers.find(({ questionId }) => questionId === "primary-skill");
+      const skillAnswer = validated.answers.find(({ questionId }) => questionId === primarySkillAmbiguityQuestionId);
       if (skillAmbiguityIds.length > 0) {
-        if (!skillAnswer || !skillAmbiguityIds.includes(canonical(skillAnswer.value))) throw new RouterPrepareError("clarification-answer-invalid", "Clarification answer does not identify an available nominated skill.");
-        selectedNominationPrimary = canonical(skillAnswer.value);
+        const applied = applyPrimarySkillAmbiguityAnswer({ answer: skillAnswer?.value, eligibleSkillIds: skillAmbiguityIds });
+        if (applied.kind === "not-a-declared-option") throw new RouterPrepareError("clarification-answer-invalid", "Clarification answer does not identify an available nominated skill.");
+        selectedNominationPrimary = applied.skillId;
       }
     } catch (error) {
       if (error instanceof RouterPrepareError) throw error;

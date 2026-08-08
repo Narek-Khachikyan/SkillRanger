@@ -1,4 +1,5 @@
 import type { RetrieveSkillCandidatesResult } from "./composer.ts";
+import type { RouterClarificationQuestion } from "./continuation.ts";
 
 const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
 
@@ -105,4 +106,79 @@ export const resolveOrderedPrimaryNominations = (input: {
   return primarySkillIds.length > 0
     ? { kind: "ordered-nominations", primarySkillIds }
     : { kind: "no-eligible-nomination" };
+};
+
+// The declared primary-skill ambiguity question is a typed closed-option
+// clarification: the id and text are stable public meanings, and the options are
+// exactly the declared eligible primary nominations. The continuation module owns
+// the cryptographic transport of the question set; this module owns its meaning.
+export const primarySkillAmbiguityQuestionId = "primary-skill" as const;
+export const primarySkillAmbiguityQuestionText = "Which nominated skill should be the primary workflow?" as const;
+
+// Outcome of deciding a declared primary-skill ambiguity against the precomputed
+// eligibility facts: no ambiguity, a rejected declaration naming the ineligible
+// ids in declared order, or an eligible declaration the caller must clarify.
+export type DeclaredPrimarySkillAmbiguity =
+  | { kind: "no-ambiguity" }
+  | { kind: "ambiguity-ineligible"; ineligibleSkillIds: string[] }
+  | { kind: "ambiguity-eligible"; skillIds: string[] };
+
+// Decides what a declared primary-skill ambiguity means from precomputed
+// eligibility facts. The explicit user choice outranks the declaration, and an
+// empty declaration means no ambiguity. When every declared id is an eligible
+// primary nomination the caller must ask the typed closed-option clarification;
+// when any declared id is not eligible the declaration is rejected as a whole.
+// Eligibility itself is never recomputed here.
+export const resolveDeclaredPrimarySkillAmbiguity = (input: {
+  declaredAmbiguityIds: readonly string[];
+  explicitSkillId?: string;
+  eligibilityFacts: NominatedPrimaryEligibilityFacts[];
+}): DeclaredPrimarySkillAmbiguity => {
+  if (input.declaredAmbiguityIds.length === 0 || input.explicitSkillId !== undefined) {
+    return { kind: "no-ambiguity" };
+  }
+  const ineligibleIds = new Set(
+    input.eligibilityFacts.filter(({ primaryRoleEligible }) => !primaryRoleEligible).map(({ skillId }) => canonical(skillId)),
+  );
+  const ineligibleSkillIds = [...new Set(input.declaredAmbiguityIds.filter((skillId) => ineligibleIds.has(canonical(skillId))))];
+  return ineligibleSkillIds.length > 0
+    ? { kind: "ambiguity-ineligible", ineligibleSkillIds }
+    : { kind: "ambiguity-eligible", skillIds: [...new Set(input.declaredAmbiguityIds)] };
+};
+
+// Builds the typed closed-option clarification question for the declared eligible
+// primary nominations. Display labels come from the caller (the catalog), never
+// from this module.
+export const primarySkillAmbiguityQuestionFor = (input: {
+  skillIds: readonly string[];
+  displayNameFor: (skillId: string) => string | undefined;
+}): RouterClarificationQuestion => ({
+  id: primarySkillAmbiguityQuestionId,
+  text: primarySkillAmbiguityQuestionText,
+  options: input.skillIds.map((skillId) => ({
+    value: skillId,
+    label: input.displayNameFor(skillId) ?? skillId,
+  })),
+});
+
+// Interpretation of an answer to the declared primary-skill ambiguity: a
+// selection of exactly one declared eligible primary nomination, or a value that
+// does not identify one.
+export type PrimarySkillAmbiguityAnswer =
+  | { kind: "selected-primary"; skillId: string }
+  | { kind: "not-a-declared-option" };
+
+// Interprets the answer to the declared primary-skill ambiguity: it must name
+// exactly one of the declared eligible primary nominations. The caller applies
+// the existing precedence rules, moving the selection to the front of the
+// effective nomination order and binding it as the required primary.
+export const applyPrimarySkillAmbiguityAnswer = (input: {
+  answer?: string;
+  eligibleSkillIds: readonly string[];
+}): PrimarySkillAmbiguityAnswer => {
+  if (input.answer === undefined) return { kind: "not-a-declared-option" };
+  const skillId = canonical(input.answer);
+  return input.eligibleSkillIds.some((eligibleSkillId) => canonical(eligibleSkillId) === skillId)
+    ? { kind: "selected-primary", skillId }
+    : { kind: "not-a-declared-option" };
 };

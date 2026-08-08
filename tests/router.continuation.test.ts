@@ -77,6 +77,57 @@ test("canonical equivalent routing projections replay during the token lifetime"
   }));
 });
 
+test("the routing projection binding keeps domains, proposal digest, nomination order, and skill ambiguity ids", () => {
+  const fullProjection = {
+    domains: ["frontend", "qa-testing"],
+    routingProposalDigest: "sha256:proposal",
+    nominationOrder: ["frontend.motion-design", "frontend.visual-design-polish"],
+    skillAmbiguityIds: ["frontend.motion-design", "frontend.visual-design-polish"],
+  };
+  const ambiguityQuestions: RouterClarificationQuestion[] = [{
+    id: "primary-skill",
+    text: "Which nominated skill should be the primary workflow?",
+    options: [
+      { value: "frontend.motion-design", label: "Motion Design" },
+      { value: "frontend.visual-design-polish", label: "Visual Design Polish" },
+    ],
+  }];
+  const created = createContinuationToken(binding({ routingProjection: fullProjection }), ambiguityQuestions, { secret, now: 1_000 });
+  assert.doesNotThrow(() => verifyContinuationToken({
+    token: created.token,
+    binding: binding({
+      routingProjection: {
+        nominationOrder: ["frontend.motion-design", "frontend.visual-design-polish"],
+        skillAmbiguityIds: ["frontend.motion-design", "frontend.visual-design-polish"],
+        domains: ["frontend", "qa-testing"],
+        routingProposalDigest: "sha256:proposal",
+      },
+    }),
+    questions: ambiguityQuestions,
+    secret,
+    now: 1_001,
+  }));
+  for (const projection of [
+    { ...fullProjection, domains: ["backend", "qa-testing"] },
+    { ...fullProjection, routingProposalDigest: "sha256:other-proposal" },
+    { ...fullProjection, nominationOrder: ["frontend.visual-design-polish", "frontend.motion-design"] },
+    { ...fullProjection, skillAmbiguityIds: ["frontend.motion-design"] },
+    { ...fullProjection, skillAmbiguityIds: [] },
+    { ...fullProjection, extra: "field" },
+  ]) {
+    assert.throws(
+      () => verifyContinuationToken({
+        token: created.token,
+        binding: binding({ routingProjection: projection }),
+        questions: ambiguityQuestions,
+        secret,
+        now: 1_001,
+      }),
+      (error) => error instanceof ContinuationTokenError && error.code === "continuation-invalid",
+    );
+  }
+});
+
 test("tampering, expiration, and cross-project reuse fail closed", () => {
   const created = createContinuationToken(binding(), questions, { secret, now: 1_000 });
   const [header, payload, signature] = created.token.split(".");
