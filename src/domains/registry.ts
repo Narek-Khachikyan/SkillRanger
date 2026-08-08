@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { defaultDomainsRoot, packageRoot } from "../paths.ts";
+import { parseValidatorId, validatorIdPattern } from "../runtime/strict/validator-id.ts";
 import {
   objectDepth,
   normalizeMetadataToken,
@@ -203,7 +204,6 @@ export const loadBundledDomainManifestSync = (input: {
 
 const registered = new Map<string, DomainPack>();
 
-import { parseValidatorId, validatorIdPattern } from "../runtime/strict/validator-id.ts";
 export { parseValidatorId, validatorIdPattern };
 
 export const validateDomainValidatorRegistrations = (input: {
