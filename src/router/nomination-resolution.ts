@@ -36,13 +36,14 @@ export const explicitSkillChoiceReasonCode = (baseRejectionReason: string): `exp
   `explicit-skill-choice-${baseRejectionReason}`;
 
 // Explicit-choice precedence: the choice stands, or is blocked by a base reason.
-export type ExplicitSkillChoiceResolution =
+// Module-private implementation detail of resolvePrimaryArbitration.
+type ExplicitSkillChoiceResolution =
   | { kind: "explicit-choice-stands"; skillId: string }
   | { kind: "explicit-choice-blocked"; reasonCode: `explicit-skill-choice-${string}`; baseRejectionReason: string };
 
 // The composer determines the base reason; this module only projects it and owns
 // the precedence decision. A blocked choice is never substituted.
-export const resolveExplicitSkillChoice = (input: {
+const resolveExplicitSkillChoice = (input: {
   explicitSkillId?: string;
   baseRejectionReason?: string;
 }): ExplicitSkillChoiceResolution | undefined => {
@@ -114,11 +115,12 @@ export const resolveNomination = (input: {
 // Projects the declared primary nomination order onto the eligible primary
 // nominations; the explicit choice is excluded (resolved separately). When no
 // nomination remains eligible the caller applies deterministic fallback.
-export type OrderedPrimaryNominationResolution =
+// Module-private implementation detail of resolvePrimaryArbitration.
+type OrderedPrimaryNominationResolution =
   | { kind: "ordered-nominations"; primarySkillIds: string[] }
   | { kind: "no-eligible-nomination" };
 
-export const resolveOrderedPrimaryNominations = (input: {
+const resolveOrderedPrimaryNominations = (input: {
   explicitSkillId?: string;
   primaryNominationOrder: Iterable<string>;
   eligibilityFacts: NominatedPrimaryEligibilityFacts[];
@@ -144,10 +146,13 @@ export const resolveOrderedPrimaryNominations = (input: {
 // Explicit-choice precedence, ordered eligible nominations, and deterministic
 // fallback are decided together from bounded eligibility facts and the composer
 // base rejection reason; this module never recomputes eligibility or retrieval.
+// The primaryOrder field carries the complete effective primary order, so the
+// caller never re-applies nomination-order policy: the explicit choice ranks
+// first, then eligible non-explicit nominations in declared order.
 export type PrimaryArbitrationDecision =
   | { kind: "explicit-choice-blocked"; reasonCode: `explicit-skill-choice-${string}`; baseRejectionReason: string }
-  | { kind: "explicit-choice-stands"; skillId: string; orderedPrimarySkillIds: readonly string[] }
-  | { kind: "ordered-nominations"; primarySkillIds: readonly string[] }
+  | { kind: "explicit-choice-stands"; skillId: string; primaryOrder: readonly string[] }
+  | { kind: "ordered-nominations"; primaryOrder: readonly string[] }
   | { kind: "deterministic-fallback" };
 
 export const resolvePrimaryArbitration = (input: {
@@ -177,12 +182,12 @@ export const resolvePrimaryArbitration = (input: {
       ? {
           kind: "explicit-choice-stands",
           skillId: explicitResolution.skillId,
-          orderedPrimarySkillIds: orderedResolution.primarySkillIds,
+          primaryOrder: [explicitResolution.skillId, ...orderedResolution.primarySkillIds],
         }
-      : { kind: "ordered-nominations", primarySkillIds: orderedResolution.primarySkillIds };
+      : { kind: "ordered-nominations", primaryOrder: orderedResolution.primarySkillIds };
   }
   return explicitResolution?.kind === "explicit-choice-stands"
-    ? { kind: "explicit-choice-stands", skillId: explicitResolution.skillId, orderedPrimarySkillIds: [] }
+    ? { kind: "explicit-choice-stands", skillId: explicitResolution.skillId, primaryOrder: [explicitResolution.skillId] }
     : { kind: "deterministic-fallback" };
 };
 

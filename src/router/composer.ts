@@ -26,6 +26,7 @@ import {
   buildNominatedPrimaryEligibilityFacts,
   explicitSkillChoiceReasonCode,
   resolvePrimaryArbitration,
+  type NominatedPrimaryEligibilityFacts,
   type ResolvedNomination,
 } from "./nomination-resolution.ts";
 import type { CanonicalRequirement } from "./requirements.ts";
@@ -147,6 +148,11 @@ export type ComposeSkillSetInput = Omit<RetrieveSkillCandidatesInput, "nominated
   resolvedNomination?: ResolvedNomination;
   candidates?: RouterCandidate[];
   retrievalResult?: RetrieveSkillCandidatesResult;
+  // Precomputed eligibility facts for the nominated primaries, produced by the
+  // retrieval owner from the same retrieval result (e.g. the ambiguity probe).
+  // When supplied together with retrievalResult, they replace the recomputed
+  // projection so eligibility is never derived twice from the same result.
+  nominatedPrimaryEligibilityFacts?: NominatedPrimaryEligibilityFacts[];
   domainCandidates?: DomainCandidate[];
   fingerprint?: ProjectFingerprint;
   limits?: Partial<RouterLimits>;
@@ -597,10 +603,11 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
         : retrievalInput)), nominatedRoles);
   const byId = new Map(retrieved.candidates.map((candidate) => [canonical(candidate.skill.id), candidate]));
   const registryById = new Map(input.skills.map((skill) => [canonical(skill.id), skill]));
-  const eligibilityFacts = buildNominatedPrimaryEligibilityFacts({
-    retrieval: retrieved,
-    skillIds: nomination ? nomination.nominationOrder : [],
-  });
+  const eligibilityFacts = input.nominatedPrimaryEligibilityFacts
+    ?? buildNominatedPrimaryEligibilityFacts({
+      retrieval: retrieved,
+      skillIds: nomination ? nomination.nominationOrder : [],
+    });
   const explicitPrimaryFailure = (reason: string): ComposeSkillSetResult => ({
     status: "no_matching_skills",
     reasonCode: explicitSkillChoiceReasonCode(reason),
@@ -627,21 +634,15 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
   if (explicitResolution.kind === "explicit-choice-blocked") {
     return explicitPrimaryFailure(explicitResolution.baseRejectionReason);
   }
-  // One decision supplies the effective primary order: the explicit choice is
-  // moved first below; eligible non-explicit nominations rank in declared order;
-  // deterministic (score then lexical) fallback applies when none remain.
-  const effectivePrimaryNominationOrder = explicitResolution.kind === "ordered-nominations"
-    ? orderMap(explicitResolution.primarySkillIds)
-    : explicitResolution.kind === "explicit-choice-stands"
-      ? orderMap(explicitResolution.orderedPrimarySkillIds)
-      : undefined;
+  // One decision supplies the complete effective primary order: the explicit
+  // choice ranks first, eligible non-explicit nominations rank in declared
+  // order, and deterministic (score then lexical) fallback applies when the
+  // decision carries no order. No nomination-order policy is re-derived here.
+  const effectivePrimaryNominationOrder = explicitResolution.kind === "deterministic-fallback"
+    ? undefined
+    : orderMap(explicitResolution.primaryOrder);
   const sortedPrimaryCandidates = sortedPrimary(retrieved.primaryCandidates, input.requirements, input.routingContext, effectivePrimaryNominationOrder);
-  const primaryCandidates = requiredPrimarySkillId
-    ? [
-      ...sortedPrimaryCandidates.filter(({ skill }) => canonical(skill.id) === requiredPrimarySkillId),
-      ...sortedPrimaryCandidates.filter(({ skill }) => canonical(skill.id) !== requiredPrimarySkillId),
-    ]
-    : sortedPrimaryCandidates;
+  const primaryCandidates = sortedPrimaryCandidates;
   const requiredDecomposition = decomposition(input.profile, retrieved.candidates, input.skills);
   if (requiredDecomposition) return { status: "decomposition_required", subtasks: requiredDecomposition, rejections: retrieved.rejections };
   if (primaryCandidates.length === 0) {

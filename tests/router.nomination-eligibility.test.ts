@@ -151,14 +151,23 @@ test("composition reusing the precomputed eligibility result matches internal re
     nominatedRoles: new Map(nominated.map(({ id }) => [id, "primary" as const])),
   };
   const precomputed = retrieveSkillCandidates(retrievalInput);
+  const facts = buildNominatedPrimaryEligibilityFacts({ retrieval: precomputed, skillIds: nominatedIds });
   const direct = composeSkillSet({ ...retrievalInput, resolvedNomination });
   const reused = composeSkillSet({ ...retrievalInput, resolvedNomination, retrievalResult: precomputed });
+  const reusedFacts = composeSkillSet({
+    ...retrievalInput,
+    resolvedNomination,
+    retrievalResult: precomputed,
+    nominatedPrimaryEligibilityFacts: facts,
+  });
 
   assert.equal(canonicalizeJson(direct), canonicalizeJson(reused));
+  assert.equal(canonicalizeJson(direct), canonicalizeJson(reusedFacts));
   assert.equal(direct.status, "prepared");
   if (direct.status === "prepared") {
     assert.equal(direct.composed.primary.skill.id, "backend.auth-implementation");
     assert.deepEqual(reused.composed.selections, direct.composed.selections);
+    assert.deepEqual(reusedFacts.composed.selections, direct.composed.selections);
   }
 });
 
