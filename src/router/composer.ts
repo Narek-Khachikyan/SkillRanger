@@ -137,8 +137,45 @@ export type RetrieveSkillCandidatesResult = {
   rejections: CandidateRejection[];
 };
 
+// Bounded eligibility facts for the nomination decision: whether a nominated primary
+// candidate may fill the primary role and, if not, the existing base rejection reason.
+// The shape intentionally exposes no candidate scores, capabilities, project data, or
+// runtime state. It is produced from an existing RetrieveSkillCandidatesResult and never
+// recomputes eligibility rules.
+export type NominatedPrimaryEligibilityFacts = {
+  skillId: string;
+  primaryRoleEligible: boolean;
+  baseRejectionReason?: string;
+};
+
+export const buildNominatedPrimaryEligibilityFacts = (input: {
+  retrieval: RetrieveSkillCandidatesResult;
+  nominatedPrimarySkillIds: Iterable<string>;
+}): NominatedPrimaryEligibilityFacts[] => {
+  const primaryEligibleIds = new Set(input.retrieval.primaryCandidates.map(({ skill }) => canonical(skill.id)));
+  const firstRejectionBySkillId = new Map<string, string>();
+  for (const { skillId, reason } of input.retrieval.rejections) {
+    const id = canonical(skillId);
+    if (!firstRejectionBySkillId.has(id)) firstRejectionBySkillId.set(id, reason);
+  }
+  const seen = new Set<string>();
+  const facts: NominatedPrimaryEligibilityFacts[] = [];
+  for (const rawSkillId of input.nominatedPrimarySkillIds) {
+    const skillId = canonical(rawSkillId);
+    if (seen.has(skillId)) continue;
+    seen.add(skillId);
+    const primaryRoleEligible = primaryEligibleIds.has(skillId);
+    const baseRejectionReason = firstRejectionBySkillId.get(skillId);
+    facts.push(primaryRoleEligible || baseRejectionReason === undefined
+      ? { skillId, primaryRoleEligible }
+      : { skillId, primaryRoleEligible, baseRejectionReason });
+  }
+  return facts;
+};
+
 export type ComposeSkillSetInput = RetrieveSkillCandidatesInput & {
   candidates?: RouterCandidate[];
+  retrievalResult?: RetrieveSkillCandidatesResult;
   domainCandidates?: DomainCandidate[];
   fingerprint?: ProjectFingerprint;
   limits?: Partial<RouterLimits>;
@@ -570,11 +607,12 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
   const nominatedPrimarySkillIds = unique(input.nominatedPrimarySkillIds ?? []);
   const proposalDrivenStrictRetrieval = Boolean(input.strict && nominatedPrimarySkillIds.size > 0);
   const requiredPrimarySkillId = input.requiredPrimarySkillId ? canonical(input.requiredPrimarySkillId) : undefined;
-  const retrieved = applyNominatedRoles(input.candidates
-    ? { candidates: input.candidates, primaryCandidates: input.candidates.filter(({ eligibleRoles }) => eligibleRoles.includes("primary")), rejections: [] }
-    : retrieveSkillCandidates(input.strict
-      ? { ...input, strict: false, deferRequiredCapabilities: !proposalDrivenStrictRetrieval, nominatedPrimarySkillIds, maxSelectedRisk: limits.maxSelectedRisk }
-      : { ...input, maxSelectedRisk: limits.maxSelectedRisk }), input.nominatedRoles);
+  const retrieved = applyNominatedRoles(input.retrievalResult
+    ?? (input.candidates
+      ? { candidates: input.candidates, primaryCandidates: input.candidates.filter(({ eligibleRoles }) => eligibleRoles.includes("primary")), rejections: [] }
+      : retrieveSkillCandidates(input.strict
+        ? { ...input, strict: false, deferRequiredCapabilities: !proposalDrivenStrictRetrieval, nominatedPrimarySkillIds, maxSelectedRisk: limits.maxSelectedRisk }
+        : { ...input, maxSelectedRisk: limits.maxSelectedRisk })), input.nominatedRoles);
   const byId = new Map(retrieved.candidates.map((candidate) => [canonical(candidate.skill.id), candidate]));
   const registryById = new Map(input.skills.map((skill) => [canonical(skill.id), skill]));
   const explicitPrimaryFailure = (reason: string): ComposeSkillSetResult => ({

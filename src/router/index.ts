@@ -49,6 +49,7 @@ export type {
 } from "./resolver.ts";
 export {
   assignSelectedRole,
+  buildNominatedPrimaryEligibilityFacts,
   composeSkillSet,
   defaultRouterLimits,
   retrieveSkillCandidates,
@@ -58,6 +59,7 @@ export type {
   ComposeSkillSetInput,
   ComposeSkillSetResult,
   ComposedSkillSet,
+  NominatedPrimaryEligibilityFacts,
   RetrieveSkillCandidatesInput,
   RetrieveSkillCandidatesResult,
   RouterCandidate,

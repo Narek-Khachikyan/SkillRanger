@@ -19,7 +19,7 @@ import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "./vocabulary/
 import { RoutingVocabularyValidationError } from "./vocabulary/validate.ts";
 import { validateSemanticHints } from "./semantic-hints.ts";
 import { analyzeTask } from "./analyzer.ts";
-import { composeSkillSet, defaultRouterLimits, retrieveSkillCandidates, type RouterSkillMetadata } from "./composer.ts";
+import { buildNominatedPrimaryEligibilityFacts, composeSkillSet, defaultRouterLimits, retrieveSkillCandidates, type RouterSkillMetadata } from "./composer.ts";
 import { createContinuationToken, validateContinuation, type RouterClarificationQuestion } from "./continuation.ts";
 import { defaultRouterThresholds, normalizeDomainAlias, resolveDomains } from "./resolver.ts";
 import { parseTrigger } from "./trigger.ts";
@@ -549,6 +549,36 @@ export const prepareTask = async (
   if (explicitSkillId) nominatedRoles.set(explicitSkillId, "primary");
   const resolution = resolveDomains({ profile: analysis.profile, domains, skills: allMetadata, fingerprint, availableDomainIds: packs.map(({ id }) => id), thresholds: defaultRouterThresholds, routingIntentTags: analysis.routingIntentTags, routingContext, routingSignals: analysis.matchedSignals });
   const declaredAmbiguityIds = routingProposal?.ambiguity?.primarySkillIds ?? [];
+  // A continuation answer only permutes the primary nomination order (the selected
+  // nomination moves to the front), so the domain union below is permutation-invariant
+  // across clarification calls and matches the historical composition input.
+  const skillById = new Map(allMetadata.map((skill) => [canonical(skill.id), skill]));
+  const nominatedPrimaryDomains: string[] = [];
+  const visitedNominatedSkills = new Set<string>();
+  const pendingNominatedSkills = [...primaryNominationOrder];
+  while (pendingNominatedSkills.length > 0) {
+    const skillId = pendingNominatedSkills.shift()!;
+    const normalizedSkillId = canonical(skillId);
+    if (visitedNominatedSkills.has(normalizedSkillId)) continue;
+    visitedNominatedSkills.add(normalizedSkillId);
+    const skill = skillById.get(normalizedSkillId);
+    if (!skill) continue;
+    nominatedPrimaryDomains.push(...skill.domains);
+    pendingNominatedSkills.push(...(skill.dependencies ?? []));
+  }
+  const routingCandidates = [...resolution.candidates];
+  const routingCandidateIds = new Set(routingCandidates.map(({ id }) => canonical(id)));
+  for (const domainId of nominatedPrimaryDomains) {
+    const normalizedDomainId = canonical(domainId);
+    if (routingCandidateIds.has(normalizedDomainId)) continue;
+    routingCandidateIds.add(normalizedDomainId);
+    routingCandidates.push({ id: domainId, confidence: 0.75, role: "supporting", available: true, reasons: ["proposal-domain-binding"], evidence: [] });
+  }
+  const firstPrimaryNomination = routingProposal?.nominations.find(({ role }) => role === "primary");
+  const firstPrimaryNominationDomain = firstPrimaryNomination && catalogSnapshot
+    ? catalogSnapshot.skills.find(({ skillId }) => skillId === firstPrimaryNomination.skillId)?.domains[0]
+    : undefined;
+  const probeSelectedPrimary = routingProposal && firstPrimaryNominationDomain ? firstPrimaryNominationDomain : resolution.primaryDomainId;
   const ambiguityProbe = declaredAmbiguityIds.length > 0 && !explicitSkillId
     ? retrieveSkillCandidates({
       profile: analysis.profile,
@@ -558,27 +588,31 @@ export const prepareTask = async (
       capabilities,
       strict: false,
       installedSkillIds: allMetadata.filter(({ installed }) => installed).map(({ id }) => id),
-      selectedDomainIds: packs.map(({ id }) => id),
+      selectedDomainIds: routingCandidates.map(({ id }) => id),
+      primaryDomainId: probeSelectedPrimary,
       fingerprint,
       routingDate,
       routingIntentTags: analysis.routingIntentTags,
       routingContext,
       matchedSignals: analysis.matchedSignals,
-      nominatedSkillIds: declaredAmbiguityIds,
-      nominatedPrimarySkillIds: declaredAmbiguityIds,
+      nominatedSkillIds,
+      nominatedPrimarySkillIds,
+      nominatedRoles,
       maxSelectedRisk: config.router.maxSelectedRisk,
     })
     : undefined;
-  const ineligibleAmbiguityIds = ambiguityProbe
-    ? declaredAmbiguityIds.filter((skillId) => !ambiguityProbe.primaryCandidates.some(({ skill }) => skill.id === skillId))
+  const nominatedPrimaryFacts = ambiguityProbe
+    ? buildNominatedPrimaryEligibilityFacts({ retrieval: ambiguityProbe, nominatedPrimarySkillIds })
     : [];
+  const ineligibleSkillIds = new Set(nominatedPrimaryFacts.filter(({ primaryRoleEligible }) => !primaryRoleEligible).map(({ skillId }) => skillId));
+  const ineligibleAmbiguityIds = declaredAmbiguityIds.filter((skillId) => ineligibleSkillIds.has(canonical(skillId)));
   if (ineligibleAmbiguityIds.length > 0) {
     throw new RouterPrepareError(
       "routing-proposal-invalid",
       `Declared primary ambiguity choices are not eligible primary nominations: ${ineligibleAmbiguityIds.join(", ")}.`,
     );
   }
-  const skillAmbiguityIds = ambiguityProbe && declaredAmbiguityIds.every((skillId) => ambiguityProbe.primaryCandidates.some(({ skill }) => skill.id === skillId))
+  const skillAmbiguityIds = ambiguityProbe && ineligibleAmbiguityIds.length === 0
     ? declaredAmbiguityIds
     : [];
   const projectIdentity = await new RouterStore(input.projectRoot).projectIdentity();
@@ -635,7 +669,7 @@ export const prepareTask = async (
       throw new RouterPrepareError(code, "Continuation token or clarification answers are invalid.");
     }
   }
-  const proposalPrimarySkillId = selectedNominationPrimary ?? explicitSkillId ?? routingProposal?.nominations.find(({ role }) => role === "primary")?.skillId;
+  const proposalPrimarySkillId = selectedNominationPrimary ?? explicitSkillId ?? firstPrimaryNomination?.skillId;
   const proposalPrimaryDomain = proposalPrimarySkillId && catalogSnapshot
     ? catalogSnapshot.skills.find(({ skillId }) => skillId === proposalPrimarySkillId)?.domains[0]
     : undefined;
@@ -654,28 +688,13 @@ export const prepareTask = async (
   const effectivePrimaryNominationOrder = selectedNominationPrimary
     ? [selectedNominationPrimary, ...primaryNominationOrder.filter((skillId) => skillId !== selectedNominationPrimary)]
     : primaryNominationOrder;
-  const skillById = new Map(allMetadata.map((skill) => [canonical(skill.id), skill]));
-  const nominatedPrimaryDomains: string[] = [];
-  const visitedNominatedSkills = new Set<string>();
-  const pendingNominatedSkills = [...effectivePrimaryNominationOrder];
-  while (pendingNominatedSkills.length > 0) {
-    const skillId = pendingNominatedSkills.shift()!;
-    const normalizedSkillId = canonical(skillId);
-    if (visitedNominatedSkills.has(normalizedSkillId)) continue;
-    visitedNominatedSkills.add(normalizedSkillId);
-    const skill = skillById.get(normalizedSkillId);
-    if (!skill) continue;
-    nominatedPrimaryDomains.push(...skill.domains);
-    pendingNominatedSkills.push(...(skill.dependencies ?? []));
-  }
-  const routingCandidates = [...resolution.candidates];
-  const routingCandidateIds = new Set(routingCandidates.map(({ id }) => canonical(id)));
-  for (const domainId of nominatedPrimaryDomains) {
-    const normalizedDomainId = canonical(domainId);
-    if (routingCandidateIds.has(normalizedDomainId)) continue;
-    routingCandidateIds.add(normalizedDomainId);
-    routingCandidates.push({ id: domainId, confidence: 0.75, role: "supporting", available: true, reasons: ["proposal-domain-binding"], evidence: [] });
-  }
+  // The ambiguity probe is the existing candidate retrieval, aligned to the composition
+  // retrieval input: the same nomination sets, roles, domains, and primary domain. Its
+  // result is reused by composition instead of running a second eligibility pass. The
+  // only axis that can diverge between the probe and the final primary domain is a
+  // continuation answer selecting a nomination that names another domain; reuse is
+  // skipped then, preserving the historical retrieval input exactly.
+  const reuseProbeRetrieval = ambiguityProbe !== undefined && probeSelectedPrimary !== undefined && canonical(probeSelectedPrimary) === canonical(selectedPrimary);
   const composed = composeSkillSet({
     profile: analysis.profile,
     requirements: analysis.requirements,
@@ -697,6 +716,7 @@ export const prepareTask = async (
     nominatedRoles,
     nominationOrder: effectiveNominationOrder,
     primaryNominationOrder: effectivePrimaryNominationOrder,
+    ...(reuseProbeRetrieval ? { retrievalResult: ambiguityProbe } : {}),
     // A continuation answer is a closed host choice; a later composer veto must not silently
     // replace it with another nominated or lexical primary.
     ...(explicitSkillId
