@@ -427,12 +427,12 @@ test("the default store resolver rebuilds from persisted ledgers and never cache
   );
 });
 
-test("the trusted registry resolves evaluators only for trusted core validator ids", () => {
+test("the trusted registry resolves evaluators only for trusted core ids and implemented domain validators", () => {
   const registry = buildTrustedValidatorRegistry([{ skillId: "frontend.performance-review" }]);
   assert.equal(typeof registry.resolveValidator("core/artifact-integrity"), "function");
   assert.equal(typeof registry.resolveValidator("core/critic-independence"), "function");
+  assert.equal(typeof registry.resolveValidator("frontend/performance-claims"), "function");
   assert.equal(registry.resolveValidator("frontend/browser-hard-gates"), undefined);
-  assert.equal(registry.resolveValidator("frontend/performance-claims"), undefined);
   assert.equal(registry.resolveValidator("core/unknown-core"), undefined);
 
   const bare = TrustedValidatorRegistry.fromIds([]);

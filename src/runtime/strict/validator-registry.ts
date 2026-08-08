@@ -52,6 +52,27 @@ export class TrustedValidatorRegistry {
 
   resolveValidator(id: string): ValidatorEvaluator | undefined {
     if (!this.ids.has(id)) return undefined;
+    const parsed = parseValidatorId(id);
+    if (parsed && parsed.owner !== "core") {
+      const evaluator = getDomainPack(parsed.owner)?.validatorEvaluators?.[id];
+      if (evaluator) {
+        return (context) => {
+          if (context.gateId === undefined) {
+            return { passed: false, message: `Validator ${id} requires a gate id to evaluate.` };
+          }
+          return evaluator({
+            gateId: context.gateId,
+            validatorId: id,
+            skillId: context.ledger.skillId,
+            artifacts: context.artifacts,
+            output: context.output,
+            verificationInput: context.verificationInput,
+            sourceReview: context.sourceReview,
+            criticReport: context.criticReport,
+          });
+        };
+      }
+    }
     return coreValidatorEvaluators[id];
   }
 

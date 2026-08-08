@@ -17,6 +17,7 @@ export type ValidatorEvaluationContext = {
   verificationInput?: unknown;
   sourceReview?: unknown;
   criticReport?: CriticReportV2;
+  gateId?: string;
 };
 
 export type ValidatorEvaluator = (context: ValidatorEvaluationContext) => Result | Promise<Result>;

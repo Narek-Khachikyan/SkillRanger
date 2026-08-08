@@ -246,11 +246,21 @@ export const registerDomainPack = (registration: DomainPackRegistration): Domain
   if (validatorIssues.length > 0) {
     throw new Error(`Invalid domain pack ${registration.manifest.id}: ${validatorIssues.join("; ")}`);
   }
+  const declaredValidators = new Set(registration.validators ?? []);
+  for (const validatorId of Object.keys(registration.validatorEvaluators ?? {})) {
+    const match = validatorIdPattern.exec(validatorId);
+    if (!match || match[1] !== registration.manifest.id || !declaredValidators.has(validatorId)) {
+      throw new Error(
+        `Invalid domain pack ${registration.manifest.id}: validator evaluator ${validatorId} is not declared by a matching validator id.`,
+      );
+    }
+  }
   const pack: DomainPack = {
     manifest: registration.manifest,
     routing: registration.routing,
     ...(registration.runPolicy ? { runPolicy: registration.runPolicy } : {}),
     ...(registration.validators ? { validators: [...registration.validators].sort() } : {}),
+    ...(registration.validatorEvaluators ? { validatorEvaluators: { ...registration.validatorEvaluators } } : {}),
     root: registration.root ?? "",
   };
   registered.set(pack.manifest.id, pack);

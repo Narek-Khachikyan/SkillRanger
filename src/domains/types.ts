@@ -1,5 +1,7 @@
 import type { ProjectFingerprint, Recommendation, RegistrySkill, SkillLane } from "../types.ts";
 import type { SkillRunPolicyDecision } from "../runtime/skill-run/types.ts";
+import type { Result } from "../runtime/strict/core-validators.ts";
+import type { CriticReportV2, EvidenceArtifact } from "../runtime/strict/types.ts";
 
 export type DomainCapability =
   | "project-signals"
@@ -127,12 +129,26 @@ export type DomainRunPolicy = {
   evaluate(input: DomainRunPolicyInput): SkillRunPolicyDecision;
 };
 
+export type DomainValidatorProjection = {
+  gateId: string;
+  validatorId: string;
+  skillId: string;
+  artifacts: readonly EvidenceArtifact[];
+  output?: unknown;
+  verificationInput?: unknown;
+  sourceReview?: unknown;
+  criticReport?: CriticReportV2;
+};
+
+export type DomainValidatorEvaluator = (projection: DomainValidatorProjection) => Result;
+
 export type DomainPack = {
   manifest: DomainPackManifest;
   root: string;
   routing: DomainRoutingPolicy;
   runPolicy?: DomainRunPolicy;
   validators?: string[];
+  validatorEvaluators?: Readonly<Record<string, DomainValidatorEvaluator>>;
 };
 
 export type DomainPackRegistration = {
@@ -141,4 +157,5 @@ export type DomainPackRegistration = {
   runPolicy?: DomainRunPolicy;
   root?: string;
   validators?: string[];
+  validatorEvaluators?: Readonly<Record<string, DomainValidatorEvaluator>>;
 };

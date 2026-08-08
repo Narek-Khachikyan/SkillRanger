@@ -259,25 +259,8 @@ export const deriveStrictValidatorResults = async (
     const evaluator = registry.resolveValidator(validatorId);
     let result: Result;
     if (evaluator) {
-      const context: ValidatorEvaluationContext = { projectRoot, ledger, artifacts, artifactBytes, output, verificationInput, sourceReview, criticReport };
+      const context: ValidatorEvaluationContext = { projectRoot, ledger, artifacts, artifactBytes, output, verificationInput, sourceReview, criticReport, gateId: gate.id };
       result = await evaluator(context);
-    } else if (validatorId === "frontend/performance-claims") {
-      const report = record(output) ? output : undefined;
-      const findings = Array.isArray(report?.findings) ? report.findings.filter(record) : [];
-      const measurements = Array.isArray(report?.measurementsInspected) ? report.measurementsInspected.filter((item): item is string => typeof item === "string") : [];
-      const gaps = Array.isArray(report?.measurementGaps) ? report.measurementGaps.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
-      const beforeAfter = measurements.some((item) => /before/i.test(item)) && measurements.some((item) => /after/i.test(item));
-      const checks: Record<string, boolean> = {
-        "finding-dimension-present": findings.every((finding) => typeof finding.affectedFlow === "string" && typeof finding.dimension === "string"),
-        "measured-claim-has-artifact": findings.filter((finding) => finding.basis === "measured").every((finding) => Array.isArray(finding.evidence) && finding.evidence.length > 0),
-        "before-after-required-for-win": report?.mode !== "validate-change" || beforeAfter,
-        "unmeasured-claims-labeled-risk": findings.every((finding) => finding.basis === "measured" || finding.basis === "risk"),
-        "exact-missing-measurement": !findings.some((finding) => finding.basis === "risk") || gaps.length > 0,
-        "priority-confidence-present": findings.every((finding) => typeof finding.impact === "string" && typeof finding.confidence === "string" && typeof finding.tradeoff === "string"),
-        "no-false-performance-win": report?.mode !== "validate-change" || beforeAfter,
-      };
-      const passed = report !== undefined && checks[gateSlug(gate.id)] === true;
-      result = { passed, ...(passed ? {} : { message: `Performance report failed ${gateSlug(gate.id)}.` }) };
     } else if (validatorId === "frontend/browser-hard-gates" || validatorId === "frontend/tailwind-source") {
       result = validatorId === "frontend/browser-hard-gates"
         ? browser[gateSlug(gate.id)]

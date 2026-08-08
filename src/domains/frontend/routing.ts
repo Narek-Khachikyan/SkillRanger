@@ -5,6 +5,7 @@ import { loadBundledDomainManifestSync, registerDomainPack } from "../registry.t
 import type { DomainRoutingPolicy } from "../types.ts";
 import { analyzeFrontendIntent, type CanonicalFrontendIntent } from "./intents/index.ts";
 import { evaluateFrontendRunPolicy } from "./run-policy.ts";
+import { frontendValidatorEvaluators } from "./validators.ts";
 
 const tokenize = (input: string) =>
   new Set(
@@ -433,4 +434,5 @@ export const registerFrontendDomainPack = () =>
       "frontend/tailwind-source",
       "frontend/performance-claims",
     ],
+    validatorEvaluators: frontendValidatorEvaluators,
   });
