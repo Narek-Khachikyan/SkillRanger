@@ -60,9 +60,8 @@ test("explicit choice reason codes preserve the exact prefix and suffix strings"
 test("primary arbitration blocks an ineligible explicit choice with the exact reason code", () => {
   assert.deepEqual(resolvePrimaryArbitration({
     explicitSkillId: "backend.high-risk",
-    baseRejectionReason: "risk-blocked",
     eligibilityFacts: [
-      { skillId: "backend.high-risk", primaryRoleEligible: false },
+      { skillId: "backend.high-risk", primaryRoleEligible: false, baseRejectionReason: "risk-blocked" },
       { skillId: "backend.auth-implementation", primaryRoleEligible: true },
     ],
     primaryNominationOrder: ["backend.high-risk", "backend.auth-implementation"],
@@ -76,8 +75,9 @@ test("primary arbitration blocks an ineligible explicit choice with the exact re
 test("primary arbitration never substitutes a blocked explicit choice", () => {
   const decision = resolvePrimaryArbitration({
     explicitSkillId: "backend.auth-implementation",
-    baseRejectionReason: "dependency-cycle",
-    eligibilityFacts: [{ skillId: "backend.auth-implementation", primaryRoleEligible: false }],
+    eligibilityFacts: [
+      { skillId: "backend.auth-implementation", primaryRoleEligible: false, baseRejectionReason: "dependency-cycle" },
+    ],
     primaryNominationOrder: ["backend.auth-implementation"],
   });
   assert.equal(decision.kind, "explicit-choice-blocked");
@@ -85,6 +85,27 @@ test("primary arbitration never substitutes a blocked explicit choice", () => {
     assert.equal(decision.reasonCode, "explicit-skill-choice-dependency-cycle");
     assert.equal(decision.baseRejectionReason, "dependency-cycle");
   }
+});
+
+test("an ineligible explicit choice never stands without an explicit base rejection reason", () => {
+  assert.deepEqual(resolvePrimaryArbitration({
+    explicitSkillId: "backend.high-risk",
+    eligibilityFacts: [{ skillId: "backend.high-risk", primaryRoleEligible: false }],
+    primaryNominationOrder: ["backend.high-risk"],
+  }), {
+    kind: "explicit-choice-blocked",
+    reasonCode: "explicit-skill-choice-ineligible",
+    baseRejectionReason: "ineligible",
+  });
+  assert.deepEqual(resolvePrimaryArbitration({
+    explicitSkillId: "backend.undeclared",
+    eligibilityFacts: [],
+    primaryNominationOrder: ["backend.undeclared"],
+  }), {
+    kind: "explicit-choice-blocked",
+    reasonCode: "explicit-skill-choice-ineligible",
+    baseRejectionReason: "ineligible",
+  });
 });
 
 test("primary arbitration carries the complete effective order beside a standing explicit choice", () => {
@@ -393,7 +414,6 @@ test("nomination resolution is a pure projection that never mutates its inputs",
   const snapshot = JSON.parse(JSON.stringify({ facts, order, declared })) as unknown;
   resolvePrimaryArbitration({
     explicitSkillId: "backend.auth-implementation",
-    baseRejectionReason: "risk-blocked",
     primaryNominationOrder: order,
     eligibilityFacts: facts,
   });
@@ -621,7 +641,6 @@ test("facts-driven nomination decisions match the composition outcome", async ()
   const facts = buildNominatedPrimaryEligibilityFacts({ retrieval, skillIds: nominatedPrimarySkillIds });
   const blocked = resolvePrimaryArbitration({
     explicitSkillId: highRisk.id,
-    baseRejectionReason: "risk-blocked",
     eligibilityFacts: facts,
     primaryNominationOrder: nominatedPrimarySkillIds,
   });

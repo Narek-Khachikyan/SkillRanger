@@ -63,11 +63,14 @@ test("eligibility facts report eligible and ineligible declared primary nominati
 
   assert.deepEqual(facts, [
     { skillId: "backend.auth-implementation", primaryRoleEligible: true },
-    { skillId: "backend.high-risk", primaryRoleEligible: false },
-    { skillId: "backend.missing-capability", primaryRoleEligible: false },
+    { skillId: "backend.high-risk", primaryRoleEligible: false, baseRejectionReason: "risk-blocked" },
+    { skillId: "backend.missing-capability", primaryRoleEligible: false, baseRejectionReason: "required-capability-missing" },
   ]);
   for (const fact of facts) {
-    assert.deepEqual(Object.keys(fact).sort(), ["primaryRoleEligible", "skillId"]);
+    const keys = Object.keys(fact).sort();
+    assert.deepEqual(keys, fact.primaryRoleEligible
+      ? ["primaryRoleEligible", "skillId"]
+      : ["baseRejectionReason", "primaryRoleEligible", "skillId"]);
   }
 });
 
@@ -116,13 +119,13 @@ test("eligibility facts are a bounded pure projection of the existing retrieval 
 
   assert.deepEqual(facts, [
     { skillId: "backend.eligible", primaryRoleEligible: true },
-    { skillId: "backend.audit-failed", primaryRoleEligible: false },
-    { skillId: "backend.unknown", primaryRoleEligible: false },
+    { skillId: "backend.audit-failed", primaryRoleEligible: false, baseRejectionReason: "audit-failed" },
+    { skillId: "backend.unknown", primaryRoleEligible: false, baseRejectionReason: "candidate-not-found" },
   ]);
   assert.deepEqual(JSON.parse(JSON.stringify(retrieval)) as unknown, snapshot);
 });
 
-test("composition reusing the precomputed eligibility result matches internal retrieval", async () => {
+test("composition reuses the supplied retrieval result instead of recomputing eligibility", async () => {
   const packs = await loadRouterFixturePacks(fixtureRoot);
   const skills = fixtureSkills(packs);
   const base = skills.find(({ id }) => id === "backend.auth-implementation")!;
@@ -151,24 +154,57 @@ test("composition reusing the precomputed eligibility result matches internal re
     nominatedRoles: new Map(nominated.map(({ id }) => [id, "primary" as const])),
   };
   const precomputed = retrieveSkillCandidates(retrievalInput);
-  const facts = buildNominatedPrimaryEligibilityFacts({ retrieval: precomputed, skillIds: nominatedIds });
   const direct = composeSkillSet({ ...retrievalInput, resolvedNomination });
   const reused = composeSkillSet({ ...retrievalInput, resolvedNomination, retrievalResult: precomputed });
-  const reusedFacts = composeSkillSet({
-    ...retrievalInput,
-    resolvedNomination,
-    retrievalResult: precomputed,
-    nominatedPrimaryEligibilityFacts: facts,
-  });
 
   assert.equal(canonicalizeJson(direct), canonicalizeJson(reused));
-  assert.equal(canonicalizeJson(direct), canonicalizeJson(reusedFacts));
   assert.equal(direct.status, "prepared");
   if (direct.status === "prepared") {
     assert.equal(direct.composed.primary.skill.id, "backend.auth-implementation");
     assert.deepEqual(reused.composed.selections, direct.composed.selections);
-    assert.deepEqual(reusedFacts.composed.selections, direct.composed.selections);
   }
+});
+
+test("composition binds the eligibility decision to the supplied retrieval result", async () => {
+  const packs = await loadRouterFixturePacks(fixtureRoot);
+  const skills = fixtureSkills(packs);
+  const base = skills.find(({ id }) => id === "backend.auth-implementation")!;
+  const explicit = { ...base, id: "backend.explicit-choice", riskLevel: "low" };
+  const nominatedIds = [explicit.id];
+  const precomputed = retrieveSkillCandidates({
+    profile: profile(),
+    skills: [explicit],
+    selectedDomainIds: ["backend-api"],
+    primaryDomainId: "backend-api",
+    targetAgent: "codex",
+    capabilities: ["filesystem", "terminal"],
+    nominatedSkillIds: nominatedIds,
+    nominatedPrimarySkillIds: nominatedIds,
+    nominatedRoles: new Map([[explicit.id, "primary" as const]]),
+  });
+  // The input skills would reject the explicit choice as high-risk, but the
+  // supplied retrieval result is authoritative: facts are derived from it, never
+  // recomputed from the input skills.
+  const highRiskInRegistry = { ...base, id: explicit.id, riskLevel: "high" };
+  const reused = composeSkillSet({
+    profile: profile(),
+    skills: [highRiskInRegistry],
+    selectedDomainIds: ["backend-api"],
+    primaryDomainId: "backend-api",
+    targetAgent: "codex",
+    capabilities: ["filesystem", "terminal"],
+    retrievalResult: precomputed,
+    resolvedNomination: {
+      requiredPrimarySkillId: explicit.id,
+      nominationOrder: nominatedIds,
+      primaryNominationOrder: nominatedIds,
+      nominatedSkillIds: nominatedIds,
+      nominatedPrimarySkillIds: nominatedIds,
+      nominatedRoles: new Map([[explicit.id, "primary" as const]]),
+    },
+  });
+  assert.equal(reused.status, "prepared");
+  if (reused.status === "prepared") assert.equal(reused.composed.primary.skill.id, explicit.id);
 });
 
 test("reused eligibility result keeps explicit-choice blocking with the exact reason code", async () => {

@@ -8,10 +8,14 @@ const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase(
 export type NominationRole = Exclude<RouterSkillRole, "environment" | "agent-context">;
 
 // Bounded eligibility facts for the nomination decision: whether the skill may fill
-// the primary role. Never recomputed here; produced from a retrieval result.
+// the primary role and the existing base rejection reason when it may not. The
+// reason is the same projection the composer applies to an explicit choice, so the
+// arbitration decision never accepts a reason-less ineligible choice. Never
+// recomputed here; produced from a retrieval result.
 export type NominatedPrimaryEligibilityFacts = {
   skillId: string;
   primaryRoleEligible: boolean;
+  baseRejectionReason?: string;
 };
 
 export const buildNominatedPrimaryEligibilityFacts = (input: {
@@ -25,7 +29,14 @@ export const buildNominatedPrimaryEligibilityFacts = (input: {
     const skillId = canonical(rawSkillId);
     if (seen.has(skillId)) continue;
     seen.add(skillId);
-    facts.push({ skillId, primaryRoleEligible: primaryEligibleIds.has(skillId) });
+    const primaryRoleEligible = primaryEligibleIds.has(skillId);
+    const baseRejectionReason = primaryRoleEligible
+      ? undefined
+      : input.retrieval.rejections.find(({ skillId: rejectedSkillId }) => canonical(rejectedSkillId) === skillId)?.reason
+        ?? (input.retrieval.candidates.some(({ skill }) => canonical(skill.id) === skillId)
+          ? "primary-role-ineligible"
+          : "candidate-not-found");
+    facts.push({ skillId, primaryRoleEligible, ...(baseRejectionReason === undefined ? {} : { baseRejectionReason }) });
   }
   return facts;
 };
@@ -42,20 +53,24 @@ type ExplicitSkillChoiceResolution =
   | { kind: "explicit-choice-blocked"; reasonCode: `explicit-skill-choice-${string}`; baseRejectionReason: string };
 
 // The composer determines the base reason; this module only projects it and owns
-// the precedence decision. A blocked choice is never substituted.
+// the precedence decision. A blocked choice is never substituted. The base reason
+// travels inside the eligibility facts, so an ineligible explicit choice can never
+// stand on missing or contradictory input.
 const resolveExplicitSkillChoice = (input: {
   explicitSkillId?: string;
-  baseRejectionReason?: string;
+  eligibilityFacts: NominatedPrimaryEligibilityFacts[];
 }): ExplicitSkillChoiceResolution | undefined => {
   if (!input.explicitSkillId) return undefined;
   const skillId = canonical(input.explicitSkillId);
-  return input.baseRejectionReason !== undefined
-    ? {
-        kind: "explicit-choice-blocked",
-        reasonCode: explicitSkillChoiceReasonCode(input.baseRejectionReason),
-        baseRejectionReason: input.baseRejectionReason,
-      }
-    : { kind: "explicit-choice-stands", skillId };
+  // The explicit choice leads the effective nomination order the facts are built
+  // from, so it always has a fact; a missing fact fails closed as ineligible.
+  const fact = input.eligibilityFacts.find(({ skillId: factSkillId }) => canonical(factSkillId) === skillId);
+  if (fact?.primaryRoleEligible) return { kind: "explicit-choice-stands", skillId };
+  return {
+    kind: "explicit-choice-blocked",
+    reasonCode: explicitSkillChoiceReasonCode(fact?.baseRejectionReason ?? "ineligible"),
+    baseRejectionReason: fact?.baseRejectionReason ?? "ineligible",
+  };
 };
 
 // The resolved nomination result handed to the composer: the required primary
@@ -144,8 +159,9 @@ const resolveOrderedPrimaryNominations = (input: {
 
 // The one post-retrieval primary arbitration decision consumed by composition.
 // Explicit-choice precedence, ordered eligible nominations, and deterministic
-// fallback are decided together from bounded eligibility facts and the composer
-// base rejection reason; this module never recomputes eligibility or retrieval.
+// fallback are decided together from bounded eligibility facts; the facts carry
+// the composer base rejection reason, so no reason-less ineligible choice can
+// stand. This module never recomputes eligibility or retrieval.
 // The primaryOrder field carries the complete effective primary order, so the
 // caller never re-applies nomination-order policy: the explicit choice ranks
 // first, then eligible non-explicit nominations in declared order.
@@ -157,13 +173,12 @@ export type PrimaryArbitrationDecision =
 
 export const resolvePrimaryArbitration = (input: {
   explicitSkillId?: string;
-  baseRejectionReason?: string;
   eligibilityFacts: NominatedPrimaryEligibilityFacts[];
   primaryNominationOrder: readonly string[];
 }): PrimaryArbitrationDecision => {
   const explicitResolution = resolveExplicitSkillChoice({
     explicitSkillId: input.explicitSkillId,
-    baseRejectionReason: input.baseRejectionReason,
+    eligibilityFacts: input.eligibilityFacts,
   });
   if (explicitResolution?.kind === "explicit-choice-blocked") {
     return {
