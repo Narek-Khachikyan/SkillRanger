@@ -129,6 +129,26 @@ test("primary arbitration considers eligible non-explicit nominations in declare
   });
 });
 
+test("primary arbitration collapses duplicate nominations and keeps the explicit choice first", () => {
+  assert.deepEqual(resolvePrimaryArbitration({
+    explicitSkillId: "backend.auth-implementation",
+    eligibilityFacts: [
+      { skillId: "backend.auth-implementation", primaryRoleEligible: true },
+      { skillId: "backend.semantic-primary", primaryRoleEligible: true },
+    ],
+    primaryNominationOrder: [
+      "backend.auth-implementation",
+      "backend.semantic-primary",
+      "backend.auth-implementation",
+      "backend.semantic-primary",
+    ],
+  }), {
+    kind: "explicit-choice-stands",
+    skillId: "backend.auth-implementation",
+    primaryOrder: ["backend.auth-implementation", "backend.semantic-primary"],
+  });
+});
+
 test("primary arbitration falls back deterministically when no non-explicit nomination remains eligible", () => {
   assert.deepEqual(resolvePrimaryArbitration({
     eligibilityFacts: [{ skillId: "backend.high-risk", primaryRoleEligible: false }],

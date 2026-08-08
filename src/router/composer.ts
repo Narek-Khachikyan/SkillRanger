@@ -149,9 +149,10 @@ export type ComposeSkillSetInput = Omit<RetrieveSkillCandidatesInput, "nominated
   candidates?: RouterCandidate[];
   retrievalResult?: RetrieveSkillCandidatesResult;
   // Precomputed eligibility facts for the nominated primaries, produced by the
-  // retrieval owner from the same retrieval result (e.g. the ambiguity probe).
-  // When supplied together with retrievalResult, they replace the recomputed
-  // projection so eligibility is never derived twice from the same result.
+  // retrieval owner from the supplied retrievalResult (e.g. the ambiguity
+  // probe). Accepted only alongside retrievalResult, so facts can never
+  // disagree with the retrieval they were derived from; eligibility is never
+  // projected twice from the same result.
   nominatedPrimaryEligibilityFacts?: NominatedPrimaryEligibilityFacts[];
   domainCandidates?: DomainCandidate[];
   fingerprint?: ProjectFingerprint;
@@ -603,8 +604,9 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
         : retrievalInput)), nominatedRoles);
   const byId = new Map(retrieved.candidates.map((candidate) => [canonical(candidate.skill.id), candidate]));
   const registryById = new Map(input.skills.map((skill) => [canonical(skill.id), skill]));
-  const eligibilityFacts = input.nominatedPrimaryEligibilityFacts
-    ?? buildNominatedPrimaryEligibilityFacts({
+  const eligibilityFacts = input.nominatedPrimaryEligibilityFacts && input.retrievalResult
+    ? input.nominatedPrimaryEligibilityFacts
+    : buildNominatedPrimaryEligibilityFacts({
       retrieval: retrieved,
       skillIds: nomination ? nomination.nominationOrder : [],
     });
