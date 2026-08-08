@@ -52,7 +52,7 @@ test("deep raw verification rejects a caller-constructed derivation", () => {
   assert.throws(
     () => verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", {
       artifactIntegrity: { passed: true },
-      validatorResults: { "core/artifact-integrity": { passed: true } },
+      validatorResults: { "frontend.test-skill/gate/custom": { passed: true } },
       systemGateResults: [],
     }),
     (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
@@ -154,10 +154,8 @@ const authenticFixtureDerivation = async () => {
   return deriveStrictValidatorResults(derivationRoot, source, source.skillLedgers[0]);
 };
 const passingDerivation = await authenticFixtureDerivation();
-passingDerivation.validatorResults["core/artifact-integrity"] = { passed: true };
 const failingDerivation = await authenticFixtureDerivation();
 for (const gateId of Object.keys(failingDerivation.validatorResults)) failingDerivation.validatorResults[gateId] = { passed: false };
-failingDerivation.validatorResults["core/artifact-integrity"] = { passed: false };
 const artifactFailureDerivation = await deriveStrictValidatorResults(
   derivationRoot,
   verificationReadyFixture(),
@@ -175,6 +173,24 @@ test("deep raw verification rejects a cloned runtime derivation", () => {
   assert.throws(
     () => verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", structuredClone(passingDerivation)),
     (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
+  );
+});
+
+test("validator results are keyed by gate id only; a validatorId-keyed result does not pass the gate", async () => {
+  const derivation = await authenticFixtureDerivation();
+  delete derivation.validatorResults["frontend.test-skill/gate/custom"];
+  derivation.validatorResults["core/artifact-integrity"] = { passed: true };
+  const run = verifyStrictSkill(verificationReadyFixture(), "frontend.test-skill", derivation);
+  assert.equal(run.state, "repair-required");
+  assert.deepEqual(
+    run.skillLedgers[0].verificationReports.at(-1)!.gateResults
+      .find(({ gateId }) => gateId === "frontend.test-skill/gate/custom"),
+    {
+      gateId: "frontend.test-skill/gate/custom",
+      passed: false,
+      level: "hard",
+      message: "Validator result missing: core/artifact-integrity.",
+    },
   );
 });
 
@@ -243,7 +259,7 @@ test("accepts a reducer-produced ready ledger for a repair-only contract", () =>
   assert.throws(() => assertValidStrictSkillRun(forged), StrictSkillRunError);
 });
 
-test("accepts reducer verification while another ledger owns the active step", () => {
+test("accepts reducer verification while another ledger owns the active step", async () => {
   const firstSkillId = "frontend.first";
   const secondSkillId = "frontend.second";
   const firstContract = renamedContract(firstSkillId);
@@ -267,7 +283,10 @@ test("accepts reducer verification while another ledger owns the active step", (
   run = attachForSkill(run, firstSkillId, "skill-output", firstContract.steps[2].id, "output");
   run = completeStrictStep(run, firstSkillId, firstContract.steps[2].id);
   run = beginStrictStep(run, secondSkillId, secondContract.steps[0].id);
-  run = verifyStrictSkill(run, firstSkillId, passingDerivation);
+  const source = structuredClone(run);
+  source.artifacts = [];
+  const multiActiveDerivation = await deriveStrictValidatorResults(derivationRoot, source, source.skillLedgers[0]);
+  run = verifyStrictSkill(run, firstSkillId, multiActiveDerivation);
 
   assert.equal(run.state, "verifying");
   assert.deepEqual(run.skillLedgers.map(({ state }) => state), ["used", "running"]);

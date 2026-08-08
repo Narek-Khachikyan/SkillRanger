@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "2.0",
+  "skillId": "frontend.visual-design-polish",
+  "criticInvocationId": "critic-99",
+  "executorInvocationId": "executor-1",
+  "outcome": "findings",
+  "evidenceArtifactIds": [
+    "artifact_a50eed2f-993c-4828-90dc-7546cfe9275a",
+    "artifact_8a8196c2-a751-4910-9d36-08576de40a6c",
+    "artifact_440b1bfe-4061-4981-8099-0bc893ed00bd"
+  ],
+  "findings": [
+    {
+      "id": "finding-1",
+      "ruleId": "frontend.visual-design-polish/rule/no-unresolved-ai-slop",
+      "severity": "high",
+      "message": "Hero looks like generic SaaS landing.",
+      "evidenceArtifactIds": [
+        "artifact_a50eed2f-993c-4828-90dc-7546cfe9275a"
+      ],
+      "remediation": "Replace generic cards with aquaculture domain layout."
+    }
+  ]
+}

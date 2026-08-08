@@ -1,0 +1,2596 @@
+{
+  "schemaVersion": "2.0",
+  "certification": "strict",
+  "runId": "run_29dd76aa-5aa0-432c-a912-c22d05a930c2",
+  "domain": "frontend",
+  "targetAgent": "codex",
+  "locale": "en",
+  "state": "verifying",
+  "revision": 85,
+  "createdAt": "2026-08-08T06:20:35.083Z",
+  "updatedAt": "2026-08-08T06:20:35.694Z",
+  "intent": {
+    "sha256": "sha256:4335b83b4140aec40fc630e628fe3911c3fcaeb84e22ca089f5d8b60efb686c0",
+    "normalizedGoal": "frontend strict lifecycle using frontend.visual-design-polish, frontend.tailwind-ui-polish"
+  },
+  "recommendations": [
+    {
+      "skillId": "frontend.visual-design-polish",
+      "role": "primary",
+      "strictCompatible": true
+    },
+    {
+      "skillId": "frontend.tailwind-ui-polish",
+      "role": "companion",
+      "strictCompatible": true
+    },
+    {
+      "skillId": "frontend.interaction-polish",
+      "role": "companion",
+      "strictCompatible": false
+    }
+  ],
+  "excludedRecommendations": [
+    {
+      "skillId": "frontend.interaction-polish",
+      "reason": "strict-contract-missing"
+    }
+  ],
+  "skillLedgers": [
+    {
+      "skillId": "frontend.visual-design-polish",
+      "role": "primary",
+      "mandatory": true,
+      "version": "0.3.0",
+      "packageChecksum": "sha256:59e33c32f304f9ec43b364ff81380f3cdf2743b85a98e726703b743476dab447",
+      "contractChecksum": "sha256:dd64fc2d2ff39caf6cd509e4e9ab8cb673e4408b88aab2d474b09931629169db",
+      "contract": {
+        "schemaVersion": "2.0",
+        "skillId": "frontend.visual-design-polish",
+        "contractVersion": "2.0.0",
+        "inputSchema": "input.schema.json",
+        "outputSchema": "output.schema.json",
+        "mustRead": [
+          "SKILL.md",
+          "references/visual-rules.md",
+          "references/evidence-examples.md",
+          "references/shared/frontend--visual-verification.md"
+        ],
+        "applicability": {
+          "op": "input",
+          "path": "changeClass",
+          "equals": "material"
+        },
+        "prerequisites": [
+          {
+            "id": "design-brief-present",
+            "kind": "input",
+            "path": "brief"
+          },
+          {
+            "id": "material-change-declared",
+            "kind": "input",
+            "path": "changeClass"
+          },
+          {
+            "id": "browser-ready",
+            "kind": "capability",
+            "capability": "browser",
+            "requiredStatus": "ready"
+          },
+          {
+            "id": "screenshots-ready",
+            "kind": "capability",
+            "capability": "screenshots",
+            "requiredStatus": "ready"
+          }
+        ],
+        "steps": [
+          {
+            "id": "frontend.visual-design-polish/step/collect-product-evidence",
+            "type": "collect",
+            "requiredEvidenceKinds": [
+              "product-evidence-ledger"
+            ],
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/product-evidence-present"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/step/define-structured-direction",
+            "type": "validate",
+            "requiredEvidenceKinds": [
+              "design-direction"
+            ],
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/structured-direction-present"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/step/implement-direction",
+            "type": "implement",
+            "requiredEvidenceKinds": [
+              "implementation-diff"
+            ],
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/material-scope-confirmed",
+              "frontend.visual-design-polish/rule/no-invented-proof"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/step/capture-initial-evidence",
+            "type": "collect",
+            "requiredEvidenceKinds": [
+              "browser-screenshot-initial-390",
+              "browser-screenshot-initial-768",
+              "browser-screenshot-initial-1440"
+            ],
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/initial-viewports-covered"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/step/independent-visual-critic",
+            "type": "critic",
+            "requiredEvidenceKinds": [
+              "critic-report"
+            ],
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/critic-independent",
+              "frontend.visual-design-polish/rule/no-unresolved-ai-slop"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/step/bounded-repair",
+            "type": "repair",
+            "requiredEvidenceKinds": [],
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/fresh-evidence-after-repair"
+            ],
+            "repairable": true
+          },
+          {
+            "id": "frontend.visual-design-polish/step/capture-recheck-evidence",
+            "type": "collect",
+            "requiredEvidenceKinds": [
+              "browser-screenshot-390",
+              "browser-screenshot-768",
+              "browser-screenshot-1440"
+            ],
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/no-horizontal-overflow",
+              "frontend.visual-design-polish/rule/no-clipped-controls",
+              "frontend.visual-design-polish/rule/no-sticky-overlap"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/step/recheck-visual-critic",
+            "type": "critic",
+            "requiredEvidenceKinds": [
+              "critic-report"
+            ],
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/critic-independent",
+              "frontend.visual-design-polish/rule/no-unresolved-ai-slop"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/step/final-verify",
+            "type": "verify",
+            "requiredEvidenceKinds": [
+              "verification-input"
+            ],
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/focus-visible",
+              "frontend.visual-design-polish/rule/no-runtime-console-errors",
+              "frontend.visual-design-polish/rule/reduced-motion-verified",
+              "frontend.visual-design-polish/rule/runtime-verification-required"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/step/final-report",
+            "type": "report",
+            "requiredEvidenceKinds": [
+              "skill-output"
+            ],
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/runtime-verification-required"
+            ]
+          }
+        ],
+        "rules": [
+          {
+            "id": "frontend.visual-design-polish/rule/material-scope-confirmed",
+            "description": "Confirm material change class for visual redesign."
+          },
+          {
+            "id": "frontend.visual-design-polish/rule/product-evidence-present",
+            "description": "Ground visual direction in observed product evidence."
+          },
+          {
+            "id": "frontend.visual-design-polish/rule/structured-direction-present",
+            "description": "Define a structured visual direction with recipe and rule selections."
+          },
+          {
+            "id": "frontend.visual-design-polish/rule/no-invented-proof",
+            "description": "Do not invent domain terminology, fake metrics, stock photography subjects, or brand marks."
+          },
+          {
+            "id": "frontend.visual-design-polish/rule/initial-viewports-covered",
+            "description": "Capture initial screenshots across mobile, tablet, and desktop viewports."
+          },
+          {
+            "id": "frontend.visual-design-polish/rule/critic-independent",
+            "description": "Ensure independent visual critique actor and invocation."
+          },
+          {
+            "id": "frontend.visual-design-polish/rule/no-unresolved-ai-slop",
+            "description": "Resolve all high-risk AI slop findings before certification."
+          },
+          {
+            "id": "frontend.visual-design-polish/rule/no-horizontal-overflow",
+            "description": "Do not leave horizontal overflow."
+          },
+          {
+            "id": "frontend.visual-design-polish/rule/no-clipped-controls",
+            "description": "Do not leave clipped or unreachable interactive controls."
+          },
+          {
+            "id": "frontend.visual-design-polish/rule/no-sticky-overlap",
+            "description": "Do not leave sticky or fixed elements covering readable content."
+          },
+          {
+            "id": "frontend.visual-design-polish/rule/focus-visible",
+            "description": "Keep keyboard focus visible across interactive elements."
+          },
+          {
+            "id": "frontend.visual-design-polish/rule/no-runtime-console-errors",
+            "description": "Leave no runtime console errors during verification."
+          },
+          {
+            "id": "frontend.visual-design-polish/rule/reduced-motion-verified",
+            "description": "Verify reduced motion accessibility behavior."
+          },
+          {
+            "id": "frontend.visual-design-polish/rule/fresh-evidence-after-repair",
+            "description": "Capture fresh downstream screenshots after repair."
+          },
+          {
+            "id": "frontend.visual-design-polish/rule/runtime-verification-required",
+            "description": "Require runtime verification before certifying the run."
+          }
+        ],
+        "gates": [
+          {
+            "id": "frontend.visual-design-polish/gate/material-scope-confirmed",
+            "level": "hard",
+            "evaluator": {
+              "type": "schema-valid",
+              "schema": "input"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/material-scope-confirmed"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/gate/product-evidence-present",
+            "level": "hard",
+            "evaluator": {
+              "type": "evidence-present",
+              "evidenceKind": "product-evidence-ledger"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/product-evidence-present"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/gate/structured-direction-present",
+            "level": "hard",
+            "evaluator": {
+              "type": "evidence-present",
+              "evidenceKind": "design-direction"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/structured-direction-present"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/gate/initial-viewports-covered",
+            "level": "hard",
+            "evaluator": {
+              "type": "evidence-present",
+              "evidenceKind": "browser-screenshot-initial-390"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/initial-viewports-covered"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/gate/fresh-viewports-covered",
+            "level": "hard",
+            "evaluator": {
+              "type": "evidence-present",
+              "evidenceKind": "browser-screenshot-390"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/fresh-evidence-after-repair"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/gate/output-schema-valid",
+            "level": "hard",
+            "evaluator": {
+              "type": "schema-valid",
+              "schema": "output"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/runtime-verification-required"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/gate/critic-independent",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "core/critic-independence"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/critic-independent"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/gate/no-unresolved-ai-slop",
+            "level": "hard",
+            "evaluator": {
+              "type": "schema-valid",
+              "schema": "critic-report"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/no-unresolved-ai-slop"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/gate/required-states-covered",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/browser-hard-gates"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/initial-viewports-covered"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/gate/no-horizontal-overflow",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/browser-hard-gates"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/no-horizontal-overflow"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/gate/no-clipped-controls",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/browser-hard-gates"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/no-clipped-controls"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/gate/no-sticky-overlap",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/browser-hard-gates"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/no-sticky-overlap"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/gate/focus-visible",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/browser-hard-gates"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/focus-visible"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/gate/no-runtime-console-errors",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/browser-hard-gates"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/no-runtime-console-errors"
+            ]
+          },
+          {
+            "id": "frontend.visual-design-polish/gate/reduced-motion-verified",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/browser-hard-gates"
+            },
+            "ruleIds": [
+              "frontend.visual-design-polish/rule/reduced-motion-verified"
+            ]
+          }
+        ],
+        "maxRepairIterations": 3
+      },
+      "schemaSnapshots": {
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": [
+            "brief",
+            "capabilityProfile",
+            "changeClass"
+          ],
+          "properties": {
+            "brief": {
+              "type": "object",
+              "description": "Canonical .design/brief.json matching the frontend design brief contract."
+            },
+            "capabilityProfile": {
+              "enum": [
+                "constrained",
+                "standard",
+                "advanced"
+              ]
+            },
+            "changeClass": {
+              "enum": [
+                "micro",
+                "bounded",
+                "material"
+              ]
+            },
+            "existingScreenshots": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "approvedDirection": {
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "output": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": [
+            "implementationOutcome",
+            "verificationState",
+            "artifacts",
+            "changes",
+            "residualRisks"
+          ],
+          "properties": {
+            "implementationOutcome": {
+              "enum": [
+                "implemented",
+                "failed",
+                "blocked"
+              ]
+            },
+            "verificationState": {
+              "const": "pending-runtime-verification"
+            },
+            "artifacts": {
+              "type": "object",
+              "required": [
+                "brief",
+                "recipe",
+                "direction",
+                "verification"
+              ],
+              "properties": {
+                "brief": {
+                  "type": "string"
+                },
+                "recipe": {
+                  "type": "string"
+                },
+                "direction": {
+                  "type": "string"
+                },
+                "verification": {
+                  "type": "string"
+                }
+              }
+            },
+            "changes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "residualRisks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "schemaChecksums": {
+        "input": "sha256:9db1d1018506702ee3121a98e2fe5d64ba720aa71cad80279cabc6bdb3ffeb86",
+        "output": "sha256:fa372d62bcb4000b4536420bdaae0a847a96046eba04c00796d0d6cd07cd5c6f"
+      },
+      "input": {
+        "brief": {
+          "title": "Aquaculture Hero"
+        },
+        "capabilityProfile": "standard",
+        "changeClass": "material"
+      },
+      "state": "used",
+      "applicability": {
+        "applicable": true,
+        "unmetPrerequisites": []
+      },
+      "contentChunks": [
+        {
+          "path": "SKILL.md",
+          "ordinal": 0,
+          "total": 5,
+          "sha256": "sha256:f02a33eff15fd123bbff39e3794f296adf2949aed3c8042017006fad0d651f56",
+          "content": "---\nname: visual-design-polish\ndescription: Improve frontend visual design with subject-specific direction, hierarchy, typography, spacing, palette, density, responsive screenshot QA, and anti-generic UI critique.\n---\n\n# Visual Design Polish\n\nUse when a frontend screen works but looks generic, weakly prioritized, crowded, empty, or mismatched to its product. Do not use for pure Tailwind cleanup, backend work, accessibility-only audits, or token-system extraction.\n\n## Ownership Boundary\n\nVisual-design-polish owns **broad art direction**: theses, layout models, density\ntargets, type/color systems, and signature moves. Tailwind-ui-polish **implements or\nrepairs an existing direction** through Tailwind classes. If the user asks for\nopen-ended direction work from tailwind-ui-polish, hand off to this skill. Do not keep\nopen-ended direction work in tailwind-ui-polish.\n\n## Scope Triage\n\n- **Micro polish:** a bounded, reversible issue such as one button hierarchy, spacing defect, or responsive overlap. Inspect local conventions; make one coherent change. Do not create art directions or a new spec.\n- **Bounded screen:** one established screen or flow. Use one compact thesis and before/after evidence where possible.\n- **Material redesign:** a new direction, layout, density model, or brand expression. Run the full workflow below. Offer three directions only when the user has not selected one.\n\n## Structured Execution Contract\n\nFor material work, read `input.schema.json`, `workflow.json`, and `gates.json` before implementation. Create the required `.design` artifacts in workflow order and validate them with SkillRanger when available. Load the canonical rule index, select exactly one compatible rule from each of the six families, and record the six selected rule ids in structured direction metadata. Compare the direction against the selected recipe's good/bad example pack before implementation. Use the constrained profile when model capability is unknown: select one recommended recipe, keep one signature move, use existing primitives, and do not skip browser evidence or the repair pass. Return the shape in `output.schema.json`; `evals.json` identifies the benchmark slice.\n\n## Design Change Modes\n\n- **repair:** Correct verification findings within the approved `BoundedRepairRequest`; repair cannot broaden art direction.\n- **refine:** Improve an approved direction while preserving its recipe, thesis, and protected invariants.\n- **explore:** Compare policy-permitted recipe-compatible directions before selecting one structured direction.\n- **reimagine:** Establish a new direction only when product evidence, destructive critique, and the execution policy permit it.\n\n## Evidence Ledger\n\nBefore choosing a thesis, separate **observed** project evidence, **inferred** context, and **assumptions** requiring confirmation. Never invent domain artifacts, personas, or terminology at low confidence.\n\nTreat existing `DESIGN.md` as a source to health-check, not unquestioned truth. If it is stale, generic, contradictory, or unsupported by the current UI, name the conflict and propose a compact correction for approval. Do not silently follow or replace it.\n\n## Verification Outcome\n\n- The implementation report must never claim `verified`. Only strict runtime verification followed by successful run finalization may produce a verified result.\n- Without browser or screenshot capability, stop before material implementation with `blocked`; analysis and a manual QA plan are still useful.\n- Return `implementationOutcome` as `implemented`, `failed`, or `blocked`, with `verificationState` set to `pending-runtime-verification`. Never call it complete self-verified.\n\n## Workflow\n\n### 1. Ground In Product Evidence\nInspect adjacent screens, components, tokens, type, spacing, states, and available references. Preserve established conventions unless the request changes direction. Identify the user, screen job, primary action, important states, data constraints, and supported viewports. State only high-impact assumptions. If no evidence of real users, tasks, or data shapes exists, ask for it before choosing a direction. Never invent personas, stock photography subjects, brand marks, or fake metrics.\n\n### 2. Surface The Design Tension\nName the concrete problem the current UI creates for a real user task: weak hierarchy, missing focal point, crowded density, empty canvas, mismatched tone, or generic layout. State the design tension as a product truth (observed data or workflow) conflicting with a visual limitation.\n\n### 3. Generate 2-3 Competing Directions\nEach direction must differ on at least two of: density model, hierarchy strategy, typographic voice, color temperature, composition pattern, or material treatment. Each must include a one-sentence product reason and one rejected default it intentionally avoids. Do not propose directions that could describe the same \"clean modern SaaS\" with different accent colors.\n\n### 4. Choose And Thesis\nSelect one direction with its product justification. Select and record one compatible rule id for typography, layout, responsive, color, state, and signature move. Use the category applicability matrix in `references/visual-rules.md`, chosen from product evidence, the primary task, and the current recipe; universal hard gates remain unchanged. State a compact visual thesis: product/audience, hierarchy and density target, type/color roles, one useful signature move, and one generic default deliberately rejected. Compare it with the recipe's good/bad pack, then set design variance, motion, and density to suit the product. Choose one primary direction and at most one supporting accent; do not mix unrelated trends.\n\n### 5. Define The Signature Move\nFor material visual work, name one non-generic visual decision that supports the primary task: a treatment of a real data shape, a domain-appropriate surface material, a typographic conflict and resolution, a composition structure tied to a user workflow, a color-as-meaning rule, or a motion behavior that clarifies cause and effect. Motion is optional; when used, state its function. If the signature could describe any SaaS product, it is not specific enough.\n\n### 6. Apply Across First Viewport And Common Surfaces\nDemonstrate the thesis on the primary screen, then verify on: primary/secondary CTA, repeated card or row, input/form control and focus state, navigation active state, dense data cell or metadata row, empty/loading/error state, modal/drawer/toast surface, and mobile version of the primary workflow. If the thesis breaks on any surface, revise it before implementing.\n\n### 7. Destructive Critique\nBefore writing code, state the strongest argument against the chosen direction: what user task it harms, what content type it fails to contain, what responsive condition it ignores, what accessibility requirement it weakens, or what product constraint it violates. If no strong counterargument exists, the direction is likely too generic. Revise or document why the risk is acceptable.\n\n### 8. Implement With Local Conventions\nImplement with local components and conventions. Prefer information-bearing structure over decoration: lists/tables for comparison, split panes for triage, editorial grids for narrative, and cards only when they clarify grouping.\n\n### 9. Run The Final Corrective Gate\nRun the **final corrective gate** below immediately before handoff. It has priority over earlier ideation steps.\n\n## Design Constraints\n\n- A direction is insufficient if it could describe any \"clean, modern, premium\" SaaS product. Use real user tasks, data shapes, proof, language, and product constraints.\n- Make hierarchy, readability, task clarity, accessibility, and responsive recomposition more important than ornament.\n- Give typography and color semantic roles. Use saturation, motion, glow, glass, gradients, and imagery only when they clarify action, state, data, trust, or an earned signature.\n- Copy and states are visual material. Use domain objects and observable verbs; account for loading, empty, error, disabled, focus-visible, selected, long-content, and permission states when relevant.\n- For a state-changing primary action, keep the control, resulting state, and at least two dependent representations causally consistent; verify the observed path rather than assuming shared internal state.\n- Classify subject-specific content as `observed`, `inferred`, `assumed`, or `unknown`. Never present assumed clients, metrics, awards, reviews, testimonials, or production results as proof.\n- Mobile is a separate composition: preserve focal hierarchy and action reachability; do not merely stack desktop cards.\n- Public references are attribute sources, not blueprints. Never reproduce a logo, marks, exact palette-plus-layout, mascot, hero composition, or trade-dress impression.\n\n## Guard Against Invented Assets\n\n- Never invent stock photography subjects, stock people, brand marks, product logos,\n  fake company names, or domain artifacts not supplied by project evidence or explicitly\n  approved by the user.\n- Do not generate placeholder metrics, chart data, user names, avatars, reviews, or\n  testimonials that imply real people or transactions.\n- When missing genuine content, use neutral structural placeholders: \"Patient Name\",\n  \"Order #1234\", \"Metric label\". State that these are placeholders and flag the need for\n  real content before release.\n- Reject generated hero imagery of diverse stock teams, abstract AI brains, glowing\n  server racks, or smiling people in headsets unless the product is literally about\n  those things and the imagery is sourced from the project.\n\n## Final Corrective Gate\n\nBefore handoff, inspect and revise the implemented result—not only the plan:\n\n- Delete decoration, fake metrics, vague AI copy, generic icon grids, gradients, glass, glow, blobs, or nested cards that do not encode meaning.\n- Confirm the first viewport makes the primary message, action, and next step clear.\n- Confirm the thesis governs type, spacing, color, surfaces, imagery, and motion rather than library defaults.\n- Check mobile and desktop for overlap, horizontal scroll, clipped actions, long-content failure, and focus-visible loss. Check empty/loading/error and dark mode when supported.\n- Confirm contrast, non-color state cues, keyboard access, target size, reduced motion, and performance constraints after polish.\n- If 20% or more secondary decoration can be removed without losing meaning, remove it.\n\n### Genericity Self-Test\n- Can you swap the logo and product name with an unrelated SaaS (CRM, HR platform,\n  analytics dashboard) and the page still reads as intentional? If yes, reject the\n  direction. Replace at least two identity-bearing axes: composition structure, type\n  genre, color system, density model, imagery treatment, or material language.\n- Does every decorative element (gradient, icon, card, illustration) carry known product\n  meaning or state information? If not, remove or replace it with an evidence-bearing\n  structure.\n- Would the visual thesis survive a logo swap without reading as generic? Test by\n  mentally substituting three unrelated product logos. If the page still makes sense,\n  the direction is too generic.\n\n## Validation\n\n- Verify the visual thesis against the product's subject, audience, and user workflow,\n  not against generic design taste.\n- Check that the signature move survives translation to: first viewport, CTA,\n  repeated card/row, form control, nav, dense data, empty/loading/error state,\n  modal/drawer/toast, and mobile workflow.\n- Confirm the genericity self-test is passed: logo-swap to an unrelated SaaS should\n  break the illusion.\n- Verify that no invented assets (stock people, fake metrics, brand marks, placeholder\n  data implying real transactions) remain in the output.\n- If browsers/screenshots are unavailable, state the missing evidence and the exact\n  viewport/state matrix that remains unverified.\n\n## Output Contract\n\nReturn `implementationOutcome` (`implemented`, `failed`, or `blocked`), `verificationState` (`pending-runtime-verification`), `artifacts`, `changes`, and `residualRisks`. Never claim `verified` in agent-authored output.\n\n## References\n\n"
+        },
+        {
+          "path": "SKILL.md",
+          "ordinal": 1,
+          "total": 5,
+          "sha256": "sha256:2e3e549ac37e73354de0b40f719b3da7ccdbfa6f9d22e1eacab884fbb3abda9a",
+          "content": "Read [the DESIGN.md method](references/design-md-method.md) for material new direction\nor open-ended requests. Read [the visual rules reference](references/visual-rules.md)\nfor domain extraction, composition, typography, color, data, interaction, and pattern\ndetail. Read [the evidence examples](references/evidence-examples.md) for worked\nexamples of the thesis workflow across product types.\n\n## Shared Contracts\n\nOwnership: visual-design-polish owns art direction.\n\n- [`frontend/browser-evidence`](references/shared/frontend--browser-evidence.md)\n- [`frontend/bounded-repair`](references/shared/frontend--bounded-repair.md)\n- [`frontend/visual-verification`](references/shared/frontend--visual-verification.md)\n"
+        },
+        {
+          "path": "references/visual-rules.md",
+          "ordinal": 2,
+          "total": 5,
+          "sha256": "sha256:e4b1c80dc331e9668b213adb536019ed013cf332a81677662373bb03b06104d5",
+          "content": "# Visual Rules Reference\n\nRead this only for material visual direction, an unfamiliar domain, or when the core workflow needs concrete craft guidance.\n\n## Canonical Rule Library\n\nLoad `domains/frontend/rules/index.json` before material implementation. Select exactly one compatible rule from each family—typography, layout, responsive, color, state, and signature move—and record the six selected rule ids in structured direction metadata. Treat each rule's preconditions, constraints, accessibility notes, anti-patterns, and verification criteria as one decision contract.\n\n- Constrained: use the first policy-compatible six-rule set without adding primitives.\n- Standard: compare recipe-compatible alternatives by rule id before selecting six.\n- Advanced: a deviation requires destructive critique naming the affected rule id, product benefit, accessibility effect, and replacement verification.\n\nDo not mix constraints from several same-family rules while claiming one selection.\n\n## Domain And Direction\n\nAnchor a visual thesis in observed domain nouns, verbs, artifacts, data shapes, user\nstakes, and brand voice. If those are unknown, use neutral product-native structure and\nrecord the assumption; do not manufacture a world from plausible-sounding details.\n\n### Operational Positive Direction Method\n\nReplace anti-pattern prohibitions with grounded positive guidance from product evidence:\n\n1. **Collect product evidence:** domain objects, user verbs, data shapes, artifact types,\n   trust signals, frequency metrics, stakes (financial, safety, compliance, identity).\n2. **Identify the visual job:** scan, compare, decide, create, monitor, purchase, learn,\n   or navigate. Each job implies a different layout model, density target, and hierarchy\n   logic.\n3. **Choose a treatment from observed patterns** and adapt it with the product's\n   specific constraints:\n   - Dense operations: compact tables, exception queues, timestamps, split panes,\n     signal colors, audit trails.\n   - Editorial product story: typographic contrast, asymmetric grid, proof near claims,\n     art-directed imagery, varied rhythm.\n   - Tactile commerce: close product crops, honest specs, variant clarity, trust near\n     purchase decisions.\n   - Clinical or regulated: quiet high-contrast surfaces, stable forms, recovery copy,\n     evidence trails, restrained motion.\n   - Technical control room: mono metadata, status rails, diagrams, calibrated\n     live-state accents, high-density scanning.\n4. **Derive constraints from observation:** If the product has 50+ items per screen,\n   choose compact density; if the product needs trust signals at decision points, place\n   proof adjacent to the CTA; if the audience scans for exceptions, use signal color as\n   a left-border rail not background decoration.\n5. **Verify against product evidence:** Does the treatment serve the observed user\n   workflow? Does it communicate the real data shapes? Does it encode domain meaning\n   rather than abstract decoration?\n\n### Direction Integrity\n\nChoose a direction because it aids the product task, not because it is fashionable.\nA single justified aesthetic risk is enough: stronger type, a data-specific treatment,\ndomain material, composition, or feedback. State why restraint is better if no risk is\nwarranted.\n\n### Category Applicability Matrix\n\nChoose the closest experience shape from product evidence, the primary task, and the selected recipe. These are category-specific choices; accessibility, responsive integrity, state rendering, clipping, and causal state synchronization remain universal hard gates.\n\n| Experience shape | Priority | Permitted signature move | Main risk |\n| --- | --- | --- | --- |\n| Utility / admin / dashboard | Speed, density, predictability | One functional device | Decorative overload |\n| Developer tool | Causality, diagnosis, precision | Reveal system state | Theater instead of clarity |\n| Commerce / configurator | Media, variant, availability, cart coherence | Synchronized product change | Visuals diverge from the selected variant |\n| Editorial / content-heavy | Reading, navigation, provenance | Typographic or structural rhythm | Effects obstruct reading |\n| Data-heavy | Comparison, filtering, explanation | Data-explaining transformation | Meaningless chart decoration |\n| Portfolio / agency | Authorship, work selection, narrative | Branded transition or composition motif | Hidden navigation |\n| Experimental / immersive | Exploration and atmosphere | One dominant interaction model | Inaccessible or heavy spectacle |\n\nCalm utility-first work can score highly when it is specific and coherent. Experimental work earns no exception: universal hard gates still apply. A Signature Move is required only for material visual work and must support the primary task. Motion is optional and must have a named function when used.\n\n## Composition And Type\n\n- Encode sequence, ownership, priority, status, or grouping with structure; avoid decorative rails, badges, cards, and dividers.\n- Use a real grid, rhythm, gutters, alignment, and scroll ownership. Break symmetry only with shared edges or baselines.\n- Use tables/lists for comparison, split panes for triage, editorial grids for reading, dashboards for monitoring, and bento only for genuinely different jobs.\n- Define roles for display, heading, body, label, caption, CTA, and data/mono. Use tabular figures for metrics, timers, tables, and money.\n- Avoid one generic treatment: giant centered hero, rounded-card grid, ultra-light body text, tiny low-contrast captions, all-caps long labels, or centred paragraphs.\n\n## Color, Surfaces, Images, And Data\n\n- Define semantic roles for canvas, surface, raised surface, text, muted text, border, action, focus, selected, status, disabled, and data.\n- Let neutrals carry most product UI; reserve saturation for action, state, focus, data, and signature moments. Dark mode needs separate surface and text roles, not inversion.\n- Glass, blur, glow, gradients, 3D, nostalgia, maximalism, and motion require a thesis-specific reason plus readability and performance checks.\n- Prefer real product surfaces, diagrams, data patterns, domain artifacts, and art-directed crops over stock 3D people, abstract AI waves, fake dashboards, and ornamental chart wallpaper.\n- Charts answer a named question with labels, units, timeframe, freshness, thresholds, uncertainty, and accessible color.\n\n## States And Motion\n\n- Empty states explain what belongs there, why it is empty, and the best next action. Errors identify the object, problem, known cause, and recovery.\n- For one state-changing primary action, verify control → resulting state → at least two dependent representations. The product preview, summary, count, availability, cart, schedule, transcript, or progress must agree with the selected state.\n- AI output needs provenance, uncertainty when useful, and controls to edit, accept, reject, retry, stop, or inspect sources.\n- Motion communicates feedback, causality, continuity, progress, or a rare brand moment. Prefer opacity and transform; respect reduced motion; do not default to scroll-jacking, cursor followers, animated counters, or blanket reveals.\n\n## Severity\n\n- S4: blocks a core task, serious accessibility exclusion, data loss, legal/payment/security risk, or unreleasable responsive breakage.\n- S3: harms comprehension, trust, accessibility, first-run success, conversion, or mobile usability.\n- S2: recoverable friction, inconsistency, weak craft, or missed specificity.\n- S1: cosmetic improvement with limited task impact.\n"
+        },
+        {
+          "path": "references/evidence-examples.md",
+          "ordinal": 3,
+          "total": 5,
+          "sha256": "sha256:01fc01489927e3bb25b80764a4cd8f4600ecf7c59f233ae009c7fe5741181be1",
+          "content": "# Evidence-Grounded Design Examples\n\nUse this reference when the product context matches one of these patterns. Each example\nshows product truth -> design tension -> competing directions -> thesis -> signature ->\napplication -> destructive critique. Adapt the structure, not the details.\n\n## Canonical Worked Packs\n\nBefore implementation, load `domains/frontend/examples/<recipe-id>/example.json` for the selected recipe. Compare the proposed direction with its good and bad desktop/mobile/state scenes and record which selected rule ids explain the difference. The SVG assets are explanatory evidence only: do not copy them as JSX, CSS, components, layouts, or production templates.\n\nThe narrative examples below remain reasoning exercises. The canonical packs govern recipe-specific comparison and use neutral structural content.\n\nEvery subject-specific content choice must retain its evidence status: `observed`, `inferred`, `assumed`, or `unknown`. Assumed content may illustrate structure, but it must not be presented as a real client, metric, award, review, testimonial, transaction, or production proof. For state-changing examples, the good scene must keep the chosen control, visible result, and dependent summary causally synchronized.\n\n## 1. Operations SaaS: Fleet Maintenance Dashboard\n\n**Product truth:** Dispatchers scan 50+ work orders/hour. Each order has priority,\nvehicle class, fault code, service interval, location, status, ETA, and exception flag. Errors cascade to late\ndeliveries and crew overtime.\n\n**Design tension:** Generic card layout hides priority and exception urgency behind equal\nvisual weight. Dispatchers must open each card to triage.\n\n**Direction A — Compact dense table:** Single-row work orders with status rail, inline\npriority badge, exception signal, scroll-linked sticky header. Rejects oversized cards\nand whitespace-for-whitespace-sake.\n\n**Direction B — Kanban queue:** Three columns (queued / in-progress / exception).\nRejects forcing a table when the physical workflow is a handoff.\n\n**Direction C — Map-first with overlay list.** Rejected: geo-data is thin here — most\nwork is triage, not routing.\n\n**Chosen thesis (A):** Compact table with exception rail, monospace timing, status-dot\npriority. Density: 48px rows. Typography: heading=Inter SemiBold 14px, body=Inter\nRegular 13px, data=JetBrains Mono 12px tabular, labels=Inter Medium 11px uppercase.\nColor: canvas surface for table, amber/red left-border rail for exceptions, green for\non-time, gray for scheduled. Signature: left-border exception rail and tabular ETA\nalignment let dispatchers scan without opening.\n\n**Application:** Primary viewport fits 25 orders at once. Common surfaces: toast for new\nexception (red rail, no modal), detail slide-over with same type/color grammar, empty\nstate = no-exception banner, mobile = horizontal scroll with frozen first column.\n\n**Destructive critique:** Loses detail preview — must open row for context. Acceptable\n(dispatchers know their fleet; detail is for action not browsing). Genericity check:\nswap \"order/dispatch/vehicle\" — does the table still work for any admin? Yes, it is a\ngeneric data table. Fix: make fault code, service interval, and vehicle class part of the\nscan grammar, with the exception rail connecting the affected field to the maintenance\naction. Re-test: logo-swap to a CRM — the fault/service grammar no longer transfers.\n\n## 2. Editorial: Scientific Journal Article Page\n\n**Product truth:** Researchers scan for findings, methodology, data availability, and\ncitations. Reading time averages 4 min first visit. PDF is still the primary format for\ndeep reading.\n\n**Design tension:** Wide content column with full-justified serif text mimics print but\nwastes horizontal space on widescreens and buries data figures in linear scroll.\n\n**Direction A — Asymmetric editorial grid:** Narrow text column (~66ch), wide margin for\nfigures/citations/data tables, sticky author sidebar. Rejects full-width text columns.\n\n**Direction B — Linear reader with floating panels:** Central scroll, floating figure\nviewer, sticky citation drawer. Rejects fixed sidebar competing with reading focus.\n\n**Direction C — PDF-first with enhanced HTML supplement.** Rejected: replicates existing\nPDF experience.\n\n**Chosen thesis (A):** Asymmetric editorial grid with margin figures. Hierarchy: title,\nabstract in distinct surface, body at 1.5 line-height, marginalia for figures.\nTypography: display=IBM Plex Serif 38px bold, body=20px/30px, captions=13px,\ndata=IBM Plex Mono 14px. Color: warm off-white canvas, dark charcoal text, blue-600 for\nlinks/citations, amber for open-access badges. Signature: figures floated into the right\nmargin at the point of reference — not collected in a media block.\n\n**Application:** Article page fits abstract + first figure above fold. Common surfaces:\ncitation drawer uses same type scale; search results use compact two-line result\n(title+author+year); empty state = no-results with domain-specific suggestions; mobile\ncollapses margin figures inline.\n\n**Destructive critique:** Marginal figures overlap at narrow viewports without a\ndeliberate collapse rule. Acceptable with a <1024px breakpoint that moves figures inline\nand widens text column. Genericity check: swap logo to a fashion magazine — citation\ngrammar and data typography are domain-specific, protecting identity.\n\n## 3. Commerce: Artisanal Food Marketplace\n\n**Product truth:** Customers choose based on origin, producer story, ingredients, and\nphotography. Trust signals (certifications, reviews, producer ratings) justify premium\npricing. Basket is typically 3-7 items.\n\n**Design tension:** Default e-commerce cards with uniform thumbnail, title, price, and\nrating bury the producer narrative and ingredient transparency that justify the premium.\n\n**Direction A — Narrative product card:** Hero crop with producer name overlay,\ningredients as visual badge row, origin map dot, price as secondary. Rejects price-first\ncard hierarchy.\n\n**Direction B — Editorial product detail with gallery:** Single product page as story\nwith full-bleed hero, producer inset, ingredient infographic. Rejects tabs-and-accordion\nPDP.\n\n**Direction C — Grid of small tiles with modal detail.** Rejected: modal disrupts\nbrowsing for narrative discovery.\n\n**Chosen thesis (A):** Narrative product card on browse grid. Hierarchy: existing\nproduct photography, producer and origin as the primary caption, verified certification\nand ingredient facts, price in callout weight, rating as secondary. Typography:\ndisplay=sturdy project grotesk 22px, body=project sans 15px, origin/lot metadata=condensed\nsans 12px, price=project sans 16px semibold tabular. Color: neutral label-paper canvas,\nink text, certification green, and one batch-marker accent sampled from approved product\npackaging. Signature: a lot-label band ties producer, origin, batch, and certification\ninto one evidence-bearing strip instead of decorative ingredient tags.\n\n**Application:** Browse grid 3 columns, each card = hero (3:2) + producer + badges +\nprice. Common surfaces: PDP uses same visual grammar (hero full-bleed, ingredient\nsection as visual grid, producer sidebar). Cart = compact row with thumbnail + producer\n+ qty + price. Empty cart: \"Your basket is empty — explore [region] [category]\" with\nlive producer samples. Mobile: 2 columns, hero crops tighter.\n\n**Destructive critique:** Ingredient badges add visual noise at small card sizes.\nAcceptable — at <640px, badges collapse to count-dot with tooltip. Genericity check:\nswap to electronics marketplace — \"ingredient badges\" become meaningless; the edible\ncolor cue system is product-specific.\n\n## 4. Regulated: Clinical Trial Results Portal\n\n**Product truth:** Physicians and regulators need fast scanning of endpoints, safety\ndata, and statistical methods. Every figure and statistic has regulatory significance.\nUsers print or PDF-export for records.\n\n**Design tension:** Marketing-grade visual design or complex data dashboards create trust\nissues. Too much decoration undermines credibility.\n\n**Direction A — Quiet high-information document layout:** Single-column structured\ndocument with anchored TOC, results in table form, statistical detail in expandable\nsections. Rejects dashboard or card-based navigation.\n\n**Direction B — Structured data portal with filter-driven results matrix.** Rejects\nnarrative in favor of direct cross-trial comparison.\n\n**Direction C — PDF replica in HTML.** Rejected: replicates print limitations; loses\nlinking and search.\n\n**Chosen thesis (A):** Quiet document layout with anchored navigation. Hierarchy: sticky\nTOC sidebar, results tables with row striping and fixed headers, expandable appendices.\nTypography: body=system font 16px/24px (proven readability), tables=tabular 14px,\nheadings=semibold at stepped scale. Color: white canvas, high-contrast charcoal text,\nblue-600 for endpoints and links, amber for safety signals — no decoration. Signature:\nevery figure and table is preceded by its regulatory identifier (NCT + endpoint ID) in a\nfixed-format metadata line.\n\n**Application:** Trial landing = metadata header + TOC + results summary. Common\nsurfaces: search = trial cards (NCT, condition, phase, status badge, enrollment). Data\ntable = fixed-header sortable with row hover and highlight-on-scroll-to-anchor. Print =\nhidden navigation, expanded all sections. Empty = \"No results matching criteria; try\nbroadening [filters].\"\n\n**Destructive critique:** Document layout reads as an unstyled legal filing. Acceptable\nfor this audience — regulatory readers trust document structure; the metadata identifier\nprovides the signature without ornament. Genericity check: swap to a marketing landing\npage — regulatory identifiers and table-heavy structure are unmistakably domain-specific.\n\n## 5. Niche Consumer: Vinyl Record Marketplace\n\n**Product truth:** Collectors care about pressing year, label, country, condition grade,\nmatrix/runout, and rarity. Grading (Mint/NM/VG+/VG/G) is the most important data.\nCover art is secondary to pressing details for experienced buyers.\n\n**Design tension:** Generic e-commerce cards with large cover art and price bury the\npressing details and grading that determine purchase decisions.\n\n**Direction A — Data-forward list with grading visual system:** Compact list rows with\nsmall thumbnail, pressing details as structured data, grading as color-coded badge,\nprice aligned right. Rejects large-card-with-add-to-cart as primary interaction.\n\n**Direction B — Discogs-style table with matrix detail panel.** Familiar to the audience\nbut visually outdated. Rejects reinventing a layout collectors already understand.\n\n**Direction C — Visual grid with pressing metadata overlay.** Rejected: buries critical\ngrading data behind hover.\n\n**Chosen thesis (A):** Hybrid of list density and data precision. Hierarchy: small\nthumbnail (40x40), pressing year+label+country as primary line, grade as colored badge,\nmatrix/runout as mono secondary, price+seller rating right-aligned. Typography: body=Inter\n14px, data=Mono 12px, grade badge=Inter 11px bold tracking-wide. Color: slate bg, warm\npaper surface. Grade colors — Mint=teal, NM=blue, VG+=green, VG=amber, G/g+=gray. No\ncover-art blowups as hero — pressing data is the hero. Signature: grade badges use\nvinyl-era typography (tracking-wide, uppercase, fixed-width) with a subtle groove-line\nicon prefix.\n\n**Application:** Browse = sortable list (year, label, grade, price). Common surfaces:\ndetail page = large cover art (now earned) + pressing details table + seller info.\nCart = compact row. Empty = \"No pressings match your search — try [label] [year]\n[country].\" Mobile = same list, grade badges stay readable.\n\n**Destructive critique:** List density overwhelms casual collectors who browse by cover\nart. Acceptable — add a grid-view toggle for casual browsing. Genericity check: swap to\nbook marketplace — \"pressing year/matrix/runout\" become meaningless; vinyl-era grade\nbadges with groove-line icon are unmistakably domain-specific.\n"
+        },
+        {
+          "path": "references/shared/frontend--visual-verification.md",
+          "ordinal": 4,
+          "total": 5,
+          "sha256": "sha256:b2c2eb8d9e3c2eb8fb1343c51f2ecf4694a6476e20e37f190efb5118b5a25b1d",
+          "content": "Contract-Version: 1.0.0\n\n# Visual Verification\n\nFirst capture complete initial browser evidence. An independent, host-executed, non-coding critic compares rendered candidates. Apply no repair only when the critic reports no actionable finding; otherwise issue a bounded repair request. Capture fresh evidence from a new source identity after correction and run the final cross-lane audit. The only verified outcome is complete fresh evidence with passing hard gates. Missing capabilities, stale evidence, incomplete matrices, unresolved findings, or exceeded repair budgets remain failed, blocked, or implemented-unverified.\n"
+        }
+      ],
+      "readReceipts": [
+        {
+          "path": "SKILL.md",
+          "ordinal": 0,
+          "total": 5,
+          "sha256": "sha256:f02a33eff15fd123bbff39e3794f296adf2949aed3c8042017006fad0d651f56",
+          "deliveredAt": "2026-08-08T06:20:35.089Z"
+        },
+        {
+          "path": "SKILL.md",
+          "ordinal": 1,
+          "total": 5,
+          "sha256": "sha256:2e3e549ac37e73354de0b40f719b3da7ccdbfa6f9d22e1eacab884fbb3abda9a",
+          "deliveredAt": "2026-08-08T06:20:35.093Z"
+        },
+        {
+          "path": "references/visual-rules.md",
+          "ordinal": 2,
+          "total": 5,
+          "sha256": "sha256:e4b1c80dc331e9668b213adb536019ed013cf332a81677662373bb03b06104d5",
+          "deliveredAt": "2026-08-08T06:20:35.097Z"
+        },
+        {
+          "path": "references/evidence-examples.md",
+          "ordinal": 3,
+          "total": 5,
+          "sha256": "sha256:01fc01489927e3bb25b80764a4cd8f4600ecf7c59f233ae009c7fe5741181be1",
+          "deliveredAt": "2026-08-08T06:20:35.100Z"
+        },
+        {
+          "path": "references/shared/frontend--visual-verification.md",
+          "ordinal": 4,
+          "total": 5,
+          "sha256": "sha256:b2c2eb8d9e3c2eb8fb1343c51f2ecf4694a6476e20e37f190efb5118b5a25b1d",
+          "deliveredAt": "2026-08-08T06:20:35.104Z"
+        }
+      ],
+      "steps": [
+        {
+          "id": "frontend.visual-design-polish/step/collect-product-evidence",
+          "type": "collect",
+          "requiredEvidenceKinds": [
+            "product-evidence-ledger"
+          ],
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/product-evidence-present"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.118Z",
+              "evidenceIds": [
+                "artifact_f68a92be-107d-46cd-8785-5a9b303ebd35"
+              ],
+              "completedAt": "2026-08-08T06:20:35.135Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.visual-design-polish/step/define-structured-direction",
+          "type": "validate",
+          "requiredEvidenceKinds": [
+            "design-direction"
+          ],
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/structured-direction-present"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.139Z",
+              "evidenceIds": [
+                "artifact_03a9a5c3-6b2d-4365-b0c7-e0d92491aa1c"
+              ],
+              "completedAt": "2026-08-08T06:20:35.155Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.visual-design-polish/step/implement-direction",
+          "type": "implement",
+          "requiredEvidenceKinds": [
+            "implementation-diff"
+          ],
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/material-scope-confirmed",
+            "frontend.visual-design-polish/rule/no-invented-proof"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.159Z",
+              "evidenceIds": [
+                "artifact_b438161f-cd11-4f9d-9b24-1fa4960a6bda"
+              ],
+              "completedAt": "2026-08-08T06:20:35.175Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.visual-design-polish/step/capture-initial-evidence",
+          "type": "collect",
+          "requiredEvidenceKinds": [
+            "browser-screenshot-initial-390",
+            "browser-screenshot-initial-768",
+            "browser-screenshot-initial-1440"
+          ],
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/initial-viewports-covered"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.178Z",
+              "evidenceIds": [
+                "artifact_a50eed2f-993c-4828-90dc-7546cfe9275a",
+                "artifact_8a8196c2-a751-4910-9d36-08576de40a6c",
+                "artifact_440b1bfe-4061-4981-8099-0bc893ed00bd"
+              ],
+              "completedAt": "2026-08-08T06:20:35.219Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.visual-design-polish/step/independent-visual-critic",
+          "type": "critic",
+          "requiredEvidenceKinds": [
+            "critic-report"
+          ],
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/critic-independent",
+            "frontend.visual-design-polish/rule/no-unresolved-ai-slop"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.223Z",
+              "evidenceIds": [
+                "artifact_1211e93a-be7a-4a13-846d-09fd332b2fa4"
+              ],
+              "completedAt": "2026-08-08T06:20:35.239Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.visual-design-polish/step/bounded-repair",
+          "type": "repair",
+          "requiredEvidenceKinds": [],
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/fresh-evidence-after-repair"
+          ],
+          "repairable": true,
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.357Z",
+              "evidenceIds": [
+                "artifact_0fb14905-735f-46b7-85f9-928f00361796"
+              ],
+              "completedAt": "2026-08-08T06:20:35.373Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.visual-design-polish/step/capture-recheck-evidence",
+          "type": "collect",
+          "requiredEvidenceKinds": [
+            "browser-screenshot-390",
+            "browser-screenshot-768",
+            "browser-screenshot-1440"
+          ],
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/no-horizontal-overflow",
+            "frontend.visual-design-polish/rule/no-clipped-controls",
+            "frontend.visual-design-polish/rule/no-sticky-overlap"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.243Z",
+              "evidenceIds": [
+                "artifact_b7a189a1-7f6a-4af2-b958-63c6f69daff9",
+                "artifact_597aeb7b-3b36-4427-9adb-0a990732685b",
+                "artifact_bd69d360-764b-41ef-9160-3ffda618454a"
+              ],
+              "completedAt": "2026-08-08T06:20:35.284Z"
+            },
+            {
+              "attempt": 2,
+              "startedAt": "2026-08-08T06:20:35.377Z",
+              "evidenceIds": [
+                "artifact_90459a98-81fe-447d-aa71-25efb8170d8d",
+                "artifact_d98ae926-c412-4a6a-b8cb-6d708eb8c51c",
+                "artifact_4ce9562e-d76c-4fa2-bbf8-20613dcb4b97"
+              ],
+              "completedAt": "2026-08-08T06:20:35.419Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.visual-design-polish/step/recheck-visual-critic",
+          "type": "critic",
+          "requiredEvidenceKinds": [
+            "critic-report"
+          ],
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/critic-independent",
+            "frontend.visual-design-polish/rule/no-unresolved-ai-slop"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.287Z",
+              "evidenceIds": [
+                "artifact_70f65235-c6d8-4469-81b8-90e8b42d3075"
+              ],
+              "completedAt": "2026-08-08T06:20:35.303Z"
+            },
+            {
+              "attempt": 2,
+              "startedAt": "2026-08-08T06:20:35.423Z",
+              "evidenceIds": [
+                "artifact_3069509f-1064-4d8f-9708-aa951f838a6f"
+              ],
+              "completedAt": "2026-08-08T06:20:35.440Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.visual-design-polish/step/final-verify",
+          "type": "verify",
+          "requiredEvidenceKinds": [
+            "verification-input"
+          ],
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/focus-visible",
+            "frontend.visual-design-polish/rule/no-runtime-console-errors",
+            "frontend.visual-design-polish/rule/reduced-motion-verified",
+            "frontend.visual-design-polish/rule/runtime-verification-required"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.306Z",
+              "evidenceIds": [
+                "artifact_6ef93c0c-8c7e-498c-93b8-56b30fd2ef09"
+              ],
+              "completedAt": "2026-08-08T06:20:35.323Z"
+            },
+            {
+              "attempt": 2,
+              "startedAt": "2026-08-08T06:20:35.443Z",
+              "evidenceIds": [
+                "artifact_33c2fff2-1497-410c-9524-d9fd88c00b1c"
+              ],
+              "completedAt": "2026-08-08T06:20:35.460Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.visual-design-polish/step/final-report",
+          "type": "report",
+          "requiredEvidenceKinds": [
+            "skill-output"
+          ],
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/runtime-verification-required"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.326Z",
+              "evidenceIds": [
+                "artifact_a295882f-4494-4336-95d9-84d11c30c1e8"
+              ],
+              "completedAt": "2026-08-08T06:20:35.343Z"
+            },
+            {
+              "attempt": 2,
+              "startedAt": "2026-08-08T06:20:35.464Z",
+              "evidenceIds": [
+                "artifact_a18e498f-5500-4da6-bfb0-6115c111f2f2"
+              ],
+              "completedAt": "2026-08-08T06:20:35.480Z"
+            }
+          ]
+        }
+      ],
+      "repairIterations": 1,
+      "verificationReports": [
+        {
+          "schemaVersion": "2.0",
+          "skillId": "frontend.visual-design-polish",
+          "generatedAt": "2026-08-08T06:20:35.353Z",
+          "iteration": 0,
+          "gateResults": [
+            {
+              "gateId": "frontend.visual-design-polish/gate/material-scope-confirmed",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/product-evidence-present",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/structured-direction-present",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/initial-viewports-covered",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/fresh-viewports-covered",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/output-schema-valid",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/critic-independent",
+              "passed": true,
+              "level": "hard",
+              "message": "Distinct invocation IDs provide host-attested critic/executor separation; they do not technically prove independent execution."
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/no-unresolved-ai-slop",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/required-states-covered",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/no-horizontal-overflow",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/no-clipped-controls",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/no-sticky-overlap",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/focus-visible",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/no-runtime-console-errors",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/reduced-motion-verified",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "core/gate/critic-findings",
+              "passed": false,
+              "level": "hard",
+              "message": "Critic reported 1 unresolved finding(s)."
+            }
+          ],
+          "hardPassed": false,
+          "evidenceIds": [
+            "artifact_f68a92be-107d-46cd-8785-5a9b303ebd35",
+            "artifact_03a9a5c3-6b2d-4365-b0c7-e0d92491aa1c",
+            "artifact_b438161f-cd11-4f9d-9b24-1fa4960a6bda",
+            "artifact_a50eed2f-993c-4828-90dc-7546cfe9275a",
+            "artifact_8a8196c2-a751-4910-9d36-08576de40a6c",
+            "artifact_440b1bfe-4061-4981-8099-0bc893ed00bd",
+            "artifact_1211e93a-be7a-4a13-846d-09fd332b2fa4",
+            "artifact_b7a189a1-7f6a-4af2-b958-63c6f69daff9",
+            "artifact_597aeb7b-3b36-4427-9adb-0a990732685b",
+            "artifact_bd69d360-764b-41ef-9160-3ffda618454a",
+            "artifact_70f65235-c6d8-4469-81b8-90e8b42d3075",
+            "artifact_6ef93c0c-8c7e-498c-93b8-56b30fd2ef09",
+            "artifact_a295882f-4494-4336-95d9-84d11c30c1e8"
+          ]
+        },
+        {
+          "schemaVersion": "2.0",
+          "skillId": "frontend.visual-design-polish",
+          "generatedAt": "2026-08-08T06:20:35.487Z",
+          "iteration": 1,
+          "gateResults": [
+            {
+              "gateId": "frontend.visual-design-polish/gate/material-scope-confirmed",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/product-evidence-present",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/structured-direction-present",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/initial-viewports-covered",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/fresh-viewports-covered",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/output-schema-valid",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/critic-independent",
+              "passed": true,
+              "level": "hard",
+              "message": "Distinct invocation IDs provide host-attested critic/executor separation; they do not technically prove independent execution."
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/no-unresolved-ai-slop",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/required-states-covered",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/no-horizontal-overflow",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/no-clipped-controls",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/no-sticky-overlap",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/focus-visible",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/no-runtime-console-errors",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.visual-design-polish/gate/reduced-motion-verified",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "core/gate/critic-findings",
+              "passed": true,
+              "level": "hard"
+            }
+          ],
+          "hardPassed": true,
+          "evidenceIds": [
+            "artifact_f68a92be-107d-46cd-8785-5a9b303ebd35",
+            "artifact_03a9a5c3-6b2d-4365-b0c7-e0d92491aa1c",
+            "artifact_b438161f-cd11-4f9d-9b24-1fa4960a6bda",
+            "artifact_a50eed2f-993c-4828-90dc-7546cfe9275a",
+            "artifact_8a8196c2-a751-4910-9d36-08576de40a6c",
+            "artifact_440b1bfe-4061-4981-8099-0bc893ed00bd",
+            "artifact_1211e93a-be7a-4a13-846d-09fd332b2fa4",
+            "artifact_0fb14905-735f-46b7-85f9-928f00361796",
+            "artifact_90459a98-81fe-447d-aa71-25efb8170d8d",
+            "artifact_d98ae926-c412-4a6a-b8cb-6d708eb8c51c",
+            "artifact_4ce9562e-d76c-4fa2-bbf8-20613dcb4b97",
+            "artifact_3069509f-1064-4d8f-9708-aa951f838a6f",
+            "artifact_33c2fff2-1497-410c-9524-d9fd88c00b1c",
+            "artifact_a18e498f-5500-4da6-bfb0-6115c111f2f2"
+          ]
+        }
+      ],
+      "repairRequests": [
+        {
+          "schemaVersion": "2.0",
+          "skillId": "frontend.visual-design-polish",
+          "iteration": 1,
+          "maxIterations": 3,
+          "gateIds": [
+            "core/gate/critic-findings"
+          ],
+          "sourceReportIndex": 0
+        }
+      ],
+      "outcome": "used"
+    },
+    {
+      "skillId": "frontend.tailwind-ui-polish",
+      "role": "companion",
+      "mandatory": false,
+      "version": "0.3.0",
+      "packageChecksum": "sha256:7924649efcfc8ad0e6e7fb5d6a4fb1648cd380ed82c8921e6cb82bcd89025da0",
+      "contractChecksum": "sha256:4e960c4e3d47726516fa28d7744a521687a180f90466a387e201aa437d19466d",
+      "contract": {
+        "schemaVersion": "2.0",
+        "skillId": "frontend.tailwind-ui-polish",
+        "contractVersion": "2.0.0",
+        "inputSchema": "input.schema.json",
+        "outputSchema": "output.schema.json",
+        "mustRead": [
+          "SKILL.md",
+          "references/mechanical-rules.md"
+        ],
+        "applicability": {
+          "op": "signal",
+          "collection": "styling",
+          "name": "tailwindcss",
+          "minConfidence": 0.5
+        },
+        "prerequisites": [
+          {
+            "id": "approved-direction",
+            "kind": "input",
+            "path": "existingDirection"
+          },
+          {
+            "id": "browser-ready",
+            "kind": "capability",
+            "capability": "browser",
+            "requiredStatus": "ready"
+          },
+          {
+            "id": "screenshots-ready",
+            "kind": "capability",
+            "capability": "screenshots",
+            "requiredStatus": "ready"
+          }
+        ],
+        "steps": [
+          {
+            "id": "frontend.tailwind-ui-polish/step/classify-project",
+            "type": "collect",
+            "requiredEvidenceKinds": [
+              "project-archetype"
+            ],
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/tailwind-project-confirmed"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/step/capture-before",
+            "type": "collect",
+            "requiredEvidenceKinds": [
+              "browser-screenshot-before"
+            ],
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/required-states-covered"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/step/implement-bounded-fix",
+            "type": "implement",
+            "requiredEvidenceKinds": [
+              "implementation-diff"
+            ],
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/no-dynamic-tailwind-classes"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/step/capture-initial-evidence",
+            "type": "collect",
+            "requiredEvidenceKinds": [
+              "browser-screenshot-initial"
+            ],
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/no-horizontal-overflow",
+              "frontend.tailwind-ui-polish/rule/focus-visible"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/step/independent-critique",
+            "type": "critic",
+            "requiredEvidenceKinds": [
+              "critic-report"
+            ],
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/required-states-covered"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/step/bounded-repair",
+            "type": "repair",
+            "requiredEvidenceKinds": [],
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/required-states-covered"
+            ],
+            "repairable": true
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/step/capture-recheck-evidence",
+            "type": "collect",
+            "requiredEvidenceKinds": [
+              "browser-screenshot-390",
+              "browser-screenshot-768",
+              "browser-screenshot-1440"
+            ],
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/no-horizontal-overflow",
+              "frontend.tailwind-ui-polish/rule/no-clipped-controls",
+              "frontend.tailwind-ui-polish/rule/no-sticky-overlap"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/step/final-verify",
+            "type": "verify",
+            "requiredEvidenceKinds": [
+              "verification-input"
+            ],
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/no-runtime-console-errors",
+              "frontend.tailwind-ui-polish/rule/reduced-motion-verified"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/step/final-report",
+            "type": "report",
+            "requiredEvidenceKinds": [
+              "skill-output"
+            ],
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/required-states-covered"
+            ]
+          }
+        ],
+        "rules": [
+          {
+            "id": "frontend.tailwind-ui-polish/rule/existing-direction-present",
+            "description": "Preserve an approved existing visual direction."
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/rule/tailwind-project-confirmed",
+            "description": "Confirm Tailwind and classify the local token archetype."
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/rule/required-states-covered",
+            "description": "Cover required states and supported viewports."
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/rule/no-horizontal-overflow",
+            "description": "Do not leave page-level horizontal overflow."
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/rule/no-clipped-controls",
+            "description": "Do not leave clipped or unreachable controls."
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/rule/no-sticky-overlap",
+            "description": "Do not leave sticky elements covering content."
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/rule/focus-visible",
+            "description": "Keep keyboard focus visible."
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/rule/no-dynamic-tailwind-classes",
+            "description": "Use complete static Tailwind class strings."
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/rule/no-runtime-console-errors",
+            "description": "Leave no runtime console errors in the verified flow."
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/rule/reduced-motion-verified",
+            "description": "Verify reduced-motion behavior."
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/rule/raw-colors-reviewed",
+            "description": "Review raw colors against semantic token roles."
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/rule/repeated-class-bundles-reviewed",
+            "description": "Review repeated class bundles for stable variants."
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/rule/genericity-findings-reviewed",
+            "description": "Remove unsupported generic visual decoration."
+          }
+        ],
+        "gates": [
+          {
+            "id": "frontend.tailwind-ui-polish/gate/existing-direction-present",
+            "level": "hard",
+            "evaluator": {
+              "type": "schema-valid",
+              "schema": "input"
+            },
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/existing-direction-present"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/gate/tailwind-project-confirmed",
+            "level": "hard",
+            "evaluator": {
+              "type": "evidence-present",
+              "evidenceKind": "project-archetype"
+            },
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/tailwind-project-confirmed"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/gate/required-states-covered",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/browser-hard-gates"
+            },
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/required-states-covered"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/gate/no-horizontal-overflow",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/browser-hard-gates"
+            },
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/no-horizontal-overflow"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/gate/no-clipped-controls",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/browser-hard-gates"
+            },
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/no-clipped-controls"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/gate/no-sticky-overlap",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/browser-hard-gates"
+            },
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/no-sticky-overlap"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/gate/focus-visible",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/browser-hard-gates"
+            },
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/focus-visible"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/gate/no-dynamic-tailwind-classes",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/tailwind-source"
+            },
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/no-dynamic-tailwind-classes"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/gate/no-runtime-console-errors",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/browser-hard-gates"
+            },
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/no-runtime-console-errors"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/gate/reduced-motion-verified",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/browser-hard-gates"
+            },
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/reduced-motion-verified"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/gate/raw-colors-reviewed",
+            "level": "advisory",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/tailwind-source"
+            },
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/raw-colors-reviewed"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/gate/repeated-class-bundles-reviewed",
+            "level": "advisory",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/tailwind-source"
+            },
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/repeated-class-bundles-reviewed"
+            ]
+          },
+          {
+            "id": "frontend.tailwind-ui-polish/gate/genericity-findings-reviewed",
+            "level": "advisory",
+            "evaluator": {
+              "type": "schema-valid",
+              "schema": "critic-report"
+            },
+            "ruleIds": [
+              "frontend.tailwind-ui-polish/rule/genericity-findings-reviewed"
+            ]
+          }
+        ],
+        "maxRepairIterations": 3
+      },
+      "schemaSnapshots": {
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": [
+            "brief",
+            "capabilityProfile"
+          ],
+          "properties": {
+            "brief": {
+              "type": "object"
+            },
+            "existingDirection": {
+              "type": "object",
+              "minProperties": 1,
+              "description": "Approved design direction; this skill must not replace it."
+            },
+            "capabilityProfile": {
+              "enum": [
+                "constrained",
+                "standard",
+                "advanced"
+              ]
+            },
+            "tailwindVersion": {
+              "enum": [
+                "3",
+                "4",
+                "unknown"
+              ]
+            },
+            "affectedSurfaces": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "output": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": [
+            "outcome",
+            "classification",
+            "changes",
+            "verification",
+            "residualRisks"
+          ],
+          "properties": {
+            "outcome": {
+              "enum": [
+                "verified",
+                "implemented-unverified",
+                "failed",
+                "blocked"
+              ]
+            },
+            "classification": {
+              "enum": [
+                "responsive-bug",
+                "state-gap",
+                "hierarchy",
+                "token-drift",
+                "accessibility",
+                "density",
+                "subjective-polish"
+              ]
+            },
+            "changes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "verification": {
+              "type": "object"
+            },
+            "residualRisks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "schemaChecksums": {
+        "input": "sha256:c2dfa06a51d0e36a169339a4824b4d4513defeaaaafbfc0357685d6f3894cef8",
+        "output": "sha256:9afe85b91798a192a88ecdf34fcbfd0554ec62517646f0e0c0cd7a8110d406e2"
+      },
+      "input": {
+        "brief": {},
+        "capabilityProfile": "standard",
+        "existingDirection": {
+          "source": "approved"
+        }
+      },
+      "state": "used",
+      "applicability": {
+        "applicable": true,
+        "unmetPrerequisites": []
+      },
+      "contentChunks": [
+        {
+          "path": "SKILL.md",
+          "ordinal": 0,
+          "total": 3,
+          "sha256": "sha256:6f574704045a02768ec0165d23f5d8befbdfc2498648d5ce026ce35a27b90643",
+          "content": "---\nname: tailwind-ui-polish\ndescription: Improve Tailwind-based UI through screenshot-driven visual QA, responsive layout repair, spacing, density, typography, state styling, accessibility checks, token consistency, and subject-specific design polish.\n---\n\n# Tailwind UI Polish\n\nUse this skill when Tailwind classes, local Tailwind components, shadcn/Tailwind tokens, or Tailwind-driven layouts are the implementation surface for visual polish, responsive repair, density tuning, or state styling. Do not use it for pure backend work, non-visual refactors, brand redesign from scratch, illustration work, or projects where Tailwind is not part of the UI layer.\n\n## Ownership Boundary\n\nTailwind-ui-polish **implements or repairs an existing visual direction** through\nTailwind classes. It does not choose open-ended art direction, layout models, density\ntargets, or type/color systems. If the task requires a new broad direction or the user\nasks for subjective visual direction without a reference, hand off to\n`frontend.visual-design-polish`. Keep this skill focused on execution class tuning and\nresponsive/states/overflow repair of an existing direction.\n\n## Project Archetype\n\nClassify the project before prescribing tokens: **shadcn-backed**, **Tailwind with local semantic tokens**, or **Tailwind/CSS-first without a system**. Use shadcn names only in the first case; reuse local roles in the second; keep changes page-local in the third until repetition proves a system boundary. Do not turn a prototype or an inconsistent baseline into a token migration by default.\n\n## Structured Execution Contract\n\nFor material responsive or state work, read `input.schema.json`, `workflow.json`, and `gates.json` before editing. Follow the selected profile without relaxing hard gates. With unknown model capability, use the constrained profile: preserve the existing direction, make the smallest bounded class change, verify declared states and viewports, and run one repair pass. Return `output.schema.json`; use `evals.json` for isolated evaluation.\n\n## Design Change Modes\n\n- **repair:** Correct verification findings within the approved `BoundedRepairRequest`; repair cannot broaden art direction.\n- **refine:** Improve an approved direction while preserving its recipe, thesis, and protected invariants.\n- **explore:** Compare policy-permitted recipe-compatible directions before selecting one structured direction.\n- **reimagine:** Establish a new direction only when product evidence, destructive critique, and the execution policy permit it.\n\n## Verification Outcome\n\n- Report `verified` only after the changed view is rendered at the relevant desktop and mobile widths.\n- Without browser or screenshot capability, allow only analysis and small reversible fixes; mark material layout or visual work `blocked`.\n- If the user explicitly accepts the risk, return `implemented-unverified` with a manual overflow, focus, state, and viewport checklist.\n\n## Decision Rules\n\n- Start from the product's subject, audience, and primary job. A manga library, CRM dashboard, and health portal should not receive the same palette, density, typography, or decorative moves.\n- If the project has `DESIGN.md`, use it as the visual source for Tailwind class choices. Otherwise infer only the bounded implementation rules supported by adjacent screens. If a new visual thesis is required, hand off to `frontend.visual-design-polish`.\n- Match the existing app style. If the request explicitly asks to move the direction, hand off before changing classes.\n- Treat screenshots, rendered browser state, and real viewport checks as required evidence for visual/layout changes. Code inspection alone is not enough to close Tailwind polish work unless browser access is blocked.\n- Prioritize layout stability, readable density, hierarchy, and state coverage over decorative changes.\n- Treat overflow, wrapping, contrast, focus visibility, sticky overlap, and responsive breakage as correctness issues.\n- Prefer semantic Tailwind tokens, local variants, `cn` helpers, CVA/class helpers, or shared components when repeated utility clusters become meaningful duplication.\n- Use arbitrary values only when no project token expresses the role or when a deliberate product-specific token is being introduced.\n- Avoid one-note palettes, generic gradient/blob/card layouts, nested cards, ornamental shadows, random icon grids, and animation without a job.\n- Avoid inherited model house styles unless the brief earns them. Warm cream plus serif plus terracotta, purple gradients, dark neon glass, and bento-card grids are defaults, not decisions.\n- For subjective polish, set the design dials first: design variance, motion intensity, and visual density. A dense admin table, consumer landing page, and onboarding flow should not receive the same Tailwind treatment.\n- Keep dashboard, CRM, admin, and operational tools compact and scannable. Save hero-scale type, large imagery, and editorial spacing for content that actually needs it.\n- Keep boundaries sharp: use `frontend.design-system` for token/theme architecture, `frontend.visual-design-polish` for broad visual direction, `frontend.ux-critique` for task-flow redesign, `frontend.interaction-polish` for local component motion, and `frontend.motion-design` for product-wide motion systems.\n- Use Tailwind as an implementation language for a visual thesis, not as a source of generic styling. The class list should express layout, hierarchy, state, token roles, and responsive behavior.\n- Every new raw color, radius, shadow, gradient, or arbitrary spacing should map to a token role or mini-DESIGN rule. If it cannot, remove it or keep it page-local with a clear product reason.\n- Prefer semantic tokens and static variant maps over raw palette classes, hard-coded neutrals, dynamic class construction, and one-off arbitrary values.\n\n## Pre-Polish Gate\n\nBefore changing Tailwind classes, identify the UI contract:\n\n- Primary user task and first-viewport priority.\n- Flow state: entry, main action, feedback, success, and recovery.\n- Required states: default, hover, focus-visible, active, disabled, loading, empty, error, success, selected, dirty, stale, partial, and no-permission where relevant.\n- Data stress cases: long labels, missing images, translated text, large numbers, dense tables, code blocks, and user-generated content.\n- Design-system binding: existing tokens, semantic color roles, radius, shadow, type scale, spacing, density, dark mode, and component variants.\n- Responsive contract: supported breakpoints, content-priority reflow, touch targets, horizontal overflow strategy, and sticky element behavior.\n\nDo not start from a decorative class pass. Start from hierarchy, states, responsiveness, and project tokens.\n\n## Workflow\n\n1. Capture the polish envelope: screen or component, user workflow, Tailwind version, design system conventions, target breakpoints, and states that must remain intact.\n2. Inspect local UI vocabulary before changing classes: shared components, `tailwind.config.*`, global CSS, `components.json`, shadcn theme tokens, `cn`/CVA utilities, nearby screens, and existing radii/shadow/spacing/type patterns.\n   For Tailwind v4, inspect CSS-first `@theme`, `@theme inline`, `@custom-variant`, `@source`, and theme variable namespaces; for Tailwind v3, inspect `tailwind.config.*`.\n3. Form a compact design thesis for the pass:\n   - design source: `DESIGN.md`, supplied reference, local conventions, or inferred mini-DESIGN spec;\n   - subject and audience;\n   - primary content/action hierarchy;\n   - density target: compact tool, balanced product UI, or editorial/marketing page;\n   - one allowed visual move and what it communicates;\n   - one generic Tailwind/shadcn default you are avoiding.\n   If these rules cannot be derived from an existing direction, reference, or adjacent UI, stop and hand off instead of inventing 2-3 directions here.\n4. Render or request visual evidence. Check at minimum `320px` or `390px`, desktop, and `768px` when layout, tables, sidebars, modals, or dense toolbars are involved. Prefer before/after screenshots for existing UI.\n5. Audit visual hierarchy:\n   - primary action/content is obvious;\n   - headings, labels, metadata, and controls have distinct type roles;\n   - spacing groups related items and separates unrelated items;\n   - color and emphasis guide attention without becoming decoration.\n6. Audit responsive robustness:\n   - no page-level horizontal scroll;\n   - long text, translated labels, badges, icons, and buttons fit or truncate intentionally;\n   - sticky headers/footers/action bars do not cover content;\n   - grids, sidebars, tables, modals, menus, and toolbars keep stable dimensions.\n7. Audit interaction and state styling:\n   - hover, focus-visible, active, disabled, selected, loading, empty, error, success, skeleton, and dirty states;\n   - keyboard focus order and visible focus rings;\n   - reduced motion for transitions;\n   - contrast for text, icons, borders, focus rings, charts, and disabled states.\n8. Audit Tailwind implementation quality:\n   - conflicting utilities such as multiple spacing, display, width, or color classes;\n   - arbitrary values where tokens or semantic classes exist;\n   - repeated class bundles that should become a variant or local component;\n   - fragile absolute positioning, magic negative margins, and viewport-sized hacks;\n   - inconsistent radii, shadows, borders, gaps, and typography scale;\n   - dynamically constructed class names such as `bg-${color}-600`; map props to complete static class strings so Tailwind can detect them;\n   - missing container-query handling when a reusable component should adapt to parent width rather than viewport width;\n   - shadcn token drift such as hard-coded neutrals where `bg-background`, `text-foreground`, `border-border`, `ring-ring`, `bg-primary`, or `text-primary-foreground` already express the role;\n   - element semantics changed for styling, such as using a button for navigation or a link for mutation.\n9. Make the smallest useful change:\n   - prefer local convention over a new mini design system;\n   - extract only when duplication or variants justify it;\n   - preserve behavior, routing, data fetching, and component ownership boundaries.\n10. Verify with screenshots or state the exact manual/browser checks still needed.\n\nFor detailed class-level, layout-mechanical, and container guidance, read\n[the mechanical rules reference](references/mechanical-rules.md). The workflow below\ncovers the essential audit structure — use the reference for specific class patterns.\n\n## Hard Failure Gates\n\n- Do not finish a Tailwind visual/layout change with unresolved page-level horizontal scroll, clipped controls, sticky overlap, invisible focus, or text/control overlap at supported breakpoints.\n- Do not leave state-driven layout shift where hover, focus, active, loading, or disabled states resize controls unexpectedly.\n- Do not rely on dynamic Tailwind class construction such as `bg-${color}-600`; map variants to complete static class strings.\n- Do not replace semantic shadcn/Tailwind tokens with hard-coded neutrals, hex values, or arbitrary spacing unless the product role is deliberate and documented.\n- Do not close responsive polish by hiding overflow while controls, text, tables, or sticky elements remain unreachable.\n- If screenshots/browser verification are unavailable, report the blocker and list the exact viewport/state matrix that remains unverified.\n\n## Self-Critique And Revision Gate\n\nBefore closing a Tailwind polish task, inspect the result for slop and revise in code:\n\n- Remove class changes that only add generic gradients, glow, glass, blobs, heavy shadows, nested cards, or random icon decoration.\n- Replace magic spacing, color, radius, shadow, and type values with project tokens or document why the one-off is deliberate.\n- Verify one primary action remains visually dominant and secondary/destructive actions are quieter or separated.\n- Verify state styling does not resize controls, hide focus, reduce contrast, or create layout shift.\n- Verify mobile is recomposed around task priority instead of being a compressed desktop layout.\n"
+        },
+        {
+          "path": "SKILL.md",
+          "ordinal": 1,
+          "total": 3,
+          "sha256": "sha256:6e0a1b822288d2c049b502709a92f7db66602c468006509960bb00df946845fe",
+          "content": "- If a repeated class bundle now encodes a stable product intent, promote it to a local variant or component; otherwise keep the change local.\n\n## Screenshot QA Checklist\n\n- Capture before and after when possible for `320px` or `390px`, `768px` when relevant, and desktop-width viewports, adjusted to the app's supported breakpoints.\n- Compare first viewport hierarchy, scroll depth, sticky elements, long-text cases, and modal/menu/table overflow.\n- Inspect at least one empty, loading, error, disabled, selected, and focused state when those states exist.\n- Check that hover/focus/active states do not resize controls or shift layout.\n- Check dark mode separately when the project supports it.\n- Check focus-visible, disabled, loading, empty, error, selected/current, hover, and active states when they exist.\n- Treat screenshot differences as useful only when they improve hierarchy, task completion, readability, accessibility, or robustness. Decoration alone is not a win.\n\nFor token discipline, class construction, responsive, layout-mechanical, and fix-pattern\nguidance, read [the mechanical rules reference](references/mechanical-rules.md).\n\n## References\n\n- Use official Tailwind docs for utility classes, responsive design, theme variables, arbitrary values, source detection, and functions/directives; use shadcn/ui theming and `components.json` docs when shadcn is present.\n- When available in the project, inspect existing layout primitives, shared buttons/inputs/cards, Tailwind config or CSS theme variables, shadcn theme, screenshots, design tokens, and adjacent pages with similar density.\n\n## Validation\n\n- Name the viewport, state, or component variant affected by every material issue.\n- Tie color, spacing, typography, and motion comments to hierarchy, consistency, accessibility, or usability.\n- Verify no horizontal scroll, no clipped controls, no sticky overlap, no text/control overlap, visible focus, and stable controls across relevant breakpoints.\n- If screenshots or browser verification are unavailable, state the missing evidence and the safest exact checks to run.\n- Do not claim visual improvement without comparing against the product's subject, local conventions, and at least one concrete user workflow.\n\n## Output Contract\n\n- Classification first: responsive bug, state styling gap, hierarchy issue, token drift, accessibility risk, density problem, or subjective polish.\n- Evidence inspected: screenshot/browser viewport, code, local component pattern, tokens/config, state coverage, or missing.\n- Proposed visual thesis when the task is subjective.\n- Changes made or recommended, scoped to Tailwind classes, local variants, or small component extraction.\n- Viewports and states verified, including the mobile/desktop screenshot matrix or the exact blocker.\n- Remaining visual/accessibility risk and any screenshots or manual checks still needed.\n\n## Shared Contracts\n\nOwnership: tailwind-ui-polish owns Tailwind implementation and bounded repair.\n\n- [`frontend/browser-evidence`](references/shared/frontend--browser-evidence.md)\n- [`frontend/bounded-repair`](references/shared/frontend--bounded-repair.md)\n- [`frontend/visual-verification`](references/shared/frontend--visual-verification.md)\n"
+        },
+        {
+          "path": "references/mechanical-rules.md",
+          "ordinal": 2,
+          "total": 3,
+          "sha256": "sha256:32e8fb0ae9d5b2a24b2067c7a5b7574d422580db376f887a05694cb79794b9c4",
+          "content": "# Tailwind Mechanical Rules Reference\n\nRead this reference when the core SKILL.md workflow needs detailed class-level, layout,\nor container guidance. Do not read it for every task — use it when a specific mechanical\nquestion arises during implementation or audit.\n\n## Token Discipline\n\n- In shadcn/Tailwind projects, prefer `bg-background`, `text-foreground`, `bg-card`,\n  `text-card-foreground`, `text-muted-foreground`, `border-border`, `ring-ring`,\n  `bg-primary`, and `text-primary-foreground` over raw `slate-*`, `zinc-*`, or hex.\n- When a project DESIGN.md defines token roles, map them to Tailwind theme variables or\n  local semantic classes before adding page-level utilities.\n- Preserve foreground pairs: `primary`/`primary-foreground`, `card`/`card-foreground`,\n  `accent`/`accent-foreground`, `popover`/`popover-foreground`, and\n  `destructive`/`destructive-foreground`.\n- For Tailwind v4, inspect CSS-first `@theme`, `@theme inline`, custom variants, and\n  CSS variable namespaces before adding classes.\n- Prefer OKLCH or semantic CSS variables for new color ramps when the project already\n  uses CSS variables.\n- Theme shadcn components through `:root` and `.dark` tokens rather than scattering\n  hard-coded `dark:*` palette overrides.\n- Keep `--radius` or the project's radius scale as source of truth; do not invent\n  unrelated corner values for one component.\n- Define reusable animations with theme variables or local utilities before using many\n  one-off `animate-[...]` classes.\n\n## Class Construction Rules\n\n- Group classes by intent: layout, sizing, spacing, typography, color, border/effects,\n  state, responsive.\n- Split repeated class bundles into existing components, variant maps, `cn` helpers, or\n  local primitives when repetition has semantic meaning.\n- Do not hide everything behind opaque custom CSS classes; Tailwind should remain\n  readable unless third-party markup or a true primitive needs CSS.\n- Use arbitrary values for genuine one-offs, CSS variable references, masks, complex\n  grids, or layout math; promote repeated arbitrary values into tokens.\n- Avoid `transition-all`; prefer `transition-colors`, `transition-opacity`,\n  `transition-shadow`, or `transition-transform`.\n- Use `motion-safe:` for decorative motion and `motion-reduce:` to remove or simplify\n  non-essential movement.\n- Use `data-*`, `aria-*`, `open:`, `disabled:`, `invalid:`, `has-*`, `group-*`, and\n  `peer-*` variants to style state instead of manually toggling brittle class strings.\n- Use `contrast-more:`, `forced-colors:`, and `not-forced-colors:` when high-contrast\n  environments are relevant.\n- Avoid global `!important` and widespread `!` modifiers; fix specificity or component\n  boundaries instead.\n\n## Container And Responsive Rules\n\n- Use viewport breakpoints for page-level layout and container queries for cards,\n  panels, dashboard tiles, embedded widgets, sidebars, and reusable components.\n- Mark reusable component shells with `@container` and use named containers when nested\n  contexts matter.\n- Unprefixed utilities are the mobile baseline. Do not use `sm:` as the mobile style.\n- Test around actual breakpoint edges, not only at ideal desktop and phone widths.\n- Use `min-w-0`, `max-w-*`, `truncate`, `line-clamp`, wrapping, and explicit grid/flex\n  constraints for long labels, translated strings, and user-generated content.\n\n## Mechanical UI Checks\n\n- Flex and grid children containing text should usually have `min-w-0` plus intentional\n  wrapping, truncation, or `line-clamp` behavior.\n- Buttons, tabs, badges, table cells, nav items, and icon buttons should keep stable\n  dimensions across hover, focus, active, disabled, loading, and selected states.\n- Images and media shells need reserved dimensions, `aspect-*`, or explicit sizing so\n  loading does not shift layout.\n- Full-bleed and fixed-position layouts should account for mobile safe areas when\n  controls sit near viewport edges.\n- Avoid `overflow-x-hidden` as a blanket fix for real overflow. Fix the child\n  constraint, table strategy, sticky element, or long-content behavior first.\n- If theming changes touch the page shell, check `color-scheme`, native form controls,\n  scrollbars, and theme-color behavior where the project supports dark mode.\n- Format dates, numbers, currencies, and units through project helpers or `Intl.*`\n  conventions before polishing spacing around hard-coded text.\n- Preserve deep-linkable UI state for tabs, filters, pagination, and selected records\n  when the product expects shareable or restorable state; style should not hide broken\n  state ownership.\n\n## Fix Patterns\n\n- Replace raw hex or arbitrary color values with project tokens unless the visual\n  direction explicitly needs a new token.\n- In shadcn projects, prefer semantic tokens for reusable UI: `background`, `foreground`,\n  `card`, `popover`, `primary`, `secondary`, `muted`, `accent`, `destructive`, `border`,\n  `input`, and `ring` before hard-coded neutral palettes.\n- Prefer `gap`, `space-*`, grid tracks, and flex wrapping over hard-coded margins\n  between repeated items.\n- Use `min-w-0`, `max-w-*`, `truncate`, `line-clamp`, stable icon sizes, and explicit\n  grid/flex constraints for long content.\n- Use `focus-visible:*` styles that are visible against the actual background, not only\n  the default light surface.\n- Use mobile-first Tailwind: unprefixed utilities define the narrow layout; `sm:`,\n  `md:`, `lg:`, and larger prefixes progressively enhance. Do not use `sm:` as the\n  mobile style.\n- Use container queries for reusable components whose layout depends on parent width\n  more than viewport width.\n- Keep cards shallow: use cards for repeated items or framed tools, not for every\n  section inside another card.\n- Keep button and control dimensions stable across states. Loading text/spinners should\n  not resize the control.\n- Use semantic variants for repeated states such as intent, size, tone, density, and\n  selected/active.\n- Preserve native semantics: anchors navigate, buttons perform actions, form controls\n  keep labels and accessible names.\n"
+        }
+      ],
+      "readReceipts": [
+        {
+          "path": "SKILL.md",
+          "ordinal": 0,
+          "total": 3,
+          "sha256": "sha256:6f574704045a02768ec0165d23f5d8befbdfc2498648d5ce026ce35a27b90643",
+          "deliveredAt": "2026-08-08T06:20:35.107Z"
+        },
+        {
+          "path": "SKILL.md",
+          "ordinal": 1,
+          "total": 3,
+          "sha256": "sha256:6e0a1b822288d2c049b502709a92f7db66602c468006509960bb00df946845fe",
+          "deliveredAt": "2026-08-08T06:20:35.111Z"
+        },
+        {
+          "path": "references/mechanical-rules.md",
+          "ordinal": 2,
+          "total": 3,
+          "sha256": "sha256:32e8fb0ae9d5b2a24b2067c7a5b7574d422580db376f887a05694cb79794b9c4",
+          "deliveredAt": "2026-08-08T06:20:35.114Z"
+        }
+      ],
+      "steps": [
+        {
+          "id": "frontend.tailwind-ui-polish/step/classify-project",
+          "type": "collect",
+          "requiredEvidenceKinds": [
+            "project-archetype"
+          ],
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/tailwind-project-confirmed"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.492Z",
+              "evidenceIds": [
+                "artifact_f82844ae-2c66-44d4-8774-565190d5dc21"
+              ],
+              "completedAt": "2026-08-08T06:20:35.510Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.tailwind-ui-polish/step/capture-before",
+          "type": "collect",
+          "requiredEvidenceKinds": [
+            "browser-screenshot-before"
+          ],
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/required-states-covered"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.514Z",
+              "evidenceIds": [
+                "artifact_120f4b4e-3bc7-4d3d-b288-fb3c883df14a"
+              ],
+              "completedAt": "2026-08-08T06:20:35.531Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.tailwind-ui-polish/step/implement-bounded-fix",
+          "type": "implement",
+          "requiredEvidenceKinds": [
+            "implementation-diff"
+          ],
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/no-dynamic-tailwind-classes"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.535Z",
+              "evidenceIds": [
+                "artifact_6e74a8a5-8bb6-45fc-8b26-5ac540c2d72d"
+              ],
+              "completedAt": "2026-08-08T06:20:35.552Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.tailwind-ui-polish/step/capture-initial-evidence",
+          "type": "collect",
+          "requiredEvidenceKinds": [
+            "browser-screenshot-initial"
+          ],
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/no-horizontal-overflow",
+            "frontend.tailwind-ui-polish/rule/focus-visible"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.556Z",
+              "evidenceIds": [
+                "artifact_e8414878-68d7-4a06-bdd9-ad25daf80e00"
+              ],
+              "completedAt": "2026-08-08T06:20:35.573Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.tailwind-ui-polish/step/independent-critique",
+          "type": "critic",
+          "requiredEvidenceKinds": [
+            "critic-report"
+          ],
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/required-states-covered"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.577Z",
+              "evidenceIds": [
+                "artifact_05183420-acb2-4128-8cfa-1d3067230d64"
+              ],
+              "completedAt": "2026-08-08T06:20:35.594Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.tailwind-ui-polish/step/bounded-repair",
+          "type": "repair",
+          "requiredEvidenceKinds": [],
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/required-states-covered"
+          ],
+          "repairable": true,
+          "status": "skipped",
+          "attempts": []
+        },
+        {
+          "id": "frontend.tailwind-ui-polish/step/capture-recheck-evidence",
+          "type": "collect",
+          "requiredEvidenceKinds": [
+            "browser-screenshot-390",
+            "browser-screenshot-768",
+            "browser-screenshot-1440"
+          ],
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/no-horizontal-overflow",
+            "frontend.tailwind-ui-polish/rule/no-clipped-controls",
+            "frontend.tailwind-ui-polish/rule/no-sticky-overlap"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.599Z",
+              "evidenceIds": [
+                "artifact_825fdf66-44bf-449f-b462-794bbdae2f9b",
+                "artifact_b084f8b7-a83f-4078-826a-61641ca02461",
+                "artifact_886ee7a8-de28-4af1-9d7a-0983801f6688"
+              ],
+              "completedAt": "2026-08-08T06:20:35.642Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.tailwind-ui-polish/step/final-verify",
+          "type": "verify",
+          "requiredEvidenceKinds": [
+            "verification-input"
+          ],
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/no-runtime-console-errors",
+            "frontend.tailwind-ui-polish/rule/reduced-motion-verified"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.646Z",
+              "evidenceIds": [
+                "artifact_0ee127e8-f358-4339-a1c8-a436430ebc2e"
+              ],
+              "completedAt": "2026-08-08T06:20:35.665Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.tailwind-ui-polish/step/final-report",
+          "type": "report",
+          "requiredEvidenceKinds": [
+            "skill-output"
+          ],
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/required-states-covered"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.670Z",
+              "evidenceIds": [
+                "artifact_b29c5818-591a-4d8d-9dc3-f4a71d893951"
+              ],
+              "completedAt": "2026-08-08T06:20:35.688Z"
+            }
+          ]
+        }
+      ],
+      "repairIterations": 0,
+      "verificationReports": [
+        {
+          "schemaVersion": "2.0",
+          "skillId": "frontend.tailwind-ui-polish",
+          "generatedAt": "2026-08-08T06:20:35.694Z",
+          "iteration": 0,
+          "gateResults": [
+            {
+              "gateId": "frontend.tailwind-ui-polish/gate/existing-direction-present",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.tailwind-ui-polish/gate/tailwind-project-confirmed",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.tailwind-ui-polish/gate/required-states-covered",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.tailwind-ui-polish/gate/no-horizontal-overflow",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.tailwind-ui-polish/gate/no-clipped-controls",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.tailwind-ui-polish/gate/no-sticky-overlap",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.tailwind-ui-polish/gate/focus-visible",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.tailwind-ui-polish/gate/no-dynamic-tailwind-classes",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.tailwind-ui-polish/gate/no-runtime-console-errors",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.tailwind-ui-polish/gate/reduced-motion-verified",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.tailwind-ui-polish/gate/raw-colors-reviewed",
+              "passed": true,
+              "level": "advisory"
+            },
+            {
+              "gateId": "frontend.tailwind-ui-polish/gate/repeated-class-bundles-reviewed",
+              "passed": true,
+              "level": "advisory"
+            },
+            {
+              "gateId": "frontend.tailwind-ui-polish/gate/genericity-findings-reviewed",
+              "passed": true,
+              "level": "advisory"
+            },
+            {
+              "gateId": "core/gate/critic-findings",
+              "passed": true,
+              "level": "hard"
+            }
+          ],
+          "hardPassed": true,
+          "evidenceIds": [
+            "artifact_f82844ae-2c66-44d4-8774-565190d5dc21",
+            "artifact_120f4b4e-3bc7-4d3d-b288-fb3c883df14a",
+            "artifact_6e74a8a5-8bb6-45fc-8b26-5ac540c2d72d",
+            "artifact_e8414878-68d7-4a06-bdd9-ad25daf80e00",
+            "artifact_05183420-acb2-4128-8cfa-1d3067230d64",
+            "artifact_825fdf66-44bf-449f-b462-794bbdae2f9b",
+            "artifact_b084f8b7-a83f-4078-826a-61641ca02461",
+            "artifact_886ee7a8-de28-4af1-9d7a-0983801f6688",
+            "artifact_0ee127e8-f358-4339-a1c8-a436430ebc2e",
+            "artifact_b29c5818-591a-4d8d-9dc3-f4a71d893951"
+          ]
+        }
+      ],
+      "repairRequests": [],
+      "outcome": "used"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifactId": "artifact_f68a92be-107d-46cd-8785-5a9b303ebd35",
+      "kind": "product-evidence-ledger",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/bdcf4c994585af6dd6cb1cfbff78bcc73ab27dc30a299db5bb83766ca05b5de4",
+      "sourcePath": "evidence/9-0-product-evidence-ledger.json",
+      "sha256": "sha256:bdcf4c994585af6dd6cb1cfbff78bcc73ab27dc30a299db5bb83766ca05b5de4",
+      "size": 9,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/collect-product-evidence",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/product-evidence-present"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_03a9a5c3-6b2d-4365-b0c7-e0d92491aa1c",
+      "kind": "design-direction",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/8aeec2629979acfe497f198aff4bd058e5e13c5f22377c38a932edf9153a0310",
+      "sourcePath": "evidence/12-0-design-direction.json",
+      "sha256": "sha256:8aeec2629979acfe497f198aff4bd058e5e13c5f22377c38a932edf9153a0310",
+      "size": 10,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/define-structured-direction",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/structured-direction-present"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_b438161f-cd11-4f9d-9b24-1fa4960a6bda",
+      "kind": "implementation-diff",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/dbf2f87cc89f342d0861f2e216e7f8b3e81eb60306a379b7c8523f66805cc62d",
+      "sourcePath": "evidence/15-0-implementation-diff.json",
+      "sha256": "sha256:dbf2f87cc89f342d0861f2e216e7f8b3e81eb60306a379b7c8523f66805cc62d",
+      "size": 18,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/implement-direction",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/material-scope-confirmed",
+            "frontend.visual-design-polish/rule/no-invented-proof"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_a50eed2f-993c-4828-90dc-7546cfe9275a",
+      "kind": "browser-screenshot-initial-390",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/22202b661b6c1f090edfe263758227a2fdaf1e2980483bf406fd635108fe7fa7",
+      "sourcePath": "evidence/initial-390.png",
+      "sha256": "sha256:22202b661b6c1f090edfe263758227a2fdaf1e2980483bf406fd635108fe7fa7",
+      "size": 12,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/capture-initial-evidence",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/initial-viewports-covered"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_8a8196c2-a751-4910-9d36-08576de40a6c",
+      "kind": "browser-screenshot-initial-768",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/d4bae57e4c02f126d2dfc92c655836586cfdd0c5970c724cfb73601ae0d5b911",
+      "sourcePath": "evidence/initial-768.png",
+      "sha256": "sha256:d4bae57e4c02f126d2dfc92c655836586cfdd0c5970c724cfb73601ae0d5b911",
+      "size": 12,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/capture-initial-evidence",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/initial-viewports-covered"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_440b1bfe-4061-4981-8099-0bc893ed00bd",
+      "kind": "browser-screenshot-initial-1440",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/e8d1f8ff2746a27b54d29da85029b03eab03ad38f7c587876472f642231bea5b",
+      "sourcePath": "evidence/initial-1440.png",
+      "sha256": "sha256:e8d1f8ff2746a27b54d29da85029b03eab03ad38f7c587876472f642231bea5b",
+      "size": 13,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/capture-initial-evidence",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/initial-viewports-covered"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_1211e93a-be7a-4a13-846d-09fd332b2fa4",
+      "kind": "critic-report",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/815857fe4712fa532eca1f6d3f1128c1a6d973a4bc957722a13a310866bd2941",
+      "sourcePath": "evidence/23-0-critic-report.json",
+      "sha256": "sha256:815857fe4712fa532eca1f6d3f1128c1a6d973a4bc957722a13a310866bd2941",
+      "size": 758,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "validatedAs": "critic-report",
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/independent-visual-critic",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/critic-independent",
+            "frontend.visual-design-polish/rule/no-unresolved-ai-slop"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_b7a189a1-7f6a-4af2-b958-63c6f69daff9",
+      "kind": "browser-screenshot-390",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/37b28f772c2bca49cd2f0aa172330ab39edfec9be67079066fcb329042ba5e11",
+      "sourcePath": "evidence/recheck-390.png",
+      "sha256": "sha256:37b28f772c2bca49cd2f0aa172330ab39edfec9be67079066fcb329042ba5e11",
+      "size": 12,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/capture-recheck-evidence",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/no-horizontal-overflow",
+            "frontend.visual-design-polish/rule/no-clipped-controls",
+            "frontend.visual-design-polish/rule/no-sticky-overlap"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_597aeb7b-3b36-4427-9adb-0a990732685b",
+      "kind": "browser-screenshot-768",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/ea4f73580651196f27b36d9fc083f1b8b86ca3d0ab5978188958dee44dfa8b13",
+      "sourcePath": "evidence/recheck-768.png",
+      "sha256": "sha256:ea4f73580651196f27b36d9fc083f1b8b86ca3d0ab5978188958dee44dfa8b13",
+      "size": 12,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/capture-recheck-evidence",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/no-horizontal-overflow",
+            "frontend.visual-design-polish/rule/no-clipped-controls",
+            "frontend.visual-design-polish/rule/no-sticky-overlap"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_bd69d360-764b-41ef-9160-3ffda618454a",
+      "kind": "browser-screenshot-1440",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/862bc18721f310b7a406e8f7785b21edb04e8d2ad01a0e6ee77d468f94333818",
+      "sourcePath": "evidence/recheck-1440.png",
+      "sha256": "sha256:862bc18721f310b7a406e8f7785b21edb04e8d2ad01a0e6ee77d468f94333818",
+      "size": 13,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/capture-recheck-evidence",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/no-horizontal-overflow",
+            "frontend.visual-design-polish/rule/no-clipped-controls",
+            "frontend.visual-design-polish/rule/no-sticky-overlap"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_70f65235-c6d8-4469-81b8-90e8b42d3075",
+      "kind": "critic-report",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/2130743686c39727e6f1d34186972911f22895105b943b1bebe1c6c7cf133ccb",
+      "sourcePath": "evidence/31-0-critic-report.json",
+      "sha256": "sha256:2130743686c39727e6f1d34186972911f22895105b943b1bebe1c6c7cf133ccb",
+      "size": 759,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "validatedAs": "critic-report",
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/recheck-visual-critic",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/critic-independent",
+            "frontend.visual-design-polish/rule/no-unresolved-ai-slop"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_6ef93c0c-8c7e-498c-93b8-56b30fd2ef09",
+      "kind": "verification-input",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/4febbf1c5f30699b9a3789ff124c7b3a8d4da233d7ba7f294687808961c649f7",
+      "sourcePath": "evidence/34-0-verification-input.json",
+      "sha256": "sha256:4febbf1c5f30699b9a3789ff124c7b3a8d4da233d7ba7f294687808961c649f7",
+      "size": 2740,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/final-verify",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/focus-visible",
+            "frontend.visual-design-polish/rule/no-runtime-console-errors",
+            "frontend.visual-design-polish/rule/reduced-motion-verified",
+            "frontend.visual-design-polish/rule/runtime-verification-required"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_a295882f-4494-4336-95d9-84d11c30c1e8",
+      "kind": "skill-output",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/9cfb84d0b1fe821515ed509a333b153081decdf1b5727b3f47586089f4a69669",
+      "sourcePath": "evidence/37-0-skill-output.json",
+      "sha256": "sha256:9cfb84d0b1fe821515ed509a333b153081decdf1b5727b3f47586089f4a69669",
+      "size": 267,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "validatedAs": "output",
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/final-report",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/runtime-verification-required"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_0fb14905-735f-46b7-85f9-928f00361796",
+      "kind": "implementation-diff",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/f83b397b0787d6dab68ab605d3dff791de249c67ec0a005ddb6d45a7a92fa738",
+      "sourcePath": "evidence/41-0-implementation-diff.json",
+      "sha256": "sha256:f83b397b0787d6dab68ab605d3dff791de249c67ec0a005ddb6d45a7a92fa738",
+      "size": 55,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/bounded-repair",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/fresh-evidence-after-repair"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_90459a98-81fe-447d-aa71-25efb8170d8d",
+      "kind": "browser-screenshot-390",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/04b92b0476aca4edab59024244523ff81da005108a866681fea3c39209203e3b",
+      "sourcePath": "evidence/fresh-390.png",
+      "sha256": "sha256:04b92b0476aca4edab59024244523ff81da005108a866681fea3c39209203e3b",
+      "size": 21,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/capture-recheck-evidence",
+          "attempt": 2,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/no-horizontal-overflow",
+            "frontend.visual-design-polish/rule/no-clipped-controls",
+            "frontend.visual-design-polish/rule/no-sticky-overlap"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_d98ae926-c412-4a6a-b8cb-6d708eb8c51c",
+      "kind": "browser-screenshot-768",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/c50d657dc5ee48a6d7a48462d1e45fc7d45eab8f2d94f8db45f6bb5fc2cf7acc",
+      "sourcePath": "evidence/fresh-768.png",
+      "sha256": "sha256:c50d657dc5ee48a6d7a48462d1e45fc7d45eab8f2d94f8db45f6bb5fc2cf7acc",
+      "size": 21,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/capture-recheck-evidence",
+          "attempt": 2,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/no-horizontal-overflow",
+            "frontend.visual-design-polish/rule/no-clipped-controls",
+            "frontend.visual-design-polish/rule/no-sticky-overlap"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_4ce9562e-d76c-4fa2-bbf8-20613dcb4b97",
+      "kind": "browser-screenshot-1440",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/1113154596736626b6c7dcef68f324259a2bf635b63699f289bd1085d7f6b7ec",
+      "sourcePath": "evidence/fresh-1440.png",
+      "sha256": "sha256:1113154596736626b6c7dcef68f324259a2bf635b63699f289bd1085d7f6b7ec",
+      "size": 22,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/capture-recheck-evidence",
+          "attempt": 2,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/no-horizontal-overflow",
+            "frontend.visual-design-polish/rule/no-clipped-controls",
+            "frontend.visual-design-polish/rule/no-sticky-overlap"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_3069509f-1064-4d8f-9708-aa951f838a6f",
+      "kind": "critic-report",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/d01c568e0fabe4cc1d0318e218df2d9434a4c788794ac0b9688d68cd1e46b9ac",
+      "sourcePath": "evidence/49-0-critic-report.json",
+      "sha256": "sha256:d01c568e0fabe4cc1d0318e218df2d9434a4c788794ac0b9688d68cd1e46b9ac",
+      "size": 387,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "validatedAs": "critic-report",
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/recheck-visual-critic",
+          "attempt": 2,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/critic-independent",
+            "frontend.visual-design-polish/rule/no-unresolved-ai-slop"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_33c2fff2-1497-410c-9524-d9fd88c00b1c",
+      "kind": "verification-input",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/7e717d615b94084a4f632e4aa75888d8cb974e808d9540cfbaef12fb1c715d41",
+      "sourcePath": "evidence/52-0-verification-input.json",
+      "sha256": "sha256:7e717d615b94084a4f632e4aa75888d8cb974e808d9540cfbaef12fb1c715d41",
+      "size": 2734,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/final-verify",
+          "attempt": 2,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/focus-visible",
+            "frontend.visual-design-polish/rule/no-runtime-console-errors",
+            "frontend.visual-design-polish/rule/reduced-motion-verified",
+            "frontend.visual-design-polish/rule/runtime-verification-required"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_a18e498f-5500-4da6-bfb0-6115c111f2f2",
+      "kind": "skill-output",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/0348f64023443e6831afb9ba0f17ae0747af304884ecce28b96a11f5cc5d29fe",
+      "sourcePath": "evidence/55-0-skill-output.json",
+      "sha256": "sha256:0348f64023443e6831afb9ba0f17ae0747af304884ecce28b96a11f5cc5d29fe",
+      "size": 268,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "validatedAs": "output",
+      "attributions": [
+        {
+          "skillId": "frontend.visual-design-polish",
+          "stepId": "frontend.visual-design-polish/step/final-report",
+          "attempt": 2,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.visual-design-polish/rule/runtime-verification-required"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_f82844ae-2c66-44d4-8774-565190d5dc21",
+      "kind": "project-archetype",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/a066bbe2235a2a63b8c9471f829e220c32cb06324a83f11d7f2c02755d15169c",
+      "sourcePath": "evidence/59-0-project-archetype.json",
+      "sha256": "sha256:a066bbe2235a2a63b8c9471f829e220c32cb06324a83f11d7f2c02755d15169c",
+      "size": 9,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.tailwind-ui-polish",
+          "stepId": "frontend.tailwind-ui-polish/step/classify-project",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/tailwind-project-confirmed"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_120f4b4e-3bc7-4d3d-b288-fb3c883df14a",
+      "kind": "browser-screenshot-before",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb",
+      "sourcePath": "evidence/62-0-browser-screenshot-before.json",
+      "sha256": "sha256:9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb",
+      "size": 7,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.tailwind-ui-polish",
+          "stepId": "frontend.tailwind-ui-polish/step/capture-before",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/required-states-covered"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_6e74a8a5-8bb6-45fc-8b26-5ac540c2d72d",
+      "kind": "implementation-diff",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/5ddfae5bba77b6e43e0110688f2436f078692c288514415bfa991f6096621162",
+      "sourcePath": "evidence/65-0-implementation-diff.json",
+      "sha256": "sha256:5ddfae5bba77b6e43e0110688f2436f078692c288514415bfa991f6096621162",
+      "size": 120,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.tailwind-ui-polish",
+          "stepId": "frontend.tailwind-ui-polish/step/implement-bounded-fix",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/no-dynamic-tailwind-classes"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_e8414878-68d7-4a06-bdd9-ad25daf80e00",
+      "kind": "browser-screenshot-initial",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/da68f54607d5f5644954096ce1597c006c5bb9f2497e07441bf064b81003ef8a",
+      "sourcePath": "evidence/68-0-browser-screenshot-initial.json",
+      "sha256": "sha256:da68f54607d5f5644954096ce1597c006c5bb9f2497e07441bf064b81003ef8a",
+      "size": 8,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.tailwind-ui-polish",
+          "stepId": "frontend.tailwind-ui-polish/step/capture-initial-evidence",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/no-horizontal-overflow",
+            "frontend.tailwind-ui-polish/rule/focus-visible"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_05183420-acb2-4128-8cfa-1d3067230d64",
+      "kind": "critic-report",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/784344a8c4992c37b44e7c4596945bbcb392f7fb3534b84ab88480d261904399",
+      "sourcePath": "evidence/71-0-critic-report.json",
+      "sha256": "sha256:784344a8c4992c37b44e7c4596945bbcb392f7fb3534b84ab88480d261904399",
+      "size": 275,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "validatedAs": "critic-report",
+      "attributions": [
+        {
+          "skillId": "frontend.tailwind-ui-polish",
+          "stepId": "frontend.tailwind-ui-polish/step/independent-critique",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/required-states-covered"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_825fdf66-44bf-449f-b462-794bbdae2f9b",
+      "kind": "browser-screenshot-390",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/52b0b5e6c26e387e95148b86de5f5f2f535c7c820983c2a8999d89794f2d754d",
+      "sourcePath": "evidence/tw-initial-390.png",
+      "sha256": "sha256:52b0b5e6c26e387e95148b86de5f5f2f535c7c820983c2a8999d89794f2d754d",
+      "size": 23,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.tailwind-ui-polish",
+          "stepId": "frontend.tailwind-ui-polish/step/capture-recheck-evidence",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/no-horizontal-overflow",
+            "frontend.tailwind-ui-polish/rule/no-clipped-controls",
+            "frontend.tailwind-ui-polish/rule/no-sticky-overlap"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_b084f8b7-a83f-4078-826a-61641ca02461",
+      "kind": "browser-screenshot-768",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/bc5631aa3a0c9bada6bd5e25224a1c145fa209d08048b3c511107ff84fd4ea46",
+      "sourcePath": "evidence/tw-initial-768.png",
+      "sha256": "sha256:bc5631aa3a0c9bada6bd5e25224a1c145fa209d08048b3c511107ff84fd4ea46",
+      "size": 23,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.tailwind-ui-polish",
+          "stepId": "frontend.tailwind-ui-polish/step/capture-recheck-evidence",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/no-horizontal-overflow",
+            "frontend.tailwind-ui-polish/rule/no-clipped-controls",
+            "frontend.tailwind-ui-polish/rule/no-sticky-overlap"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_886ee7a8-de28-4af1-9d7a-0983801f6688",
+      "kind": "browser-screenshot-1440",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/861a42c4ac47afc518d752832366c6ca598ed727e366f9bd89e215280f143152",
+      "sourcePath": "evidence/tw-initial-1440.png",
+      "sha256": "sha256:861a42c4ac47afc518d752832366c6ca598ed727e366f9bd89e215280f143152",
+      "size": 24,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.tailwind-ui-polish",
+          "stepId": "frontend.tailwind-ui-polish/step/capture-recheck-evidence",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/no-horizontal-overflow",
+            "frontend.tailwind-ui-polish/rule/no-clipped-controls",
+            "frontend.tailwind-ui-polish/rule/no-sticky-overlap"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_0ee127e8-f358-4339-a1c8-a436430ebc2e",
+      "kind": "verification-input",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/56cb3894fd2424220291378266e5b42a4f6889c1fb3e5ea22f8982b5f05337de",
+      "sourcePath": "evidence/79-0-verification-input.json",
+      "sha256": "sha256:56cb3894fd2424220291378266e5b42a4f6889c1fb3e5ea22f8982b5f05337de",
+      "size": 2749,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.tailwind-ui-polish",
+          "stepId": "frontend.tailwind-ui-polish/step/final-verify",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/no-runtime-console-errors",
+            "frontend.tailwind-ui-polish/rule/reduced-motion-verified"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_b29c5818-591a-4d8d-9dc3-f4a71d893951",
+      "kind": "skill-output",
+      "path": ".skillranger/runs/run_29dd76aa-5aa0-432c-a912-c22d05a930c2/artifacts/38d5565c9db3ab0f392eb1a03c51034697d25189ebe5256ab8128e9d92a8788a",
+      "sourcePath": "evidence/82-0-skill-output.json",
+      "sha256": "sha256:38d5565c9db3ab0f392eb1a03c51034697d25189ebe5256ab8128e9d92a8788a",
+      "size": 141,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "validatedAs": "output",
+      "attributions": [
+        {
+          "skillId": "frontend.tailwind-ui-polish",
+          "stepId": "frontend.tailwind-ui-polish/step/final-report",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.tailwind-ui-polish/rule/required-states-covered"
+          ]
+        }
+      ]
+    }
+  ],
+  "sourceControl": {
+    "mode": "non-git"
+  }
+}

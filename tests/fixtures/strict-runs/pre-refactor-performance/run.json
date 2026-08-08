@@ -1,0 +1,718 @@
+{
+  "schemaVersion": "2.0",
+  "certification": "strict",
+  "runId": "run_eead0eed-e526-4cfd-a720-0556e850ee7e",
+  "domain": "frontend",
+  "targetAgent": "codex",
+  "locale": "en",
+  "state": "verifying",
+  "revision": 16,
+  "createdAt": "2026-08-08T06:20:35.766Z",
+  "updatedAt": "2026-08-08T06:20:35.836Z",
+  "intent": {
+    "sha256": "sha256:8af8185d953ff80949c8fe2cd0c7bc68f2ed71034bd9c2e43657467926b70c6b",
+    "normalizedGoal": "frontend strict lifecycle using frontend.performance-review"
+  },
+  "recommendations": [
+    {
+      "skillId": "frontend.performance-review",
+      "role": "primary",
+      "strictCompatible": true
+    }
+  ],
+  "excludedRecommendations": [],
+  "skillLedgers": [
+    {
+      "skillId": "frontend.performance-review",
+      "role": "primary",
+      "mandatory": true,
+      "version": "0.2.0",
+      "packageChecksum": "sha256:7c3a15f524cd29580dcd46e3bb09ce26c4e6cf98ec2ba151fd31f405fb7e12bb",
+      "contractChecksum": "sha256:f3359fc494f17d0ad915d82b00b21232de4f867abc343226a3472d9faa1d4ef0",
+      "contract": {
+        "schemaVersion": "2.0",
+        "skillId": "frontend.performance-review",
+        "contractVersion": "2.0.0",
+        "inputSchema": "input.schema.json",
+        "outputSchema": "output.schema.json",
+        "mustRead": [
+          "SKILL.md"
+        ],
+        "applicability": {
+          "op": "signal",
+          "collection": "projectTypes",
+          "name": "frontend",
+          "minConfidence": 0.5
+        },
+        "prerequisites": [
+          {
+            "id": "affected-flows",
+            "kind": "input",
+            "path": "affectedFlows"
+          }
+        ],
+        "steps": [
+          {
+            "id": "frontend.performance-review/step/inventory-affected-flows",
+            "type": "collect",
+            "requiredEvidenceKinds": [
+              "affected-flow-inventory"
+            ],
+            "ruleIds": [
+              "frontend.performance-review/rule/affected-surface-inventory"
+            ]
+          },
+          {
+            "id": "frontend.performance-review/step/inspect-static-risks",
+            "type": "collect",
+            "requiredEvidenceKinds": [
+              "static-performance-review"
+            ],
+            "ruleIds": [
+              "frontend.performance-review/rule/finding-dimension-present"
+            ]
+          },
+          {
+            "id": "frontend.performance-review/step/inspect-runtime-evidence",
+            "type": "collect",
+            "requiredEvidenceKinds": [],
+            "ruleIds": [
+              "frontend.performance-review/rule/measured-claim-has-artifact"
+            ]
+          },
+          {
+            "id": "frontend.performance-review/step/compile-findings",
+            "type": "report",
+            "requiredEvidenceKinds": [
+              "performance-report"
+            ],
+            "ruleIds": [
+              "frontend.performance-review/rule/unmeasured-claims-labeled-risk",
+              "frontend.performance-review/rule/priority-confidence-present"
+            ]
+          },
+          {
+            "id": "frontend.performance-review/step/repair-report",
+            "type": "repair",
+            "requiredEvidenceKinds": [
+              "performance-report"
+            ],
+            "ruleIds": [
+              "frontend.performance-review/rule/unmeasured-claims-labeled-risk",
+              "frontend.performance-review/rule/before-after-required-for-win"
+            ],
+            "repairable": true
+          },
+          {
+            "id": "frontend.performance-review/step/verify-claims",
+            "type": "verify",
+            "requiredEvidenceKinds": [
+              "verification-input"
+            ],
+            "ruleIds": [
+              "frontend.performance-review/rule/before-after-required-for-win",
+              "frontend.performance-review/rule/no-false-performance-win"
+            ]
+          }
+        ],
+        "rules": [
+          {
+            "id": "frontend.performance-review/rule/affected-surface-inventory",
+            "description": "Identify affected user flows and frontend surfaces."
+          },
+          {
+            "id": "frontend.performance-review/rule/finding-dimension-present",
+            "description": "Name the user-visible performance dimension for each finding."
+          },
+          {
+            "id": "frontend.performance-review/rule/measured-claim-has-artifact",
+            "description": "Back every measured claim with a measurement artifact."
+          },
+          {
+            "id": "frontend.performance-review/rule/before-after-required-for-win",
+            "description": "Require before and after evidence for a performance win."
+          },
+          {
+            "id": "frontend.performance-review/rule/unmeasured-claims-labeled-risk",
+            "description": "Label unmeasured findings as risk-based hypotheses."
+          },
+          {
+            "id": "frontend.performance-review/rule/exact-missing-measurement",
+            "description": "State the exact measurement needed to confirm each hypothesis."
+          },
+          {
+            "id": "frontend.performance-review/rule/priority-confidence-present",
+            "description": "Rank findings by user-visible impact and confidence."
+          },
+          {
+            "id": "frontend.performance-review/rule/output-schema-valid",
+            "description": "Return the complete structured performance report."
+          },
+          {
+            "id": "frontend.performance-review/rule/no-false-performance-win",
+            "description": "Never claim a performance win from code shape alone."
+          }
+        ],
+        "gates": [
+          {
+            "id": "frontend.performance-review/gate/affected-surface-inventory",
+            "level": "hard",
+            "evaluator": {
+              "type": "evidence-present",
+              "evidenceKind": "affected-flow-inventory"
+            },
+            "ruleIds": [
+              "frontend.performance-review/rule/affected-surface-inventory"
+            ]
+          },
+          {
+            "id": "frontend.performance-review/gate/finding-dimension-present",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/performance-claims"
+            },
+            "ruleIds": [
+              "frontend.performance-review/rule/finding-dimension-present"
+            ]
+          },
+          {
+            "id": "frontend.performance-review/gate/measured-claim-has-artifact",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/performance-claims"
+            },
+            "ruleIds": [
+              "frontend.performance-review/rule/measured-claim-has-artifact"
+            ]
+          },
+          {
+            "id": "frontend.performance-review/gate/before-after-required-for-win",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/performance-claims"
+            },
+            "ruleIds": [
+              "frontend.performance-review/rule/before-after-required-for-win"
+            ]
+          },
+          {
+            "id": "frontend.performance-review/gate/unmeasured-claims-labeled-risk",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/performance-claims"
+            },
+            "ruleIds": [
+              "frontend.performance-review/rule/unmeasured-claims-labeled-risk"
+            ]
+          },
+          {
+            "id": "frontend.performance-review/gate/exact-missing-measurement",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/performance-claims"
+            },
+            "ruleIds": [
+              "frontend.performance-review/rule/exact-missing-measurement"
+            ]
+          },
+          {
+            "id": "frontend.performance-review/gate/priority-confidence-present",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/performance-claims"
+            },
+            "ruleIds": [
+              "frontend.performance-review/rule/priority-confidence-present"
+            ]
+          },
+          {
+            "id": "frontend.performance-review/gate/output-schema-valid",
+            "level": "hard",
+            "evaluator": {
+              "type": "schema-valid",
+              "schema": "output"
+            },
+            "ruleIds": [
+              "frontend.performance-review/rule/output-schema-valid"
+            ]
+          },
+          {
+            "id": "frontend.performance-review/gate/no-false-performance-win",
+            "level": "hard",
+            "evaluator": {
+              "type": "validator",
+              "validatorId": "frontend/performance-claims"
+            },
+            "ruleIds": [
+              "frontend.performance-review/rule/no-false-performance-win"
+            ]
+          }
+        ],
+        "maxRepairIterations": 1
+      },
+      "schemaSnapshots": {
+        "input": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "risk-review",
+                "validate-change"
+              ]
+            },
+            "affectedFlows": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "output": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "findings",
+            "measurementsInspected",
+            "measurementGaps",
+            "residualRisks"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "risk-review",
+                "validate-change"
+              ]
+            },
+            "findings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "affectedFlow",
+                  "dimension",
+                  "basis",
+                  "impact",
+                  "confidence",
+                  "behavior",
+                  "evidence",
+                  "expectedBenefit",
+                  "tradeoff"
+                ],
+                "properties": {
+                  "affectedFlow": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "dimension": {
+                    "enum": [
+                      "LCP",
+                      "INP",
+                      "CLS",
+                      "bundle-size",
+                      "route-transition",
+                      "render-cost",
+                      "memory",
+                      "data-waterfall",
+                      "cache-behavior"
+                    ]
+                  },
+                  "basis": {
+                    "enum": [
+                      "measured",
+                      "risk"
+                    ]
+                  },
+                  "impact": {
+                    "enum": [
+                      "critical",
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "confidence": {
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "file": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "expectedBenefit": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tradeoff": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "measurementsInspected": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "measurementGaps": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "residualRisks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "schemaChecksums": {
+        "input": "sha256:8b077aff100f6cb2a5316920ac8f31c9041224ded67e178d35e7748e0282a2ca",
+        "output": "sha256:3095c1bc13083136db0a1a1076e367dabc128033144e3b97952a66d5bb18cd4d"
+      },
+      "input": {
+        "mode": "risk-review",
+        "affectedFlows": [
+          "initial load"
+        ]
+      },
+      "state": "used",
+      "applicability": {
+        "applicable": true,
+        "unmetPrerequisites": []
+      },
+      "contentChunks": [
+        {
+          "path": "SKILL.md",
+          "ordinal": 0,
+          "total": 1,
+          "sha256": "sha256:d6c9be448afcf843f8c9d81dbeb5c80e4ced93f03506a8222614c2f26b89f3a2",
+          "content": "---\nname: performance-review\ndescription: Review frontend web app performance for rendering cost, bundle size, data loading, image delivery, caching, and Core Web Vitals risk.\n---\n\n# Frontend Performance Review\n\nUse this skill when reviewing frontend web app changes that may affect runtime performance, loading speed, bundle size, rendering cost, data fetching, image delivery, caching, or Core Web Vitals. Do not use it for backend-only profiling, database query tuning, or infrastructure capacity planning with no browser-facing surface.\n\n## Verification Outcome\n\n- Report `verified` only when the claimed result is backed by the relevant before/after browser measurement, trace, profiler, bundle, network, or field artifact.\n- Without measurement capability, report risks and hypotheses but not wins. Return `implemented-unverified` for an approved change with the exact measurement still required, or `blocked` when evidence is necessary to choose a safe fix.\n- A Lighthouse score alone does not verify every runtime concern; name the user flow and metric represented by each artifact.\n\n## Decision Rules\n\n- Start from user-visible performance impact before suggesting micro-optimizations.\n- Separate initial load, route transition, interaction latency, and render stability concerns.\n- Prefer evidence from changed code, framework configuration, bundle boundaries, and existing measurements.\n- Treat performance and accessibility as linked when loading states, disabled states, or layout shifts affect usability.\n- Use Core Web Vitals as the default browser-facing frame: LCP, INP, and CLS matter more than raw implementation elegance.\n- Prioritize likely user-visible bottlenecks before local code neatness: data waterfalls, client bundle growth, hydration cost, render/input latency, media delivery, and layout shift.\n- Treat unmeasured performance claims as hypotheses. Recommend the artifact needed to prove or disprove them.\n\n## Workflow\n\n1. Identify changed routes, components, data loaders, media assets, client components, and shared utilities.\n2. Check whether code moved unnecessary work to the client, added broad imports, unstable keys, repeated effects, or expensive render loops.\n3. Review data fetching and caching behavior for duplicate requests, waterfall risk, missing loading/error states, and stale data assumptions.\n4. Inspect image, font, script, and third-party usage for blocking resources, missing dimensions, or avoidable client payload.\n5. Look for route-level bundle risks such as large dependencies in shared layouts or components that could stay server-rendered.\n6. Check runtime evidence when available: console errors, network waterfall, Lighthouse/Web Vitals, profiler, trace, bundle analyzer, image/font loading, and third-party script behavior.\n7. Recommend the smallest change that reduces measurable risk while preserving existing framework conventions.\n\n## Evidence Gates\n\n- Name the metric or performance dimension for every finding: LCP, INP, CLS, bundle size, route transition latency, render cost, memory growth, data waterfall, or cache behavior.\n- Use good Core Web Vitals thresholds as default targets unless the project defines stricter budgets: LCP at or below 2.5s, INP at or below 200ms, CLS at or below 0.1.\n- When measurement exists, cite Lighthouse/Web Vitals output, browser performance trace, bundle analyzer output, profiler data, network waterfall, or app-specific telemetry.\n- When measurement is unavailable, label the finding as risk-based and state the exact evidence needed to confirm it.\n- Do not claim a performance win from code shape alone. Tie expected benefit to a user-visible wait, interaction, layout shift, or payload reduction.\n\n## Priority Taxonomy\n\n- Critical: data waterfalls on primary routes, accidental broad client bundles, blocking third-party scripts, missing dimensions causing CLS, expensive work during input, and cache mistakes that make core flows slow or stale.\n- High: LCP image or font delivery issues, unnecessary hydration of static UI, large dependencies in shared layouts, repeated fetches, slow optimistic/retry flows, and long lists rendered without a containment or virtualization strategy.\n- Medium: avoidable re-renders, unstable keys, heavy animation/filter effects, unoptimized below-fold media, duplicate formatting work, and missing preconnect/preload where evidence shows resource delay.\n- Low: micro-optimizations without visible latency, speculative memoization, and refactors that do not affect load, interaction, stability, memory, or payload.\n\n## Measurement Artifact Checklist\n\n- Initial load: Lighthouse, WebPageTest, Core Web Vitals, browser network waterfall, route render timing, or server logs where available.\n- Interaction: React Profiler, browser performance trace, INP/Web Vitals, input typing latency, scroll/drag trace, or targeted Playwright timing.\n- Bundle: bundle analyzer, dependency diff, route chunk inspection, client/server boundary review, and tree-shaking assumptions.\n- Media/fonts/scripts: image sizes and dimensions, LCP candidate priority, font fallback stability, `font-display`, script loading strategy, and third-party main-thread cost.\n- Data/cache: duplicate request evidence, waterfall timing, cache freshness contract, invalidation path, stale-data behavior, and retry/recovery timing.\n\n## Review Checklist\n\n- Loading and rendering: avoid unnecessary client boundaries, broad imports, render loops, unstable keys, repeated effects, and expensive work during typing or scrolling.\n- Images: set dimensions, use responsive sizing, prioritize only the likely LCP image, avoid lazy-loading above-the-fold LCP candidates, and compress/serve appropriate formats.\n- Fonts: avoid render-blocking font patterns, check fallback stability, subset where practical, and watch for layout shift from late font swaps.\n- JavaScript: keep heavy dependencies out of shared layouts, split route-specific code, avoid hydration work for static UI, and verify tree-shaking assumptions.\n- Data: avoid waterfalls, duplicate fetches, stale loading states, cache invalidation gaps, and optimistic UI that hides slow or failed mutations.\n- Third parties: identify scripts that block render, shift layout, or add main-thread work; recommend deferral or isolation when appropriate.\n\n## References\n\n- Use web.dev Core Web Vitals guidance, framework performance docs, browser DevTools, Lighthouse, bundle analyzer output, and project-local performance budgets when available.\n- When available in the project, inspect framework config, changed route files, component boundaries, package dependencies, image/font usage, and existing performance tests or reports.\n\n## Validation\n\n- Findings should name the likely performance dimension: load, interaction, render stability, memory, or data latency.\n- Suggestions should include what evidence would confirm the issue, such as profiler output, bundle analysis, trace, or user-facing timing.\n- If no measurement exists, label the recommendation as risk-based rather than proven.\n- Report Core Web Vitals, bundle, trace, or profiler artifacts that were inspected, or state exactly why they were unavailable.\n- Rank recommendations by expected user-visible impact and confidence in the evidence.\n\n## Output Contract\n\n- Lead with the highest user-impact performance risks.\n- Include file references and the specific behavior that creates the risk.\n- State the expected benefit and any tradeoff for each recommendation.\n- List commands, measurements, budgets, artifacts inspected or recommended, confidence level, and unverified assumptions.\n"
+        }
+      ],
+      "readReceipts": [
+        {
+          "path": "SKILL.md",
+          "ordinal": 0,
+          "total": 1,
+          "sha256": "sha256:d6c9be448afcf843f8c9d81dbeb5c80e4ced93f03506a8222614c2f26b89f3a2",
+          "deliveredAt": "2026-08-08T06:20:35.769Z"
+        }
+      ],
+      "steps": [
+        {
+          "id": "frontend.performance-review/step/inventory-affected-flows",
+          "type": "collect",
+          "requiredEvidenceKinds": [
+            "affected-flow-inventory"
+          ],
+          "ruleIds": [
+            "frontend.performance-review/rule/affected-surface-inventory"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.771Z",
+              "evidenceIds": [
+                "artifact_cdd3c23d-6c03-4bd2-a752-4f40e1f9264d"
+              ],
+              "completedAt": "2026-08-08T06:20:35.784Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.performance-review/step/inspect-static-risks",
+          "type": "collect",
+          "requiredEvidenceKinds": [
+            "static-performance-review"
+          ],
+          "ruleIds": [
+            "frontend.performance-review/rule/finding-dimension-present"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.787Z",
+              "evidenceIds": [
+                "artifact_0d6a57f7-2dd8-4154-8b31-cbce0c594d82"
+              ],
+              "completedAt": "2026-08-08T06:20:35.800Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.performance-review/step/inspect-runtime-evidence",
+          "type": "collect",
+          "requiredEvidenceKinds": [],
+          "ruleIds": [
+            "frontend.performance-review/rule/measured-claim-has-artifact"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.802Z",
+              "evidenceIds": [],
+              "completedAt": "2026-08-08T06:20:35.804Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.performance-review/step/compile-findings",
+          "type": "report",
+          "requiredEvidenceKinds": [
+            "performance-report"
+          ],
+          "ruleIds": [
+            "frontend.performance-review/rule/unmeasured-claims-labeled-risk",
+            "frontend.performance-review/rule/priority-confidence-present"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.806Z",
+              "evidenceIds": [
+                "artifact_cd6ac3e3-20f1-41fe-81a4-886d11758601"
+              ],
+              "completedAt": "2026-08-08T06:20:35.818Z"
+            }
+          ]
+        },
+        {
+          "id": "frontend.performance-review/step/repair-report",
+          "type": "repair",
+          "requiredEvidenceKinds": [
+            "performance-report"
+          ],
+          "ruleIds": [
+            "frontend.performance-review/rule/unmeasured-claims-labeled-risk",
+            "frontend.performance-review/rule/before-after-required-for-win"
+          ],
+          "repairable": true,
+          "status": "skipped",
+          "attempts": []
+        },
+        {
+          "id": "frontend.performance-review/step/verify-claims",
+          "type": "verify",
+          "requiredEvidenceKinds": [
+            "verification-input"
+          ],
+          "ruleIds": [
+            "frontend.performance-review/rule/before-after-required-for-win",
+            "frontend.performance-review/rule/no-false-performance-win"
+          ],
+          "status": "satisfied",
+          "attempts": [
+            {
+              "attempt": 1,
+              "startedAt": "2026-08-08T06:20:35.820Z",
+              "evidenceIds": [
+                "artifact_b92e9c1b-202e-4a12-a53e-f323abb26a4f"
+              ],
+              "completedAt": "2026-08-08T06:20:35.833Z"
+            }
+          ]
+        }
+      ],
+      "repairIterations": 0,
+      "verificationReports": [
+        {
+          "schemaVersion": "2.0",
+          "skillId": "frontend.performance-review",
+          "generatedAt": "2026-08-08T06:20:35.836Z",
+          "iteration": 0,
+          "gateResults": [
+            {
+              "gateId": "frontend.performance-review/gate/affected-surface-inventory",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.performance-review/gate/finding-dimension-present",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.performance-review/gate/measured-claim-has-artifact",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.performance-review/gate/before-after-required-for-win",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.performance-review/gate/unmeasured-claims-labeled-risk",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.performance-review/gate/exact-missing-measurement",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.performance-review/gate/priority-confidence-present",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.performance-review/gate/output-schema-valid",
+              "passed": true,
+              "level": "hard"
+            },
+            {
+              "gateId": "frontend.performance-review/gate/no-false-performance-win",
+              "passed": true,
+              "level": "hard"
+            }
+          ],
+          "hardPassed": true,
+          "evidenceIds": [
+            "artifact_cdd3c23d-6c03-4bd2-a752-4f40e1f9264d",
+            "artifact_0d6a57f7-2dd8-4154-8b31-cbce0c594d82",
+            "artifact_cd6ac3e3-20f1-41fe-81a4-886d11758601",
+            "artifact_b92e9c1b-202e-4a12-a53e-f323abb26a4f"
+          ]
+        }
+      ],
+      "repairRequests": [],
+      "outcome": "used"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifactId": "artifact_cdd3c23d-6c03-4bd2-a752-4f40e1f9264d",
+      "kind": "affected-flow-inventory",
+      "path": ".skillranger/runs/run_eead0eed-e526-4cfd-a720-0556e850ee7e/artifacts/f279c93907cdb9c878bae8b9505446c07ee9fd3296e9384e2aac7781bd61999d",
+      "sourcePath": "evidence/2-0-affected-flow-inventory.json",
+      "sha256": "sha256:f279c93907cdb9c878bae8b9505446c07ee9fd3296e9384e2aac7781bd61999d",
+      "size": 13,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.performance-review",
+          "stepId": "frontend.performance-review/step/inventory-affected-flows",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.performance-review/rule/affected-surface-inventory"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_0d6a57f7-2dd8-4154-8b31-cbce0c594d82",
+      "kind": "static-performance-review",
+      "path": ".skillranger/runs/run_eead0eed-e526-4cfd-a720-0556e850ee7e/artifacts/a9f2d25d1f71f8065e2119e538bde8846570fcdad320388236e99d9e225c290d",
+      "sourcePath": "evidence/5-0-static-performance-review.json",
+      "sha256": "sha256:a9f2d25d1f71f8065e2119e538bde8846570fcdad320388236e99d9e225c290d",
+      "size": 9,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.performance-review",
+          "stepId": "frontend.performance-review/step/inspect-static-risks",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.performance-review/rule/finding-dimension-present"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_cd6ac3e3-20f1-41fe-81a4-886d11758601",
+      "kind": "performance-report",
+      "path": ".skillranger/runs/run_eead0eed-e526-4cfd-a720-0556e850ee7e/artifacts/566e297cc02955cf85bad909142d4603a5ce5265e2c82b51ecce466a3e171cf9",
+      "sourcePath": "evidence/10-0-performance-report.json",
+      "sha256": "sha256:566e297cc02955cf85bad909142d4603a5ce5265e2c82b51ecce466a3e171cf9",
+      "size": 505,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "validatedAs": "output",
+      "attributions": [
+        {
+          "skillId": "frontend.performance-review",
+          "stepId": "frontend.performance-review/step/compile-findings",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.performance-review/rule/unmeasured-claims-labeled-risk",
+            "frontend.performance-review/rule/priority-confidence-present"
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "artifact_b92e9c1b-202e-4a12-a53e-f323abb26a4f",
+      "kind": "verification-input",
+      "path": ".skillranger/runs/run_eead0eed-e526-4cfd-a720-0556e850ee7e/artifacts/101f5a74238a91140b075b3895e4fbf5058f14f218b9398aefaef1d7e8b0175c",
+      "sourcePath": "evidence/13-0-verification-input.json",
+      "sha256": "sha256:101f5a74238a91140b075b3895e4fbf5058f14f218b9398aefaef1d7e8b0175c",
+      "size": 25,
+      "sourceControl": {
+        "mode": "non-git"
+      },
+      "attributions": [
+        {
+          "skillId": "frontend.performance-review",
+          "stepId": "frontend.performance-review/step/verify-claims",
+          "attempt": 1,
+          "relation": "produced",
+          "ruleIds": [
+            "frontend.performance-review/rule/before-after-required-for-win",
+            "frontend.performance-review/rule/no-false-performance-win"
+          ]
+        }
+      ]
+    }
+  ],
+  "sourceControl": {
+    "mode": "non-git"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "checks": {
+    "no-dynamic-tailwind-classes": true
+  },
+  "diff": "+ <div className=\"bg-brand-600\">Save</div>"
+}

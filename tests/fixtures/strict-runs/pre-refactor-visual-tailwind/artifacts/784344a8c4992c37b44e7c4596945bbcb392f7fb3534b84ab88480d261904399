@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "2.0",
+  "skillId": "frontend.tailwind-ui-polish",
+  "criticInvocationId": "critic-tw",
+  "executorInvocationId": "executor-tw",
+  "outcome": "clean",
+  "evidenceArtifactIds": [
+    "artifact_e8414878-68d7-4a06-bdd9-ad25daf80e00"
+  ],
+  "findings": []
+}

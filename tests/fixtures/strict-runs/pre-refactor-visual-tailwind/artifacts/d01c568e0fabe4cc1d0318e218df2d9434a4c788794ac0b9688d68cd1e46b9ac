@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "2.0",
+  "skillId": "frontend.visual-design-polish",
+  "criticInvocationId": "critic-fresh-1",
+  "executorInvocationId": "executor-1",
+  "outcome": "clean",
+  "evidenceArtifactIds": [
+    "artifact_90459a98-81fe-447d-aa71-25efb8170d8d",
+    "artifact_d98ae926-c412-4a6a-b8cb-6d708eb8c51c",
+    "artifact_4ce9562e-d76c-4fa2-bbf8-20613dcb4b97"
+  ],
+  "findings": []
+}

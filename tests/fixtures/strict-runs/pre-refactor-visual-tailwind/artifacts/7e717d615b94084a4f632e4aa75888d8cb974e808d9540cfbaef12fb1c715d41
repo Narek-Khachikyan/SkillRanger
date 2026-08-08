@@ -1,0 +1,112 @@
+{
+  "observations": [
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "state": "default",
+      "screenshotPath": "evidence/fresh-390.png",
+      "horizontalOverflow": false,
+      "clippedControls": [],
+      "unreachableActions": [],
+      "stickyOverlaps": [],
+      "consoleErrors": [],
+      "keyboardTraps": [],
+      "invisibleFocus": [],
+      "criticalAxeViolations": [],
+      "reducedMotionVerified": true,
+      "mechanicalSnapshot": {
+        "spacingContexts": [],
+        "colors": [],
+        "radii": [],
+        "shadows": [],
+        "cards": [],
+        "typography": [],
+        "textBlocks": [],
+        "touchTargets": []
+      },
+      "stateRendered": true,
+      "action": "Select the captured state",
+      "changes": [
+        {
+          "locator": "#active-state",
+          "before": "previous",
+          "after": "viewport-390"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "state": "default",
+      "screenshotPath": "evidence/fresh-768.png",
+      "horizontalOverflow": false,
+      "clippedControls": [],
+      "unreachableActions": [],
+      "stickyOverlaps": [],
+      "consoleErrors": [],
+      "keyboardTraps": [],
+      "invisibleFocus": [],
+      "criticalAxeViolations": [],
+      "reducedMotionVerified": true,
+      "mechanicalSnapshot": {
+        "spacingContexts": [],
+        "colors": [],
+        "radii": [],
+        "shadows": [],
+        "cards": [],
+        "typography": [],
+        "textBlocks": [],
+        "touchTargets": []
+      },
+      "stateRendered": true,
+      "action": "Select the captured state",
+      "changes": [
+        {
+          "locator": "#active-state",
+          "before": "previous",
+          "after": "viewport-768"
+        }
+      ]
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "state": "default",
+      "screenshotPath": "evidence/fresh-1440.png",
+      "horizontalOverflow": false,
+      "clippedControls": [],
+      "unreachableActions": [],
+      "stickyOverlaps": [],
+      "consoleErrors": [],
+      "keyboardTraps": [],
+      "invisibleFocus": [],
+      "criticalAxeViolations": [],
+      "reducedMotionVerified": true,
+      "mechanicalSnapshot": {
+        "spacingContexts": [],
+        "colors": [],
+        "radii": [],
+        "shadows": [],
+        "cards": [],
+        "typography": [],
+        "textBlocks": [],
+        "touchTargets": []
+      },
+      "stateRendered": true,
+      "action": "Select the captured state",
+      "changes": [
+        {
+          "locator": "#active-state",
+          "before": "previous",
+          "after": "viewport-1440"
+        }
+      ]
+    }
+  ]
+}

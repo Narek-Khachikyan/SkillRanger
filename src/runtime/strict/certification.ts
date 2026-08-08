@@ -28,7 +28,7 @@ export const deriveStrictCertificationProjection = (
     if (evaluator.type === "evidence-present") passed = artifacts.some(({ kind }) => kind === evaluator.evidenceKind);
     else if (evaluator.type === "schema-valid") passed = evaluator.schema === "input" ? true : artifacts.some(({ validatedAs }) => validatedAs === evaluator.schema);
     else {
-      const result = derivation.validatorResults[gate.id] ?? derivation.validatorResults[evaluator.validatorId];
+      const result = derivation.validatorResults[gate.id];
       passed = result?.passed === true;
       message = result?.message ?? (result ? undefined : `Validator result missing: ${evaluator.validatorId}.`);
     }

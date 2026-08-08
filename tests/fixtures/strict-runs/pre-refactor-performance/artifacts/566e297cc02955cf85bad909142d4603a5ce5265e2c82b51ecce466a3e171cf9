@@ -1,0 +1,21 @@
+{
+  "mode": "risk-review",
+  "findings": [
+    {
+      "affectedFlow": "initial load",
+      "dimension": "LCP",
+      "basis": "risk",
+      "impact": "high",
+      "confidence": "medium",
+      "behavior": "Hero delivery may delay paint",
+      "evidence": [],
+      "expectedBenefit": "Earlier LCP",
+      "tradeoff": "Potential preload bytes"
+    }
+  ],
+  "measurementsInspected": [],
+  "measurementGaps": [
+    "Capture before/after LCP traces for the initial load flow"
+  ],
+  "residualRisks": []
+}
