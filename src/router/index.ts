@@ -49,7 +49,6 @@ export type {
 } from "./resolver.ts";
 export {
   assignSelectedRole,
-  buildNominatedPrimaryEligibilityFacts,
   composeSkillSet,
   defaultRouterLimits,
   retrieveSkillCandidates,
@@ -59,13 +58,23 @@ export type {
   ComposeSkillSetInput,
   ComposeSkillSetResult,
   ComposedSkillSet,
-  NominatedPrimaryEligibilityFacts,
   RetrieveSkillCandidatesInput,
   RetrieveSkillCandidatesResult,
   RouterCandidate,
   SelectedRouterCandidate,
   RouterSkillMetadata,
 } from "./composer.ts";
+export {
+  buildNominatedPrimaryEligibilityFacts,
+  explicitSkillChoiceReasonCode,
+  resolveExplicitSkillChoice,
+  resolveOrderedPrimaryNominations,
+} from "./nomination-resolution.ts";
+export type {
+  ExplicitSkillChoiceResolution,
+  NominatedPrimaryEligibilityFacts,
+  OrderedPrimaryNominationResolution,
+} from "./nomination-resolution.ts";
 export type * from "./types.ts";
 export {
   assertValidRouterRun,

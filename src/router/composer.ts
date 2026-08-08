@@ -22,6 +22,12 @@ import {
   requirementKey,
 } from "./coverage.ts";
 import { collectAvailableEvidence, evaluateRequiredEvidence, requiredEvidenceForCandidate } from "./evidence.ts";
+import {
+  buildNominatedPrimaryEligibilityFacts,
+  explicitSkillChoiceReasonCode,
+  resolveExplicitSkillChoice,
+  resolveOrderedPrimaryNominations,
+} from "./nomination-resolution.ts";
 import type { CanonicalRequirement } from "./requirements.ts";
 import type { MatchedRoutingSignal } from "./vocabulary/match.ts";
 
@@ -135,42 +141,6 @@ export type RetrieveSkillCandidatesResult = {
   candidates: RouterCandidate[];
   primaryCandidates: RouterCandidate[];
   rejections: CandidateRejection[];
-};
-
-// Bounded eligibility facts for the nomination decision: whether a nominated primary
-// candidate may fill the primary role and, if not, the existing base rejection reason.
-// The shape intentionally exposes no candidate scores, capabilities, project data, or
-// runtime state. It is produced from an existing RetrieveSkillCandidatesResult and never
-// recomputes eligibility rules.
-export type NominatedPrimaryEligibilityFacts = {
-  skillId: string;
-  primaryRoleEligible: boolean;
-  baseRejectionReason?: string;
-};
-
-export const buildNominatedPrimaryEligibilityFacts = (input: {
-  retrieval: RetrieveSkillCandidatesResult;
-  nominatedPrimarySkillIds: Iterable<string>;
-}): NominatedPrimaryEligibilityFacts[] => {
-  const primaryEligibleIds = new Set(input.retrieval.primaryCandidates.map(({ skill }) => canonical(skill.id)));
-  const firstRejectionBySkillId = new Map<string, string>();
-  for (const { skillId, reason } of input.retrieval.rejections) {
-    const id = canonical(skillId);
-    if (!firstRejectionBySkillId.has(id)) firstRejectionBySkillId.set(id, reason);
-  }
-  const seen = new Set<string>();
-  const facts: NominatedPrimaryEligibilityFacts[] = [];
-  for (const rawSkillId of input.nominatedPrimarySkillIds) {
-    const skillId = canonical(rawSkillId);
-    if (seen.has(skillId)) continue;
-    seen.add(skillId);
-    const primaryRoleEligible = primaryEligibleIds.has(skillId);
-    const baseRejectionReason = firstRejectionBySkillId.get(skillId);
-    facts.push(primaryRoleEligible || baseRejectionReason === undefined
-      ? { skillId, primaryRoleEligible }
-      : { skillId, primaryRoleEligible, baseRejectionReason });
-  }
-  return facts;
 };
 
 export type ComposeSkillSetInput = RetrieveSkillCandidatesInput & {
@@ -603,7 +573,6 @@ const applyNominatedRoles = (result: RetrieveSkillCandidatesResult, nominatedRol
 export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetResult => {
   const limits = { ...defaultRouterLimits, ...input.limits };
   const nominationOrder = new Map([...new Set([...(input.nominationOrder ?? [])].map(canonical))].map((skillId, index) => [skillId, index]));
-  const primaryNominationOrder = new Map([...new Set([...(input.primaryNominationOrder ?? input.nominationOrder ?? [])].map(canonical))].map((skillId, index) => [skillId, index]));
   const nominatedPrimarySkillIds = unique(input.nominatedPrimarySkillIds ?? []);
   const proposalDrivenStrictRetrieval = Boolean(input.strict && nominatedPrimarySkillIds.size > 0);
   const requiredPrimarySkillId = input.requiredPrimarySkillId ? canonical(input.requiredPrimarySkillId) : undefined;
@@ -615,25 +584,52 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
         : { ...input, maxSelectedRisk: limits.maxSelectedRisk })), input.nominatedRoles);
   const byId = new Map(retrieved.candidates.map((candidate) => [canonical(candidate.skill.id), candidate]));
   const registryById = new Map(input.skills.map((skill) => [canonical(skill.id), skill]));
+  const eligibilityFacts = buildNominatedPrimaryEligibilityFacts({
+    retrieval: retrieved,
+    nominatedPrimarySkillIds: [
+      ...nominatedPrimarySkillIds,
+      ...(requiredPrimarySkillId ? [requiredPrimarySkillId] : []),
+      ...(input.primaryNominationOrder ?? []),
+    ],
+  });
   const explicitPrimaryFailure = (reason: string): ComposeSkillSetResult => ({
     status: "no_matching_skills",
-    reasonCode: `explicit-skill-choice-${reason}`,
+    reasonCode: explicitSkillChoiceReasonCode(reason),
     rejections: retrieved.rejections,
   });
-  const sortedPrimaryCandidates = sortedPrimary(retrieved.primaryCandidates, input.requirements, input.routingContext, primaryNominationOrder);
+  let explicitBaseRejectionReason: string | undefined;
+  if (requiredPrimarySkillId) {
+    const rejection = retrieved.rejections.find(({ skillId }) => canonical(skillId) === requiredPrimarySkillId);
+    if (rejection) explicitBaseRejectionReason = rejection.reason;
+    else {
+      const explicitCandidate = retrieved.candidates.find(({ skill }) => canonical(skill.id) === requiredPrimarySkillId);
+      if (!explicitCandidate) explicitBaseRejectionReason = "candidate-not-found";
+      else if (!explicitCandidate.eligibleRoles.includes("primary")) explicitBaseRejectionReason = "primary-role-ineligible";
+    }
+  }
+  const explicitResolution = resolveExplicitSkillChoice({
+    explicitSkillId: requiredPrimarySkillId,
+    eligibilityFacts,
+    baseRejectionReason: explicitBaseRejectionReason,
+  });
+  if (explicitResolution?.kind === "explicit-choice-blocked") {
+    return { status: "no_matching_skills", reasonCode: explicitResolution.reasonCode, rejections: retrieved.rejections };
+  }
+  const orderedNominationResolution = resolveOrderedPrimaryNominations({
+    explicitSkillId: requiredPrimarySkillId,
+    primaryNominationOrder: [...(input.primaryNominationOrder ?? input.nominationOrder ?? [])],
+    eligibilityFacts,
+  });
+  const effectivePrimaryNominationOrder = orderedNominationResolution.kind === "ordered-nominations"
+    ? new Map(orderedNominationResolution.primarySkillIds.map((skillId, index) => [skillId, index]))
+    : undefined;
+  const sortedPrimaryCandidates = sortedPrimary(retrieved.primaryCandidates, input.requirements, input.routingContext, effectivePrimaryNominationOrder);
   const primaryCandidates = requiredPrimarySkillId
     ? [
       ...sortedPrimaryCandidates.filter(({ skill }) => canonical(skill.id) === requiredPrimarySkillId),
       ...sortedPrimaryCandidates.filter(({ skill }) => canonical(skill.id) !== requiredPrimarySkillId),
     ]
     : sortedPrimaryCandidates;
-  if (requiredPrimarySkillId) {
-    const rejection = retrieved.rejections.find(({ skillId }) => canonical(skillId) === requiredPrimarySkillId);
-    if (rejection) return explicitPrimaryFailure(rejection.reason);
-    const explicitCandidate = retrieved.candidates.find(({ skill }) => canonical(skill.id) === requiredPrimarySkillId);
-    if (!explicitCandidate) return explicitPrimaryFailure("candidate-not-found");
-    if (!explicitCandidate.eligibleRoles.includes("primary")) return explicitPrimaryFailure("primary-role-ineligible");
-  }
   const requiredDecomposition = decomposition(input.profile, retrieved.candidates, input.skills);
   if (requiredDecomposition) return { status: "decomposition_required", subtasks: requiredDecomposition, rejections: retrieved.rejections };
   if (primaryCandidates.length === 0) {
