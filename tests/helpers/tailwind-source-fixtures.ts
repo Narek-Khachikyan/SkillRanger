@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { sourceGateSlugs } from "../../src/domains/frontend/source-validator.ts";
+import { buildTrustedValidatorRegistry } from "../../src/domains/trusted-validators.ts";
 import {
-  buildTrustedValidatorRegistry,
   createContentChunks,
   createStrictSkillRun,
   type ExecutionContractV2,

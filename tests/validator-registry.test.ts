@@ -6,22 +6,26 @@ import os from "node:os";
 import path from "node:path";
 import { getAdapter } from "../src/installers/codex.ts";
 import { getDomainPack, registerDomainPack, unregisterDomainPack } from "../src/domains/registry.ts";
-import type { DomainPackManifest, DomainRoutingPolicy } from "../src/domains/types.ts";
+import {
+  assertBundledContractValidatorOwnership,
+  assertRunTrustedValidatorOwnership,
+  assertSelectionsTrustedValidatorOwnership,
+  buildTrustedValidatorRegistry,
+} from "../src/domains/trusted-validators.ts";
+import type { DomainPackManifest, DomainRoutingPolicy, DomainValidatorEvaluator } from "../src/domains/types.ts";
 import { loadLocalRegistry } from "../src/registry/index.ts";
 import { prepareTask } from "../src/router/prepare.ts";
 import {
   StrictSkillRunError,
   StrictSkillRunStore,
   TrustedValidatorRegistry,
-  assertBundledContractValidatorOwnership,
-  assertRunTrustedValidatorOwnership,
-  assertSelectionsTrustedValidatorOwnership,
+  addStrictEvidence,
   beginStrictStep,
-  buildTrustedValidatorRegistry,
   completeStrictStep,
   coreValidatorIds,
   createContentChunks,
   createStrictSkillRun,
+  deriveStrictValidatorResults,
   parseValidatorId,
   readNextStrictChunk,
   resolveTrustedValidatorRegistry,
@@ -57,9 +61,15 @@ const withSyntheticPack = async <T>(
   id: string,
   validators: string[],
   run: () => Promise<T>,
+  validatorEvaluators?: Readonly<Record<string, DomainValidatorEvaluator>>,
 ): Promise<T> => {
   assert.equal(getDomainPack(id), undefined, `synthetic pack ${id} must not pre-exist`);
-  registerDomainPack({ manifest: syntheticManifest(id, validators), routing: syntheticRouting, validators });
+  registerDomainPack({
+    manifest: syntheticManifest(id, validators),
+    routing: syntheticRouting,
+    validators,
+    ...(validatorEvaluators === undefined ? {} : { validatorEvaluators }),
+  });
   try {
     return await run();
   } finally {
@@ -202,11 +212,22 @@ test("phase 2 accepts only validators owned by selected domain packs and rejects
         && /belongs to domain frontend, not analytics/.test(error.message),
     );
 
+    assert.throws(
+      () => assertSelectionsTrustedValidatorOwnership([
+        selection("frontend.performance-review", "frontend/performance-claims"),
+        selection("analytics.some-skill", "analytics/analytics-check"),
+      ]),
+      (error: unknown) => error instanceof StrictSkillRunError
+        && /implementation .* is unavailable/.test(error.message),
+    );
+  });
+
+  await withSyntheticPack("analytics", ["analytics/analytics-check"], async () => {
     assert.doesNotThrow(() => assertSelectionsTrustedValidatorOwnership([
       selection("frontend.performance-review", "frontend/performance-claims"),
       selection("analytics.some-skill", "analytics/analytics-check"),
     ]));
-  });
+  }, { "analytics/analytics-check": () => ({ passed: true }) });
 
   assert.throws(
     () => assertSelectionsTrustedValidatorOwnership([selection("frontend.performance-review", "core/unknown-core")]),
@@ -216,6 +237,93 @@ test("phase 2 accepts only validators owned by selected domain packs and rejects
     () => assertSelectionsTrustedValidatorOwnership([selection("frontend.performance-review", "unregistered-domain/thing")]),
     (error: unknown) => error instanceof StrictSkillRunError && /not owned by a selected domain pack/.test(error.message),
   );
+});
+
+test("a declared validator without a trusted implementation is rejected before run creation", async () => {
+  await withSyntheticPack("analytics", ["analytics/analytics-check"], async () => {
+    const registry = buildTrustedValidatorRegistry([{ skillId: "analytics.some-skill" }]);
+    assert.equal(registry.has("analytics/analytics-check"), true);
+    assert.equal(registry.resolveValidator("analytics/analytics-check"), undefined);
+
+    assert.throws(
+      () => assertSelectionsTrustedValidatorOwnership([selection("analytics.some-skill", "analytics/analytics-check")]),
+      (error: unknown) => error instanceof StrictSkillRunError
+        && error.code === "strict-contract-missing"
+        && /implementation .* is unavailable/.test(error.message)
+        && error.details?.reason === "validator-ownership",
+    );
+  });
+});
+
+test("a domainless ledger cannot use a domain validator while core validators stay available", async () => {
+  assert.doesNotThrow(() =>
+    assertSelectionsTrustedValidatorOwnership([selection("domainless.skill", "core/artifact-integrity")]));
+
+  await withSyntheticPack("analytics", ["analytics/analytics-check"], async () => {
+    assert.throws(
+      () => assertSelectionsTrustedValidatorOwnership([
+        selection("frontend.performance-review", "frontend/performance-claims"),
+        selection("domainless.skill", "frontend/performance-claims"),
+      ]),
+      (error: unknown) => error instanceof StrictSkillRunError
+        && error.code === "strict-contract-missing"
+        && /belongs to domain frontend, but domainless.skill is not owned by any domain/.test(error.message),
+    );
+  });
+});
+
+test("persisted-run verification turns a validator that lost its trusted implementation into a failed gate, not a throw", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "validator-persisted-lost-"));
+  let contract: ExecutionContractV2;
+  await withSyntheticPack("analytics", ["analytics/analytics-check"], async () => {
+    contract = validatorContract("analytics.some-skill", "analytics/analytics-check");
+    contract.steps.push({
+      id: "analytics.some-skill/step/repair",
+      type: "repair",
+      requiredEvidenceKinds: [],
+      ruleIds: contract.rules.map(({ id }) => id),
+    });
+    let run = createStrictSkillRun({
+      runId: "run_validator_persisted_lost", domain: "analytics", targetAgent: "codex", locale: "en",
+      intent: { sha256: sha("lost"), normalizedGoal: "persisted validator" }, now: "2026-07-15T10:00:00.000Z",
+      selectedSkills: [{
+        skillId: contract.skillId, role: "primary", mandatory: true, version: "1.0.0",
+        packageChecksum: sha("package"), contractChecksum: sha(JSON.stringify(contract)), contract,
+        schemaSnapshots: { input: { type: "object" }, output: { type: "object" } },
+        schemaChecksums: { input: sha(JSON.stringify({ type: "object" })), output: sha(JSON.stringify({ type: "object" })) },
+        contentChunks: createContentChunks("SKILL.md", "# Lost\n"), applicable: true, unmetPrerequisites: [],
+      }],
+    });
+    run = beginStrictStep(
+      readNextStrictChunk(run, contract.skillId).run,
+      contract.skillId,
+      contract.steps[0].id,
+    );
+    const reportPath = path.join(root, "artifacts", "report.json");
+    await mkdir(path.dirname(reportPath), { recursive: true });
+    await writeFile(reportPath, "report");
+    run = addStrictEvidence(run, {
+      artifactId: "artifact_report", kind: "report", path: "artifacts/report.json",
+      sha256: sha("report"), size: 6, sourceControl: { mode: "non-git" },
+      attributions: [{
+        skillId: contract.skillId, stepId: contract.steps[0].id, attempt: 1,
+        relation: "produced", ruleIds: contract.rules.map(({ id }) => id),
+      }],
+    });
+    run = completeStrictStep(run, contract.skillId, contract.steps[0].id);
+    await new StrictSkillRunStore(root).create(run);
+  });
+  const store = new StrictSkillRunStore(root);
+  const loaded = await store.read("run_validator_persisted_lost");
+  const derivation = await deriveStrictValidatorResults(root, loaded, loaded.skillLedgers[0]);
+  assert.deepEqual(
+    derivation.validatorResults["analytics.some-skill/gate/validator"],
+    { passed: false, message: "Validator result missing: analytics/analytics-check." },
+  );
+  const verified = await store.verifySkill("run_validator_persisted_lost", "analytics.some-skill");
+  const report = verified.skillLedgers[0].verificationReports.at(-1);
+  assert.equal(report?.gateResults.find(({ gateId }) => gateId === "analytics.some-skill/gate/validator")?.passed, false);
+  assert.equal(verified.state, "repair-required");
 });
 
 test("bundled registry validation stays fail-fast for unknown or misspelled validator ids", async () => {
@@ -411,7 +519,7 @@ test("store rebuilds a fresh trusted registry from persisted ledgers for verific
   assert.equal(observed[1].outcome, "used");
 });
 
-test("the default store resolver rebuilds from persisted ledgers and never caches a prepare-time registry", () => {
+test("the default store resolver rebuilds a lenient registry from persisted ledgers without throwing", () => {
   const contract = validatorContract("frontend.performance-review", "frontend/performance-claims");
   const registry = resolveTrustedValidatorRegistry({
     skillLedgers: [{ skillId: "frontend.performance-review", contract }],
@@ -419,12 +527,11 @@ test("the default store resolver rebuilds from persisted ledgers and never cache
   assert.equal(registry.has("frontend/performance-claims"), true);
   assert.equal(registry.has("frontend/browser-hard-gates"), true);
 
-  assert.throws(
-    () => resolveTrustedValidatorRegistry({
-      skillLedgers: [{ skillId: "frontend.performance-review", contract: validatorContract("frontend.performance-review", "core/unknown-core") }],
-    } as unknown as SkillRunV2),
-    (error: unknown) => error instanceof StrictSkillRunError && /not part of the trusted runtime catalog/.test(error.message),
-  );
+  const unknown = resolveTrustedValidatorRegistry({
+    skillLedgers: [{ skillId: "frontend.performance-review", contract: validatorContract("frontend.performance-review", "core/unknown-core") }],
+  } as unknown as SkillRunV2);
+  assert.equal(unknown.has("core/unknown-core"), false);
+  assert.equal(unknown.resolveValidator("core/unknown-core"), undefined);
 });
 
 test("the trusted registry resolves evaluators only for trusted core ids and implemented domain validators", () => {

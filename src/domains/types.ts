@@ -1,7 +1,7 @@
 import type { ProjectFingerprint, Recommendation, RegistrySkill, SkillLane } from "../types.ts";
 import type { SkillRunPolicyDecision } from "../runtime/skill-run/types.ts";
 import type { Result } from "../runtime/strict/core-validators.ts";
-import type { CriticReportV2, EvidenceArtifact } from "../runtime/strict/types.ts";
+import type { EvidenceArtifact } from "../runtime/strict/types.ts";
 
 export type DomainCapability =
   | "project-signals"
@@ -138,7 +138,6 @@ export type DomainValidatorProjection = {
   output?: unknown;
   verificationInput?: unknown;
   sourceReview?: unknown;
-  criticReport?: CriticReportV2;
 };
 
 export type DomainValidatorEvaluator = (projection: DomainValidatorProjection) => Result;

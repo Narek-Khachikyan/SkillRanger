@@ -1152,11 +1152,13 @@ test("a caller-supplied trusted registry cannot make a failing Tailwind gate pas
     TrustedValidatorRegistry.fromIds(["core/artifact-integrity", "core/critic-independence"]));
   const run = await stageCompletedEvidence(root, store, tailwindValidatorContract);
 
-  await assert.rejects(
-    store.verifySkill(run.runId, tailwindValidatorContract.skillId),
-    (error: unknown) => error instanceof StrictSkillRunError && error.code === "strict-contract-missing",
+  const verified = await store.verifySkill(run.runId, tailwindValidatorContract.skillId);
+  const report = verified.skillLedgers[0].verificationReports.at(-1)!;
+  assert.equal(
+    report.gateResults.find(({ gateId }) => gateId === "frontend.store-test/gate/focus-visible")?.passed,
+    false,
   );
-  assert.equal((await store.read(run.runId)).state, "verifying");
+  assert.equal(verified.state, "repair-required");
 });
 
 test("strict store reload rejects parseable non-RFC3339 and impossible persisted timestamps", async (t) => {

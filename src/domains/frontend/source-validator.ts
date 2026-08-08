@@ -8,7 +8,7 @@ export const sourceGateSlugs = [
   "repeated-class-bundles-reviewed",
 ];
 
-const gateSlug = (gateId: string) => gateId.slice(gateId.lastIndexOf("/") + 1);
+export const gateSlug = (gateId: string) => gateId.slice(gateId.lastIndexOf("/") + 1);
 
 const quotedPathEnd = (value: string, start: number) => {
   if (value[start] !== "\"") return undefined;

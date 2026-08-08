@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { buildTrustedValidatorRegistry } from "../../src/domains/trusted-validators.ts";
 import {
-  buildTrustedValidatorRegistry,
   createContentChunks,
   createStrictSkillRun,
   type ExecutionContractV2,

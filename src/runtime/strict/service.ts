@@ -11,7 +11,7 @@ import { recommendSkills } from "../../recommender/index.ts";
 import { scanProject } from "../../scanner/index.ts";
 import { assertValidExecutionContract } from "./contract.ts";
 import { evaluateApplicability } from "./contract.ts";
-import { assertSelectionsTrustedValidatorOwnership } from "./validator-registry.ts";
+import { assertSelectionsTrustedValidatorOwnership } from "../../domains/trusted-validators.ts";
 import { validateJsonSchema } from "./json-schema.ts";
 import { captureSourceControl } from "./git.ts";
 import { createContentChunks, createStrictSkillRun } from "./reducer.ts";

@@ -4,7 +4,7 @@ import path from "node:path";
 import type { RegistrySkill, ResolvedSharedContract } from "../types.ts";
 import "../domains/bundled.ts";
 import { assertValidExecutionContract } from "../runtime/strict/contract.ts";
-import { assertBundledContractValidatorOwnership } from "../runtime/strict/validator-registry.ts";
+import { assertBundledContractValidatorOwnership } from "../domains/trusted-validators.ts";
 import type { ExecutionContractV2 } from "../runtime/strict/types.ts";
 import { objectDepth, routerMetadataLimits } from "../router/metadata.ts";
 import {

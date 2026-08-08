@@ -1,11 +1,9 @@
-import { resolveDomainPackForSkill } from "../../domains/registry.ts";
 import { assertValidCriticReportV2 } from "./critic.ts";
 import { atOrAfter, canonicalCriticArtifact, parse, type Result, type ValidatorEvaluationContext } from "./core-validators.ts";
 import { deriveVerificationEvidenceIds } from "./report-evidence.ts";
 import { criticSystemGateId } from "./system-gates.ts";
 import {
-  buildTrustedValidatorRegistry,
-  validateValidatorOwnership,
+  resolveTrustedValidatorRegistry,
   type TrustedValidatorRegistry,
 } from "./validator-registry.ts";
 import { StrictSkillRunError, type CriticReportV2, type EvidenceArtifact, type SkillLedger, type SkillRunV2, type StrictSystemGateResult } from "./types.ts";
@@ -193,7 +191,7 @@ export const deriveStrictValidatorResults = async (
   run: SkillRunV2,
   ledger: SkillLedger,
   observer?: StrictValidatorObserver,
-  registry: TrustedValidatorRegistry = buildTrustedValidatorRegistry(run.skillLedgers),
+  registry: TrustedValidatorRegistry = resolveTrustedValidatorRegistry(run),
 ): Promise<StrictValidatorDerivation> => {
   const results: Record<string, Result> = {};
   const ids = new Set(deriveVerificationEvidenceIds(ledger, ledger.repairIterations));
@@ -225,19 +223,13 @@ export const deriveStrictValidatorResults = async (
   for (const gate of ledger.contract.gates) {
     if (gate.evaluator.type !== "validator") continue;
     const validatorId = gate.evaluator.validatorId;
-    validateValidatorOwnership({
-      validatorId,
-      registry,
-      skillId: ledger.skillId,
-      skillDomain: resolveDomainPackForSkill(ledger.skillId)?.manifest.id,
-    });
     const evaluator = registry.resolveValidator(validatorId);
     let result: Result;
     if (evaluator) {
       const context: ValidatorEvaluationContext = { projectRoot, ledger, artifacts, artifactBytes, output, verificationInput, sourceReview, criticReport, gateId: gate.id };
       result = await evaluator(context);
     } else {
-      result = { passed: false, message: `Runtime validator ${validatorId} found no valid evidence.` };
+      result = { passed: false, message: `Validator result missing: ${validatorId}.` };
     }
     results[gate.id] = result;
     if (observer) {

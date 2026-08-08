@@ -7,16 +7,11 @@ import {
 import type { DomainValidatorEvaluator, DomainValidatorProjection } from "../types.ts";
 import type { EvidenceArtifact } from "../../runtime/strict/types.ts";
 import type { Result } from "../../runtime/strict/core-validators.ts";
-import { evaluateTailwindSource } from "./source-validator.ts";
-
-const record = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const gateSlug = (gateId: string) => gateId.slice(gateId.lastIndexOf("/") + 1);
+import { evaluateTailwindSource, gateSlug } from "./source-validator.ts";
 
 export const evaluatePerformanceClaims = (projection: DomainValidatorProjection) => {
-  const output = record(projection.output) ? projection.output : undefined;
-  const findings = Array.isArray(output?.findings) ? output.findings.filter(record) : [];
+  const output = isRecord(projection.output) ? projection.output : undefined;
+  const findings = Array.isArray(output?.findings) ? output.findings.filter(isRecord) : [];
   const measurements = Array.isArray(output?.measurementsInspected)
     ? output.measurementsInspected.filter((item): item is string => typeof item === "string")
     : [];
@@ -159,9 +154,9 @@ const deriveBrowserGateResults = (
 
 export const evaluateBrowserHardGates = (projection: DomainValidatorProjection) => {
   const slug = gateSlug(projection.gateId);
-  const input = record(projection.input) ? projection.input : undefined;
-  const brief = record(input?.brief) ? input.brief : undefined;
-  const surface = record(brief?.surface) ? brief.surface : undefined;
+  const input = isRecord(projection.input) ? projection.input : undefined;
+  const brief = isRecord(input?.brief) ? input.brief : undefined;
+  const surface = isRecord(brief?.surface) ? brief.surface : undefined;
   const briefRequiredStates = surface?.requiredStates;
   const requiredStates = Array.isArray(briefRequiredStates)
     && briefRequiredStates.length > 0

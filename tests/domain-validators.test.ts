@@ -4,11 +4,11 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { buildTrustedValidatorRegistry } from "../src/domains/trusted-validators.ts";
 import {
   StrictSkillRunError,
   StrictSkillRunStore,
   beginStrictStep,
-  buildTrustedValidatorRegistry,
   completeStrictStep,
   createContentChunks,
   createStrictSkillRun,

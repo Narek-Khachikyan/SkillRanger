@@ -203,13 +203,8 @@ export const loadBundledDomainManifestSync = (input: {
 
 const registered = new Map<string, DomainPack>();
 
-export const validatorIdPattern = /^([a-z0-9][a-z0-9._-]*)\/([a-z0-9][a-z0-9._-]*)$/;
-
-export const parseValidatorId = (id: string): { owner: string; name: string } | undefined => {
-  const match = validatorIdPattern.exec(id);
-  if (!match) return undefined;
-  return { owner: match[1], name: match[2] };
-};
+import { parseValidatorId, validatorIdPattern } from "../runtime/strict/validator-id.ts";
+export { parseValidatorId, validatorIdPattern };
 
 export const validateDomainValidatorRegistrations = (input: {
   domainId: string;
