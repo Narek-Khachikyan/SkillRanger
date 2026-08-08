@@ -1,4 +1,3 @@
-import type { RetrieveSkillCandidatesResult } from "./composer.ts";
 import type { RouterClarificationQuestion } from "./continuation.ts";
 import type { RouterSkillRole } from "./types.ts";
 
@@ -8,37 +7,14 @@ const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase(
 export type NominationRole = Exclude<RouterSkillRole, "environment" | "agent-context">;
 
 // Bounded eligibility facts for the nomination decision: whether the skill may fill
-// the primary role and the existing base rejection reason when it may not. The
+// the primary role and the existing base rejection reason when it may not. Produced
+// by the retrieval boundary from the retrieval result, never recomputed here; the
 // reason is the same projection the composer applies to an explicit choice, so the
-// arbitration decision never accepts a reason-less ineligible choice. Never
-// recomputed here; produced from a retrieval result.
+// arbitration decision never accepts a reason-less ineligible choice.
 export type NominatedPrimaryEligibilityFacts = {
   skillId: string;
   primaryRoleEligible: boolean;
   baseRejectionReason?: string;
-};
-
-export const buildNominatedPrimaryEligibilityFacts = (input: {
-  retrieval: RetrieveSkillCandidatesResult;
-  skillIds: Iterable<string>;
-}): NominatedPrimaryEligibilityFacts[] => {
-  const primaryEligibleIds = new Set(input.retrieval.primaryCandidates.map(({ skill }) => canonical(skill.id)));
-  const seen = new Set<string>();
-  const facts: NominatedPrimaryEligibilityFacts[] = [];
-  for (const rawSkillId of input.skillIds) {
-    const skillId = canonical(rawSkillId);
-    if (seen.has(skillId)) continue;
-    seen.add(skillId);
-    const primaryRoleEligible = primaryEligibleIds.has(skillId);
-    const baseRejectionReason = primaryRoleEligible
-      ? undefined
-      : input.retrieval.rejections.find(({ skillId: rejectedSkillId }) => canonical(rejectedSkillId) === skillId)?.reason
-        ?? (input.retrieval.candidates.some(({ skill }) => canonical(skill.id) === skillId)
-          ? "primary-role-ineligible"
-          : "candidate-not-found");
-    facts.push({ skillId, primaryRoleEligible, ...(baseRejectionReason === undefined ? {} : { baseRejectionReason }) });
-  }
-  return facts;
 };
 
 // Projects a base rejection reason into the public `explicit-skill-choice-*` code. The
@@ -52,10 +28,11 @@ type ExplicitSkillChoiceResolution =
   | { kind: "explicit-choice-stands"; skillId: string }
   | { kind: "explicit-choice-blocked"; reasonCode: `explicit-skill-choice-${string}`; baseRejectionReason: string };
 
-// The composer determines the base reason; this module only projects it and owns
-// the precedence decision. A blocked choice is never substituted. The base reason
-// travels inside the eligibility facts, so an ineligible explicit choice can never
-// stand on missing or contradictory input.
+// The retrieval boundary determines the base reason inside the precomputed
+// eligibility facts; this module only projects it and owns the precedence
+// decision. A blocked choice is never substituted. The base reason travels in
+// the facts, so an ineligible explicit choice can never stand on missing or
+// contradictory input.
 const resolveExplicitSkillChoice = (input: {
   explicitSkillId?: string;
   eligibilityFacts: NominatedPrimaryEligibilityFacts[];

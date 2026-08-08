@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { loadRouterFixturePacks, type RouterFixturePack } from "../src/router/fixtures.ts";
-import { buildNominatedPrimaryEligibilityFacts } from "../src/router/nomination-resolution.ts";
 import {
+  buildNominatedPrimaryEligibilityFacts,
   composeSkillSet,
   defaultRouterLimits,
   retrieveSkillCandidates,

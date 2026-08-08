@@ -23,9 +23,9 @@ import {
 } from "./coverage.ts";
 import { collectAvailableEvidence, evaluateRequiredEvidence, requiredEvidenceForCandidate } from "./evidence.ts";
 import {
-  buildNominatedPrimaryEligibilityFacts,
   explicitSkillChoiceReasonCode,
   resolvePrimaryArbitration,
+  type NominatedPrimaryEligibilityFacts,
   type ResolvedNomination,
 } from "./nomination-resolution.ts";
 import type { CanonicalRequirement } from "./requirements.ts";
@@ -141,6 +141,35 @@ export type RetrieveSkillCandidatesResult = {
   candidates: RouterCandidate[];
   primaryCandidates: RouterCandidate[];
   rejections: CandidateRejection[];
+};
+
+// The retrieval boundary's projection of one retrieval result into bounded
+// eligibility facts for the primary nomination decision. Rejection precedence:
+// an explicit candidate rejection carries its reason; a candidate that reached
+// the candidate set without primary eligibility is `primary-role-ineligible`;
+// anything else is `candidate-not-found`. Facts are derived only from the
+// retrieval result, so they can never disagree with the retrieval they describe.
+export const buildNominatedPrimaryEligibilityFacts = (input: {
+  retrieval: RetrieveSkillCandidatesResult;
+  skillIds: Iterable<string>;
+}): NominatedPrimaryEligibilityFacts[] => {
+  const primaryEligibleIds = new Set(input.retrieval.primaryCandidates.map(({ skill }) => canonical(skill.id)));
+  const seen = new Set<string>();
+  const facts: NominatedPrimaryEligibilityFacts[] = [];
+  for (const rawSkillId of input.skillIds) {
+    const skillId = canonical(rawSkillId);
+    if (seen.has(skillId)) continue;
+    seen.add(skillId);
+    const primaryRoleEligible = primaryEligibleIds.has(skillId);
+    const baseRejectionReason = primaryRoleEligible
+      ? undefined
+      : input.retrieval.rejections.find(({ skillId: rejectedSkillId }) => canonical(rejectedSkillId) === skillId)?.reason
+        ?? (input.retrieval.candidates.some(({ skill }) => canonical(skill.id) === skillId)
+          ? "primary-role-ineligible"
+          : "candidate-not-found");
+    facts.push({ skillId, primaryRoleEligible, ...(baseRejectionReason === undefined ? {} : { baseRejectionReason }) });
+  }
+  return facts;
 };
 
 export type ComposeSkillSetInput = Omit<RetrieveSkillCandidatesInput, "nominatedSkillIds" | "nominatedPrimarySkillIds" | "nominatedRoles"> & {

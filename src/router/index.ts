@@ -49,6 +49,7 @@ export type {
 } from "./resolver.ts";
 export {
   assignSelectedRole,
+  buildNominatedPrimaryEligibilityFacts,
   composeSkillSet,
   defaultRouterLimits,
   retrieveSkillCandidates,
@@ -66,7 +67,6 @@ export type {
 } from "./composer.ts";
 export {
   applyPrimarySkillAmbiguityAnswer,
-  buildNominatedPrimaryEligibilityFacts,
   explicitSkillChoiceReasonCode,
   primarySkillAmbiguityQuestionFor,
   primarySkillAmbiguityQuestionId,

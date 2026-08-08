@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { loadRouterFixturePacks, type RouterFixturePack } from "../src/router/fixtures.ts";
 import {
   applyPrimarySkillAmbiguityAnswer,
-  buildNominatedPrimaryEligibilityFacts,
   explicitSkillChoiceReasonCode,
   primarySkillAmbiguityQuestionFor,
   primarySkillAmbiguityQuestionId,
@@ -15,6 +14,7 @@ import {
   type ResolvedNomination,
 } from "../src/router/nomination-resolution.ts";
 import {
+  buildNominatedPrimaryEligibilityFacts,
   composeSkillSet,
   retrieveSkillCandidates,
   type RouterSkillMetadata,
