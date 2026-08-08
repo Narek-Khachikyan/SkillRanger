@@ -9,6 +9,7 @@ import {
   primarySkillAmbiguityQuestionId,
   primarySkillAmbiguityQuestionText,
   resolveDeclaredPrimarySkillAmbiguity,
+  resolveDeclaredPrimarySkillClarification,
   resolveExplicitSkillChoice,
   resolveNomination,
   resolveOrderedPrimaryNominations,
@@ -299,6 +300,142 @@ test("a missing or non-declared answer is rejected", () => {
   assert.deepEqual(applyPrimarySkillAmbiguityAnswer({ answer: "free-form", eligibleSkillIds }), { kind: "not-a-declared-option" });
 });
 
+const declaredNominations = [
+  { skillId: "backend.auth-implementation", role: "primary" as const },
+  { skillId: "backend.semantic-primary", role: "primary" as const },
+];
+
+test("the cohesive decision requires a typed closed-option clarification for an eligible declared ambiguity", () => {
+  const decision = resolveDeclaredPrimarySkillClarification({
+    declaredAmbiguityIds: ["backend.auth-implementation", "backend.semantic-primary"],
+    eligibilityFacts: [
+      { skillId: "backend.auth-implementation", primaryRoleEligible: true },
+      { skillId: "backend.semantic-primary", primaryRoleEligible: true },
+    ],
+    displayNameFor: (skillId) => skillId === "backend.auth-implementation" ? "Auth Implementation" : undefined,
+  });
+  assert.equal(decision.kind, "clarification-required");
+  if (decision.kind !== "clarification-required") return;
+  assert.deepEqual(decision.eligibleSkillIds, ["backend.auth-implementation", "backend.semantic-primary"]);
+  assert.equal(decision.question.id, primarySkillAmbiguityQuestionId);
+  assert.equal(decision.question.text, primarySkillAmbiguityQuestionText);
+  assert.deepEqual(decision.question.options, [
+    { value: "backend.auth-implementation", label: "Auth Implementation" },
+    { value: "backend.semantic-primary", label: "backend.semantic-primary" },
+  ]);
+});
+
+test("the explicit user choice outranks a declared ambiguity in the cohesive decision", () => {
+  const decision = resolveDeclaredPrimarySkillClarification({
+    declaredAmbiguityIds: ["backend.auth-implementation", "backend.semantic-primary"],
+    explicitSkillId: "backend.semantic-primary",
+    eligibilityFacts: [
+      { skillId: "backend.auth-implementation", primaryRoleEligible: true },
+      { skillId: "backend.semantic-primary", primaryRoleEligible: true },
+    ],
+    displayNameFor: () => undefined,
+  });
+  assert.deepEqual(decision, { kind: "no-clarification" });
+});
+
+test("an ineligible or inconsistent declared ambiguity fails closed in the cohesive decision", () => {
+  const decision = resolveDeclaredPrimarySkillClarification({
+    declaredAmbiguityIds: ["backend.auth-implementation", "backend.high-risk", "backend.undeclared"],
+    eligibilityFacts: [
+      { skillId: "backend.auth-implementation", primaryRoleEligible: true },
+      { skillId: "backend.high-risk", primaryRoleEligible: false },
+    ],
+    displayNameFor: () => undefined,
+  });
+  assert.deepEqual(decision, { kind: "ambiguity-ineligible", ineligibleSkillIds: ["backend.high-risk", "backend.undeclared"] });
+});
+
+test("an empty ambiguity declaration never requires a skill clarification", () => {
+  assert.deepEqual(resolveDeclaredPrimarySkillClarification({
+    declaredAmbiguityIds: [],
+    eligibilityFacts: [],
+    displayNameFor: () => undefined,
+  }), { kind: "no-clarification" });
+});
+
+test("a valid continuation answer selects exactly one eligible primary and updates the effective nomination order", () => {
+  const decision = resolveDeclaredPrimarySkillClarification({
+    declaredAmbiguityIds: ["backend.auth-implementation", "backend.semantic-primary"],
+    eligibilityFacts: [
+      { skillId: "backend.auth-implementation", primaryRoleEligible: true },
+      { skillId: "backend.semantic-primary", primaryRoleEligible: true },
+    ],
+    declaredNominations,
+    answer: "backend.semantic-primary",
+    displayNameFor: () => undefined,
+  });
+  assert.equal(decision.kind, "answer-accepted");
+  if (decision.kind !== "answer-accepted") return;
+  assert.equal(decision.selectedPrimarySkillId, "backend.semantic-primary");
+  assert.equal(decision.resolvedNomination.requiredPrimarySkillId, "backend.semantic-primary");
+  assert.deepEqual(decision.resolvedNomination.nominationOrder, ["backend.semantic-primary", "backend.auth-implementation"]);
+  assert.deepEqual(decision.resolvedNomination.primaryNominationOrder, ["backend.semantic-primary", "backend.auth-implementation"]);
+});
+
+test("a valid continuation answer is canonicalized before selection", () => {
+  const decision = resolveDeclaredPrimarySkillClarification({
+    declaredAmbiguityIds: ["backend.auth-implementation", "backend.semantic-primary"],
+    eligibilityFacts: [
+      { skillId: "backend.auth-implementation", primaryRoleEligible: true },
+      { skillId: "backend.semantic-primary", primaryRoleEligible: true },
+    ],
+    declaredNominations,
+    answer: "BACKEND.Auth-Implementation",
+    displayNameFor: () => undefined,
+  });
+  assert.equal(decision.kind, "answer-accepted");
+  if (decision.kind !== "answer-accepted") return;
+  assert.equal(decision.selectedPrimarySkillId, "backend.auth-implementation");
+  assert.deepEqual(decision.resolvedNomination.nominationOrder, ["backend.auth-implementation", "backend.semantic-primary"]);
+});
+
+test("a missing, free-form, or non-declared answer is rejected by the cohesive decision", () => {
+  const input = {
+    declaredAmbiguityIds: ["backend.auth-implementation", "backend.semantic-primary"],
+    eligibilityFacts: [
+      { skillId: "backend.auth-implementation", primaryRoleEligible: true },
+      { skillId: "backend.semantic-primary", primaryRoleEligible: true },
+    ],
+    declaredNominations,
+    displayNameFor: () => undefined,
+  };
+  assert.deepEqual(resolveDeclaredPrimarySkillClarification({ ...input, answer: "free-form" }), { kind: "answer-invalid" });
+  assert.deepEqual(resolveDeclaredPrimarySkillClarification({ ...input, answer: "backend.high-risk" }), { kind: "answer-invalid" });
+});
+
+test("an eligible answer that is not a declared nomination is rejected without a resolution", () => {
+  const decision = resolveDeclaredPrimarySkillClarification({
+    declaredAmbiguityIds: ["backend.eligibility-only"],
+    eligibilityFacts: [{ skillId: "backend.eligibility-only", primaryRoleEligible: true }],
+    declaredNominations: [],
+    answer: "backend.eligibility-only",
+    displayNameFor: () => undefined,
+  });
+  assert.deepEqual(decision, { kind: "answer-invalid" });
+});
+
+test("the cohesive decision carries only the resolution, never token or transport artifacts", () => {
+  const decision = resolveDeclaredPrimarySkillClarification({
+    declaredAmbiguityIds: ["backend.auth-implementation", "backend.semantic-primary"],
+    eligibilityFacts: [
+      { skillId: "backend.auth-implementation", primaryRoleEligible: true },
+      { skillId: "backend.semantic-primary", primaryRoleEligible: true },
+    ],
+    declaredNominations,
+    answer: "backend.semantic-primary",
+    displayNameFor: () => undefined,
+  });
+  assert.equal(decision.kind, "answer-accepted");
+  assert.equal(Object.keys(decision).includes("resolvedNomination"), true);
+  assert.equal("expiresAt" in (decision as object), false);
+  assert.equal("token" in (decision as object), false);
+});
+
 test("nomination resolution is a pure projection that never mutates its inputs", () => {
   const facts = [
     { skillId: "backend.high-risk", primaryRoleEligible: false },
@@ -318,6 +455,13 @@ test("nomination resolution is a pure projection that never mutates its inputs",
   resolveDeclaredPrimarySkillAmbiguity({ declaredAmbiguityIds: declared, eligibilityFacts: facts });
   applyPrimarySkillAmbiguityAnswer({ answer: "backend.auth-implementation", eligibleSkillIds: declared });
   primarySkillAmbiguityQuestionFor({ skillIds: declared, displayNameFor: (skillId) => skillId });
+  resolveDeclaredPrimarySkillClarification({
+    declaredAmbiguityIds: declared,
+    eligibilityFacts: facts,
+    declaredNominations: [{ skillId: "backend.auth-implementation", role: "primary" }],
+    answer: "backend.auth-implementation",
+    displayNameFor: (skillId) => skillId,
+  });
   assert.deepEqual(JSON.parse(JSON.stringify({ facts, order, declared })) as unknown, snapshot);
 });
 

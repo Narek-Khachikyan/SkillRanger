@@ -19,7 +19,7 @@ import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "./vocabulary/
 import { RoutingVocabularyValidationError } from "./vocabulary/validate.ts";
 import { validateSemanticHints } from "./semantic-hints.ts";
 import { analyzeTask } from "./analyzer.ts";
-import { applyPrimarySkillAmbiguityAnswer, buildNominatedPrimaryEligibilityFacts, primarySkillAmbiguityQuestionFor, primarySkillAmbiguityQuestionId, resolveDeclaredPrimarySkillAmbiguity, resolveNomination } from "./nomination-resolution.ts";
+import { buildNominatedPrimaryEligibilityFacts, primarySkillAmbiguityQuestionId, resolveDeclaredPrimarySkillClarification, resolveNomination } from "./nomination-resolution.ts";
 import { composeSkillSet, defaultRouterLimits, retrieveSkillCandidates, type RouterSkillMetadata } from "./composer.ts";
 import { createContinuationToken, validateContinuation, type RouterClarificationQuestion } from "./continuation.ts";
 import { defaultRouterThresholds, normalizeDomainAlias, resolveDomains } from "./resolver.ts";
@@ -594,19 +594,28 @@ export const prepareTask = async (
   const nominatedPrimaryFacts = ambiguityProbe
     ? buildNominatedPrimaryEligibilityFacts({ retrieval: ambiguityProbe, skillIds: nominatedPrimarySkillIds })
     : [];
-  const declaredAmbiguityResolution = resolveDeclaredPrimarySkillAmbiguity({
+  // The cohesive nomination decision owns declared-ambiguity eligibility, the typed
+  // closed-option question, and the answer's effect on the effective nomination
+  // order. The continuation module owns token signing, expiry, replay protection,
+  // and integrity validation; only the validated answer value reaches this decision.
+  // The same input is reused for the answer pass inside the continuation block; the
+  // binding must be built from the no-answer pass before the token is validated.
+  const ambiguityClarificationInput = {
     declaredAmbiguityIds,
     explicitSkillId,
     eligibilityFacts: nominatedPrimaryFacts,
-  });
-  if (declaredAmbiguityResolution.kind === "ambiguity-ineligible") {
+    declaredNominations,
+    displayNameFor: (skillId: string) => catalogSkill(skillId)?.displayName,
+  };
+  const ambiguityClarification = resolveDeclaredPrimarySkillClarification(ambiguityClarificationInput);
+  if (ambiguityClarification.kind === "ambiguity-ineligible") {
     throw new RouterPrepareError(
       "routing-proposal-invalid",
-      `Declared primary ambiguity choices are not eligible primary nominations: ${declaredAmbiguityResolution.ineligibleSkillIds.join(", ")}.`,
+      `Declared primary ambiguity choices are not eligible primary nominations: ${ambiguityClarification.ineligibleSkillIds.join(", ")}.`,
     );
   }
-  const skillAmbiguityIds = declaredAmbiguityResolution.kind === "ambiguity-eligible"
-    ? declaredAmbiguityResolution.skillIds
+  const skillAmbiguityIds = ambiguityClarification.kind === "clarification-required"
+    ? ambiguityClarification.eligibleSkillIds
     : [];
   const projectIdentity = await new RouterStore(input.projectRoot).projectIdentity();
   const continuationBinding = {
@@ -632,18 +641,15 @@ export const prepareTask = async (
   if (input.continuationToken && !resolution.clarificationRequired && skillAmbiguityIds.length === 0) {
     throw new RouterPrepareError("continuation-invalid", "Continuation input does not match a routing clarification.");
   }
-  const skillAmbiguityQuestion = skillAmbiguityIds.length > 0 && catalogSnapshot
-    ? primarySkillAmbiguityQuestionFor({
-        skillIds: skillAmbiguityIds,
-        displayNameFor: (skillId) => catalogSkill(skillId)?.displayName,
-      })
+  const skillAmbiguityQuestion = ambiguityClarification.kind === "clarification-required"
+    ? ambiguityClarification.question
     : undefined;
   const questions = [
     ...(resolution.clarificationRequired ? questionFor(resolution.ambiguousDomainIds.map((id) => resolution.candidates.find((candidate) => candidate.id === id)!).filter(Boolean)) : []),
     ...(skillAmbiguityQuestion ? [skillAmbiguityQuestion] : []),
   ];
   let selectedPrimary = resolution.primaryDomainId;
-  let selectedNominationPrimary: string | undefined;
+  let resolvedNomination = declaredResolution;
   if (questions.length > 0) {
     if (!input.continuationToken || !input.clarificationAnswers) {
       const token = createContinuationToken(continuationBinding, questions);
@@ -659,9 +665,17 @@ export const prepareTask = async (
       }
       const skillAnswer = validated.answers.find(({ questionId }) => questionId === primarySkillAmbiguityQuestionId);
       if (skillAmbiguityIds.length > 0) {
-        const applied = applyPrimarySkillAmbiguityAnswer({ answer: skillAnswer?.value, eligibleSkillIds: skillAmbiguityIds });
-        if (applied.kind === "not-a-declared-option") throw new RouterPrepareError("clarification-answer-invalid", "Clarification answer does not identify an available nominated skill.");
-        selectedNominationPrimary = applied.skillId;
+        // The answer pass reuses the no-answer decision input; any outcome other
+        // than an accepted answer fails closed, matching the guarantee that no run
+        // state is created before a valid choice is resolved.
+        const appliedClarification = resolveDeclaredPrimarySkillClarification({
+          ...ambiguityClarificationInput,
+          answer: skillAnswer?.value,
+        });
+        if (appliedClarification.kind !== "answer-accepted") {
+          throw new RouterPrepareError("clarification-answer-invalid", "Clarification answer does not identify an available nominated skill.");
+        }
+        resolvedNomination = appliedClarification.resolvedNomination;
       }
     } catch (error) {
       if (error instanceof RouterPrepareError) throw error;
@@ -669,14 +683,11 @@ export const prepareTask = async (
       throw new RouterPrepareError(code, "Continuation token or clarification answers are invalid.");
     }
   }
-  // A continuation answer permutes the resolution (the selected nomination
-  // becomes the required primary); without one the declared resolution is the
-  // effective one. The proposal-assisted path consumes this decision for both
-  // the primary-domain binding and composition instead of reconstructing the
-  // same projection from the raw explicit choice and answer sources.
-  const resolvedNomination = selectedNominationPrimary
-    ? resolveNomination({ explicitSkillId, selectedNominationPrimary, declaredNominations })
-    : declaredResolution;
+  // A continuation answer permutes the resolution (the selected nomination becomes
+  // the required primary); without one the declared resolution is the effective
+  // one. The proposal-assisted path consumes this decision for both the
+  // primary-domain binding and composition instead of reconstructing the same
+  // projection from the raw explicit choice and answer sources.
   const proposalPrimarySkillId = resolvedNomination?.requiredPrimarySkillId ?? firstPrimaryNomination?.skillId;
   const proposalPrimaryDomain = proposalPrimarySkillId
     ? catalogSkill(proposalPrimarySkillId)?.domains[0]

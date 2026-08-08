@@ -244,3 +244,48 @@ export const applyPrimarySkillAmbiguityAnswer = (input: {
     ? { kind: "selected-primary", skillId }
     : { kind: "not-a-declared-option" };
 };
+
+// One cohesive decision for a declared primary-skill ambiguity and its validated
+// continuation answer: whether the declared options are eligible, whether a typed
+// closed-option clarification is required, and how the selected answer changes the
+// effective nomination order. The continuation module owns token signing, expiry,
+// replay protection, and integrity validation; this decision owns the meaning of the
+// question and answer only, and never touches cryptography, transport, persistence,
+// or run state.
+export type DeclaredPrimarySkillClarification =
+  | { kind: "no-clarification" }
+  | { kind: "ambiguity-ineligible"; ineligibleSkillIds: string[] }
+  | { kind: "clarification-required"; question: RouterClarificationQuestion; eligibleSkillIds: string[] }
+  | { kind: "answer-accepted"; selectedPrimarySkillId: string; resolvedNomination: ResolvedNomination }
+  | { kind: "answer-invalid" };
+
+export const resolveDeclaredPrimarySkillClarification = (input: {
+  declaredAmbiguityIds: readonly string[];
+  explicitSkillId?: string;
+  eligibilityFacts: NominatedPrimaryEligibilityFacts[];
+  declaredNominations?: readonly { skillId: string; role: NominationRole }[];
+  answer?: string;
+  displayNameFor: (skillId: string) => string | undefined;
+}): DeclaredPrimarySkillClarification => {
+  const declared = resolveDeclaredPrimarySkillAmbiguity({
+    declaredAmbiguityIds: input.declaredAmbiguityIds,
+    explicitSkillId: input.explicitSkillId,
+    eligibilityFacts: input.eligibilityFacts,
+  });
+  if (declared.kind === "no-ambiguity") return { kind: "no-clarification" };
+  if (declared.kind === "ambiguity-ineligible") return declared;
+  const question = primarySkillAmbiguityQuestionFor({
+    skillIds: declared.skillIds,
+    displayNameFor: input.displayNameFor,
+  });
+  if (input.answer === undefined) return { kind: "clarification-required", question, eligibleSkillIds: declared.skillIds };
+  const applied = applyPrimarySkillAmbiguityAnswer({ answer: input.answer, eligibleSkillIds: declared.skillIds });
+  if (applied.kind === "not-a-declared-option") return { kind: "answer-invalid" };
+  const resolvedNomination = resolveNomination({
+    explicitSkillId: input.explicitSkillId,
+    selectedNominationPrimary: applied.skillId,
+    declaredNominations: input.declaredNominations,
+  });
+  if (resolvedNomination === undefined) return { kind: "answer-invalid" };
+  return { kind: "answer-accepted", selectedPrimarySkillId: applied.skillId, resolvedNomination };
+};
