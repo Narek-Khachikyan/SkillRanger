@@ -17,6 +17,7 @@ import {
   type EvidenceArtifact,
   type ExecutionContractV2,
   type SkillLedger,
+  type SkillRunV2,
   type ValidatorEvaluationContext,
 } from "../src/runtime/strict/index.ts";
 import {
@@ -28,6 +29,15 @@ import {
   browserResultsFor,
   createBrowserGateRun,
 } from "./helpers/browser-gate-fixtures.ts";
+import {
+  createTailwindSourceRun,
+  tailwindContract,
+  tailwindGateResult,
+  tailwindGateSlugs,
+  tailwindRepairContract,
+  tailwindResultsFor,
+  tailwindSkillId,
+} from "./helpers/tailwind-source-fixtures.ts";
 
 const sha = (value: string | Buffer) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
 const skillId = "frontend.domain-validators-test";
@@ -532,4 +542,170 @@ test("deriveStrictValidatorResults keys browser gate results by gate id through 
   for (const gate of browserContract.gates) {
     assert.equal(derivation.validatorResults[gate.id].passed, true, gate.id);
   }
+});
+
+const stageDiff = async (
+  root: string,
+  store: StrictSkillRunStore,
+  run: SkillRunV2,
+  stepId: string,
+  content: string,
+) => {
+  const source = path.join(root, "evidence", `${run.revision}-${stepId.slice(stepId.lastIndexOf("/") + 1)}.patch`);
+  await mkdir(path.dirname(source), { recursive: true });
+  await writeFile(source, content);
+  const step = run.skillLedgers[0].steps.find(({ id }) => id === stepId)!;
+  const attempt = step.attempts.at(-1)!.attempt;
+  return store.ingestEvidence(run.runId, {
+    sourcePath: source,
+    kind: "implementation-diff",
+    attributions: [{
+      skillId: tailwindSkillId,
+      stepId,
+      attempt,
+      relation: "produced",
+      ruleIds: tailwindContract.rules.map(({ id }) => id),
+    }],
+  });
+};
+
+const stageValidDiff = async (root: string, store: StrictSkillRunStore) => {
+  let run = beginStrictStep(
+    readNextStrictChunk(createTailwindSourceRun(), tailwindSkillId).run,
+    tailwindSkillId,
+    tailwindContract.steps[0].id,
+  );
+  await store.create(run);
+  run = await stageDiff(root, store, run, tailwindContract.steps[0].id, '+ <div className="bg-brand-600 text-on-brand">Save</div>\n');
+  return store.update(run.runId, (current) => completeStrictStep(current, tailwindSkillId, tailwindContract.steps[0].id));
+};
+
+test("valid static source-review evidence passes every tailwind source gate through the domain validator seam", () => {
+  const results = tailwindResultsFor(createTailwindSourceRun().skillLedgers[0], ['+ <div className="bg-brand-600 text-on-brand">Save</div>']);
+  assert.deepEqual(failedGateIds(results), []);
+});
+
+test("dynamic Tailwind class evidence fails only no-dynamic-tailwind-classes", () => {
+  const results = tailwindResultsFor(createTailwindSourceRun().skillLedgers[0], ['<div className={`p-4 bg-${color}-600`}>Save</div>']);
+  assert.deepEqual(failedGateIds(results), ["no-dynamic-tailwind-classes"]);
+});
+
+test("raw color evidence fails only raw-colors-reviewed", () => {
+  const results = tailwindResultsFor(createTailwindSourceRun().skillLedgers[0], ['<div className="bg-red-500">Save</div>']);
+  assert.deepEqual(failedGateIds(results), ["raw-colors-reviewed"]);
+});
+
+test("repeated conflicting class bundles fail only repeated-class-bundles-reviewed", () => {
+  const results = tailwindResultsFor(createTailwindSourceRun().skillLedgers[0], ['+ <div className="block flex">Save</div>']);
+  assert.deepEqual(failedGateIds(results), ["repeated-class-bundles-reviewed"]);
+});
+
+test("an unrecognized tailwind gate slug fails closed", () => {
+  const result = tailwindGateResult(createTailwindSourceRun().skillLedgers[0], ['+ <div className="bg-brand-600">Save</div>'], `${skillId}/gate/unexpected`);
+  assert.deepEqual(result, { passed: false, message: "Tailwind source check failed unexpected." });
+});
+
+test("missing or malformed source-review evidence fails every tailwind gate with the staged-evidence contract", () => {
+  const ledger = createTailwindSourceRun().skillLedgers[0];
+  for (const sourceReview of [undefined, [], "", "not staged evidence"]) {
+    const results = tailwindResultsFor(ledger, sourceReview);
+    assert.deepEqual(failedGateIds(results), tailwindGateSlugs);
+    for (const slug of tailwindGateSlugs) {
+      assert.equal(results[slug].message, "No implementation diff evidence was staged.");
+    }
+  }
+});
+
+test("deriveStrictValidatorResults keys tailwind source results by gate id through the integrity seam", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "domain-validators-tailwind-derive-"));
+  const store = new StrictSkillRunStore(root);
+  let run = beginStrictStep(
+    readNextStrictChunk(createTailwindSourceRun(), tailwindSkillId).run,
+    tailwindSkillId,
+    tailwindContract.steps[0].id,
+  );
+  await store.create(run);
+  run = await stageDiff(root, store, run, tailwindContract.steps[0].id, '+ <div className="bg-brand-600 text-on-brand">Save</div>\n');
+  run = await store.update(run.runId, (current) => completeStrictStep(current, tailwindSkillId, tailwindContract.steps[0].id));
+
+  const derivation = await deriveStrictValidatorResults(root, run, run.skillLedgers[0]);
+  assert.equal(derivation.artifactIntegrity.passed, true);
+  for (const gate of tailwindContract.gates) {
+    assert.equal(derivation.validatorResults[gate.id].passed, true, gate.id);
+  }
+});
+
+test("missing implementation-diff evidence fails every tailwind gate through the domain validator seam", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "domain-validators-tailwind-missing-"));
+  const store = new StrictSkillRunStore(root);
+  let run = beginStrictStep(
+    readNextStrictChunk(createTailwindSourceRun(), tailwindSkillId).run,
+    tailwindSkillId,
+    tailwindContract.steps[0].id,
+  );
+  await store.create(run);
+  run = await store.update(run.runId, (current) => completeStrictStep(current, tailwindSkillId, tailwindContract.steps[0].id));
+
+  const derivation = await deriveStrictValidatorResults(root, run, run.skillLedgers[0]);
+  for (const gate of tailwindContract.gates) {
+    assert.equal(derivation.validatorResults[gate.id].passed, false, gate.id);
+    assert.equal(derivation.validatorResults[gate.id].message, "No implementation diff evidence was staged.");
+  }
+  await assert.rejects(
+    store.verifySkill(run.runId, tailwindSkillId),
+    (error: unknown) => error instanceof StrictSkillRunError && error.code === "hard-gate-failed",
+  );
+  assert.equal((await store.read(run.runId)).state, "verifying");
+});
+
+test("stale source-review evidence from a superseded attempt cannot fail the re-derived tailwind gates", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "domain-validators-tailwind-stale-"));
+  const store = new StrictSkillRunStore(root);
+  const implementStep = tailwindRepairContract.steps[0].id;
+  const repairStep = tailwindRepairContract.steps[1].id;
+  let run = beginStrictStep(
+    readNextStrictChunk(createTailwindSourceRun(tailwindRepairContract), tailwindSkillId).run,
+    tailwindSkillId,
+    implementStep,
+  );
+  await store.create(run);
+  run = await stageDiff(root, store, run, implementStep, '+ <div className={`p-4 bg-${color}-600`}>Save</div>\n');
+  run = await store.update(run.runId, (current) => completeStrictStep(current, tailwindSkillId, implementStep));
+
+  run = await store.verifySkill(run.runId, tailwindSkillId);
+  assert.equal(run.state, "repair-required");
+  assert.equal(run.skillLedgers[0].repairRequests.length, 1);
+
+  run = await store.update(run.runId, (current) => beginStrictStep(current, tailwindSkillId, repairStep));
+  run = await stageDiff(root, store, run, repairStep, '+ <div className="bg-brand-600 text-on-brand">Save</div>\n');
+  run = await store.update(run.runId, (current) => completeStrictStep(current, tailwindSkillId, repairStep));
+
+  run = await store.verifySkill(run.runId, tailwindSkillId);
+  assert.equal(run.skillLedgers[0].outcome, "used");
+  const latest = run.skillLedgers[0].verificationReports.at(-1)!;
+  for (const gate of tailwindContract.gates) {
+    assert.equal(latest.gateResults.find(({ gateId }) => gateId === gate.id)?.passed, true, gate.id);
+  }
+  assert.equal((await store.finalizeRun(run.runId)).state, "verified");
+});
+
+test("verification and finalization re-derive identical tailwind gate results across independent stores", async () => {
+  const firstRoot = await mkdtemp(path.join(os.tmpdir(), "domain-validators-tailwind-parity-a-"));
+  const secondRoot = await mkdtemp(path.join(os.tmpdir(), "domain-validators-tailwind-parity-b-"));
+  const firstStore = new StrictSkillRunStore(firstRoot);
+  const secondStore = new StrictSkillRunStore(secondRoot);
+  const first = await stageValidDiff(firstRoot, firstStore);
+  const second = await stageValidDiff(secondRoot, secondStore);
+
+  const firstReport = (await firstStore.verifySkill(first.runId, tailwindSkillId))
+    .skillLedgers[0].verificationReports.at(-1)!;
+  const secondReport = (await secondStore.verifySkill(second.runId, tailwindSkillId))
+    .skillLedgers[0].verificationReports.at(-1)!;
+
+  assert.equal(firstReport.hardPassed, true);
+  assert.equal(firstReport.hardPassed, secondReport.hardPassed);
+  assert.equal(firstReport.gateResults.filter(({ gateId }) => gateId.startsWith(`${tailwindSkillId}/gate/`)).length, tailwindContract.gates.length);
+  assert.deepEqual(firstReport.gateResults, secondReport.gateResults);
+  assert.equal((await firstStore.finalizeRun(first.runId)).state, "verified");
+  assert.equal((await secondStore.finalizeRun(second.runId)).state, "verified");
 });

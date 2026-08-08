@@ -19,7 +19,7 @@ import {
   type ExecutionContractV2,
   type SkillRunV2,
 } from "../src/runtime/strict/index.ts";
-import { deriveTailwindSourceResults } from "../src/runtime/strict/frontend-evidence.ts";
+import { deriveTailwindSourceResults } from "../src/domains/frontend/source-validator.ts";
 import { internalContainedFileReadHooks } from "../src/runtime/strict/contained-file.ts";
 
 const sha = (value: string | Buffer) => `sha256:${createHash("sha256").update(value).digest("hex")}`;

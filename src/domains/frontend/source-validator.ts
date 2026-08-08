@@ -1,6 +1,14 @@
-import { validateFrontendSources } from "../../domains/frontend/design/source-validation.ts";
+import type { Result } from "../../runtime/strict/core-validators.ts";
+import type { DomainValidatorProjection } from "../types.ts";
+import { validateFrontendSources } from "./design/source-validation.ts";
 
-type Result = { passed: boolean; message?: string };
+export const sourceGateSlugs = [
+  "no-dynamic-tailwind-classes",
+  "raw-colors-reviewed",
+  "repeated-class-bundles-reviewed",
+];
+
+const gateSlug = (gateId: string) => gateId.slice(gateId.lastIndexOf("/") + 1);
 
 const quotedPathEnd = (value: string, start: number) => {
   if (value[start] !== "\"") return undefined;
@@ -107,4 +115,18 @@ export const deriveTailwindSourceResults = (content: string): Record<string, Res
     "raw-colors-reviewed": { passed: !findings.some(({ code }) => code === "design-system-raw-color") },
     "repeated-class-bundles-reviewed": { passed: !findings.some(({ code }) => code === "tailwind-conflicting-utilities") },
   };
+};
+
+export const evaluateTailwindSource = (projection: DomainValidatorProjection): Result => {
+  const slug = gateSlug(projection.gateId);
+  if (!sourceGateSlugs.includes(slug)) return { passed: false, message: `Tailwind source check failed ${slug}.` };
+  const reviews = Array.isArray(projection.sourceReview)
+    ? projection.sourceReview.filter((content): content is string => typeof content === "string")
+    : [];
+  const failed = reviews
+    .map((content) => deriveTailwindSourceResults(content))
+    .find((candidate) => candidate[slug]?.passed !== true)?.[slug];
+  return failed ?? (reviews.length > 0
+    ? { passed: true }
+    : { passed: false, message: "No implementation diff evidence was staged." });
 };

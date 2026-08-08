@@ -7,6 +7,7 @@ import {
 import type { DomainValidatorEvaluator, DomainValidatorProjection } from "../types.ts";
 import type { EvidenceArtifact } from "../../runtime/strict/types.ts";
 import type { Result } from "../../runtime/strict/core-validators.ts";
+import { evaluateTailwindSource } from "./source-validator.ts";
 
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -174,4 +175,5 @@ export const evaluateBrowserHardGates = (projection: DomainValidatorProjection) 
 export const frontendValidatorEvaluators: Readonly<Record<string, DomainValidatorEvaluator>> = {
   "frontend/performance-claims": evaluatePerformanceClaims,
   "frontend/browser-hard-gates": evaluateBrowserHardGates,
+  "frontend/tailwind-source": evaluateTailwindSource,
 };
