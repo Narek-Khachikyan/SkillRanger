@@ -87,6 +87,12 @@ test("setup CLI applies recommendations non-interactively with --yes and explici
     assert.match(stdout, /Targets: codex/);
     assert.match(stdout, /Scope: repo/);
     assert.match(stdout, /Done\. Installed \d+ skills\./);
+    // Preflight audit summary: risk level + findings count per recommended skill, before install proceeds.
+    assert.match(stdout, /Audit summary:/);
+    assert.match(stdout, /- frontend\.\S+: risk low, \d+ findings?/);
+    // Exactly one feedback invitation, after the final success message.
+    assert.match(stdout, /Done\. Installed \d+ skills\.[\s\S]*issues\/new/);
+    assert.equal(stdout.split("https://github.com/Narek-Khachikyan/SkillRanger/issues/new").length - 1, 1);
     assert.equal(await exists(path.join(projectRoot, ".agents/skills/next-app-router-review/SKILL.md")), true);
     assert.equal(await exists(path.join(projectRoot, "skillranger.lock.json")), true);
     assert.match(stdout, /AGENTS\.md/);

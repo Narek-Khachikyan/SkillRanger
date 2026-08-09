@@ -398,6 +398,21 @@ const printSetupPlanSummary = (plans: InstallPlan[], projectRoot: string, additi
   }
 };
 
+const printSetupAuditSummary = async (skills: RegistrySkill[]) => {
+  const reports = await Promise.all(skills.map((skill) => auditSkill(skill)));
+  console.log("\nAudit summary:");
+  for (const report of reports) {
+    const findingsLabel = report.findings.length === 1 ? "finding" : "findings";
+    console.log(`- ${report.skillId}: risk ${report.riskLevel}, ${report.findings.length} ${findingsLabel}`);
+  }
+};
+
+const printFeedbackInvitation = () => {
+  console.log("");
+  console.log("Enjoying SkillRanger? Star the repo: https://github.com/Narek-Khachikyan/SkillRanger");
+  console.log("Found a bug or have feedback? Open an issue: https://github.com/Narek-Khachikyan/SkillRanger/issues/new");
+};
+
 const printInstallSummary = (
   plan: {
     skillId: string;
@@ -846,6 +861,7 @@ const run = async () => {
       projectRoot,
       agentContextPlan?.changed ? [agentContextPlan.path] : [],
     );
+    await printSetupAuditSummary(selectedSkills.map(({ skill }) => skill));
 
     const confirmed = autoConfirm || await promptYesNo("Install selected skills into this project?");
     if (!confirmed) {
@@ -890,6 +906,7 @@ const run = async () => {
       console.log(`- ${formatProjectPath(projectRoot, update)}`);
     }
     console.log(`Done. Installed ${appliedPlans.length} skills.`);
+    printFeedbackInvitation();
     return;
   }
 
