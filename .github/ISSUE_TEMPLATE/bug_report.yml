@@ -15,8 +15,8 @@ body:
     id: command
     attributes:
       label: Command run
-      description: The exact skillranger command that hit the bug, including flags and any project path.
-      placeholder: "skillranger setup --yes"
+      description: The exact skillranger command that hit the bug, including flags and any project path (redacted if private).
+      placeholder: "skillranger setup --yes --intent \"add design skills\""
     validations:
       required: true
   - type: input
@@ -48,7 +48,7 @@ body:
     attributes:
       label: Summarized stack
       description: |-
-        The last 10–20 lines of the error or stack trace, summarized — not the full output. Apply the redaction warning above: strip local paths, private package names, tokens, credentials, and proprietary repository details. Write "N/A" if the command produced no error output.
+        The last 10–20 lines of the error or stack trace, summarized — not the full output. Apply the redaction warning above: redact local paths, private package names, tokens, credentials, and proprietary repository details. Write "N/A" if the command produced no error output.
       placeholder: |-
         Error: …
             at … (line 12)
