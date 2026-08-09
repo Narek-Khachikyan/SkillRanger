@@ -37,7 +37,7 @@ SkillRanger requires Node.js 20 or newer. The setup command walks you through th
 
 When setup finishes, it prints one feedback invitation: star the repo or open an issue.
 
-To script the same flow without an interactive prompt, pass `--yes` with an intent (and a target agent — setup asks for both interactively):
+To script the same flow without the interactive prompts, pass `--yes` with an intent. Interactively, setup asks for the target agent, scope, and install mode:
 
 ```bash
 npx -y skillranger@latest setup --yes --target codex \
