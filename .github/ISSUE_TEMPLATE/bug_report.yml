@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a bug in SkillRanger — the command, version, expected vs actual behavior, and a summarized stack.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |-
+        Thanks for filing a bug report — five short fields, under a minute.
+
+        > **Redact local paths, private package names, tokens, credentials, and proprietary repository details.**
+
+        Never paste full `scan --json` output: the project fingerprint contains your absolute root path and dependency details.
+  - type: input
+    id: command
+    attributes:
+      label: Command run
+      description: The exact skillranger command that hit the bug, including flags and any project path.
+      placeholder: "skillranger setup --yes"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `skillranger --version`.
+      placeholder: "0.4.1"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+      placeholder: "The command should …"
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+      placeholder: "The command instead …"
+    validations:
+      required: true
+  - type: textarea
+    id: stack
+    attributes:
+      label: Summarized stack
+      description: |-
+        The last 10–20 lines of the error or stack trace, summarized — not the full output. Apply the redaction warning above: strip local paths, private package names, tokens, credentials, and proprietary repository details. Write "N/A" if the command produced no error output.
+      placeholder: |-
+        Error: …
+            at … (line 12)
+        /Users/you/… (redacted)
+    validations:
+      required: true
