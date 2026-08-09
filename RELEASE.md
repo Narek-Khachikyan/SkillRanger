@@ -2,6 +2,8 @@
 
 This checklist covers the current public beta. It verifies the npx/npm UX, compiled npm binaries, source-run CLI, MCP server, Universal Prompt Router, bundled registry, audit gates, frontend and router eval suites, and package hygiene before handing the beta to another user or publishing a tarball.
 
+0.4.1 is a patch release. The strict runtime now routes core evaluators through a trusted validator registry with ownership validation, moving browser hard gates, performance claims, and Tailwind source checks behind the frontend domain validator and removing the legacy validator dispatch. The router gains a pure nomination-resolution module: declared ambiguity, ordered nominations, and continuation now resolve through the same nomination decision consumed by the proposal-assisted path, with cross-domain primary nominations preserved. See ADR 0004 (`docs/adr/0004-domain-owned-strict-validators.md`).
+
 0.4.0 is the frontend design certification release. The package and frontend domain publish the same release identity, a six-family/18-rule contract, eight recipe packs, 80 deterministic worked-example assets, and the frozen visual benchmark pinned to `visual-benchmark-v1`. Validate the shipped contract with:
 
 ```bash
@@ -205,7 +207,19 @@ See `docs/mcp-host-config.md` for example host config and JSON-RPC messages.
 
 ## Manual Publish Steps
 
-Do not publish until the npm account is authenticated and the package name is still available immediately before publishing:
+Create the tag and GitHub release first, then publish to npm. The tag must point at the exact commit whose contents will be published; if in doubt, verify checksum parity between the npm tarball and the tagged tree.
+
+From the release commit (after `release:check` passes):
+
+```bash
+git tag -a v0.4.1 -m "SkillRanger v0.4.1"
+git push origin v0.4.1
+gh release create v0.4.1 \
+  --title "SkillRanger v0.4.1" \
+  --notes-file /path/to/release-notes.md
+```
+
+Write the release notes with `Summary`, `What's changed`, and `Verification` sections in the style of the previous releases. Then do not publish until the npm account is authenticated and the package name is still available immediately before publishing:
 
 ```bash
 npm view skillranger name version description

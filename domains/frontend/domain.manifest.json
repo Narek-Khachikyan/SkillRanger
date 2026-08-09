@@ -4,7 +4,7 @@
   "displayName": "Frontend",
   "description": "Design, implementation, review, and verification workflows for web interfaces.",
   "version": "1.0.0",
-  "releaseVersion": "0.4.0",
+  "releaseVersion": "0.4.1",
   "coreApi": "1.0",
   "skillIdPrefix": "frontend.",
   "capabilities": [

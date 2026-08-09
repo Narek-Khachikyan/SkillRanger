@@ -286,7 +286,7 @@ export const cliCommandDefinitions = Object.freeze([
   }),
   defineCommand({
     name: "release:validate",
-    description: "Validate the 0.4.0 frontend release artifact contract and deterministic assets.",
+    description: "Validate the 0.4.1 frontend release artifact contract and deterministic assets.",
     usages: ["release:validate [--json]"],
     booleanOptions: ["json"],
     valueOptions: [],

@@ -18,7 +18,7 @@
 
 SkillRanger scans your repository, detects its stack and development context, recommends compatible skills, audits them for safety risks, and creates a reviewable install plan before writing anything. In MCP catalog-assisted routing, the host model can also interpret the prompt and nominate relevant skills; SkillRanger validates those nominations before selecting a bounded set.
 
-The frontend design contract ships in release `0.4.0`: six rule families, 18 stable rules, eight recipe packs, and 80 deterministic worked-example assets. Run `npm run release:validate` to verify the local package artifacts; use `release:certify` to bind external visual and matched-baseline evidence into a retained promotion verdict.
+The frontend design contract ships in release `0.4.1`: six rule families, 18 stable rules, eight recipe packs, and 80 deterministic worked-example assets. Run `npm run release:validate` to verify the local package artifacts; use `release:certify` to bind external visual and matched-baseline evidence into a retained promotion verdict.
 
 For example, when you ask an AI agent to review a Next.js application, the host model can nominate the relevant Next.js, accessibility, performance, and testing instructions instead of making the agent work from a generic prompt. SkillRanger still owns catalog membership, hard vetoes, compatibility, composition, mandatory reads, and runtime integrity.
 

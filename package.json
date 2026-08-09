@@ -1,6 +1,6 @@
 {
   "name": "skillranger",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Local-first AI skill router and package manager: a host model proposes skills from a trusted catalog while SkillRanger validates, composes, audits, and installs bounded instructions.",
   "type": "module",
   "engines": {
