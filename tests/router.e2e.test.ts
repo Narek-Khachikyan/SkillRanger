@@ -527,7 +527,7 @@ test("CLI direct and MCP explicit both return the canonical core result contract
   }));
   assert.equal(cli.status, "prepared");
   assert.equal(mcp.status, "prepared");
-  assert.equal(cli.schemaVersion, "router-result/1.0");
+  assert.equal(cli.schemaVersion, "router-result/1.1");
   assert.equal(mcp.schemaVersion, cli.schemaVersion);
   assert.equal(cli.activation.mode, "direct");
   assert.equal(mcp.activation.mode, "explicit");

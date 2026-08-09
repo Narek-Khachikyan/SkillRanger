@@ -3,7 +3,7 @@ import { constants } from "node:fs";
 import { lstat, mkdir, open, opendir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { RunFileLock, type RunFileLockHooks } from "../runtime/run-lock.ts";
-import type { RouterJournalEntry, RouterRun } from "./types.ts";
+import { routingModeValues, type RouterJournalEntry, type RouterRun, type RoutingMode } from "./types.ts";
 
 const routeIdPattern = /^route_[a-z0-9_-]{7,127}$/;
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
@@ -263,7 +263,7 @@ export function assertValidRouterRun(value: unknown): asserts value is RouterRun
   digestValue(record.projectIdentity, "routerRun.projectIdentity");
   validateTaskProfile(record.taskProfile, "routerRun.taskProfile");
 
-  const routing = keys(record.routing, ["targetAgent", "domains", "deterministicKey", "routerAlgorithmVersion", "routingDate", "fingerprintDigest", "registryDigest", "configDigest"], ["routingProposal"], "routerRun.routing");
+  const routing = keys(record.routing, ["targetAgent", "domains", "deterministicKey", "routerAlgorithmVersion", "routingDate", "fingerprintDigest", "registryDigest", "configDigest"], ["routingProposal", "mode"], "routerRun.routing");
   string(routing.targetAgent, "routerRun.routing.targetAgent", true);
   if (!Array.isArray(routing.domains)) fail("routerRun.routing.domains must be an array.");
   (routing.domains as unknown[]).forEach((item, index) => validateDomain(item, `routerRun.routing.domains[${index}]`));
@@ -273,6 +273,10 @@ export function assertValidRouterRun(value: unknown): asserts value is RouterRun
   digestValue(routing.fingerprintDigest, "routerRun.routing.fingerprintDigest");
   digestValue(routing.registryDigest, "routerRun.routing.registryDigest");
   digestValue(routing.configDigest, "routerRun.routing.configDigest");
+  // Records written before routing mode existed omit `mode` and remain valid as-is.
+  // Any explicitly stored mode must be one of the canonical values; an invalid
+  // explicit mode fails integrity validation instead of being inferred away.
+  if (routing.mode !== undefined) enumeration(routing.mode, new Set(routingModeValues), "routerRun.routing.mode");
   if (routing.routingProposal !== undefined) validateRoutingProposalProjection(routing.routingProposal, "routerRun.routing.routingProposal");
   validateSelections(record.selections, "routerRun.selections");
 
@@ -289,6 +293,21 @@ export function assertValidRouterRun(value: unknown): asserts value is RouterRun
     string(failure.reasonCode, "routerRun.failure.reasonCode", true);
   }
 }
+
+// Legacy records (written before routing mode existed) omit `mode`. The compatibility
+// inference is: a persisted routing proposal means `model-assisted`; its absence means
+// `limited-deterministic-fallback`. The normalized in-memory representation always
+// exposes the inferred mode, while the on-disk record stays untouched on reads.
+const inferRouterRunMode = (routing: { mode?: unknown; routingProposal?: unknown }): RoutingMode => (
+  routing.mode !== undefined
+    ? routing.mode as RoutingMode
+    : routing.routingProposal !== undefined ? "model-assisted" : "limited-deterministic-fallback"
+);
+
+const normalizeRouterRunMode = (run: RouterRun): RouterRun => {
+  if (run.routing.mode !== undefined) return run;
+  return { ...run, routing: { ...run.routing, mode: inferRouterRunMode(run.routing) } };
+};
 
 export type RouterStoreErrorCode = "run-not-found" | "run-integrity" | "identity-integrity" | "recovery-required";
 
@@ -683,14 +702,14 @@ export class RouterStore {
 
   async read(runId: string): Promise<RouterRun> {
     await this.ensurePrepared();
-    return structuredClone(await this.readRunUnlocked(runId));
+    return structuredClone(normalizeRouterRunMode(await this.readRunUnlocked(runId)));
   }
 
   async update(runId: string, apply: (run: RouterRun) => RouterRun | Promise<RouterRun>): Promise<RouterRun> {
     await this.ensurePrepared();
     const lock = await this.lock.acquire(runId);
     try {
-      const current = await this.readRunUnlocked(runId);
+      const current = normalizeRouterRunMode(await this.readRunUnlocked(runId));
       const reduced = await apply(structuredClone(current));
       if (reduced.routerRunId !== runId) throw new RouterStoreError("run-integrity", "A router update cannot change the run ID.");
       const next = { ...reduced, revision: current.revision + 1 };

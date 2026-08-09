@@ -39,6 +39,7 @@ const fixtureRun = (overrides: Partial<RouterRun> = {}): RouterRun => ({
     evidence: [],
   },
   routing: {
+    mode: "limited-deterministic-fallback",
     targetAgent: "codex",
     domains: [],
     deterministicKey: digest("b"),

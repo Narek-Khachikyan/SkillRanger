@@ -248,7 +248,7 @@ A stale digest, invalid receipt, expired receipt, or interrupted cursor chain re
 ```json
 {
   "ok": true,
-  "schemaVersion": "router-result/1.0",
+  "schemaVersion": "router-result/1.1",
   "status": "catalog_refresh_required",
   "reasonCode": "catalog-digest-mismatch",
   "currentCatalogDigest": "sha256:...",

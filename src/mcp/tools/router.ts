@@ -22,7 +22,7 @@ import {
 
 const routerResultSchema = JSON.parse(readFileSync(new URL("../../../schemas/router-tool-result.schema.json", import.meta.url), "utf8")) as JsonObject;
 
-const routerToolOutputSchema = (schemaVersion: "router-result/1.0" | "router-read-result/1.0", propertiesForTool: string[]) => {
+const routerToolOutputSchema = (schemaVersion: "router-result/1.1" | "router-read-result/1.0", propertiesForTool: string[]) => {
   const copy = structuredClone(routerResultSchema) as JsonObject;
   // MCP SDK AJV caches validators by $id. Both tools clone the same source schema, so a shared
   // $id makes listTools bind read_run_skill_file to prepare_task's validator and reject reads.
@@ -48,7 +48,7 @@ const routerToolOutputSchema = (schemaVersion: "router-result/1.0" | "router-rea
   return copy;
 };
 
-const prepareTaskOutputSchema = routerToolOutputSchema("router-result/1.0", [
+const prepareTaskOutputSchema = routerToolOutputSchema("router-result/1.1", [
   "ok", "schemaVersion", "status", "activation", "taskProfile", "project", "routing", "warnings",
   "run", "selections", "requiredReads", "runtimeClarification", "verification", "clarification",
   "continuationToken", "expiresAt", "decomposition", "suggestedAction", "missing",

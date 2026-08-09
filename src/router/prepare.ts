@@ -36,18 +36,20 @@ import type {
   PrepareTaskCoreInput,
   PrepareTaskResult,
   PreparedSkillSelection,
+  RoutingMode,
   RouterRun,
   RuntimeRunReference,
   RuntimeClarificationSummary,
   SkillSourceSnapshot,
 } from "./types.ts";
+import { semanticRecallLimitedWarning } from "./types.ts";
 import { createSkillRun, reduceSkillRun } from "../runtime/skill-run/reducer.ts";
 import { SkillRunStore, type SkillRun } from "../runtime/skill-run/index.ts";
 import { createPreparedStrictSkillRun } from "../runtime/strict/service.ts";
 import { StrictSkillRunError, StrictSkillRunStore, type SkillRunV2 } from "../runtime/strict/index.ts";
 import { assertInstalledMatches } from "../runtime/strict/service.ts";
 
-export const routerAlgorithmVersion = "router/2.0" as const;
+export const routerAlgorithmVersion = "router/2.1" as const;
 export const deterministicRoutingKey = (projection: DeterministicRoutingProjection) => routerRecordDigest(projection);
 
 export class RouterPrepareError extends Error {
@@ -319,42 +321,54 @@ const common = (input: {
   semanticHintsDigest: string;
   routingProposal?: ValidatedRoutingProposal;
   outcome: DeterministicRoutingOutcome;
-}): PrepareTaskCommon => ({
-  ok: true,
-  schemaVersion: "router-result/1.0",
-  activation: input.activation,
-  taskProfile: input.profile,
-  project: displayProject(input.fingerprint),
-  routing: {
-    targetAgent: input.targetAgent,
-    domains: input.domains,
-    deterministicKey: deterministicRoutingKey({
+}): PrepareTaskCommon => {
+  // A routed outcome is model-assisted only when a validated routing proposal actually
+  // participates. Every other routed outcome is limited deterministic fallback and must
+  // carry the stable recall warning in the canonical deduplicated warning collection.
+  const mode: RoutingMode = input.routingProposal ? "model-assisted" : "limited-deterministic-fallback";
+  const warnings = [...new Set([
+    ...input.warnings,
+    ...(mode === "limited-deterministic-fallback" ? [semanticRecallLimitedWarning] : []),
+  ])];
+  return {
+    ok: true,
+    schemaVersion: "router-result/1.1",
+    activation: input.activation,
+    taskProfile: input.profile,
+    project: displayProject(input.fingerprint),
+    routing: {
+      mode,
+      targetAgent: input.targetAgent,
+      domains: input.domains,
+      deterministicKey: deterministicRoutingKey({
+        routerAlgorithmVersion,
+        routingDate: input.routingDate,
+        activation: input.activation,
+        mode,
+        targetAgent: input.targetAgent,
+        strict: input.strict,
+        capabilities: [...input.capabilities].sort(),
+        taskProfile: input.profile,
+        signalDigest: input.signalDigest,
+        semanticHintsDigest: input.semanticHintsDigest,
+        fingerprintDigest: routingFingerprintDigest(input.fingerprint),
+        vocabularyDigest: input.vocabularyDigest,
+        routingRegistryDigest: input.registryDigest,
+        configDigest: input.configDigest,
+        ...(input.routingProposal ? { routingProposalDigest: input.routingProposal.proposalDigest } : {}),
+        domains: input.domains,
+        outcome: input.outcome,
+        warnings,
+      }),
       routerAlgorithmVersion,
       routingDate: input.routingDate,
-      activation: input.activation,
-      targetAgent: input.targetAgent,
-      strict: input.strict,
-      capabilities: [...input.capabilities].sort(),
-      taskProfile: input.profile,
-      signalDigest: input.signalDigest,
-      semanticHintsDigest: input.semanticHintsDigest,
-      fingerprintDigest: routingFingerprintDigest(input.fingerprint),
-      vocabularyDigest: input.vocabularyDigest,
-      routingRegistryDigest: input.registryDigest,
+      registryDigest: input.registryDigest,
       configDigest: input.configDigest,
-      ...(input.routingProposal ? { routingProposalDigest: input.routingProposal.proposalDigest } : {}),
-      domains: input.domains,
-      outcome: input.outcome,
-      warnings: [...new Set(input.warnings)],
-    }),
-    routerAlgorithmVersion,
-    routingDate: input.routingDate,
-    registryDigest: input.registryDigest,
-    configDigest: input.configDigest,
-    ...(input.routingProposal ? { routingProposal: input.routingProposal.projection } : {}),
-  },
-  warnings: [...new Set(input.warnings)],
-});
+      ...(input.routingProposal ? { routingProposal: input.routingProposal.projection } : {}),
+    },
+    warnings,
+  };
+};
 
 const applyClarification = (domainId: string, domains: DomainCandidate[]) => domains.map((domain) => ({ ...domain, role: domain.id === domainId ? "primary" as const : "supporting" as const }));
 
@@ -423,7 +437,7 @@ export const prepareTask = async (
     }
     try {
       const refresh = validateRoutingProposalCatalogBinding({ proposal: shapedProposal, catalog: catalogSnapshot });
-      if (refresh) return { ok: true, schemaVersion: "router-result/1.0", ...refresh };
+      if (refresh) return { ok: true, schemaVersion: "router-result/1.1", ...refresh };
     } catch (error) {
       if (error instanceof RoutingProposalError) throw new RouterPrepareError(error.code, error.message);
       throw error;
@@ -483,7 +497,7 @@ export const prepareTask = async (
         catalog: catalogSnapshot,
         routingContext,
       });
-      if ("status" in ownerChecked) return { ok: true, schemaVersion: "router-result/1.0", ...ownerChecked };
+      if ("status" in ownerChecked) return { ok: true, schemaVersion: "router-result/1.1", ...ownerChecked };
       routingProposal = ownerChecked;
     } catch (error) {
       if (error instanceof RoutingProposalError) throw new RouterPrepareError(error.code, error.message);

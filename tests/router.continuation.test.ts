@@ -38,7 +38,7 @@ const binding = (overrides: Partial<ContinuationBinding> = {}): ContinuationBind
   routingProjection: {
     domains: ["backend-api", "qa-testing"],
   },
-  routerAlgorithmVersion: "router/2.0",
+  routerAlgorithmVersion: "router/2.1",
   signalDigest: "sha256:signals",
   vocabularyDigest: "sha256:vocabulary",
   semanticHintsDigest: "sha256:hints",
@@ -57,7 +57,7 @@ test("continuation tokens are opaque and bind the canonical request", () => {
     now: 1_001,
   });
   assert.equal(claims.version, "router-continuation/2.0");
-  assert.equal(claims.routerAlgorithmVersion, "router/2.0");
+  assert.equal(claims.routerAlgorithmVersion, "router/2.1");
 });
 
 test("canonical equivalent routing projections replay during the token lifetime", () => {

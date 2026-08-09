@@ -31,6 +31,16 @@ export type TaskLocale = "en" | "ru" | "mixed" | "unknown";
 export type RouterSkillRole = "environment" | "primary" | "companion" | "verification" | "agent-context";
 export type PreparedSkillSource = "installed" | "bundled-registry" | "test-fixture-registry";
 
+// The source of semantic relevance for a routed outcome. `model-assisted` means a
+// validated host routing proposal participated in routing; `limited-deterministic-fallback`
+// means routing used the local vocabulary path without a proposal. The mode describes
+// provenance only — never execution strictness, confidence, or verification quality.
+export type RoutingMode = "model-assisted" | "limited-deterministic-fallback";
+export const routingModeValues: readonly RoutingMode[] = ["model-assisted", "limited-deterministic-fallback"];
+// Stable machine-readable warning code emitted by every limited-deterministic-fallback
+// routed outcome. It participates in the canonical deduplicated warning collection.
+export const semanticRecallLimitedWarning = "semantic-recall-limited" as const;
+
 export type SemanticHint = {
   kind: "domain" | "action" | "artifact" | "intent" | "technology" | "quality";
   id: string;
@@ -107,6 +117,10 @@ export type RuntimeRunReference =
   | { kind: "strict-v2"; runId: string };
 
 export type RouterRoutingSnapshot = {
+  // Explicit on records written by the current router. Legacy records may omit it;
+  // readers infer `model-assisted` from a persisted routing proposal and
+  // `limited-deterministic-fallback` otherwise.
+  mode: RoutingMode;
   targetAgent: string;
   domains: DomainCandidate[];
   deterministicKey: string;
@@ -262,7 +276,7 @@ export type TriggerParseResult =
 
 export type PrepareTaskCommon = {
   ok: true;
-  schemaVersion: "router-result/1.0";
+  schemaVersion: "router-result/1.1";
   activation: { mode: "explicit" | "direct"; trigger?: "@skillranger" | "skillranger" | "/sr" };
   taskProfile: TaskProfile;
   project: {
@@ -273,6 +287,9 @@ export type PrepareTaskCommon = {
     frameworks: string[];
   };
   routing: {
+    // Required on every new routed outcome. Catalog-refresh outcomes and errors carry
+    // no routing shape at all and therefore never fabricate a mode.
+    mode: RoutingMode;
     targetAgent: string;
     domains: DomainCandidate[];
     deterministicKey: string;
@@ -288,7 +305,7 @@ export type PrepareTaskCommon = {
 export type PrepareTaskResult =
   | (RoutingProposalRefresh & {
       ok: true;
-      schemaVersion: "router-result/1.0";
+      schemaVersion: "router-result/1.1";
     })
   | (PrepareTaskCommon & {
       status: "prepared";
@@ -348,9 +365,13 @@ export type DeterministicRoutingOutcome =
   | { status: "context_budget_exceeded"; requiredBytes: number; allowedBytes: number; blockingSkillIds: string[] };
 
 export type DeterministicRoutingProjection = {
-  routerAlgorithmVersion: "router/2.0";
+  routerAlgorithmVersion: "router/2.1";
   routingDate: string;
   activation: PrepareTaskCommon["activation"];
+  // Mode participates directly in replay identity — it is never inferred only from
+  // an optional proposal digest, so otherwise identical inputs in different modes
+  // produce different keys.
+  mode: RoutingMode;
   targetAgent: string;
   strict: boolean;
   capabilities: string[];

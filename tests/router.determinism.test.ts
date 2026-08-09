@@ -57,9 +57,10 @@ test("clarification replays exclude token identity and expiry from the determini
 
 test("the canonical outcome variant participates in the deterministic key", () => {
   const base = {
-    routerAlgorithmVersion: "router/2.0" as const,
+    routerAlgorithmVersion: "router/2.1" as const,
     routingDate: "2026-07-21",
     activation: { mode: "direct" as const },
+    mode: "limited-deterministic-fallback" as const,
     targetAgent: "codex",
     strict: false,
     capabilities: ["filesystem"],

@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 const tokenVersion = "router-continuation/2.0" as const;
-const routerVersion = "router/2.0" as const;
+const routerVersion = "router/2.1" as const;
 const algorithm = "HS256" as const;
 const defaultTtlMs = 15 * 60 * 1000;
 const maxTokenBytes = 4096;
