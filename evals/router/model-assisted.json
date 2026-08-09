@@ -703,7 +703,7 @@
         "roleAssignments": {
           "primary": ["frontend.visual-design-polish"],
           "companion": [],
-          "verification": []
+          "verification": ["frontend.motion-audit"]
         }
       }
     }

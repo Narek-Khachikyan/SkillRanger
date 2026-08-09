@@ -309,6 +309,23 @@ const normalizeRouterRunMode = (run: RouterRun): RouterRun => {
   return { ...run, routing: { ...run.routing, mode: inferRouterRunMode(run.routing) } };
 };
 
+// Writer-side counterpart to inferRouterRunMode: an update must not silently migrate a
+// legacy record. Updates operate on the normalized in-memory representation, but the
+// persisted record only gains an explicit `mode` when the update deliberately assigned
+// one that a reader could not infer from the record itself (i.e. it differs from the
+// proposal-based inference for the record being written). Otherwise the inferred mode
+// is stripped before the write, so a legacy record stays legacy across updates.
+const stripInferredRouterRunMode = (original: RouterRun, next: RouterRun): RouterRun => {
+  if (original.routing.mode !== undefined || next.routing.mode === undefined) return next;
+  const inferred = inferRouterRunMode({ ...next.routing, mode: undefined });
+  if (next.routing.mode === inferred) {
+    const routing = { ...next.routing };
+    delete (routing as { mode?: RoutingMode }).mode;
+    return { ...next, routing };
+  }
+  return next;
+};
+
 export type RouterStoreErrorCode = "run-not-found" | "run-integrity" | "identity-integrity" | "recovery-required";
 
 export class RouterStoreError extends Error {
@@ -709,12 +726,13 @@ export class RouterStore {
     await this.ensurePrepared();
     const lock = await this.lock.acquire(runId);
     try {
-      const current = normalizeRouterRunMode(await this.readRunUnlocked(runId));
+      const original = await this.readRunUnlocked(runId);
+      const current = normalizeRouterRunMode(original);
       const reduced = await apply(structuredClone(current));
       if (reduced.routerRunId !== runId) throw new RouterStoreError("run-integrity", "A router update cannot change the run ID.");
       const next = { ...reduced, revision: current.revision + 1 };
       assertValidRouterRun(next);
-      await this.writeRunUnlocked(next);
+      await this.writeRunUnlocked(stripInferredRouterRunMode(original, next));
       return structuredClone(next);
     } finally { await this.lock.release(lock); }
   }
@@ -756,35 +774,38 @@ export class RouterStore {
     try {
       const current = await this.readRunUnlocked(input.routerRun.routerRunId);
       if (input.routerRun.revision !== current.revision + 1) throw new RouterStoreError("run-integrity", "A journaled router update must advance the current revision exactly once.");
+      // A legacy record must not gain an inferred mode through the read bridge; the
+      // stripped record is journaled and written, so recovery replays the same shape.
+      const candidate = stripInferredRouterRunMode(current, input.routerRun);
       const journal: JournalPayload = {
         schemaVersion: "router-journal/1.0",
         operationId: `op_${randomUUID()}`,
-        routerRunId: input.routerRun.routerRunId,
-        runtimeRunId: input.routerRun.runtime.runId,
-        payloadDigest: digest({ routerRun: input.routerRun, runtimePayload: input.runtimePayload }),
+        routerRunId: candidate.routerRunId,
+        runtimeRunId: candidate.runtime.runId,
+        payloadDigest: digest({ routerRun: candidate, runtimePayload: input.runtimePayload }),
         intendedTransition: "record-read",
         createdAt: new Date().toISOString(),
-        routerRun: input.routerRun,
+        routerRun: candidate,
         runtimePayload: input.runtimePayload,
       };
-      await this.writeAtomic(this.journalPath(input.routerRun.routerRunId), `${JSON.stringify(journal, null, 2)}\n`);
+      await this.writeAtomic(this.journalPath(candidate.routerRunId), `${JSON.stringify(journal, null, 2)}\n`);
       try {
         await input.applyRuntime();
       } catch (error) {
-        const runtime = await input.runtime.read(input.routerRun.runtime.runId).catch(() => undefined);
+        const runtime = await input.runtime.read(candidate.runtime.runId).catch(() => undefined);
         if (runtime === undefined || digest(runtime) !== digest(input.runtimePayload)) {
-          await unlink(this.journalPath(input.routerRun.routerRunId)).catch(() => undefined);
+          await unlink(this.journalPath(candidate.routerRunId)).catch(() => undefined);
           throw error;
         }
       }
-      const runtime = await input.runtime.read(input.routerRun.runtime.runId);
+      const runtime = await input.runtime.read(candidate.runtime.runId);
       if (runtime === undefined || digest(runtime) !== digest(input.runtimePayload)) {
-        await unlink(this.journalPath(input.routerRun.routerRunId)).catch(() => undefined);
+        await unlink(this.journalPath(candidate.routerRunId)).catch(() => undefined);
         throw new RouterStoreError("run-integrity", "Runtime read bridge did not persist the expected payload.");
       }
-      await this.writeRunUnlocked(input.routerRun);
-      await unlink(this.journalPath(input.routerRun.routerRunId));
-      return structuredClone(input.routerRun);
+      await this.writeRunUnlocked(candidate);
+      await unlink(this.journalPath(candidate.routerRunId));
+      return structuredClone(normalizeRouterRunMode(candidate));
     } finally { await this.lock.release(lock); }
   }
 

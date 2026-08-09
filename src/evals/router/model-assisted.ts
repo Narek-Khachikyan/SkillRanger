@@ -130,6 +130,8 @@ export type RoleAwareSelections = {
   verification: string[];
 };
 
+export type RoleRecallCounts = Record<RoleAwareRole, { matched: number; expectedCount: number }>;
+
 export type RoleRecall = {
   fullSet: number;
   primary: number;
@@ -138,6 +140,9 @@ export type RoleRecall = {
   missedRoles: RoleAwareRole[];
   expected: RoleAwareSelections;
   observed: RoleAwareSelections;
+  // Raw per-role matched/expected counts, carried so aggregates can sum them
+  // without re-deriving per-case recall from the observed selections.
+  counts: RoleRecallCounts;
 };
 
 export type ModelAssistedBenchmarkExpected = {
@@ -562,6 +567,7 @@ const roleAwareRoles: readonly RoleAwareRole[] = ["primary", "companion", "verif
 const emptyRoleSelections = (): RoleAwareSelections => ({ primary: [], companion: [], verification: [] });
 
 const summarizePrepareResult = async (root: string, prompt: string, result: PrepareTaskResult): Promise<PreparedEvaluation> => {
+  const routing = "routing" in result ? result.routing : undefined;
   const selections = result.status === "prepared"
     ? [result.selections.primary, ...result.selections.environment, ...result.selections.companions, ...result.selections.verification, ...result.selections.agentContext]
     : [];
@@ -585,8 +591,8 @@ const summarizePrepareResult = async (root: string, prompt: string, result: Prep
     ...(typeof (result as { reasonCode?: unknown }).reasonCode === "string" ? { reasonCode: (result as { reasonCode: string }).reasonCode } : {}),
     runFileCount: await runFileCount(root),
     privacyLeakageCount,
-    ...(typeof (result as { routing?: { deterministicKey?: unknown } }).routing?.deterministicKey === "string" ? { deterministicKey: (result as { routing: { deterministicKey: string } }).routing.deterministicKey } : {}),
-    ...(typeof (result as { routing?: { mode?: unknown } }).routing?.mode === "string" ? { routingMode: (result as { routing: { mode: RoutingMode } }).routing.mode } : {}),
+    ...(routing === undefined ? {} : { deterministicKey: routing.deterministicKey }),
+    ...(routing === undefined ? {} : { routingMode: routing.mode }),
     questionIds: result.status === "clarification_required" ? result.clarification.questions.map(({ id }) => id) : [],
   };
 };
@@ -801,8 +807,16 @@ const outcomeNotWorse = (fallback: PreparedEvaluation, assisted: PreparedEvaluat
 
 const rounded3 = (value: number) => Number(value.toFixed(3));
 
-const roleRecallCounts = (expected: RoleAwareSelections, observed: RoleAwareSelections) => {
-  const counts = {} as Record<RoleAwareRole, { matched: number; expectedCount: number }>;
+const roleRatio = (matched: number, expectedCount: number) => expectedCount === 0 ? 1 : rounded3(matched / expectedCount);
+
+const fullSetRatio = (counts: RoleRecallCounts) => {
+  const expectedTotal = roleAwareRoles.reduce((sum, role) => sum + counts[role].expectedCount, 0);
+  const matchedTotal = roleAwareRoles.reduce((sum, role) => sum + counts[role].matched, 0);
+  return expectedTotal === 0 ? 1 : rounded3(matchedTotal / expectedTotal);
+};
+
+const roleRecallCounts = (expected: RoleAwareSelections, observed: RoleAwareSelections): RoleRecallCounts => {
+  const counts = {} as RoleRecallCounts;
   for (const role of roleAwareRoles) {
     counts[role] = {
       matched: expected[role].filter((skillId) => observed[role].includes(skillId)).length,
@@ -814,17 +828,15 @@ const roleRecallCounts = (expected: RoleAwareSelections, observed: RoleAwareSele
 
 const computeRoleRecall = (expected: RoleAwareSelections, observed: RoleAwareSelections): RoleRecall => {
   const counts = roleRecallCounts(expected, observed);
-  const ratio = (matched: number, expectedCount: number) => expectedCount === 0 ? 1 : rounded3(matched / expectedCount);
-  const expectedTotal = roleAwareRoles.reduce((sum, role) => sum + counts[role].expectedCount, 0);
-  const matchedTotal = roleAwareRoles.reduce((sum, role) => sum + counts[role].matched, 0);
   return {
-    fullSet: expectedTotal === 0 ? 1 : rounded3(matchedTotal / expectedTotal),
-    primary: ratio(counts.primary.matched, counts.primary.expectedCount),
-    companion: ratio(counts.companion.matched, counts.companion.expectedCount),
-    verification: ratio(counts.verification.matched, counts.verification.expectedCount),
+    fullSet: fullSetRatio(counts),
+    primary: roleRatio(counts.primary.matched, counts.primary.expectedCount),
+    companion: roleRatio(counts.companion.matched, counts.companion.expectedCount),
+    verification: roleRatio(counts.verification.matched, counts.verification.expectedCount),
     missedRoles: roleAwareRoles.filter((role) => counts[role].expectedCount > 0 && counts[role].matched < counts[role].expectedCount),
     expected: structuredClone(expected),
     observed: structuredClone(observed),
+    counts,
   };
 };
 
@@ -913,29 +925,31 @@ export const evaluateRoutingProposalBenchmark = async (root = process.cwd()): Pr
   const absentResults = results.filter(({ id }) => absentCases.some((item) => item.id === id));
   const roleCases = fixture.cases.filter(({ expected }) => expected.roleAssignments !== undefined);
   const roleAwareCaseCount = roleCases.length;
+  // The aggregate consumes each case's computed recall counts instead of re-deriving
+  // per-case recall from the observed selections; a role-declaring case that did not
+  // produce a prepared selection set counts its expected skills as missed.
   const roleAwareCounts = (() => {
-    const totals = {} as Record<RoleAwareRole, { matched: number; expectedCount: number }>;
+    const totals = {} as RoleRecallCounts;
     for (const role of roleAwareRoles) totals[role] = { matched: 0, expectedCount: 0 };
+    const recallById = new Map(results.map(({ id, recall }) => [id, recall]));
     for (const item of roleCases) {
       const expected = item.expected.roleAssignments;
       if (expected === undefined) continue;
-      const observed = results.find(({ id }) => id === item.id)?.assisted.selectedSkillIdsByRole;
-      if (observed === undefined) continue;
-      const counts = roleRecallCounts(expected, observed);
-      for (const role of roleAwareRoles) {
-        totals[role].matched += counts[role].matched;
-        totals[role].expectedCount += counts[role].expectedCount;
+      const recall = recallById.get(item.id);
+      if (recall !== undefined) {
+        for (const role of roleAwareRoles) {
+          totals[role].matched += recall.counts[role].matched;
+          totals[role].expectedCount += recall.counts[role].expectedCount;
+        }
+      } else {
+        for (const role of roleAwareRoles) totals[role].expectedCount += expected[role].length;
       }
     }
     return totals;
   })();
   const roleRecallAggregate = (role: RoleAwareRole): number =>
-    roleAwareCounts[role].expectedCount === 0 ? 1 : rounded3(roleAwareCounts[role].matched / roleAwareCounts[role].expectedCount);
-  const roleAwareFullSetRecall = (() => {
-    const expectedTotal = roleAwareRoles.reduce((sum, role) => sum + roleAwareCounts[role].expectedCount, 0);
-    const matchedTotal = roleAwareRoles.reduce((sum, role) => sum + roleAwareCounts[role].matched, 0);
-    return expectedTotal === 0 ? 1 : rounded3(matchedTotal / expectedTotal);
-  })();
+    roleRatio(roleAwareCounts[role].matched, roleAwareCounts[role].expectedCount);
+  const roleAwareFullSetRecall = fullSetRatio(roleAwareCounts);
   const metrics = {
     caseFailures: results.filter(({ passed }) => !passed).length,
     primaryAccuracy,

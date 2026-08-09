@@ -302,6 +302,7 @@ The existing analyzer and composer consume the validated output. Existing eligib
 - Existing persisted router and runtime schemas need no migration; only newly prepared runs may contain proposal-derived canonical digests and reason codes where their schemas permit them.
 - The router result schema adds `catalog_refresh_required` and its closed fields.
 - The MCP `prepare_task` input schema must publish the complete proposal shape rather than `{ "type": "object" }`.
+- Routing mode participates directly in deterministic replay identity, so the deterministic routing algorithm advances to `router/2.1`. Continuation tokens bind the router algorithm version: an in-flight token minted under `router/2.0` fails verification with `continuation-invalid` after the upgrade and the host must re-issue the clarification. Tokens live at most 15 minutes, so no persisted state is affected.
 
 ## Verification strategy
 
@@ -334,7 +335,7 @@ A separate benchmark asks host models to read the catalog and nominate skills fo
 - average selected skill count and instruction-byte cost;
 - failure and fallback behavior for weak or malformed proposals.
 
-Cases may declare `expected.roleAssignments` naming the expected skill IDs per routing role. The evaluator then compares the entire selected set by role instead of treating one acceptable primary as success: each role's recall is matched against its expected IDs, full-set recall aggregates all roles, and failure output names the missed role and shows the expected versus observed role assignments. The representative motion scenario expects motion design as primary, interaction polish as companion, and motion audit as verification for both direct English intent and an indirect Russian request to make the interface feel more alive; a generic site request must not indiscriminately pull in the motion set.
+Cases may declare `expected.roleAssignments` naming the expected skill IDs per routing role. The evaluator then compares the entire selected set by role instead of treating one acceptable primary as success: each role's recall is matched against its expected IDs, full-set recall aggregates all roles, and failure output names the missed role and shows the expected versus observed role assignments. The representative motion scenario expects motion design as primary, interaction polish as companion, and motion audit as verification for both direct English intent and an indirect Russian request to make the interface feel more alive; a generic site request must not pull in the motion workflow (motion design as primary or interaction polish as a companion), while the motion-audit skill remains eligible as a verification audit for requests whose quality goals warrant one.
 
 Every evaluated run also asserts honest routing provenance: proposal-less runs must report `limited-deterministic-fallback` with `semantic-recall-limited`, proposal-backed runs must report `model-assisted` without it, and rejected or refresh outcomes must not fabricate a mode.
 

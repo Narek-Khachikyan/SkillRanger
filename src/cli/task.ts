@@ -125,19 +125,18 @@ const print = (value: unknown, json: boolean, explain = false) => {
     console.log(JSON.stringify(output, null, 2));
     return;
   }
-  const result = value as { status?: string; run?: { routerRunId: string; runtimeRunId: string }; routing?: { mode?: string; domains: Array<{ id: string; role: string; confidence: number }> }; requiredReads?: Array<unknown>; suggestedAction?: string };
-  if (result.routing?.mode === limitedDeterministicFallbackMode) {
+  const result = value as PrepareTaskResult;
+  if ("routing" in result && result.routing.mode === limitedDeterministicFallbackMode) {
     console.log(`Warning: limited deterministic fallback (${semanticRecallLimitedWarning}) — semantic recall is limited and not equivalent to model-assisted routing.`);
   }
   if (result.status === "prepared") {
-    const primary = result.routing?.domains.find(({ role }) => role === "primary");
+    const primary = result.routing.domains.find(({ role }) => role === "primary");
     console.log(`Prepared${primary ? ` ${primary.id} (${Math.round(primary.confidence * 100)}%)` : ""}.`);
-    console.log(`Router run: ${result.run?.routerRunId}`);
-    console.log(`Runtime run: ${result.run?.runtimeRunId}`);
-    console.log(`Mandatory reads: ${result.requiredReads?.length ?? 0}`);
+    console.log(`Router run: ${result.run.routerRunId}`);
+    console.log(`Runtime run: ${result.run.runtimeRunId}`);
+    console.log(`Mandatory reads: ${result.requiredReads.length}`);
     if (explain) {
-      const selections = (value as PrepareTaskResult & { status: "prepared" }).selections;
-      for (const selection of [selections.primary, ...selections.environment, ...selections.companions, ...selections.verification, ...selections.agentContext]) {
+      for (const selection of [result.selections.primary, ...result.selections.environment, ...result.selections.companions, ...result.selections.verification, ...result.selections.agentContext]) {
         console.log(`${selection.role}: ${selection.skillId} - ${selection.reasons.join("; ")}`);
       }
     }

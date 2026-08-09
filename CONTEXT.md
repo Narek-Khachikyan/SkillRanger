@@ -20,6 +20,14 @@ _Avoid_: Selected skill, forced skill, recommendation result
 The deterministic routing decision that applies explicit user choice, nomination order, and declared ambiguity to produce a primary workflow or fallback before a run is created.
 _Avoid_: Skill selection, final skill set, composition
 
+**Vocabulary recall gap**:
+A class of routing failures where a task expresses a relevant intent, but the deterministic vocabulary does not recognize its phrasing, so the intent never reaches composition.
+_Avoid_: Missing skill, composition failure, host failure
+
+**Composition recall gap**:
+A class of routing failures where a relevant supporting skill reaches composition but is omitted because it adds no formally uncovered task requirement, despite providing complementary expertise.
+_Avoid_: Vocabulary miss, ineligible skill, host failure
+
 **Routing hard veto**:
 A deterministic eligibility or integrity rule that prevents a skill nomination from entering the prepared skill set. It protects audit, risk, compatibility, capability, installation, conflict, and context guarantees; it does not judge semantic relevance.
 _Avoid_: Low relevance score, model disagreement, soft penalty
@@ -27,6 +35,18 @@ _Avoid_: Low relevance score, model disagreement, soft penalty
 **Catalog receipt**:
 Proof that the host received every part of one skill catalog snapshot. It proves delivery, not comprehension or correct skill nomination.
 _Avoid_: Model-read proof, catalog approval, verified selection
+
+**Model-first semantic routing**:
+A routing contract in which the host agent interprets task meaning against the bounded skill catalog and submits ordered, role-specific skill nominations. SkillRanger does not delegate authority: it validates the routing proposal, applies hard vetoes and composition limits, and produces the final skill set. Local vocabulary is a limited fallback and does not promise equivalent semantic recall.
+_Avoid_: Model-selected workflow, delegated trust, deterministic semantic interpretation
+
+**Routing mode**:
+The canonical provenance class of a routing result: `model-assisted` when a valid routing proposal participates, or `limited-deterministic-fallback` when no routing proposal is submitted. It describes how semantic relevance was supplied, not whether execution is verified.
+_Avoid_: Strict mode, verification mode, routing quality score
+
+**Limited deterministic fallback**:
+The local vocabulary routing path used only when the host submits no routing proposal. It remains deterministic but does not promise semantic recall equivalent to model-first semantic routing.
+_Avoid_: Invalid-proposal recovery, degraded strict mode, model-assisted routing
 
 ## Verification
 

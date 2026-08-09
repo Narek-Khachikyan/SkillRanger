@@ -55,31 +55,42 @@ test("clarification replays exclude token identity and expiry from the determini
   assert.notEqual(first.continuationToken, second.continuationToken);
 });
 
+const baseProjection = () => ({
+  routerAlgorithmVersion: "router/2.1" as const,
+  routingDate: "2026-07-21",
+  activation: { mode: "direct" as const },
+  mode: "limited-deterministic-fallback" as const,
+  targetAgent: "codex",
+  strict: false,
+  capabilities: ["filesystem"],
+  taskProfile: {
+    schemaVersion: "task-profile/1.0" as const,
+    normalizedGoal: "",
+    locale: "en" as const,
+    actions: [], artifactTypes: [], technologies: [], constraints: [], qualityGoals: [], acceptanceCriteria: [], domains: [], subtasks: [], evidence: [],
+  },
+  signalDigest: "sha256:a",
+  semanticHintsDigest: "sha256:b",
+  fingerprintDigest: "sha256:c",
+  vocabularyDigest: "sha256:d",
+  routingRegistryDigest: "sha256:e",
+  configDigest: "sha256:f",
+  domains: [],
+  warnings: [],
+});
+
 test("the canonical outcome variant participates in the deterministic key", () => {
-  const base = {
-    routerAlgorithmVersion: "router/2.1" as const,
-    routingDate: "2026-07-21",
-    activation: { mode: "direct" as const },
-    mode: "limited-deterministic-fallback" as const,
-    targetAgent: "codex",
-    strict: false,
-    capabilities: ["filesystem"],
-    taskProfile: {
-      schemaVersion: "task-profile/1.0" as const,
-      normalizedGoal: "",
-      locale: "en" as const,
-      actions: [], artifactTypes: [], technologies: [], constraints: [], qualityGoals: [], acceptanceCriteria: [], domains: [], subtasks: [], evidence: [],
-    },
-    signalDigest: "sha256:a",
-    semanticHintsDigest: "sha256:b",
-    fingerprintDigest: "sha256:c",
-    vocabularyDigest: "sha256:d",
-    routingRegistryDigest: "sha256:e",
-    configDigest: "sha256:f",
-    domains: [],
-    warnings: [],
-  };
-  const noMatch: DeterministicRoutingProjection = { ...base, outcome: { status: "no_matching_skills", suggestedAction: "proceed" } };
-  const clarification: DeterministicRoutingProjection = { ...base, outcome: { status: "clarification_required", clarification: { questions: [] } } };
+  const noMatch: DeterministicRoutingProjection = { ...baseProjection(), outcome: { status: "no_matching_skills", suggestedAction: "proceed" } };
+  const clarification: DeterministicRoutingProjection = { ...baseProjection(), outcome: { status: "clarification_required", clarification: { questions: [] } } };
   assert.notEqual(deterministicRoutingKey(noMatch), deterministicRoutingKey(clarification));
+});
+
+test("routing mode participates directly in the deterministic key", () => {
+  const fallback: DeterministicRoutingProjection = { ...baseProjection(), outcome: { status: "no_matching_skills", suggestedAction: "proceed" } };
+  const assisted: DeterministicRoutingProjection = { ...baseProjection(), mode: "model-assisted", outcome: { status: "no_matching_skills", suggestedAction: "proceed" } };
+  const repeated: DeterministicRoutingProjection = { ...baseProjection(), outcome: { status: "no_matching_skills", suggestedAction: "proceed" } };
+  // Otherwise identical inputs in different modes must never collide on replay identity.
+  assert.notEqual(deterministicRoutingKey(fallback), deterministicRoutingKey(assisted));
+  // Same-mode replays stay stable.
+  assert.equal(deterministicRoutingKey(fallback), deterministicRoutingKey(repeated));
 });

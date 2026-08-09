@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { getAdapter } from "../src/installers/codex.ts";
+import { defaultRouterConfig } from "../src/config/index.ts";
 import { initializeRouterContext } from "../src/mcp/router-context.ts";
 import { callMcpTool, mcpTools } from "../src/mcp/tools.ts";
 import { findSkill } from "../src/registry/index.ts";
@@ -178,6 +179,22 @@ test("every fallback routed outcome variant carries the mode and the recall warn
   if (strictUnmet.status !== "strict_requirements_unmet") return;
   assert.equal(strictUnmet.routing.mode, "limited-deterministic-fallback");
   assert.equal(recallWarningCount(strictUnmet.warnings), 1);
+
+  // context_budget_exceeded (instruction budget below the required primary)
+  const budgetRoot = await temporaryProject("next-react-ts");
+  const config = structuredClone(defaultRouterConfig);
+  config.router.maxInstructionBytes = 1_000;
+  await writeFile(path.join(budgetRoot, "skillranger.config.json"), JSON.stringify(config));
+  const budgetExceeded = await prepareTask({
+    projectRoot: budgetRoot,
+    registry: { kind: "bundled", root: registry },
+    prompt: "Create a responsive web interface @skillranger",
+    activation: { mode: "explicit" },
+  });
+  assert.equal(budgetExceeded.status, "context_budget_exceeded");
+  if (budgetExceeded.status !== "context_budget_exceeded") return;
+  assert.equal(budgetExceeded.routing.mode, "limited-deterministic-fallback");
+  assert.equal(recallWarningCount(budgetExceeded.warnings), 1);
 });
 
 test("proposal-backed prepared outcomes report model-assisted without the recall warning", async () => {
@@ -456,6 +473,12 @@ test("legacy RouterRun records infer the mode without migration and reject inval
   assert.equal((await store.read(run.routerRunId)).routing.mode, "limited-deterministic-fallback");
   // The on-disk record stays untouched by a plain read.
   assert.ok(!("mode" in (JSON.parse(await readFile(runPath, "utf8")) as { routing: Record<string, unknown> }).routing));
+  // A writer-side update must not migrate the record: the inferred mode is stripped
+  // before the write, so the legacy shape and the inference survive the update.
+  await store.update(run.routerRunId, (current) => ({ ...current, state: "reading" }));
+  const afterUpdate = JSON.parse(await readFile(runPath, "utf8")) as { routing: Record<string, unknown> };
+  assert.ok(!("mode" in afterUpdate.routing), "legacy records must not gain an inferred mode through updates");
+  assert.equal((await store.read(run.routerRunId)).routing.mode, "limited-deterministic-fallback");
 
   // Legacy proposal-backed record: no mode, but a persisted proposal infers model-assisted.
   const catalog = await buildSkillCatalog();
@@ -526,18 +549,29 @@ test("journal recovery preserves compatibility inference for legacy RouterRun re
     runtimePayload,
   };
   await writeFile(path.join(root, ".skillranger", "runs", "router", `${result.run.routerRunId}.journal.json`), `${JSON.stringify(journal)}\n`);
-  const store = new RouterStore(root, {
-    runtime: {
-      async read(runId) {
-        try { return JSON.parse(await readFile(path.join(root, ".skillranger", "runs", `${runId}.json`), "utf8")); }
-        catch { return undefined; }
-      },
-      async create(runId, value) { await writeFile(path.join(root, ".skillranger", "runs", `${runId}.json`), `${JSON.stringify(value, null, 2)}\n`); },
+  const runtime = {
+    async read(runId: string) {
+      try { return JSON.parse(await readFile(path.join(root, ".skillranger", "runs", `${runId}.json`), "utf8")); }
+      catch { return undefined; }
     },
-  });
+    async create(runId: string, value: unknown) { await writeFile(path.join(root, ".skillranger", "runs", `${runId}.json`), `${JSON.stringify(value, null, 2)}\n`); },
+  };
+  const store = new RouterStore(root, { runtime });
   assert.deepEqual((await store.recover()).recovered, [result.run.routerRunId]);
   const recovered = await store.read(result.run.routerRunId);
   assert.equal(recovered.routing.mode, "limited-deterministic-fallback");
+  // A journaled read bridge must not migrate the recovered legacy record either:
+  // the candidate is stripped before it is journaled and written.
+  const bridged = await store.journaledUpdate({
+    routerRun: { ...recovered, revision: recovered.revision + 1, state: "reading" },
+    runtime,
+    runtimePayload,
+    applyRuntime: async () => {},
+  });
+  assert.equal(bridged.routing.mode, "limited-deterministic-fallback");
+  const afterBridge = JSON.parse(await readFile(routerPath, "utf8")) as { routing: Record<string, unknown> };
+  assert.ok(!("mode" in afterBridge.routing), "journaled updates must not migrate legacy records");
+  assert.equal((await store.read(result.run.routerRunId)).routing.mode, "limited-deterministic-fallback");
 });
 
 test("fallback and proposal-backed lifecycle runs keep identical runtime schemas and read inventory", async () => {

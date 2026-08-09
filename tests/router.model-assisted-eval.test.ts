@@ -109,13 +109,18 @@ test("the benchmark fixture declares bilingual role-aware expected selections", 
 
   const generic = fixture.cases.find(({ id }) => id === "generic-site-workflow-stays-lean");
   assert.ok(generic);
+  // The generic site must not pull in the motion workflow: the primary stays
+  // visual-design-polish and no companion is added. The motion-audit skill remains
+  // eligible as a verification audit for visual-quality goals, so the declared
+  // verification role names it — matching allowedSkillIds instead of contradicting it.
   assert.deepEqual(generic.expected.roleAssignments, {
     primary: ["frontend.visual-design-polish"],
     companion: [],
-    verification: [],
+    verification: ["frontend.motion-audit"],
   });
   assert.equal(generic.expected.primarySkillId, "frontend.visual-design-polish");
   assert.deepEqual(generic.expected.forbiddenSkillIds, ["frontend.motion-design", "frontend.interaction-polish"]);
+  assert.deepEqual(generic.expected.allowedSkillIds, ["frontend.visual-design-polish", "frontend.motion-audit"]);
   assert.equal(generic.proposal?.nominations.some(({ skillId }) => skillId.startsWith("frontend.motion")), false);
 });
 
