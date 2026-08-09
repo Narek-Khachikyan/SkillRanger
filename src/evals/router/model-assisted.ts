@@ -14,7 +14,7 @@ import {
   type RoutingProposalInput,
 } from "../../router/routing-proposal.ts";
 import { prepareTask, RouterPrepareError } from "../../router/prepare.ts";
-import type { PrepareTaskResult } from "../../router/types.ts";
+import { semanticRecallLimitedWarning, type PrepareTaskResult, type RoutingMode } from "../../router/types.ts";
 import { canonicalizeJson } from "../../router/store.ts";
 
 const contractSchemaVersion = "router-eval-contracts/1.0" as const;
@@ -35,7 +35,7 @@ const contractKinds = new Set([
 ] as const);
 type EvaluatedStatus = "prepared" | "clarification_required" | "decomposition_required" | "no_matching_skills" | "strict_requirements_unmet" | "context_budget_exceeded" | "catalog_refresh_required" | "error";
 type EvaluationErrorCode = RouterPrepareError["code"] | "evaluation-error";
-const benchmarkSources = new Set(["implicit-intent", "hard-paraphrase"] as const);
+const benchmarkSources = new Set(["implicit-intent", "hard-paraphrase", "russian-paraphrase"] as const);
 const proposalModes = new Set(["current", "absent", "malformed", "stale"] as const);
 const resultStatuses = new Set<EvaluatedStatus>([
   "prepared",
@@ -119,8 +119,26 @@ export type RoutingProposalContractFixture = {
   cases: RoutingProposalContractCase[];
 };
 
-export type ModelAssistedBenchmarkSource = "implicit-intent" | "hard-paraphrase";
+export type ModelAssistedBenchmarkSource = "implicit-intent" | "hard-paraphrase" | "russian-paraphrase";
 export type ModelAssistedProposalMode = "current" | "absent" | "malformed" | "stale";
+
+export type RoleAwareRole = "primary" | "companion" | "verification";
+
+export type RoleAwareSelections = {
+  primary: string[];
+  companion: string[];
+  verification: string[];
+};
+
+export type RoleRecall = {
+  fullSet: number;
+  primary: number;
+  companion: number;
+  verification: number;
+  missedRoles: RoleAwareRole[];
+  expected: RoleAwareSelections;
+  observed: RoleAwareSelections;
+};
 
 export type ModelAssistedBenchmarkExpected = {
   status: EvaluatedStatus;
@@ -134,6 +152,7 @@ export type ModelAssistedBenchmarkExpected = {
   errorCode?: EvaluationErrorCode;
   allowedSkillIds: string[];
   forbiddenSkillIds: string[];
+  roleAssignments?: RoleAwareSelections;
 };
 
 export type ModelAssistedBenchmarkCase = {
@@ -162,6 +181,7 @@ type PreparedEvaluation = {
   status: EvaluatedStatus;
   primarySkillId?: string;
   selectedSkillIds: string[];
+  selectedSkillIdsByRole: RoleAwareSelections;
   selectedSkillCount: number;
   instructionBytes: number;
   warnings: string[];
@@ -171,6 +191,7 @@ type PreparedEvaluation = {
   privacyLeakageCount: number;
   deterministicKey?: string;
   questionIds: string[];
+  routingMode?: RoutingMode;
 };
 
 type CatalogEvaluation = {
@@ -196,6 +217,7 @@ export const modelAssistedEvalThresholds = {
   absentProposalFallbackUnchanged: true,
   deterministicReplay: true,
   contractFailures: 0,
+  roleAwareFullSetRecall: 0.9,
 } as const;
 
 export type ModelAssistedEvalReport = {
@@ -232,6 +254,7 @@ export type ModelAssistedEvalReport = {
       forbiddenSelectedSkillIds: string[];
       irrelevantSelectedSkillIds: string[];
       deterministicReplay: boolean;
+      recall?: RoleRecall;
     }>;
     metrics: {
       caseFailures: number;
@@ -248,6 +271,11 @@ export type ModelAssistedEvalReport = {
       hardVetoFailures: number;
       privacyLeakageCount: number;
       deterministicReplay: boolean;
+      roleAwareCaseCount: number;
+      roleAwareFullSetRecall: number;
+      rolePrimaryRecall: number;
+      roleCompanionRecall: number;
+      roleVerificationRecall: number;
     };
   };
   promotion: {
@@ -382,6 +410,16 @@ export const loadRoutingProposalContractFixtures = async (filePath: string): Pro
   return { schemaVersion: contractSchemaVersion, catalog: { expectedDomainIds, expectedSkillIds, pageMaxItems: catalog.pageMaxItems as number }, cases };
 };
 
+const parseRoleAwareSelections = (value: unknown, at: string): RoleAwareSelections => {
+  const selections = record(value, at);
+  exactKeys(selections, ["primary", "companion", "verification"], [], at);
+  return {
+    primary: stringArray(selections.primary, `${at}.primary`, true),
+    companion: stringArray(selections.companion, `${at}.companion`, true),
+    verification: stringArray(selections.verification, `${at}.verification`, true),
+  };
+};
+
 export const loadRoutingProposalBenchmarkFixtures = async (filePath: string): Promise<ModelAssistedBenchmarkFixture> => {
   const root = record(await readJson(filePath), "router model-assisted fixture");
   exactKeys(root, ["schemaVersion", "cases"], [], "router model-assisted fixture");
@@ -403,7 +441,7 @@ export const loadRoutingProposalBenchmarkFixtures = async (filePath: string): Pr
     if (proposalMode === "absent" && proposal !== undefined) fail(`router model-assisted fixture.cases[${index}] must omit proposal in absent mode.`);
     if (proposalMode !== "absent" && proposal === undefined) fail(`router model-assisted fixture.cases[${index}] requires proposal in ${proposalMode} mode.`);
     const expectedRecord = record(value.expected, `router model-assisted fixture.cases[${index}].expected`);
-    exactKeys(expectedRecord, ["status", "allowedSkillIds", "forbiddenSkillIds"], ["primarySkillId", "fallbackStatus", "fallbackPrimarySkillId", "fallbackUnchanged", "fallbackNotWorse", "malformedRejected", "catalogIntegrityException", "errorCode"], `router model-assisted fixture.cases[${index}].expected`);
+    exactKeys(expectedRecord, ["status", "allowedSkillIds", "forbiddenSkillIds"], ["primarySkillId", "fallbackStatus", "fallbackPrimarySkillId", "fallbackUnchanged", "fallbackNotWorse", "malformedRejected", "catalogIntegrityException", "errorCode", "roleAssignments"], `router model-assisted fixture.cases[${index}].expected`);
     const status = stringValue(expectedRecord.status, `router model-assisted fixture.cases[${index}].expected.status`);
     if (!resultStatuses.has(status as EvaluatedStatus)) fail(`router model-assisted fixture.cases[${index}].expected.status is invalid.`);
     const fallbackStatus = expectedRecord.fallbackStatus === undefined ? undefined : stringValue(expectedRecord.fallbackStatus, `router model-assisted fixture.cases[${index}].expected.fallbackStatus`);
@@ -423,6 +461,7 @@ export const loadRoutingProposalBenchmarkFixtures = async (filePath: string): Pr
       ...(expectedRecord.fallbackNotWorse === undefined ? {} : { fallbackNotWorse: bool(expectedRecord.fallbackNotWorse, `router model-assisted fixture.cases[${index}].expected.fallbackNotWorse`) }),
       ...(expectedRecord.malformedRejected === undefined ? {} : { malformedRejected: bool(expectedRecord.malformedRejected, `router model-assisted fixture.cases[${index}].expected.malformedRejected`) }),
       ...(expectedRecord.catalogIntegrityException === undefined ? {} : { catalogIntegrityException: bool(expectedRecord.catalogIntegrityException, `router model-assisted fixture.cases[${index}].expected.catalogIntegrityException`) }),
+      ...(expectedRecord.roleAssignments === undefined ? {} : { roleAssignments: parseRoleAwareSelections(expectedRecord.roleAssignments, `router model-assisted fixture.cases[${index}].expected.roleAssignments`) }),
       ...(errorCode === undefined ? {} : { errorCode: errorCode as EvaluationErrorCode }),
     };
     return { id, source, vocabularyMiss, prompt, strict, capabilities, proposalMode, ...(proposal === undefined ? {} : { proposal }), expected };
@@ -518,16 +557,28 @@ const privacyLeakageCountFor = async (root: string, prompt: string, transientPay
   return canaries.filter((canary) => transientPayloads.some((payload) => payload.includes(canary)) || persisted.some((payload) => payload.includes(canary))).length;
 };
 
+const roleAwareRoles: readonly RoleAwareRole[] = ["primary", "companion", "verification"];
+
+const emptyRoleSelections = (): RoleAwareSelections => ({ primary: [], companion: [], verification: [] });
+
 const summarizePrepareResult = async (root: string, prompt: string, result: PrepareTaskResult): Promise<PreparedEvaluation> => {
   const selections = result.status === "prepared"
     ? [result.selections.primary, ...result.selections.environment, ...result.selections.companions, ...result.selections.verification, ...result.selections.agentContext]
     : [];
+  const selectedSkillIdsByRole: RoleAwareSelections = result.status === "prepared"
+    ? {
+        primary: [result.selections.primary.skillId],
+        companion: result.selections.companions.map(({ skillId }) => skillId),
+        verification: result.selections.verification.map(({ skillId }) => skillId),
+      }
+    : emptyRoleSelections();
   const serialized = JSON.stringify(result);
   const privacyLeakageCount = await privacyLeakageCountFor(root, prompt, [serialized]);
   return {
     status: result.status,
     ...(result.status === "prepared" ? { primarySkillId: result.selections.primary.skillId } : {}),
     selectedSkillIds: selections.map(({ skillId }) => skillId),
+    selectedSkillIdsByRole,
     selectedSkillCount: selections.length,
     instructionBytes: result.status === "prepared" ? result.requiredReads.reduce((sum, read) => sum + read.bytes, 0) : 0,
     warnings: "warnings" in result ? result.warnings : [],
@@ -535,6 +586,7 @@ const summarizePrepareResult = async (root: string, prompt: string, result: Prep
     runFileCount: await runFileCount(root),
     privacyLeakageCount,
     ...(typeof (result as { routing?: { deterministicKey?: unknown } }).routing?.deterministicKey === "string" ? { deterministicKey: (result as { routing: { deterministicKey: string } }).routing.deterministicKey } : {}),
+    ...(typeof (result as { routing?: { mode?: unknown } }).routing?.mode === "string" ? { routingMode: (result as { routing: { mode: RoutingMode } }).routing.mode } : {}),
     questionIds: result.status === "clarification_required" ? result.clarification.questions.map(({ id }) => id) : [],
   };
 };
@@ -573,6 +625,7 @@ const runPrepare = async (root: string, input: {
       return {
         status: "error",
         selectedSkillIds: [],
+        selectedSkillIdsByRole: emptyRoleSelections(),
         selectedSkillCount: 0,
         instructionBytes: 0,
         warnings: [],
@@ -746,6 +799,35 @@ const outcomeNotWorse = (fallback: PreparedEvaluation, assisted: PreparedEvaluat
   return true;
 };
 
+const rounded3 = (value: number) => Number(value.toFixed(3));
+
+const roleRecallCounts = (expected: RoleAwareSelections, observed: RoleAwareSelections) => {
+  const counts = {} as Record<RoleAwareRole, { matched: number; expectedCount: number }>;
+  for (const role of roleAwareRoles) {
+    counts[role] = {
+      matched: expected[role].filter((skillId) => observed[role].includes(skillId)).length,
+      expectedCount: expected[role].length,
+    };
+  }
+  return counts;
+};
+
+const computeRoleRecall = (expected: RoleAwareSelections, observed: RoleAwareSelections): RoleRecall => {
+  const counts = roleRecallCounts(expected, observed);
+  const ratio = (matched: number, expectedCount: number) => expectedCount === 0 ? 1 : rounded3(matched / expectedCount);
+  const expectedTotal = roleAwareRoles.reduce((sum, role) => sum + counts[role].expectedCount, 0);
+  const matchedTotal = roleAwareRoles.reduce((sum, role) => sum + counts[role].matched, 0);
+  return {
+    fullSet: expectedTotal === 0 ? 1 : rounded3(matchedTotal / expectedTotal),
+    primary: ratio(counts.primary.matched, counts.primary.expectedCount),
+    companion: ratio(counts.companion.matched, counts.companion.expectedCount),
+    verification: ratio(counts.verification.matched, counts.verification.expectedCount),
+    missedRoles: roleAwareRoles.filter((role) => counts[role].expectedCount > 0 && counts[role].matched < counts[role].expectedCount),
+    expected: structuredClone(expected),
+    observed: structuredClone(observed),
+  };
+};
+
 const benchmarkExpectedMatch = (expected: ModelAssistedBenchmarkExpected, assisted: PreparedEvaluation) => {
   if (assisted.status !== expected.status) return false;
   if (expected.primarySkillId !== undefined && assisted.primarySkillId !== expected.primarySkillId) return false;
@@ -769,6 +851,16 @@ const runBenchmarkCase = async (root: string, item: ModelAssistedBenchmarkCase, 
   const deterministicReplay = comparable(assisted) === comparable(replay);
   const catalogIntegrityCheckPassed = item.expected.catalogIntegrityException === undefined || !item.expected.catalogIntegrityException ||
     (assisted.status === "catalog_refresh_required" && assisted.runFileCount === 0);
+  const fallbackModeHonest = fallback.routingMode === "limited-deterministic-fallback" && fallback.warnings.includes(semanticRecallLimitedWarning);
+  const assistedModeHonest = item.proposalMode === "current"
+    ? assisted.routingMode === "model-assisted" && !assisted.warnings.includes(semanticRecallLimitedWarning)
+    : item.proposalMode === "absent"
+      ? assisted.routingMode === "limited-deterministic-fallback" && assisted.warnings.includes(semanticRecallLimitedWarning)
+      : assisted.routingMode === undefined;
+  const recall = item.expected.roleAssignments !== undefined && assisted.status === "prepared"
+    ? computeRoleRecall(item.expected.roleAssignments, assisted.selectedSkillIdsByRole)
+    : undefined;
+  const recallMatch = recall === undefined || recall.fullSet === 1;
   const passed = benchmarkExpectedMatch(item.expected, assisted) &&
     benchmarkFallbackMatch(item.expected, fallback) &&
     forbidden.length === 0 &&
@@ -776,7 +868,10 @@ const runBenchmarkCase = async (root: string, item: ModelAssistedBenchmarkCase, 
     (!item.expected.fallbackUnchanged || fallbackUnchanged) &&
     (!item.expected.fallbackNotWorse || fallbackNotWorse) &&
     (!item.expected.malformedRejected || (assisted.status === "error" && assisted.runFileCount === 0)) &&
-    catalogIntegrityCheckPassed;
+    catalogIntegrityCheckPassed &&
+    fallbackModeHonest &&
+    assistedModeHonest &&
+    recallMatch;
   const { privacyLeakageCount, ...fallbackWithoutPrivacy } = fallback;
   const { privacyLeakageCount: assistedPrivacyLeakageCount, ...assistedWithoutPrivacy } = assisted;
   return {
@@ -792,6 +887,7 @@ const runBenchmarkCase = async (root: string, item: ModelAssistedBenchmarkCase, 
     forbiddenSelectedSkillIds: forbidden,
     irrelevantSelectedSkillIds: irrelevant,
     deterministicReplay,
+    ...(recall === undefined ? {} : { recall }),
   };
 };
 
@@ -815,6 +911,31 @@ export const evaluateRoutingProposalBenchmark = async (root = process.cwd()): Pr
   const absentCases = fixture.cases.filter(({ expected }) => expected.fallbackUnchanged);
   const invalidResults = results.filter(({ id }) => invalidCases.some((item) => item.id === id));
   const absentResults = results.filter(({ id }) => absentCases.some((item) => item.id === id));
+  const roleCases = fixture.cases.filter(({ expected }) => expected.roleAssignments !== undefined);
+  const roleAwareCaseCount = roleCases.length;
+  const roleAwareCounts = (() => {
+    const totals = {} as Record<RoleAwareRole, { matched: number; expectedCount: number }>;
+    for (const role of roleAwareRoles) totals[role] = { matched: 0, expectedCount: 0 };
+    for (const item of roleCases) {
+      const expected = item.expected.roleAssignments;
+      if (expected === undefined) continue;
+      const observed = results.find(({ id }) => id === item.id)?.assisted.selectedSkillIdsByRole;
+      if (observed === undefined) continue;
+      const counts = roleRecallCounts(expected, observed);
+      for (const role of roleAwareRoles) {
+        totals[role].matched += counts[role].matched;
+        totals[role].expectedCount += counts[role].expectedCount;
+      }
+    }
+    return totals;
+  })();
+  const roleRecallAggregate = (role: RoleAwareRole): number =>
+    roleAwareCounts[role].expectedCount === 0 ? 1 : rounded3(roleAwareCounts[role].matched / roleAwareCounts[role].expectedCount);
+  const roleAwareFullSetRecall = (() => {
+    const expectedTotal = roleAwareRoles.reduce((sum, role) => sum + roleAwareCounts[role].expectedCount, 0);
+    const matchedTotal = roleAwareRoles.reduce((sum, role) => sum + roleAwareCounts[role].matched, 0);
+    return expectedTotal === 0 ? 1 : rounded3(matchedTotal / expectedTotal);
+  })();
   const metrics = {
     caseFailures: results.filter(({ passed }) => !passed).length,
     primaryAccuracy,
@@ -833,6 +954,11 @@ export const evaluateRoutingProposalBenchmark = async (root = process.cwd()): Pr
     }).length,
     privacyLeakageCount: results.reduce((sum, result) => sum + result.privacyLeakageCount, 0),
     deterministicReplay: results.every(({ deterministicReplay }) => deterministicReplay),
+    roleAwareCaseCount,
+    roleAwareFullSetRecall,
+    rolePrimaryRecall: roleRecallAggregate("primary"),
+    roleCompanionRecall: roleRecallAggregate("companion"),
+    roleVerificationRecall: roleRecallAggregate("verification"),
   };
   return {
     schemaVersion: "router-model-assisted-benchmark/1.0",
@@ -859,6 +985,7 @@ export const evaluateModelAssistedRouter = async (root = process.cwd(), options:
   if (benchmark.metrics.invalidProposalFallbackNotWorse !== modelAssistedEvalThresholds.invalidProposalFallbackNotWorse) blockingReasons.push("invalid-proposal-regressed-fallback");
   if (benchmark.metrics.absentProposalFallbackUnchanged !== modelAssistedEvalThresholds.absentProposalFallbackUnchanged) blockingReasons.push("proposal-absent-result-changed");
   if (benchmark.metrics.deterministicReplay !== modelAssistedEvalThresholds.deterministicReplay) blockingReasons.push("proposal-replay-nondeterministic");
+  if (benchmark.metrics.roleAwareFullSetRecall < modelAssistedEvalThresholds.roleAwareFullSetRecall) blockingReasons.push("role-aware-full-set-recall-below-0.90");
   return {
     schemaVersion: "router-model-assisted-eval/1.0",
     execution: "captured-proposals-only",

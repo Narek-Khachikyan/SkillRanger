@@ -30,9 +30,16 @@ proposal grounding and ownership, item rejection, precedence, hard vetoes, stric
 behavior, ambiguity, refresh, privacy, replay, and proposal-absent behavior.
 
 `evals/router/model-assisted.json` is a captured-host-proposal benchmark. Its cases cover implicit
-intents where vocabulary recovery matters and hard paraphrases. The evaluator compares each
-proposal-backed result with deterministic fallback, records selected-skill count and instruction
-byte cost, and checks malformed/invalid/absent proposals without persisting rejected runs.
+intents where vocabulary recovery matters, hard paraphrases, and indirect Russian paraphrases. The
+evaluator compares each proposal-backed result with deterministic fallback, records selected-skill
+count and instruction byte cost, and checks malformed/invalid/absent proposals without persisting
+rejected runs.
+
+Cases may declare `expected.roleAssignments` with the expected primary, companion, and verification
+skill IDs. When declared, the evaluator computes role-specific recall and full-set recall over the
+entire expected role-aware set — a case that only matches an acceptable primary cannot pass. Each
+case result reports `recall` with the full-set, per-role ratios, the missed roles, and the expected
+versus observed role assignments for diagnosis.
 
 The promotion gate requires:
 
@@ -43,8 +50,15 @@ The promotion gate requires:
 - zero privacy leakage and hard-veto failures;
 - malformed proposals to be rejected;
 - invalid nominations to be no worse than fallback;
-- proposal-absent behavior to remain unchanged; and
-- deterministic replay of captured proposals.
+- proposal-absent behavior to remain unchanged;
+- deterministic replay of captured proposals; and
+- role-aware full-set recall of at least `0.900` across all role-declaring cases.
+
+Role-aware full-set recall below `0.900` is the agreed signal that a future retrieval design
+decision should be considered as the catalog grows. The report exposes it as
+`benchmark.metrics.roleAwareFullSetRecall` with the per-role aggregates
+`rolePrimaryRecall`, `roleCompanionRecall`, and `roleVerificationRecall`, and blocks promotion with
+`role-aware-full-set-recall-below-0.90`.
 
 The report uses `router-model-assisted-eval/1.0` and marks the execution mode as
 `captured-proposals-only`, making it explicit that benchmark artifacts are not model or network

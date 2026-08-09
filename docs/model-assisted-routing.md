@@ -325,13 +325,18 @@ All existing forbidden-selection, privacy, strict-eligibility, read-order, evide
 
 ### Model-assisted benchmark
 
-A separate benchmark asks host models to read the catalog and nominate skills for prompts that include implicit intent and hard paraphrases. It measures:
+A separate benchmark asks host models to read the catalog and nominate skills for prompts that include implicit intent, hard paraphrases, and indirect Russian paraphrases. It measures:
 
 - primary-skill accuracy;
 - recovery rate on vocabulary-only routing misses;
+- role-aware full-set recall over the expected primary, companion, and verification skill IDs;
 - irrelevant and forbidden selection rates;
 - average selected skill count and instruction-byte cost;
 - failure and fallback behavior for weak or malformed proposals.
+
+Cases may declare `expected.roleAssignments` naming the expected skill IDs per routing role. The evaluator then compares the entire selected set by role instead of treating one acceptable primary as success: each role's recall is matched against its expected IDs, full-set recall aggregates all roles, and failure output names the missed role and shows the expected versus observed role assignments. The representative motion scenario expects motion design as primary, interaction polish as companion, and motion audit as verification for both direct English intent and an indirect Russian request to make the interface feel more alive; a generic site request must not indiscriminately pull in the motion set.
+
+Every evaluated run also asserts honest routing provenance: proposal-less runs must report `limited-deterministic-fallback` with `semantic-recall-limited`, proposal-backed runs must report `model-assisted` without it, and rejected or refresh outcomes must not fabricate a mode.
 
 The initial promotion bar is:
 
@@ -339,7 +344,10 @@ The initial promotion bar is:
 - zero forbidden selections and zero privacy leaks;
 - all routing hard vetoes remain effective;
 - at least 80% of curated vocabulary-only misses are corrected by the model-assisted path;
-- invalid or absent nominations do not produce a worse result than deterministic fallback, except where fail-closed catalog integrity requires stopping.
+- invalid or absent nominations do not produce a worse result than deterministic fallback, except where fail-closed catalog integrity requires stopping;
+- role-aware full-set recall of at least 90% across all role-declaring cases.
+
+Role-aware full-set recall below 90% is the agreed signal that a future retrieval design decision should be reconsidered as the catalog grows; it does not by itself authorize retrieval.
 
 Model-assisted benchmark results are evidence about host nomination quality. They are not themselves a verified outcome unless the applicable hard gates pass against accepted evidence.
 

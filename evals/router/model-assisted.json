@@ -556,6 +556,156 @@
         "allowedSkillIds": [],
         "forbiddenSkillIds": []
       }
+    },
+    {
+      "id": "direct-english-motion-workflow",
+      "source": "implicit-intent",
+      "vocabularyMiss": true,
+      "prompt": "Design polished motion for the interface: make the transitions intentional, add interaction polish to hover states, and audit the animation quality @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["motion-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.motion-design",
+            "role": "primary",
+            "confidence": 0.92,
+            "evidenceText": "Design polished motion for the interface"
+          },
+          {
+            "skillId": "frontend.interaction-polish",
+            "role": "companion",
+            "confidence": 0.85,
+            "evidenceText": "add interaction polish to hover states"
+          },
+          {
+            "skillId": "frontend.motion-audit",
+            "role": "verification",
+            "confidence": 0.9,
+            "evidenceText": "audit the animation quality"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.motion-design",
+        "fallbackStatus": "no_matching_skills",
+        "allowedSkillIds": ["frontend.motion-design", "frontend.interaction-polish", "frontend.motion-audit"],
+        "forbiddenSkillIds": [],
+        "roleAssignments": {
+          "primary": ["frontend.motion-design"],
+          "companion": ["frontend.interaction-polish"],
+          "verification": ["frontend.motion-audit"]
+        }
+      }
+    },
+    {
+      "id": "indirect-russian-motion-workflow",
+      "source": "russian-paraphrase",
+      "vocabularyMiss": true,
+      "prompt": "Интерфейс должен ощущаться более живым — добавьте анимации, отполируйте микроинтеракции и проверьте их качество @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["design"],
+          "artifactTypes": ["animation"],
+          "intentTags": ["motion-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.motion-design",
+            "role": "primary",
+            "confidence": 0.9,
+            "evidenceText": "Интерфейс должен ощущаться более живым"
+          },
+          {
+            "skillId": "frontend.interaction-polish",
+            "role": "companion",
+            "confidence": 0.82,
+            "evidenceText": "отполируйте микроинтеракции"
+          },
+          {
+            "skillId": "frontend.motion-audit",
+            "role": "verification",
+            "confidence": 0.88,
+            "evidenceText": "проверьте их качество"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.motion-design",
+        "fallbackStatus": "no_matching_skills",
+        "allowedSkillIds": ["frontend.motion-design", "frontend.interaction-polish", "frontend.motion-audit"],
+        "forbiddenSkillIds": [],
+        "roleAssignments": {
+          "primary": ["frontend.motion-design"],
+          "companion": ["frontend.interaction-polish"],
+          "verification": ["frontend.motion-audit"]
+        }
+      }
+    },
+    {
+      "id": "generic-site-workflow-stays-lean",
+      "source": "implicit-intent",
+      "vocabularyMiss": true,
+      "prompt": "Update the marketing site content and layout @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["modify"],
+          "artifactTypes": ["page"],
+          "intentTags": ["visual-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.visual-design-polish",
+            "role": "primary",
+            "confidence": 0.88,
+            "evidenceText": "Update the marketing site content and layout"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.visual-design-polish",
+        "fallbackStatus": "no_matching_skills",
+        "allowedSkillIds": ["frontend.visual-design-polish", "frontend.motion-audit"],
+        "forbiddenSkillIds": ["frontend.motion-design", "frontend.interaction-polish"],
+        "roleAssignments": {
+          "primary": ["frontend.visual-design-polish"],
+          "companion": [],
+          "verification": []
+        }
+      }
     }
   ]
 }

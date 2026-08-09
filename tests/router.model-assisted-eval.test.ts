@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { callMcpTool } from "../src/mcp/tools.ts";
@@ -44,6 +44,7 @@ test("the model-assisted benchmark is captured-proposal-only and meets its promo
   assert.equal(fixture.schemaVersion, "router-model-assisted/1.0");
   assert.ok(fixture.cases.some(({ source }) => source === "implicit-intent"));
   assert.ok(fixture.cases.some(({ source }) => source === "hard-paraphrase"));
+  assert.ok(fixture.cases.some(({ source }) => source === "russian-paraphrase"));
 
   const report = await evaluateModelAssistedRouter(process.cwd());
   assert.equal(report.execution, "captured-proposals-only");
@@ -58,6 +59,206 @@ test("the model-assisted benchmark is captured-proposal-only and meets its promo
   assert.equal(report.benchmark.metrics.absentProposalFallbackUnchanged, true);
   assert.equal(report.benchmark.metrics.deterministicReplay, true);
   assert.equal(report.contracts.passed, report.contracts.caseCount);
+  assert.equal(report.thresholds.roleAwareFullSetRecall, 0.9);
+  assert.equal(report.benchmark.metrics.roleAwareFullSetRecall, 1);
+  assert.equal(report.benchmark.metrics.rolePrimaryRecall, 1);
+  assert.equal(report.benchmark.metrics.roleCompanionRecall, 1);
+  assert.equal(report.benchmark.metrics.roleVerificationRecall, 1);
+  assert.ok(report.benchmark.metrics.roleAwareCaseCount >= 3);
+  const roleAwareResults = report.benchmark.results.filter(({ recall }) => recall !== undefined);
+  assert.ok(roleAwareResults.length >= 3);
+  for (const result of roleAwareResults) {
+    assert.deepEqual(result.recall?.missedRoles, []);
+    assert.equal(result.recall?.fullSet, 1);
+    assert.equal(result.assisted.routingMode, "model-assisted");
+    assert.equal(result.assisted.warnings.includes("semantic-recall-limited"), false);
+    assert.equal(result.fallback.routingMode, "limited-deterministic-fallback");
+    assert.equal(result.fallback.warnings.includes("semantic-recall-limited"), true);
+  }
+  const absent = report.benchmark.results.find(({ proposalMode }) => proposalMode === "absent");
+  assert.equal(absent?.assisted.routingMode, "limited-deterministic-fallback");
+  assert.equal(absent?.assisted.warnings.includes("semantic-recall-limited"), true);
+  const malformed = report.benchmark.results.find(({ proposalMode }) => proposalMode === "malformed");
+  assert.equal(malformed?.assisted.routingMode, undefined);
+  const stale = report.benchmark.results.find(({ proposalMode }) => proposalMode === "stale");
+  assert.equal(stale?.assisted.routingMode, undefined);
+});
+
+test("the benchmark fixture declares bilingual role-aware expected selections", async () => {
+  const fixture = await loadRoutingProposalBenchmarkFixtures("evals/router/model-assisted.json");
+  const motionSet = {
+    primary: ["frontend.motion-design"],
+    companion: ["frontend.interaction-polish"],
+    verification: ["frontend.motion-audit"],
+  };
+  const direct = fixture.cases.find(({ id }) => id === "direct-english-motion-workflow");
+  assert.ok(direct);
+  assert.equal(direct.source, "implicit-intent");
+  assert.deepEqual(direct.expected.roleAssignments, motionSet);
+  assert.equal(direct.expected.primarySkillId, "frontend.motion-design");
+  assert.equal(direct.proposal?.nominations.filter(({ role }) => role === "companion").length, 1);
+  assert.equal(direct.proposal?.nominations.filter(({ role }) => role === "verification").length, 1);
+
+  const indirect = fixture.cases.find(({ id }) => id === "indirect-russian-motion-workflow");
+  assert.ok(indirect);
+  assert.equal(indirect.source, "russian-paraphrase");
+  assert.deepEqual(indirect.expected.roleAssignments, motionSet);
+  assert.equal(indirect.expected.primarySkillId, "frontend.motion-design");
+  assert.ok(/[А-Яа-яЁё]/.test(indirect.prompt));
+  assert.equal(indirect.proposal?.nominations.length, 3);
+
+  const generic = fixture.cases.find(({ id }) => id === "generic-site-workflow-stays-lean");
+  assert.ok(generic);
+  assert.deepEqual(generic.expected.roleAssignments, {
+    primary: ["frontend.visual-design-polish"],
+    companion: [],
+    verification: [],
+  });
+  assert.equal(generic.expected.primarySkillId, "frontend.visual-design-polish");
+  assert.deepEqual(generic.expected.forbiddenSkillIds, ["frontend.motion-design", "frontend.interaction-polish"]);
+  assert.equal(generic.proposal?.nominations.some(({ skillId }) => skillId.startsWith("frontend.motion")), false);
+});
+
+test("role-aware full-set recall cannot be satisfied by a primary-only match", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "skillranger-role-recall-"));
+  try {
+    await mkdir(path.join(root, "evals", "router"), { recursive: true });
+    await symlink(path.resolve("registry"), path.join(root, "registry"), "dir");
+    await symlink(path.resolve("domains"), path.join(root, "domains"), "dir");
+    await writeFile(path.join(root, "evals", "router", "contracts.json"), await readFile(path.resolve("evals", "router", "contracts.json")));
+    await writeFile(path.join(root, "evals", "router", "model-assisted.json"), JSON.stringify({
+      schemaVersion: "router-model-assisted/1.0",
+      cases: [{
+        id: "primary-only-visual-nomination",
+        source: "implicit-intent",
+        vocabularyMiss: true,
+        prompt: "Update the marketing site content and layout @skillranger",
+        strict: false,
+        capabilities: ["filesystem", "terminal"],
+        proposalMode: "current",
+        proposal: {
+          schemaVersion: "routing-proposal/1.0",
+          catalogDigest: "$catalogDigest",
+          catalogReceipt: "$catalogReceipt",
+          interpretation: {
+            domains: ["frontend"],
+            actions: ["modify"],
+            artifactTypes: ["page"],
+            intentTags: ["visual-design"],
+            technologyTags: ["react"],
+            qualityGoals: ["visual-quality"],
+          },
+          nominations: [{
+            skillId: "frontend.visual-design-polish",
+            role: "primary",
+            confidence: 0.88,
+            evidenceText: "Update the marketing site content and layout",
+          }],
+        },
+        expected: {
+          status: "prepared",
+          primarySkillId: "frontend.visual-design-polish",
+          fallbackStatus: "no_matching_skills",
+          allowedSkillIds: ["frontend.visual-design-polish", "frontend.motion-audit"],
+          forbiddenSkillIds: [],
+          roleAssignments: {
+            primary: ["frontend.visual-design-polish"],
+            companion: ["frontend.tailwind-ui-polish"],
+            verification: ["frontend.motion-audit"],
+          },
+        },
+      }],
+    }));
+
+    const report = await evaluateModelAssistedRouter(root);
+    const result = report.benchmark.results[0];
+    assert.equal(result.passed, false);
+    assert.equal(result.recall?.fullSet, 0.667);
+    assert.equal(result.recall?.primary, 1);
+    assert.equal(result.recall?.companion, 0);
+    assert.equal(result.recall?.verification, 1);
+    assert.deepEqual(result.recall?.missedRoles, ["companion"]);
+    assert.deepEqual(result.recall?.observed.companion, []);
+    assert.deepEqual(result.recall?.expected.companion, ["frontend.tailwind-ui-polish"]);
+    assert.equal(result.assisted.primarySkillId, "frontend.visual-design-polish");
+    assert.equal(report.promotion.verdict, "blocked");
+    assert.ok(report.promotion.blockingReasons.includes("benchmark-case-failed"));
+    assert.ok(report.promotion.blockingReasons.includes("role-aware-full-set-recall-below-0.90"));
+    assert.equal(report.benchmark.metrics.roleCompanionRecall, 0);
+    assert.equal(report.benchmark.metrics.roleAwareFullSetRecall, 0.667);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the benchmark fixture loader rejects malformed role-aware assignments", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "skillranger-role-fixture-"));
+  try {
+    const baseCase = {
+      id: "malformed-role-assignments",
+      source: "implicit-intent",
+      vocabularyMiss: true,
+      prompt: "Design polished motion for the interface @skillranger",
+      strict: false,
+      capabilities: ["filesystem"],
+      proposalMode: "current",
+      proposal: {
+        schemaVersion: "routing-proposal/1.0",
+        catalogDigest: "$catalogDigest",
+        catalogReceipt: "$catalogReceipt",
+        interpretation: {
+          domains: ["frontend"],
+          actions: ["design"],
+          artifactTypes: ["animation"],
+          intentTags: ["motion-design"],
+          technologyTags: ["react"],
+          qualityGoals: ["visual-quality"],
+        },
+        nominations: [{
+          skillId: "frontend.motion-design",
+          role: "primary",
+          confidence: 0.9,
+          evidenceText: "Design polished motion for the interface",
+        }],
+      },
+      expected: {
+        status: "prepared",
+        allowedSkillIds: ["frontend.motion-design"],
+        forbiddenSkillIds: [],
+      },
+    };
+    const fixturePath = path.join(root, "model-assisted.json");
+    const writeFixture = (expected: Record<string, unknown>) => writeFile(fixturePath, JSON.stringify({
+      schemaVersion: "router-model-assisted/1.0",
+      cases: [{ ...baseCase, expected: { ...baseCase.expected, ...expected } }],
+    }));
+
+    await writeFixture({ roleAssignments: { primary: "frontend.motion-design", companion: [], verification: [] } });
+    await assert.rejects(
+      () => loadRoutingProposalBenchmarkFixtures(fixturePath),
+      /roleAssignments\.primary/,
+    );
+
+    await writeFixture({ roleAssignments: { primary: [], companion: [], verification: [], extra: [] } });
+    await assert.rejects(
+      () => loadRoutingProposalBenchmarkFixtures(fixturePath),
+      /roleAssignments\.extra/,
+    );
+
+    await writeFixture({ roleAssignments: { primary: [], companion: [] } });
+    await assert.rejects(
+      () => loadRoutingProposalBenchmarkFixtures(fixturePath),
+      /roleAssignments\.verification/,
+    );
+
+    await writeFixture({ roleAssignments: { primary: ["frontend.motion-design"], companion: ["Frontend.Motion"], verification: [] } });
+    await assert.rejects(
+      () => loadRoutingProposalBenchmarkFixtures(fixturePath),
+      /roleAssignments\.companion\[0\]/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("a captured proposal still follows the mandatory-read ledger", async () => {
