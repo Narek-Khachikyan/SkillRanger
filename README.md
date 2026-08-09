@@ -1,6 +1,10 @@
 # SkillRanger
 
 <p align="center">
+  <img src="docs/skillranger-hero.jpg" alt="SkillRanger — Discover. Develop. Master. Your Skills." width="720">
+</p>
+
+<p align="center">
   <strong>Find, audit, and install the right AI agent skills for your codebase.</strong>
 </p>
 
