@@ -4,6 +4,7 @@ import {
 } from "../../router/catalog.ts";
 import {
   catalogDiscoveryGuidance,
+  completeRoleAwareNominationGuidance,
   explicitTriggerGuidance,
   legacyCatalogGuidance,
   setupBoundaryGuidance,
@@ -71,7 +72,7 @@ export const catalogToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.readOnly,
     name: "inspect_skill_catalog",
     title: "Inspect Trusted Skill Catalog",
-    description: `${explicitTriggerGuidance} ${catalogDiscoveryGuidance} ${legacyCatalogGuidance} ${setupBoundaryGuidance} This read-only discovery never scans the project or local skills.`,
+    description: `${explicitTriggerGuidance} ${catalogDiscoveryGuidance} ${completeRoleAwareNominationGuidance} ${legacyCatalogGuidance} ${setupBoundaryGuidance} This read-only discovery never scans the project or local skills.`,
     inputSchema: {
       type: "object",
       properties: {

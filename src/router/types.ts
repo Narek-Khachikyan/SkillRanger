@@ -35,8 +35,10 @@ export type PreparedSkillSource = "installed" | "bundled-registry" | "test-fixtu
 // validated host routing proposal participated in routing; `limited-deterministic-fallback`
 // means routing used the local vocabulary path without a proposal. The mode describes
 // provenance only — never execution strictness, confidence, or verification quality.
-export type RoutingMode = "model-assisted" | "limited-deterministic-fallback";
-export const routingModeValues: readonly RoutingMode[] = ["model-assisted", "limited-deterministic-fallback"];
+export type RoutingMode = typeof modelAssistedMode | typeof limitedDeterministicFallbackMode;
+export const modelAssistedMode = "model-assisted" as const;
+export const limitedDeterministicFallbackMode = "limited-deterministic-fallback" as const;
+export const routingModeValues: readonly RoutingMode[] = [modelAssistedMode, limitedDeterministicFallbackMode];
 // Stable machine-readable warning code emitted by every limited-deterministic-fallback
 // routed outcome. It participates in the canonical deduplicated warning collection.
 export const semanticRecallLimitedWarning = "semantic-recall-limited" as const;

@@ -54,6 +54,10 @@ test("MCP exposes an explicitly activated, read-only skill catalog", async () =>
   assert.match(definition.description, /catalogReceipt/);
   assert.match(definition.description, /smaller explicit maxItems or maxBytes/);
   assert.match(definition.description, /Never submit a proposal without/);
+  assert.match(definition.description, /complete ordered role-aware set/);
+  assert.match(definition.description, /primary workflow plus every useful companion and verification skill/);
+  assert.match(definition.description, /A plausible primary alone is not a complete proposal/);
+  assert.match(definition.description, /explicit-user-choice precedence and SkillRanger routing hard vetoes still decide the final set/);
   assert.match(definition.description, /skillranger setup/);
   assert.match(definition.description, /legacy SkillRanger server/);
   assert.equal(definition.annotations.readOnlyHint, true);

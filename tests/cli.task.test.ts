@@ -55,6 +55,22 @@ test("task --explain adds a schema-valid privacy-safe JSON explanation", async (
   }
 });
 
+test("task human-readable output visibly reports limited deterministic fallback", async () => {
+  const root = await temporaryProject();
+  try {
+    const { stdout } = await cli([
+      "task", root,
+      "--intent", "Create a responsive web interface",
+      "--target", "codex",
+    ]);
+    assert.match(stdout, /limited deterministic fallback/);
+    assert.match(stdout, /semantic-recall-limited/);
+    assert.match(stdout, /Prepared/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("task returns the typed raw-intent confirmation error", async () => {
   const root = await temporaryProject();
   try {

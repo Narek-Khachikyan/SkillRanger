@@ -38,7 +38,16 @@ test("MCP protocol initializes with tool capability", async () => {
     "do not fall back to a local SkillRanger CLI",
     "call prepare_task again",
     "catalogReceipt",
+    "complete ordered role-aware set",
+    "primary workflow plus every useful companion and verification skill",
+    "A plausible primary alone is not a complete proposal",
+    "explicit-user-choice precedence and SkillRanger routing hard vetoes still decide the final set",
+    "limited deterministic fallback",
+    "`semantic-recall-limited`",
+    "does not promise semantic recall equivalent to model-assisted routing",
+    "never converted to fallback",
     "legacy SkillRanger server",
+    "without `routingProposal`",
     "non-strict catalog-assisted routing does not require skillranger setup",
     "managed guidance is advisory and is not a security boundary",
     "runMandatoryReadsComplete",
@@ -151,6 +160,35 @@ test("MCP publishes the strict skillInputs argument on prepare_task", async () =
   const skillInputs = (schema?.properties as Record<string, Record<string, unknown>>)?.skillInputs;
   assert.equal(skillInputs?.type, "object");
   assert.deepEqual(skillInputs?.additionalProperties, { type: "object" });
+});
+
+test("prepare_task tool guidance requires complete role-aware proposals and states fallback limits", async () => {
+  const listed = await handleJsonRpcRequest({ jsonrpc: "2.0", id: "router-guidance", method: "tools/list", params: {} });
+  const tools = (listed?.result as { tools: Array<{ name: string; description: string }> }).tools;
+  const description = tools.find(({ name }) => name === "prepare_task")?.description ?? "";
+  for (const requiredPhrase of [
+    "complete ordered role-aware set",
+    "primary workflow plus every useful companion and verification skill",
+    "A plausible primary alone is not a complete proposal",
+    "explicit-user-choice precedence and SkillRanger routing hard vetoes still decide the final set",
+    "limited deterministic fallback",
+    "`semantic-recall-limited`",
+    "does not promise semantic recall equivalent to model-assisted routing",
+    "never converted to fallback",
+    "legacy SkillRanger server",
+  ]) {
+    assert.ok(description.includes(requiredPhrase), requiredPhrase);
+  }
+});
+
+test("legacy-server guidance still directs hosts to proposal-absent routing", async () => {
+  const response = await handleJsonRpcRequest({ jsonrpc: "2.0", id: "legacy-guidance", method: "initialize", params: {} });
+  const instructions = (response?.result as { instructions?: string })?.instructions ?? "";
+  const legacySentence = instructions.match(/If `inspect_skill_catalog` is unavailable[^.]*\./)?.[0] ?? "";
+  assert.match(legacySentence, /legacy SkillRanger server/);
+  assert.match(legacySentence, /without `routingProposal`/);
+  assert.match(legacySentence, /do not treat an unavailable catalog tool as a routing failure/);
+  assert.match(instructions, /For model-assisted routing after that trigger, call inspect_skill_catalog with an empty request\. Follow each nextCursor using expectedCatalogDigest until a complete page/);
 });
 
 // The frontend tools publish the brief contract, so a stub brief is now rejected before dispatch and

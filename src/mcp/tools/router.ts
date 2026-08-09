@@ -14,9 +14,12 @@ import { routerContext } from "../router-context.ts";
 import {
   catalogDiscoveryGuidance,
   catalogRefreshGuidance,
+  completeRoleAwareNominationGuidance,
   explicitTriggerGuidance,
+  fallbackRecallGuidance,
   legacyCatalogGuidance,
   mandatoryReadGuidance,
+  proposalIntegrityGuidance,
   setupBoundaryGuidance,
 } from "../../host-guidance.ts";
 
@@ -137,7 +140,7 @@ const readInputSchema = {
 };
 
 export const routerToolDefinitions: McpToolDefinition[] = [
-  { ...mcpToolEffects.runStateWrite, name: "prepare_task", title: "Prepare SkillRanger Task", description: `Canonical authoritative entrypoint after an ${explicitTriggerGuidance.replace(/^Use the SkillRanger workflow only after an /, "") } Preserve the complete, unmodified user request, including its leading or terminal trigger. ${catalogDiscoveryGuidance} ${legacyCatalogGuidance} ${catalogRefreshGuidance} Do not submit semanticHints together with a routingProposal. ${mandatoryReadGuidance} ${setupBoundaryGuidance}`, inputSchema, outputSchema: prepareTaskOutputSchema },
+  { ...mcpToolEffects.runStateWrite, name: "prepare_task", title: "Prepare SkillRanger Task", description: `Canonical authoritative entrypoint after an ${explicitTriggerGuidance.replace(/^Use the SkillRanger workflow only after an /, "") } Preserve the complete, unmodified user request, including its leading or terminal trigger. ${catalogDiscoveryGuidance} ${completeRoleAwareNominationGuidance} ${legacyCatalogGuidance} ${catalogRefreshGuidance} ${proposalIntegrityGuidance} ${fallbackRecallGuidance} Do not submit semanticHints together with a routingProposal. ${mandatoryReadGuidance} ${setupBoundaryGuidance}`, inputSchema, outputSchema: prepareTaskOutputSchema },
   { ...mcpToolEffects.runStateWrite, annotations: { ...mcpToolEffects.runStateWrite.annotations, idempotentHint: true }, name: "read_run_skill_file", title: "Read Prepared Skill Instructions", description: `${mandatoryReadGuidance} Use a new RFC 4122 UUID for each new read; retry a transport failure with the identical request and its current revision.`, inputSchema: readInputSchema, outputSchema: readRunSkillFileOutputSchema },
 ];
 

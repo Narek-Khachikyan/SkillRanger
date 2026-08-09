@@ -26,6 +26,9 @@ test("renders the exact SkillRanger universal router block", () => {
       "Use the SkillRanger workflow only after an explicit @skillranger, skillranger, or /sr trigger. @skillranger and /sr may lead or end a prompt; skillranger is supported at the end, and a bare leading skillranger is not a trigger.\n" +
       "This managed guidance is advisory and is not a security boundary; trust MCP validation, catalog integrity, routing hard vetoes, and runtime state.\n" +
       "1. For model-assisted routing after that trigger, call inspect_skill_catalog with an empty request. Follow each nextCursor using expectedCatalogDigest until a complete page; only the complete final page supplies catalogReceipt. If a one-page response is complete without a catalogReceipt, restart with a smaller explicit maxItems or maxBytes to force a cursor chain. Never submit a proposal without the final catalogDigest and catalogReceipt.\n" +
+      "1a. After receiving the complete catalog, nominate the complete ordered role-aware set: one primary workflow plus every useful companion and verification skill, ordered by priority. A plausible primary alone is not a complete proposal. Nominations remain untrusted input: explicit-user-choice precedence and SkillRanger routing hard vetoes still decide the final set.\n" +
+      "1b. Absence of a routing proposal uses limited deterministic fallback and always reports the stable warning `semantic-recall-limited`; it does not promise semantic recall equivalent to model-assisted routing.\n" +
+      "1c. Stale or invalid submitted proposals require catalog refresh or correction and are never converted to fallback.\n" +
       "2. If `inspect_skill_catalog` is unavailable because this is a legacy SkillRanger server, use the legacy path: call `prepare_task` with the complete prompt and without `routingProposal`; do not treat an unavailable catalog tool as a routing failure.\n" +
       "3. If prepare_task returns catalog_refresh_required, discard the old proposal and receipt, restart inspect_skill_catalog with an empty request, and submit a new proposal.\n" +
       "4. Call `prepare_task` with the complete user request verbatim. Do not remove, move, or rewrite the trigger, and do not submit `semanticHints` with a `routingProposal`.\n" +
@@ -78,6 +81,14 @@ test("managed guidance covers complete catalog receipt handling and setup bounda
     "catalogReceipt",
     "smaller explicit maxItems or maxBytes",
     "Never submit a proposal without",
+    "complete ordered role-aware set",
+    "primary workflow plus every useful companion and verification skill",
+    "A plausible primary alone is not a complete proposal",
+    "explicit-user-choice precedence and SkillRanger routing hard vetoes still decide the final set",
+    "limited deterministic fallback",
+    "`semantic-recall-limited`",
+    "does not promise semantic recall equivalent to model-assisted routing",
+    "never converted to fallback",
     "If `inspect_skill_catalog` is unavailable",
     "legacy SkillRanger server",
     "without `routingProposal`",

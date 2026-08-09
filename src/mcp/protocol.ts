@@ -4,10 +4,13 @@ import { routerContext } from "./router-context.ts";
 import {
   catalogDiscoveryGuidance,
   catalogRefreshGuidance,
+  completeRoleAwareNominationGuidance,
   explicitTriggerGuidance,
+  fallbackRecallGuidance,
   legacyCatalogGuidance,
   mandatoryReadGuidance,
   managedGuidanceBoundary,
+  proposalIntegrityGuidance,
   setupBoundaryGuidance,
 } from "../host-guidance.ts";
 
@@ -83,8 +86,11 @@ export const handleJsonRpcRequest = async (request: JsonRpcRequest): Promise<Jso
         "Do not pass projectRoot to router tools and do not fall back to a local SkillRanger CLI.",
         explicitTriggerGuidance,
         catalogDiscoveryGuidance,
+        completeRoleAwareNominationGuidance,
         legacyCatalogGuidance,
         catalogRefreshGuidance,
+        proposalIntegrityGuidance,
+        fallbackRecallGuidance,
         "Call prepare_task with the full prompt and requested strict mode; do not combine routingProposal with semanticHints.",
         setupBoundaryGuidance,
         managedGuidanceBoundary,

@@ -4,10 +4,13 @@ import path from "node:path";
 import {
   catalogDiscoveryGuidance,
   catalogRefreshGuidance,
+  completeRoleAwareNominationGuidance,
   explicitTriggerGuidance,
+  fallbackRecallGuidance,
   legacyCatalogGuidance,
   mandatoryReadGuidance,
   managedGuidanceBoundary,
+  proposalIntegrityGuidance,
   setupBoundaryGuidance,
 } from "../host-guidance.ts";
 
@@ -28,6 +31,9 @@ export const renderSkillRangerAgentBlock = () => [
   explicitTriggerGuidance,
   managedGuidanceBoundary,
   `1. ${catalogDiscoveryGuidance}`,
+  `1a. ${completeRoleAwareNominationGuidance}`,
+  `1b. ${fallbackRecallGuidance}`,
+  `1c. ${proposalIntegrityGuidance}`,
   `2. ${legacyCatalogGuidance}`,
   `3. ${catalogRefreshGuidance}`,
   "4. Call `prepare_task` with the complete user request verbatim. Do not remove, move, or rewrite the trigger, and do not submit `semanticHints` with a `routingProposal`.",

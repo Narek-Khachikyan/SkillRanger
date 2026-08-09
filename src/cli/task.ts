@@ -4,6 +4,7 @@ import path from "node:path";
 import { loadRouterConfig } from "../config/index.ts";
 import { createRouterReader, prepareTask, RouterPrepareError } from "../router/index.ts";
 import { SkillInputsError, validateSkillInputs } from "../router/skill-inputs.ts";
+import { limitedDeterministicFallbackMode, semanticRecallLimitedWarning } from "../router/types.ts";
 import type { PrepareTaskCoreInput, PrepareTaskResult, ReadRunSkillFileInput, RouterExplanation, RouterSkillRole } from "../router/types.ts";
 import { RouterReaderError } from "../router/reader.ts";
 
@@ -124,7 +125,10 @@ const print = (value: unknown, json: boolean, explain = false) => {
     console.log(JSON.stringify(output, null, 2));
     return;
   }
-  const result = value as { status?: string; run?: { routerRunId: string; runtimeRunId: string }; routing?: { domains: Array<{ id: string; role: string; confidence: number }> }; requiredReads?: Array<unknown>; suggestedAction?: string };
+  const result = value as { status?: string; run?: { routerRunId: string; runtimeRunId: string }; routing?: { mode?: string; domains: Array<{ id: string; role: string; confidence: number }> }; requiredReads?: Array<unknown>; suggestedAction?: string };
+  if (result.routing?.mode === limitedDeterministicFallbackMode) {
+    console.log(`Warning: limited deterministic fallback (${semanticRecallLimitedWarning}) — semantic recall is limited and not equivalent to model-assisted routing.`);
+  }
   if (result.status === "prepared") {
     const primary = result.routing?.domains.find(({ role }) => role === "primary");
     console.log(`Prepared${primary ? ` ${primary.id} (${Math.round(primary.confidence * 100)}%)` : ""}.`);
