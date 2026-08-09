@@ -16,105 +16,43 @@
 
 **Public MVP / Beta** · Local-First · CLI + MCP · Zero Runtime Dependencies
 
-SkillRanger scans your repository, detects its stack and development context, recommends compatible skills, audits them for safety risks, and creates a reviewable install plan before writing anything. In MCP catalog-assisted routing, the host model can also interpret the prompt and nominate relevant skills; SkillRanger validates those nominations before selecting a bounded set.
-
-The frontend design contract ships in release `0.4.1`: six rule families, 18 stable rules, eight recipe packs, and 80 deterministic worked-example assets. Run `npm run release:validate` to verify the local package artifacts; use `release:certify` to bind external visual and matched-baseline evidence into a retained promotion verdict.
-
-For example, when you ask an AI agent to review a Next.js application, the host model can nominate the relevant Next.js, accessibility, performance, and testing instructions instead of making the agent work from a generic prompt. SkillRanger still owns catalog membership, hard vetoes, compatibility, composition, mandatory reads, and runtime integrity.
+SkillRanger scans your repository, detects its stack and development context, recommends compatible skills, audits them for safety risks, and creates a reviewable install plan before writing anything.
 
 ## Quick Start
 
-### 1. Optional setup inside your project
-
-SkillRanger requires Node.js 20 or newer.
+One command, inside your project:
 
 ```bash
 cd your-project
 npx -y skillranger@latest setup
 ```
 
-The interactive setup is useful when you want repo-local instructions or strict installed workflows. It will:
+SkillRanger requires Node.js 20 or newer. The setup command walks you through the whole flow in about 30 seconds:
 
-1. scan the current repository;
-2. ask which AI agents you use;
-3. recommend compatible skills;
-4. show what will be installed;
-5. ask for confirmation before writing files.
+1. **Scan** — detects your repository's stack (`Detected:` types, languages, frameworks, styling, testing).
+2. **Recommend** — selects a small compatible skill set (`Selected N skills:`).
+3. **Plan** — shows the reviewable install plan: exactly which files would be written and updated (`Planned changes:`). Nothing is touched yet.
+4. **Audit** — prints a computed audit summary for each recommended skill: risk level and findings count (`Audit summary:`).
+5. **Install** — after you confirm, installs the reviewed instructions, writes a managed block into your `AGENTS.md`, and records checksums in `skillranger.lock.json`.
 
-You can run diagnostics first when troubleshooting:
+When setup finishes, it prints one feedback invitation: star the repo or open an issue.
 
-```bash
-npx -y skillranger@latest doctor
-```
-
-If your MCP host is already configured, setup is not required for non-strict catalog-assisted routing. The host can discover the trusted catalog and prepare a triggered task directly; setup remains the installation path for strict workflows and the managed `AGENTS.md` guidance.
-
-### 2. Universal Task Router
-
-Route any task prompt into an optimal, bounded skill set and lifecycle run. End the task with `@skillranger`, `skillranger`, or `/sr` when you want the installed SkillRanger workflow to run:
-
-```text
-Review this Next.js app for accessibility and fix critical keyboard-navigation issues. @skillranger
-```
-
-Or via CLI:
+To script the same flow without an interactive prompt, pass `--yes` with an intent (and a target agent — setup asks for both interactively):
 
 ```bash
-# Execute CLI routing for a natural-language task ending with terminal trigger
-skillranger task . --intent "Review accessibility and fix critical focus traps @skillranger" --target codex --json
-
-# Read mandatory lifecycle instructions before execution
-skillranger task:read . --router-run <router-run-id> --mandatory-next --expected-read-revision 0 --json
+npx -y skillranger@latest setup --yes --target codex \
+  --intent "Review this Next.js app before release"
 ```
-
-> 🌐 **Bilingual Natural Language**: Prompts can be written in English, Russian, or mixed terminology (e.g. *"Создай современный сайт по Bleach с плавной анимацией @skillranger"*). The deterministic fallback uses owner-scoped Domain Pack routing vocabularies; an MCP host can additionally use catalog-assisted model nominations for implicit intent. End the task with `@skillranger`, `skillranger`, or `/sr` when you want the installed SkillRanger workflow to run.
-
-With setup, or with a configured MCP host, open Codex, Claude Code, Cursor, OpenCode, or Gemini CLI in the same repository and write your task as usual:
-
-```text
-Review this Next.js app for accessibility and fix critical keyboard-navigation issues. @skillranger
-```
-
-SkillRanger's managed agent context activates when your task prompt ends with `@skillranger`, `skillranger`, or `/sr`, guiding the agent through catalog discovery, proposal submission, preparation, and ordered mandatory reads before implementation. The managed block is advisory; MCP validation and runtime state enforce the security boundary.
-
-You do **not** need to manually run the advanced lifecycle commands for normal interactive use.
-
-### Prompt + SkillRanger routing
-
-SkillRanger supports two compatible routing paths:
-
-1. **Deterministic fallback**: SkillRanger matches the prompt and repository signals against its bounded routing vocabulary and shared scorer.
-2. **Catalog-assisted MCP routing**: the host model reads the complete audited skill catalog, interprets the Prompt, and submits an ordered `routingProposal` with prompt-grounded skill nominations.
-
-The catalog-assisted flow is:
-
-```text
-Prompt + repository
-        |
-        v
-Host model proposes catalog-bound skill nominations
-        |
-        v
-SkillRanger validates the catalog receipt and prompt evidence
-        |
-        v
-SkillRanger applies hard vetoes and composes the final skill set
-        |
-        v
-Host reads the selected instructions and performs the task
-```
-
-The model participates in semantic relevance, but it cannot add arbitrary skills, bypass audit or compatibility checks, choose a project or registry root, or force an ineligible skill. If the host does not provide a proposal, the deterministic fallback remains available. See [`docs/model-assisted-routing.md`](docs/model-assisted-routing.md) and [ADR 0003](docs/adr/0003-model-assisted-skill-nomination.md).
 
 ### What setup creates
 
-For a repo-scoped Codex setup, SkillRanger can create or update:
+For a repo-scoped setup, SkillRanger can create or update:
 
 - `.agents/skills/<skill>/` — repository-local skill packages;
 - `AGENTS.md` — a bounded SkillRanger-managed context block;
 - `skillranger.lock.json` — installed versions, checksums, targets, and audit metadata.
 
-SkillRanger installs static instructions. It does not invoke a model itself or silently modify your application code. In MCP catalog-assisted routing, the host model may nominate skills, but SkillRanger validates the proposal and owns the final selection.
+SkillRanger installs static instructions. It does not invoke a model itself or silently modify your application code.
 
 ## Why SkillRanger?
 
@@ -195,9 +133,47 @@ SkillRanger currently ships with 18 pre-audited, instruction-only frontend skill
 
 </details>
 
-## MCP Integration
+## Security Model
 
-Add SkillRanger as a stdio MCP server:
+- **Bundled local registry** — bundled packages ship with the distribution; normal recommendation does not fetch arbitrary remote skills.
+- **Static instructions** — installed skill packages are instructions, not scripts executed during installation.
+- **Explicit writes** — CLI installation can be previewed with `--dry-run`; MCP writes require explicit confirmation.
+- **Integrity tracking** — installed files are hashed and recorded in `skillranger.lock.json`.
+- **Host-managed execution** — the host owns model calls, tools, and application-code changes; SkillRanger validates model nominations and enforces routing and runtime guarantees.
+
+## Advanced
+
+The capabilities below are ready to use but are not part of the 30-second quick start.
+
+### Universal Task Router
+
+SkillRanger also routes a natural-language task into a bounded, reviewable skill set. Two paths are supported: a deterministic fallback that matches the prompt and repository signals against a bounded bilingual vocabulary, and catalog-assisted MCP routing where the host model reads the audited skill catalog and submits a prompt-grounded `routingProposal` — which SkillRanger validates before composing the final set. The model cannot add arbitrary skills, bypass audit or compatibility checks, or force an ineligible skill.
+
+- [`docs/model-assisted-routing.md`](docs/model-assisted-routing.md) — the catalog-assisted flow
+- [`docs/ROUTING_VOCABULARY.md`](docs/ROUTING_VOCABULARY.md) — vocabulary and translations
+- [ADR 0003](docs/adr/0003-model-assisted-skill-nomination.md) — design and trust boundaries
+
+### Strict runs, evidence, and recovery
+
+Persisted runs track skill reads, execution, evidence, and verification. Strict v2 requires opened steps, attached evidence, and verification before finalization — a run is only `verified` when every gate passes. Lifecycle v1 and strict v2 runs, evidence handling, verification states, and recovery behavior are documented in:
+
+- [`docs/workflow-runtime.md`](docs/workflow-runtime.md) — run lifecycle and recovery
+- [`docs/verification-engine.md`](docs/verification-engine.md) — evidence and gates
+
+### Frontend design pipeline
+
+The frontend design contract ships in release `0.4.1`: six rule families, 18 stable rules, eight recipe packs, and 80 deterministic worked-example assets. The pipeline covers briefs and recipes, rule selection, repair loops, model capability profiles, and browser-based visual verification:
+
+- [`docs/design-rule-library.md`](docs/design-rule-library.md) — rule library and recipes
+- [`docs/repair-loop.md`](docs/repair-loop.md) — bounded repair flow
+- [`docs/model-capability-profiles.md`](docs/model-capability-profiles.md) — model profiles
+- [`docs/browser-adapter.md`](docs/browser-adapter.md) and [`docs/visual-benchmark.md`](docs/visual-benchmark.md) — visual verification
+
+Run `npm run release:validate` to verify the local package artifacts; use `release:certify` to bind external visual and matched-baseline evidence into a retained promotion verdict.
+
+### MCP integration
+
+SkillRanger runs as a stdio MCP server so a host agent can analyze projects, recommend and audit skills, discover the trusted skill catalog, accept a host model's routing proposal, preview or confirm installations, prepare routed tasks, and serve mandatory skill instructions:
 
 ```json
 {
@@ -210,27 +186,11 @@ Add SkillRanger as a stdio MCP server:
 }
 ```
 
-The MCP surface can analyze projects, recommend and audit skills, discover the trusted skill catalog, accept a host model's prompt-grounded routing proposal, preview or confirm installations, prepare routed tasks, and serve mandatory skill instructions to an agent host.
+Full host configuration (Claude Code, Cursor, and other clients) is in [`docs/mcp-host-config.md`](docs/mcp-host-config.md).
 
-<details>
-<summary><strong>Available MCP tools (8 curated tools)</strong></summary>
-
-- `analyze_project`
-- `recommend_skills`
-- `inspect_skill_catalog`
-- `audit_skill`
-- `plan_skill_install`
-- `install_skill`
-- `prepare_task`
-- `read_run_skill_file`
-
-</details>
-
-## Advanced CLI Usage
+### Advanced CLI usage
 
 The commands below are optional. They are useful for inspecting individual stages, scripting SkillRanger, or integrating it into an agent host.
-
-### Manual recommendation and installation
 
 ```bash
 # Detect repository context
@@ -261,38 +221,20 @@ npx -y skillranger@latest install frontend.next-app-router-review \
 
 # Inspect installed skills
 npx -y skillranger@latest installed .
-```
 
-### Direct task router
-
-Use this mode when an integration needs a structured routed result rather than the normal interactive setup flow:
-
-```bash
+# Direct task routing (structured result, no interactive flow)
 npx -y skillranger@latest task . \
   --intent "Review accessibility and fix critical focus traps" \
   --target codex \
   --json
-```
 
-An agent host or manual integration can then read required instruction chunks:
-
-```bash
+# Read required instruction chunks from a routed task
 npx -y skillranger@latest task:read . \
   --router-run <router-run-id> \
   --mandatory-next \
   --expected-read-revision 0 \
   --json
 ```
-
-For persisted and strict lifecycle commands, evidence handling, verification states, and recovery behavior, see [`docs/workflow-runtime.md`](docs/workflow-runtime.md).
-
-## Security Model
-
-- **Bundled local registry** — bundled packages ship with the distribution; normal recommendation does not fetch arbitrary remote skills.
-- **Static instructions** — installed skill packages are instructions, not scripts executed during installation.
-- **Explicit writes** — CLI installation can be previewed with `--dry-run`; MCP writes require explicit confirmation.
-- **Integrity tracking** — installed files are hashed and recorded in `skillranger.lock.json`.
-- **Host-managed execution** — the host owns model calls, tools, and application-code changes; SkillRanger validates model nominations and enforces routing and runtime guarantees.
 
 ## Development
 
