@@ -20,6 +20,7 @@ export * from "./generate-example-assets.ts";
 export * from "./policy-types.ts";
 export * from "./policy.ts";
 export * from "./identity-fingerprint.ts";
+export * from "./diversification-log.ts";
 export * from "./repair.ts";
 export * from "./validation.ts";
 export * from "./browser.ts";

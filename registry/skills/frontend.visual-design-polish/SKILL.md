@@ -56,7 +56,7 @@ Name the concrete problem the current UI creates for a real user task: weak hier
 Each direction must differ on at least two of: density model, hierarchy strategy, typographic voice, color temperature, composition pattern, or material treatment. Each must include a one-sentence product reason and one rejected default it intentionally avoids. Do not propose directions that could describe the same "clean modern SaaS" with different accent colors.
 
 ### 4. Choose And Thesis
-Select one direction with its product justification. Select and record one compatible rule id for typography, layout, responsive, color, state, and signature move. Use the category applicability matrix in `references/visual-rules.md`, chosen from product evidence, the primary task, and the current recipe; universal hard gates remain unchanged. State a compact visual thesis: product/audience, hierarchy and density target, type/color roles, one useful signature move, and one generic default deliberately rejected. Compare it with the recipe's good/bad pack, then set design variance, motion, and density to suit the product. Choose one primary direction and at most one supporting accent; do not mix unrelated trends. For open-ended direction work, load the craft reference for the macrostructure you are considering from `references/craft/` (see References below) and state the chosen macrostructure and palette anchor out loud in the thesis.
+Select one direction with its product justification. Select and record one compatible rule id for typography, layout, responsive, color, state, and signature move. Use the category applicability matrix in `references/visual-rules.md`, chosen from product evidence, the primary task, and the current recipe; universal hard gates remain unchanged. State a compact visual thesis: product/audience, hierarchy and density target, type/color roles, one useful signature move, and one generic default deliberately rejected. Compare it with the recipe's good/bad pack, then set design variance, motion, and density to suit the product. Choose one primary direction and at most one supporting accent; do not mix unrelated trends. For open-ended direction work, load craft references lazily, per macrostructure: once a candidate macrostructure is named, read `references/craft/macrostructures.md` plus only the palette, type, and theme references needed to commit the theme axes — never all five craft references at build start. Check whether `.design/diversification-log.json` exists; it is a tooling-written cache of the most recent verified run identities for in-session awareness only, so use it to avoid repeating recent identity dimensions, but never treat it as the enforcement mechanism (the deterministic diversification gate decides, and the log may be missing or stale). State the chosen macrostructure and palette anchor out loud in the thesis.
 
 ### 5. Define The Signature Move
 For material visual work, name one non-generic visual decision that supports the primary task: a treatment of a real data shape, a domain-appropriate surface material, a typographic conflict and resolution, a composition structure tied to a user workflow, a color-as-meaning rule, or a motion behavior that clarifies cause and effect. Motion is optional; when used, state its function. If the signature could describe any SaaS product, it is not specific enough.
@@ -153,13 +153,15 @@ advisory-style during a build: [type pairings](references/craft/type-pairings.md
 [OKLCH palette recipes](references/craft/palette-recipes.md),
 [themes](references/craft/themes.md),
 [macrostructures](references/craft/macrostructures.md), and
-[component cookbooks](references/craft/component-cookbooks.md). Load only the craft
-reference relevant to the identity and macrostructure you are considering, never all
-five at once. Craft references are knowledge, not rules: they never replace or extend
-the six-family rule selection, they are never recorded in the direction's selected
-rule ids, and they carry no verification gates of their own. The domain pack at
-`domains/frontend/craft/craft-catalog.json` is the source of truth; the bundled copies
-are regenerated at publish time.
+[component cookbooks](references/craft/component-cookbooks.md). Load craft references
+lazily, per macrostructure: read the macrostructure reference once the candidate is
+named, and only the supporting palette, type, and theme references needed to commit
+the theme axes — never all five at once. The craft corpus is deliberately absent from
+the execution contract's mandatory reads. Craft references are knowledge, not rules:
+they never replace or extend the six-family rule selection, they are never recorded in
+the direction's selected rule ids, and they carry no verification gates of their own.
+The domain pack at `domains/frontend/craft/craft-catalog.json` is the source of truth;
+the bundled copies are regenerated at publish time.
 
 ## Shared Contracts
 
