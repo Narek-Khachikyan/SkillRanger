@@ -1,0 +1,14 @@
+{
+  "implementationOutcome": "implemented",
+  "verificationState": "pending-runtime-verification",
+  "artifacts": {
+    "brief": "b",
+    "recipe": "r",
+    "direction": "d",
+    "verification": "v"
+  },
+  "changes": [
+    "changed hero"
+  ],
+  "residualRisks": []
+}
