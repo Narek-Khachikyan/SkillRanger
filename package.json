@@ -2,6 +2,14 @@
   "name": "skillranger",
   "version": "0.4.1",
   "description": "Local-first AI skill router and package manager: a host model proposes skills from a trusted catalog while SkillRanger validates, composes, audits, and installs bounded instructions.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Narek-Khachikyan/SkillRanger.git"
+  },
+  "homepage": "https://github.com/Narek-Khachikyan/SkillRanger",
+  "bugs": {
+    "url": "https://github.com/Narek-Khachikyan/SkillRanger/issues"
+  },
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
@@ -62,7 +70,13 @@
     "codex",
     "local-first",
     "registry",
-    "audit"
+    "audit",
+    "ai-agents",
+    "claude-code",
+    "cursor",
+    "developer-tools",
+    "typescript",
+    "llm-tools"
   ],
   "publishConfig": {
     "access": "public"

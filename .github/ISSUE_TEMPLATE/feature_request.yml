@@ -1,0 +1,36 @@
+name: Feature request
+description: Propose a new capability for SkillRanger — the problem, the shape, and what is explicitly out of scope.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user situation is this addressing? Concrete scenario, not a solution.
+      placeholder: "When I …, I can't …"
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: Proposed shape
+      description: The minimal interface or behavior that would solve it. Flag anything that would change a public CLI flag, JSON output schema, MCP tool contract, or routing behavior — those need extra care.
+      placeholder: "A new flag/command/flow would …"
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Explicitly out of scope
+      description: What this request deliberately does not include.
+      placeholder: "Not …"
+    validations:
+      required: false
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Prior art, related issues, or constraints.
+    validations:
+      required: false
