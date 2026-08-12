@@ -198,14 +198,14 @@ export const visualToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.readOnly,
     name: "compare_design_variants",
     title: "Compare design variants",
-    description: "Prepare a host-attested actor-separated critic review for one candidate, or a comparative critic review for two or three candidates. Distinct generatorActorId and criticActorId values record only the host's assertion of actor separation; they do not technically prove independent execution. For one candidate, the critic must return a full scorecard, strengths, weaknesses, AI-slop findings, and either selected or no-acceptable-variant using only that candidate's evidence and no implementation code. criticReport must be a VisualCriticReport v1 (schemaVersion 1.0); the strict-run critic-report evidence contract is the different CriticReportV2 (schemaVersion 2.0).",
+    description: "Prepare a host-attested actor-separated critic review for one candidate, or a comparative critic review for two or three candidates. Distinct generatorActorId and criticActorId values record only the host's assertion of actor separation; they do not technically prove independent execution. For one candidate, the critic must return a full scorecard, strengths, weaknesses, AI-slop findings, and either selected or no-acceptable-variant using only that candidate's evidence and no implementation code. criticReport must be a VisualCriticReport v1 (schemaVersion 1.1; legacy 1.0 reports remain loadable on their original 9-code vocabulary); the strict-run critic-report evidence contract is the different CriticReportV2 (schemaVersion 2.0).",
     inputSchema: { type: "object", required: ["policyId", "generatorActorId", "criticActorId", "candidates"], properties: { policyId: { type: "string" }, generatorActorId: { type: "string" }, criticActorId: { type: "string" }, candidates: { type: "array", minItems: 1, maxItems: 3, items: criticCandidateSchema }, criticReport: visualCriticReportSchema } },
   },
   {
     ...mcpToolEffects.readOnly,
     name: "verify_visual_result",
     title: "Verify visual result",
-    description: "Run the canonical strict final visual verifier. criticReport must be a VisualCriticReport v1 (schemaVersion 1.0), not the CriticReportV2 evidence shape.",
+    description: "Run the canonical strict final visual verifier. criticReport must be a VisualCriticReport v1 (schemaVersion 1.1; legacy 1.0 reports remain loadable on their original 9-code vocabulary), not the CriticReportV2 evidence shape.",
     inputSchema: { type: "object", required: ["workflowId", "policy", "visualRun", "variant", "brief", "direction", "initialEvidence", "recheckEvidence", "criticReport", "boundedRepairFindings"], properties: { workflowId: { type: "string" }, policy: verifyPolicySchema, visualRun: verifyVisualRunSchema, variant: objectSchema, brief: objectSchema, direction: objectSchema, examplePack: examplePackSchema, executionTrace: executionTraceSchema, initialEvidence: verifiedEvidenceSchema, recheckEvidence: verifiedEvidenceSchema, criticReport: visualCriticReportSchema, boundedRepairRequest: objectSchema, boundedRepairFindings: { type: "array", items: objectSchema } } },
   },
 ];

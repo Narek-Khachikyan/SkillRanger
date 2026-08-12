@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { resolveWorkflowStepIds, type WorkflowDefinition } from "../src/runtime/index.ts";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { aiSlopCodes, legacyAiSlopCodes } from "../src/domains/frontend/design/visual-loop-types.ts";
 
 const readSkill = (name: string) =>
   readFile(path.resolve("registry/skills", `frontend.${name}`, "SKILL.md"), "utf8");
@@ -204,6 +206,52 @@ test("domain and registry critic schemas retain overlapping strictness parity", 
   assert.deepEqual(domain.allOf, registry.allOf);
   assert.equal(domain.$defs.comparison.properties.strengths.items.minLength, 1);
   assert.equal(domain.$defs.verificationFinding.properties.id.minLength, 1);
+});
+
+test("critic schema 1.1 enum stays in lock-step across domain schema, skill schema, and loop types", async () => {
+  const [domain, registry] = await Promise.all([
+    readFile("domains/frontend/schemas/visual-critic-report.schema.json", "utf8"),
+    readFile("registry/skills/frontend.visual-critic/output.schema.json", "utf8"),
+  ]).then((texts) => texts.map((text) => JSON.parse(text)));
+
+  assert.deepEqual(domain.properties.schemaVersion.enum, ["1.0", "1.1"]);
+  assert.deepEqual(registry.properties.schemaVersion.enum, ["1.0", "1.1"]);
+
+  const domainEnum = domain.$defs.aiSlopFinding.properties.code.enum;
+  const registryEnum = registry.properties.comparisons.items.properties.aiSlopFindings.items.properties.code.enum;
+  assert.equal(domainEnum.length, 16);
+  assert.equal(registryEnum.length, 16);
+  assert.deepEqual(domainEnum, registryEnum, "domain and skill schemas must carry the same enum");
+  assert.deepEqual(domainEnum, [...aiSlopCodes], "schemas must match the loop-types vocabulary");
+  assert.deepEqual(
+    [...legacyAiSlopCodes],
+    domainEnum.slice(0, legacyAiSlopCodes.length),
+    "the first nine codes are the frozen version-1.0 vocabulary",
+  );
+
+  // The digest baseline for the frozen 1.1 normative slice: any same-version normative edit
+  // (enum change or version list change) fails the pinned digest and must bump the schema version
+  // and record the new digest in this same test change, mirroring the design-rule-library baseline.
+  const normativeDigest = createHash("sha256").update(JSON.stringify({
+    schemaVersions: ["1.0", "1.1"],
+    codes: [...aiSlopCodes],
+  })).digest("hex");
+  assert.equal(
+    normativeDigest,
+    "f04ff8f71349264ab92f44904d894369311fc0d949ad03abc5fee06dd93884d3",
+  );
+
+  const skill = await readSkill("visual-critic");
+  const onePointOneTells = [
+    "generic-font-stack", "gradient-abuse", "centered-hero", "eyebrow-everywhere",
+    "italic-display-heading", "glassmorphism", "glowing-orb",
+  ];
+  for (const code of onePointOneTells) {
+    assert.match(skill, new RegExp(`\`${code}\``), `SKILL.md must document code ${code}`);
+  }
+  assert.match(skill, /Declared Identity Confirmation/);
+  assert.match(skill, /macrostructure[\s\S]*paper band[\s\S]*accent hue/i);
+  assert.match(skill, /cannot (be selected|certify)/i);
 });
 
 test("visual critic output schema binds selection id to outcome", async () => {

@@ -8,6 +8,7 @@ import type {
   VisualRun,
   VisualRunEvent,
 } from "./visual-loop-types.ts";
+import { aiSlopCodes, legacyAiSlopCodes } from "./visual-loop-types.ts";
 import { containsProhibitedCommandLine } from "./command-line-classifier.ts";
 
 const criteria: VisualCriterion[] = [
@@ -34,17 +35,12 @@ const integrityCriterionFloor = 0.50;
 
 const codeShape = /```(?:jsx|tsx|css|html|javascript|typescript)|(?:^|\n)(?:diff --git|@@ |\+\+\+ |--- )|<\/?[a-z][^>]*>|\bclassName\s*=|\b(?:git|npm|pnpm|yarn)\s+(?:add|commit|run)\b/i;
 
-const aiSlopCodes = new Set<AiSlopCode>([
-  "generic-hero-copy",
-  "interchangeable-saas-layout",
-  "excessive-generic-cards",
-  "meaningless-effects",
-  "invented-proof",
-  "repeated-icon-grid",
-  "arbitrary-radii-shadows",
-  "weak-hierarchy",
-  "meaningless-decoration",
-]);
+const aiSlopCodeSet = new Set<AiSlopCode>(aiSlopCodes);
+// Version-1.0 reports are frozen to their original 9-code vocabulary (the digest baseline); the
+// seven 1.1 tells require schemaVersion 1.1, so a same-version normative edit cannot smuggle a
+// new code into a legacy report.
+const legacyAiSlopCodeSet = new Set<AiSlopCode>(legacyAiSlopCodes);
+const criticSchemaVersions = new Set(["1.0", "1.1"]);
 
 const aiSlopSeverities = new Set(["critical", "high", "medium", "low"]);
 
@@ -119,7 +115,8 @@ const validReportContract = (value: unknown): value is VisualCriticReport => {
     "evidenceIds", "comparisons", "outcome", "selectedVariantId", "repairFindings",
     "confidence", "residualUncertainty", "containsImplementationCode",
   ])) return false;
-  if (value.schemaVersion !== "1.0" || !nonEmpty(value.id) || !nonEmpty(value.generatorActorId)
+  if (typeof value.schemaVersion !== "string" || !criticSchemaVersions.has(value.schemaVersion)
+    || !nonEmpty(value.id) || !nonEmpty(value.generatorActorId)
     || !nonEmpty(value.criticActorId) || !stringArray(value.candidateVariantIds, true)
     || value.candidateVariantIds.length === 0
     || new Set(value.candidateVariantIds).size !== value.candidateVariantIds.length
@@ -146,7 +143,7 @@ const validReportContract = (value: unknown): value is VisualCriticReport => {
         || (scorecard[criterion] as number) > 1)) return false;
     return comparison.aiSlopFindings.every((entry) => isRecord(entry)
       && hasOnlyKeys(entry, ["code", "severity", "evidence", "explanation"])
-      && nonEmpty(entry.code) && aiSlopCodes.has(entry.code as AiSlopCode)
+      && nonEmpty(entry.code) && aiSlopCodeSet.has(entry.code as AiSlopCode)
       && typeof entry.severity === "string" && aiSlopSeverities.has(entry.severity)
       && nonEmpty(entry.evidence) && nonEmpty(entry.explanation));
   });
@@ -220,9 +217,9 @@ export const validateVisualCriticReport = (
           "Reference every supplied evidence id exactly once and do not add evidence ids.", mismatch,
         ));
       }
-      if (report.schemaVersion !== "1.0") invalid.push(hardFinding(
-        "critic-schema-version", "The visual critic report schemaVersion must be 1.0.",
-        "Regenerate the report with schemaVersion 1.0.",
+      if (!criticSchemaVersions.has(String(report.schemaVersion))) invalid.push(hardFinding(
+        "critic-schema-version", "The visual critic report schemaVersion must be 1.0 or 1.1.",
+        "Regenerate the report with schemaVersion 1.1, or keep 1.0 only for legacy 9-code reports.",
       ));
       if (report.outcome !== "selected" && report.outcome !== "no-acceptable-variant") invalid.push(hardFinding(
         "critic-outcome-invalid", "The visual critic report outcome is invalid.",
@@ -236,7 +233,7 @@ export const validateVisualCriticReport = (
       if (Array.isArray(report.comparisons) && report.comparisons.some((comparison) =>
         !isRecord(comparison) || !Array.isArray(comparison.aiSlopFindings)
         || comparison.aiSlopFindings.some((entry) => !isRecord(entry)
-          || !nonEmpty(entry.code) || !aiSlopCodes.has(entry.code as AiSlopCode)
+          || !nonEmpty(entry.code) || !aiSlopCodeSet.has(entry.code as AiSlopCode)
           || typeof entry.severity !== "string" || !aiSlopSeverities.has(entry.severity)
           || !nonEmpty(entry.evidence) || !nonEmpty(entry.explanation)))) {
         invalid.push(hardFinding(
@@ -280,11 +277,11 @@ export const validateVisualCriticReport = (
   const reportCandidateIds = Array.isArray(report.candidateVariantIds) ? report.candidateVariantIds : [];
   const reportEvidenceIds = Array.isArray(report.evidenceIds) ? report.evidenceIds : [];
 
-  if (report.schemaVersion !== "1.0") {
+  if (!criticSchemaVersions.has(String(report.schemaVersion))) {
     findings.push(hardFinding(
       "critic-schema-version",
-      "The visual critic report schemaVersion must be 1.0.",
-      "Regenerate the report with schemaVersion 1.0.",
+      "The visual critic report schemaVersion must be 1.0 or 1.1.",
+      "Regenerate the report with schemaVersion 1.1, or keep 1.0 only for legacy 9-code reports.",
     ));
   }
   if (report.outcome !== "selected" && report.outcome !== "no-acceptable-variant") {
@@ -427,7 +424,7 @@ export const validateVisualCriticReport = (
       if (
         !isRecord(entry) ||
         !nonEmpty(entry.code) ||
-        !aiSlopCodes.has(entry.code as AiSlopCode) ||
+        !aiSlopCodeSet.has(entry.code as AiSlopCode) ||
         typeof entry.severity !== "string" ||
         !aiSlopSeverities.has(entry.severity) ||
         !nonEmpty(entry.evidence) ||
@@ -438,6 +435,16 @@ export const validateVisualCriticReport = (
           `Comparison ${variantId} has a malformed AI-slop finding.`,
           "Provide a legal AI-slop code and severity with non-empty evidence and explanation.",
           [variantId, String(index)],
+          variantId,
+        ));
+        continue;
+      }
+      if (report.schemaVersion === "1.0" && !legacyAiSlopCodeSet.has(entry.code as AiSlopCode)) {
+        findings.push(hardFinding(
+          "critic-ai-slop-vocabulary",
+          `Comparison ${variantId} uses code ${entry.code}, which is not in the frozen version-1.0 vocabulary.`,
+          "Bump the report to schemaVersion 1.1 to use the expanded 16-code set; version-1.0 reports stay on their original 9 codes.",
+          [variantId, String(index), entry.code],
           variantId,
         ));
         continue;

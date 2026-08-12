@@ -77,7 +77,36 @@ export type VisualCriterion =
 export type AiSlopCode =
   | "generic-hero-copy" | "interchangeable-saas-layout" | "excessive-generic-cards"
   | "meaningless-effects" | "invented-proof" | "repeated-icon-grid"
-  | "arbitrary-radii-shadows" | "weak-hierarchy" | "meaningless-decoration";
+  | "arbitrary-radii-shadows" | "weak-hierarchy" | "meaningless-decoration"
+  | "generic-font-stack" | "gradient-abuse" | "centered-hero"
+  | "eyebrow-everywhere" | "italic-display-heading" | "glassmorphism"
+  | "glowing-orb";
+
+export const legacyAiSlopCodes: readonly AiSlopCode[] = [
+  "generic-hero-copy",
+  "interchangeable-saas-layout",
+  "excessive-generic-cards",
+  "meaningless-effects",
+  "invented-proof",
+  "repeated-icon-grid",
+  "arbitrary-radii-shadows",
+  "weak-hierarchy",
+  "meaningless-decoration",
+] as const;
+
+// Canonical schemaVersion-1.1 vocabulary: the frozen 1.0 codes plus the seven 1.1 tells. All five
+// enum locations (domain schema, skill output schema, loop types, validator set, version checks)
+// must stay in lock-step with this list; a same-version normative edit is rejected by the tests.
+export const aiSlopCodes: readonly AiSlopCode[] = [
+  ...legacyAiSlopCodes,
+  "generic-font-stack",
+  "gradient-abuse",
+  "centered-hero",
+  "eyebrow-everywhere",
+  "italic-display-heading",
+  "glassmorphism",
+  "glowing-orb",
+] as const;
 
 export type VisualCriticInput = {
   schemaVersion: "1.0";
@@ -93,7 +122,7 @@ export type VisualCriticInput = {
 };
 
 export type VisualCriticReport = {
-  schemaVersion: "1.0";
+  schemaVersion: "1.0" | "1.1";
   id: string;
   generatorActorId: string;
   criticActorId: string;

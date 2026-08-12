@@ -150,6 +150,79 @@ test("carries one direction and its example pack through the complete visual lif
   assert.deepEqual(run.executionTrace, trace);
 });
 
+test("verifies a legacy schemaVersion-1.0 critic report through the full verifier", async () => {
+  const brief = makeBrief();
+  const policy = resolveDesignExecutionPolicy({
+    mode: "refine",
+    profile: "standard",
+    rankedRecipeIds: ["developer-tool"],
+    requiredStates: brief.surface.requiredStates,
+  });
+  const pack = (await loadRecipeExamplePacks()).find(({ recipeId }) => recipeId === "developer-tool");
+  assert.ok(pack);
+  const selectedDirection = direction();
+  const trace = createDesignExecutionTrace({
+    id: "design-trace-legacy",
+    directionPath: ".design/variants/v1/direction.json",
+    examplePackPath: "domains/frontend/examples/developer-tool/example.json",
+    direction: selectedDirection,
+    examplePack: pack,
+  });
+
+  let run = createVisualRun({
+    id: "visual-trace-legacy-run",
+    policyPath: ".design/execution-policy.json",
+    policy,
+    executionTrace: trace,
+  });
+  run = applyVisualRunEvent(run, {
+    type: "directions-validated", ...event(1), variantIds: ["v1"], traceId: trace.id,
+  }, policy);
+  run = applyVisualRunEvent(run, {
+    type: "implementation-recorded", ...event(2),
+    implementations: [{ variantId: "v1", artifactId: "git-diff:initial" }],
+  }, policy);
+  run = applyVisualRunEvent(run, {
+    type: "initial-evidence-recorded", ...event(3), evidenceId: "e1",
+  }, policy);
+  run = applyVisualRunEvent(run, {
+    type: "critique-recorded", ...event(4), critiqueId: "c1", selectedVariantId: "v1",
+    repairFindingCount: 0,
+  }, policy);
+  run = applyVisualRunEvent(run, { type: "no-repair-needed", ...event(5) }, policy);
+  run = applyVisualRunEvent(run, {
+    type: "recheck-evidence-recorded", ...event(6), evidenceId: "e2",
+  }, policy);
+  run = applyVisualRunEvent(run, {
+    type: "final-audit-recorded", ...event(7), reportPath: ".design/final-audit.json",
+  }, policy);
+
+  const verificationInput = makeVerificationInput({
+    initialEvidence: makeBundle({ id: "e1", variantId: "v1", sourceIdentity: "git:initial" }),
+    recheckEvidence: makeBundle({ id: "e2", variantId: "v1", sourceIdentity: "git:repair" }),
+  });
+  verificationInput.policy = policy;
+  verificationInput.visualRun = run;
+  verificationInput.variant = {
+    ...verificationInput.variant,
+    recipeId: selectedDirection.recipeId,
+    directionPath: trace.directionPath,
+    ruleIds: [...selectedDirection.selectedRuleIds!],
+  };
+  verificationInput.direction = selectedDirection;
+  verificationInput.examplePack = pack;
+  verificationInput.criticReport.schemaVersion = "1.0";
+  verificationInput.criticReport.comparisons[0].aiSlopFindings = [{
+    code: "weak-hierarchy", severity: "high", evidence: "e1",
+    explanation: "The primary action is visually subordinate.",
+  }];
+
+  const result = verifyVisualResult(verificationInput);
+  assert.equal(result.report.outcome, "verified");
+  assert.ok(!result.findings.some(({ code }) =>
+    code === "critic-ai-slop-vocabulary" || code === "critic-schema-version"));
+});
+
 test("blocks a material run when rule selection is missing before implementation", async () => {
   const brief = makeBrief();
   const policy = resolveDesignExecutionPolicy({
