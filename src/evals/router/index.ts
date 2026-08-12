@@ -6,6 +6,7 @@ import { defaultDomainsRoot, defaultRegistryRoot } from "../../paths.ts";
 import { loadLocalRegistry } from "../../registry/index.ts";
 import { scanProject } from "../../scanner/index.ts";
 import { composeSkillSet, type RouterSkillMetadata } from "../../router/composer.ts";
+import { createRetrievalBoundary } from "../../router/retrieval-boundary.ts";
 import { analyzeTask, type TaskAnalyzerDomainMetadata, type TaskAnalyzerSkillMetadata } from "../../router/analyzer.ts";
 import { parseTrigger } from "../../router/trigger.ts";
 import { resolveDomains } from "../../router/resolver.ts";
@@ -211,7 +212,11 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
   const emptySelection = { signalIds, primarySkillId: undefined, selectedCompanionIds: [], selectedSkillIds: [], primaryExclusionReasons: {}, decomposedGoals: [] };
   if (resolution.clarificationRequired) return { status: "clarification_required", domainIds: resolution.ambiguousDomainIds, primaryDomainId: undefined, selectedSkillCount: 0, selectedCompanionCount: 0, usefulCompanionCount: 0, instructionBytes: 0, privacyLeakageCount: privacyLeakageCount({ analysis, resolution }), deterministic: resolutionDeterministic, ...emptySelection };
   if (!resolution.primaryDomainId) return { status: "no_matching_skills", domainIds: [], primaryDomainId: undefined, selectedSkillCount: 0, selectedCompanionCount: 0, usefulCompanionCount: 0, instructionBytes: 0, privacyLeakageCount: privacyLeakageCount({ analysis, resolution }), deterministic: resolutionDeterministic, ...emptySelection };
-  const composed = composeSkillSet({
+  // Router evals build boundaries deterministically through the same production
+  // factory as prepare_task, so replays exercise the real seam: the boundary
+  // factory owns retrieval input construction, and both composition passes
+  // consume the same boundary.
+  const boundary = createRetrievalBoundary({
     profile: analysis.profile,
     requirements: analysis.requirements,
     skills: metadata.skills,
@@ -227,12 +232,29 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
     routingContext: metadata.routingContext,
     matchedSignals: analysis.matchedSignals,
   });
+  const composed = composeSkillSet({
+    profile: analysis.profile,
+    requirements: analysis.requirements,
+    skills: metadata.skills,
+    fingerprint: metadata.fingerprint,
+    selectedDomainIds: resolution.candidates.map(({ id }) => id),
+    primaryDomainId: resolution.primaryDomainId,
+    targetAgent: "codex",
+    capabilities: input.capabilities,
+    strict: input.strict,
+    installedSkillIds: input.id === "strict-installed" ? ["backend.auth-implementation"] : [],
+    routingDate: "2026-07-19",
+    routingIntentTags: analysis.routingIntentTags,
+    routingContext: metadata.routingContext,
+    matchedSignals: analysis.matchedSignals,
+    boundary,
+  });
   const replay = composeSkillSet({
     profile: analysis.profile, requirements: analysis.requirements, skills: metadata.skills, fingerprint: metadata.fingerprint,
     selectedDomainIds: resolution.candidates.map(({ id }) => id), primaryDomainId: resolution.primaryDomainId,
     targetAgent: "codex", capabilities: input.capabilities, strict: input.strict,
     installedSkillIds: input.id === "strict-installed" ? ["backend.auth-implementation"] : [], routingDate: "2026-07-19", routingIntentTags: analysis.routingIntentTags,
-    routingContext: metadata.routingContext, matchedSignals: analysis.matchedSignals,
+    routingContext: metadata.routingContext, matchedSignals: analysis.matchedSignals, boundary,
   });
   const selected = composed.status === "prepared" ? composed.composed.all : [];
   const companions = selected.filter(({ role }) => role !== "primary");
