@@ -4,7 +4,21 @@ import {
   defaultMechanicalCheckPolicy,
   evaluateBrowserPayload,
   evaluateMechanicalSnapshot,
+  parseUiEvidencePayload,
 } from "../src/domains/frontend/design/index.ts";
+import { emptyMechanicalSnapshot } from "./helpers/browser-gate-fixtures.ts";
+
+const motionSnapshot = (motion: Array<{ locator: string; transitionProperty: string; transitionTimingFunction: string }>) =>
+  ({ ...emptyMechanicalSnapshot, motion });
+
+const evaluateMotion = (motion: Parameters<typeof motionSnapshot>[0]) =>
+  evaluateMechanicalSnapshot({
+    snapshot: motionSnapshot(motion),
+    policy: defaultMechanicalCheckPolicy,
+    viewport: 1440,
+    state: "success",
+    screenshotPath: "1440-success.png",
+  });
 
 test("reports spacing, colors, radii, shadows, cards, typography, measure, and targets", () => {
   const checks = evaluateMechanicalSnapshot({
@@ -21,6 +35,7 @@ test("reports spacing, colors, radii, shadows, cards, typography, measure, and t
       ],
       textBlocks: [{ locator: "article p", measureCh: 92 }],
       touchTargets: [{ locator: "button.icon", widthPx: 28, heightPx: 28, interactive: true }],
+      motion: [{ locator: "#save", transitionProperty: "opacity", transitionTimingFunction: "cubic-bezier(0.25, 0.1, 0.25, 1)" }],
     },
     policy: defaultMechanicalCheckPolicy,
     viewport: 390,
@@ -127,4 +142,83 @@ test("verified state synchronization requires an action and an observed change",
     viewport: 1440, state: "success", screenshotPath: "1440-success.png",
   });
   assert.deepEqual(verified, []);
+});
+
+test("detects transition-all from computed transition-property", () => {
+  const viaKeyword = evaluateMotion([{
+    locator: "#save", transitionProperty: "all", transitionTimingFunction: "cubic-bezier(0.25, 0.1, 0.25, 1)",
+  }]);
+  assert.deepEqual(viaKeyword.map(({ code }) => code), ["transition-all"]);
+  assert.deepEqual(viaKeyword[0].measured, "all");
+
+  const viaSerializedList = evaluateMotion([{
+    locator: "#save", transitionProperty: "all, opacity", transitionTimingFunction: "ease",
+  }]);
+  assert.deepEqual(viaSerializedList.map(({ code }) => code), ["transition-all"]);
+
+  const expanded = Array.from({ length: 24 }, (_, i) => `property-${i}`).join(" ");
+  const viaExpansion = evaluateMotion([{
+    locator: "#save", transitionProperty: expanded, transitionTimingFunction: "ease",
+  }]);
+  assert.deepEqual(viaExpansion.map(({ code }) => code), ["transition-all"]);
+  assert.equal(viaExpansion[0].measured, "24 transitioned properties");
+
+  const bounded = evaluateMotion([{
+    locator: "#save", transitionProperty: "opacity, transform", transitionTimingFunction: "ease",
+  }]);
+  assert.deepEqual(bounded, []);
+});
+
+test("detects bouncy and overshoot easings from computed timing functions", () => {
+  const overshootBack = evaluateMotion([{
+    locator: "#chip", transitionProperty: "transform", transitionTimingFunction: "cubic-bezier(0.68, -0.55, 0.27, 1.55)",
+  }]);
+  assert.deepEqual(overshootBack.map(({ code }) => code), ["bouncy-easing"]);
+
+  const overshootForward = evaluateMotion([{
+    locator: "#chip", transitionProperty: "transform", transitionTimingFunction: "cubic-bezier(0.34, 1.56, 0.64, 1)",
+  }]);
+  assert.deepEqual(overshootForward.map(({ code }) => code), ["bouncy-easing"]);
+
+  const clean = evaluateMotion([
+    { locator: "#a", transitionProperty: "opacity", transitionTimingFunction: "ease" },
+    { locator: "#b", transitionProperty: "transform", transitionTimingFunction: "linear" },
+    { locator: "#c", transitionProperty: "opacity", transitionTimingFunction: "steps(4, end)" },
+    { locator: "#d", transitionProperty: "opacity, transform", transitionTimingFunction: "cubic-bezier(0.42, 0, 0.58, 1)" },
+  ]);
+  assert.deepEqual(clean, []);
+});
+
+test("reports motion tells as soft mechanical checks with screenshot evidence", () => {
+  const checks = evaluateMotion([{
+    locator: "#save", transitionProperty: "all", transitionTimingFunction: "cubic-bezier(0.68, -0.55, 0.27, 1.55)",
+  }]);
+  assert.deepEqual([...new Set(checks.map(({ code }) => code))].sort(), ["bouncy-easing", "transition-all"]);
+  assert.ok(checks.every(({ gate, severity, viewport, state, evidence }) =>
+    gate === "soft"
+    && severity === "medium"
+    && viewport === 1440
+    && state === "success"
+    && evidence.includes("1440-success.png")
+    && evidence.includes("#save")));
+  assert.ok(checks.every(({ expected, remediation }) =>
+    expected.length > 0 && remediation.length > 0));
+});
+
+test("parses legacy snapshots without the motion record", () => {
+  const parsed = parseUiEvidencePayload({
+    horizontalOverflow: false, clippedControls: [], unreachableActions: [], stickyOverlaps: [],
+    consoleErrors: [], keyboardTraps: [], invisibleFocus: [], criticalAxeViolations: [],
+    reducedMotionVerified: true, stateRendered: true, overlaps: [], focusOrderViolations: [],
+    contrastViolations: [],
+    stateSynchronization: {
+      status: "verified", path: "p -> q", observations: ["p=a", "q=b"],
+      action: "Pick", changes: [{ locator: "#q", before: "a", after: "b" }],
+    },
+    mechanicalSnapshot: {
+      spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [], textBlocks: [],
+      touchTargets: [],
+    },
+  }, { requireMechanical: true });
+  assert.deepEqual(parsed.mechanical?.motion, []);
 });

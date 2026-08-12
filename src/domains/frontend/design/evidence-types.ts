@@ -10,7 +10,8 @@ export type UiCheckCode =
   | "ui-state-desynchronized" | "state-not-rendered" | "state-mismatch"
   | "inconsistent-spacing" | "random-color"
   | "excessive-radii" | "excessive-shadows" | "generic-card-repetition"
-  | "weak-typography-hierarchy" | "text-measure" | "touch-target";
+  | "weak-typography-hierarchy" | "text-measure" | "touch-target"
+  | "transition-all" | "bouncy-easing";
 
 export type UiCheckResult = {
   code: UiCheckCode;
@@ -34,6 +35,7 @@ export type MechanicalSnapshot = {
   typography: Array<{ locator: string; role: "h1" | "h2" | "h3" | "body" | "meta"; fontSizePx: number; fontWeight: number }>;
   textBlocks: Array<{ locator: string; measureCh: number }>;
   touchTargets: Array<{ locator: string; widthPx: number; heightPx: number; interactive: boolean }>;
+  motion: Array<{ locator: string; transitionProperty: string; transitionTimingFunction: string }>;
 };
 
 export type StateSynchronization = {

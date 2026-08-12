@@ -108,6 +108,7 @@ test("recomputes canonical mechanical facts instead of trusting persisted checks
     capture.mechanicalSnapshot = {
       spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [], textBlocks: [],
       touchTargets: [{ locator: "#icon", widthPx: 24, heightPx: 24, interactive: true }],
+      motion: [],
     };
     capture.checks = [];
   }

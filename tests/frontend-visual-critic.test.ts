@@ -282,6 +282,23 @@ test("rejects a schemaVersion-1.1 code inside a legacy version-1.0 report as a s
   assert.equal(compareDesignVariants(input, report).ok, false);
 });
 
+test("keeps motion tells out of the critic enum", () => {
+  for (const code of ["transition-all", "bouncy-easing"]) {
+    const report = makeCriticReport({ selectedVariantId: "v1" });
+    report.comparisons[0].aiSlopFindings = [{
+      code: code as "weak-hierarchy",
+      severity: "high",
+      evidence: "v1-390.png",
+      explanation: "The motion tell is not visible in static screenshots.",
+    }];
+    assert.ok(
+      findingCodes(report).includes("critic-ai-slop-finding-invalid")
+      || findingCodes(report).includes("critic-ai-slop-vocabulary"),
+      `${code} must not be accepted as a critic AI-slop code`,
+    );
+  }
+});
+
 test("rejects missing and non-array AI-slop collections without throwing", () => {
   const cases: Array<[string, (comparison: Record<string, unknown>) => void]> = [
     ["missing", (comparison) => { delete comparison.aiSlopFindings; }],

@@ -16,7 +16,7 @@ const install = async (root: string, skillId: string) => {
 };
 const emptyMechanicalSnapshot = {
   spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [], textBlocks: [],
-  touchTargets: [],
+  touchTargets: [], motion: [],
 };
 const readAll = async (store: StrictSkillRunStore, run: SkillRunV2) => {
   while (run.state === "reading") {
