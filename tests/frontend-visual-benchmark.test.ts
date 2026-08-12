@@ -168,7 +168,7 @@ test("retains complete evidence for failed and timed-out commands without certif
     `fs.writeFileSync(path.join(d,'run-metadata.json'),${JSON.stringify(metadata)});`,
     "if (process.argv[3] === 'fail') process.exit(23);",
     "if (process.argv[3] === 'timeout') process.on('SIGTERM', () => process.exit(0));",
-    "setTimeout(() => {}, 1000);",
+    "setTimeout(() => {}, 5000);",
   ].join("\n"));
 
   const failed = await executeVisualBenchmarkPlanSubsetForTesting({
@@ -184,7 +184,7 @@ test("retains complete evidence for failed and timed-out commands without certif
     plan,
     commandTemplate: `${process.execPath} ${agent} {{outputDir}} timeout`,
     outputDir: path.join(root, "timed-out"),
-    timeoutPerRunMs: 250,
+    timeoutPerRunMs: 2000,
   });
   assert.equal(timedOut.runs[0].exitCode, null);
   assert.equal(timedOut.runs[0].signal, "SIGTERM");

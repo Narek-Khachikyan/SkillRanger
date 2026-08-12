@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.1",
+  "recipeId": "developer-tool",
+  "selectedRuleIds": [
+    "typography.role-contrast",
+    "layout.direction-support",
+    "responsive.recomposition",
+    "color.role-pairing",
+    "state.state-consistency",
+    "signature-move.data-shape"
+  ],
+  "thesis": "Give the operations screen an evidence-forward instrument voice.",
+  "productReason": "Operators triage live production data under time pressure.",
+  "axes": {
+    "density": "balanced",
+    "hierarchy": "data-first",
+    "composition": "structured-list",
+    "material": "layered",
+    "motionIntensity": "low",
+    "expressionLevel": "restrained"
+  },
+  "macrostructure": "operations-single-pane",
+  "themeAxes": {
+    "paperBand": "ink",
+    "displayStyle": "instrument",
+    "accentHue": "ocean"
+  },
+  "typographyRoles": {
+    "display": "Instrument Sans",
+    "body": "Inter"
+  },
+  "colorRoles": {
+    "surface": "paper",
+    "accent": "ocean"
+  },
+  "signatureMove": "Live metric rows reveal cause chains inline.",
+  "rejectedDefaults": [
+    "generic SaaS card grid"
+  ],
+  "destructiveCritique": "Dense rows may overwhelm new operators; mitigated by inline severity cues."
+}
