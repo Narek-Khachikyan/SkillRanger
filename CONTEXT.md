@@ -52,6 +52,20 @@ _Avoid_: Strict mode, verification mode, routing quality score
 The local vocabulary routing path used only when the host submits no routing proposal. It remains deterministic but does not promise semantic recall equivalent to model-first semantic routing.
 _Avoid_: Invalid-proposal recovery, degraded strict mode, model-assisted routing
 
+## Positioning
+
+**Author-curated skill library**:
+The hand-crafted, pre-audited set of agent skills authored and maintained by the SkillRanger author, shipped in the bundled registry. It is the product's primary identity; routing, audit, and installation are delivery mechanics on top of it.
+_Avoid_: generic skill registry, third-party collection, package-manager content.
+
+**Multi-domain coverage**:
+The library is designed to span several directions rather than one stack; frontend ships today, and each additional direction is announced only when it actually ships.
+_Avoid_: frontend-only product, fixed domain scope, announced-but-unshipped domains.
+
+**Content-first positioning**:
+The public framing of SkillRanger as an author-curated skill library with routing and integrity tooling, rather than as a generic skill installer or package manager. The term "package manager" is not used in public copy.
+_Avoid_: tool-first framing, installer framing, package-manager framing.
+
 ## Verification
 
 **Verified outcome**:
@@ -123,3 +137,29 @@ The equal-weight preference share across the independent human reviews, calculat
 
 **Baseline comparison**:
 A controlled comparison of the current frontend workflow with both a no-skill baseline and the prior prose-skill baseline, using the same model, fixture, repetitions, and assertions.
+
+## Frontend design craft
+
+**Craft layer**:
+A provenance-labelled reference corpus of parametric design knowledge — type pairings, palette recipes, macrostructures, component cookbooks — that the design skill loads advisory-style during a build. It is not a bundled design rule until it passes the tiered promotion bar.
+_Avoid_: theme catalog, design library, template pack
+
+**Macrostructure**:
+A named page-level composition shape (hero placement, body, divider, button voice, image treatment) that the direction step picks explicitly and states out loud, preventing default-attractor sameness.
+_Avoid_: layout template, page pattern
+
+**Theme axes**:
+The declared cross-build identity dimensions — paper band, display style, accent hue — that the direction records alongside the named macrostructure. They supplement, not replace, the direction's existing treatment axes.
+_Avoid_: theme rotation, color swap, third axis system
+
+**Diversification gate**:
+A deterministic hard gate that compares a design direction's identity fingerprint (theme axes + macrostructure + the existing composition/material treatment axes) against a snapshot of the last N verified run directions, requiring deviation on at least one dimension. The snapshot is recorded in the verification report so replay re-checks the same set.
+_Avoid_: variety check, repetition log, live re-derivation
+
+**Design DNA extraction**:
+A structured mode that reads a reference design's macrostructure, type pairing, and colour anchor into a provenance-labelled artifact without copying pixels or trade dress.
+_Avoid_: design scraping, pixel clone, study analysis
+
+**Slop-tell**:
+A closed, named anti-pattern code in the visual critic report that marks a design default as AI-generated; each tell carries a severity and a fix direction.
+_Avoid_: heuristic, style guideline, checklist item

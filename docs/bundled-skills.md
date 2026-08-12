@@ -1,6 +1,6 @@
 # Bundled Skills
 
-SkillRanger ships with 18 pre-audited, instruction-only frontend skills in its bundled local registry. Normal recommendation never fetches arbitrary remote skills; every package below passes the registry validation, content lint, and static audit gates before release.
+SkillRanger ships with 18 author-curated, pre-audited, instruction-only skills — frontend today, more directions on the way. Normal recommendation never fetches arbitrary remote skills; every package below passes the registry validation, content lint, and static audit gates before release.
 
 | Category | Skill ID | Purpose |
 | :--- | :--- | :--- |

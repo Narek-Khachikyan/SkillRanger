@@ -1,6 +1,6 @@
 # SkillRanger
 
-AI agents are only as useful as the instructions they are given — and most skills get installed without being read. SkillRanger finds, audits, and installs the right agent skills for your codebase, with the full plan shown before anything is written.
+The best agent skills are the ones already written, audited, and picked for you. SkillRanger is an author-curated library of agent skills — hand-crafted, pre-audited, static instructions — plus a router that scans your repository and selects the small set your project actually needs, showing the full plan before anything is written.
 
 <p align="center">
   <a href="https://www.npmjs.com/package/skillranger"><img src="https://img.shields.io/npm/v/skillranger?color=blue&style=flat-square" alt="npm version"></a>
@@ -10,7 +10,11 @@ AI agents are only as useful as the instructions they are given — and most ski
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Narek-Khachikyan/SkillRanger/main/docs/demo.gif" alt="SkillRanger setup on a Next.js project: scan, recommend, audit, confirm, install" width="720">
+  <img src="https://raw.githubusercontent.com/Narek-Khachikyan/SkillRanger/main/docs/demo.gif" alt="SkillRanger setup on a Next.js project: run skillranger setup, complete the prompts, review the recommended skills and the install plan, confirm" width="720">
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Narek-Khachikyan/SkillRanger/main/docs/demo-task.gif" alt="Describe the website you want, and SkillRanger routes the task to the skills it needs" width="720">
 </p>
 
 ## Quick Start
@@ -41,18 +45,22 @@ Installed skills are static instructions. SkillRanger does not invoke a model it
 
 ## Why SkillRanger?
 
-Three situations that send developers looking for a skill installer:
+Good agent skills take real work: research your stack, write the instructions, test them, keep them updated. Without SkillRanger that work lands on you — or the project settles for whatever skill a blog post happened to paste.
 
+SkillRanger flips it: the skills are already written, audited, and picked for you. The problems it removes:
+
+- **Curating skills is someone else's job.** The library is hand-crafted and pre-audited — you get a maintained, versioned skill set without maintaining it yourself.
 - **Copy-pasted skills rot.** The skill you pasted from a blog post has no version, no checksum, and no update path. Months later your agent still follows instructions written for an old API, and nobody knows.
-- **Install-all lists bloat your repo.** Dumping a curated list of forty skills into the project makes every agent read more context than it needs. The right two skills for your stack get lost in the noise.
+- **Install-all lists bloat your repo.** Dumping forty skills into the project makes every agent read more context than it needs. The right two skills for your stack get lost in the noise.
 - **Trust is granted before review.** In most install flows the plan is the install. You never see what will be written, and no one checks the skill for credential access, destructive commands, or prompt-injection patterns before it lands in the context your agent trusts most.
 
 SkillRanger exists to make the review step the default instead of an exception: recommend a small set, audit it, show the plan, then write.
 
 ### Honest comparison
 
-| | SkillRanger | Manual copying | Git submodule | Curated skill collections |
+| | SkillRanger | Manual copying | Git submodule | Static curated collections |
 | :--- | :--- | :--- | :--- | :--- |
+| **Who curates the skills** | Author-curated library, maintained by SkillRanger | You | The upstream repo | Third parties, browse by hand |
 | **Versioning** | Lockfile-pinned installs (`skillranger.lock.json`) | None — paste and forget | Upstream commit recorded; `git submodule update` syncs to it | Whatever upstream does |
 | **Integrity checks** | SHA-256 checksums recorded and verified | None | Git hash integrity | None stated |
 | **Relevance to your repo** | Selected from detected stack + your intent | Whatever you pick | A fixed repo, not per-project selection | Browse and pick by hand |
@@ -61,13 +69,14 @@ SkillRanger exists to make the review step the default instead of an exception: 
 | **Review before writing** | Full plan and audit summary before confirm | None | None | None |
 
 **Best when:**
+- **SkillRanger** — you want the skills already written for you, auto-selected for your stack.
 - **Manual copying** — you need one or two files and want no tooling at all.
 - **Git submodule** — your priority is exact synchronization with an upstream repo.
-- **Curated collection** — your priority is browsing and choosing skills by hand.
+- **Static curated collection** — your priority is browsing and choosing skills by hand.
 
 Third-party notes: git submodule tracks a recorded upstream commit and updates the working tree to match it (git-scm.com/docs/git-submodule, checked 2026-08-12). Curated collections such as anthropics/skills present skills for manual browsing and are described as demonstration and educational material — "always test skills thoroughly in your own environment before relying on them" (github.com/anthropics/skills README, checked 2026-08-12); they do not audit before install.
 
-**Where SkillRanger is not the best choice:** the bundled registry currently covers frontend skills only — a backend-only project will get few or no recommendations. Skills are instructions, not code: the host agent still does the work. And if you never install third-party content into your agent's context, you do not need an installer at all.
+**Where SkillRanger is not the best choice:** it currently ships frontend skills — backend and other directions are on the way — so a backend-only project will get few or no recommendations. Skills are instructions, not code: the host agent still does the work. And if you never install curated instructions into your agent's context, you do not need SkillRanger at all.
 
 ## How It Works
 
@@ -96,7 +105,7 @@ Repo-local setup is supported for Codex, Claude Code, Cursor, OpenCode, Gemini C
 
 ## Bundled Skills
 
-SkillRanger ships with 18 pre-audited, instruction-only frontend skills: framework reviews (Next.js App Router, React), component and Tailwind polish, visual design, UX, interaction, motion, accessibility, performance, testing strategy, Playwright debugging, release audits, and agent-context bootstrap.
+SkillRanger ships with 18 author-curated, pre-audited, instruction-only skills — frontend today, more directions on the way: framework reviews (Next.js App Router, React), component and Tailwind polish, visual design, UX, interaction, motion, accessibility, performance, testing strategy, Playwright debugging, release audits, and agent-context bootstrap.
 
 The full table of skill IDs, categories, and purposes is in [`docs/bundled-skills.md`](docs/bundled-skills.md).
 
@@ -126,6 +135,8 @@ SkillRanger runs as a stdio MCP server so a host agent can analyze projects, rec
 ```
 
 When a host model proposes skills for a task, SkillRanger validates the proposal against catalog, audit, and compatibility rules before composing the final set — a model cannot add arbitrary skills or bypass an audit gate. Host configuration for Claude Code, Cursor, and other clients: [`docs/mcp-host-config.md`](docs/mcp-host-config.md).
+
+Just tell your agent to use SkillRanger: through the MCP server it picks the best skills for your task from the audited catalog — no hunting through collections, no setup ritual.
 
 ## Documentation
 
