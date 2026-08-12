@@ -13,6 +13,7 @@ A candidate for the core library must pass every item on this checklist before i
 - It is **small enough** to stay within the run context budget alongside the existing core set.
 - It **passes registry validation and static audit** like any curated skill, with full routing metadata under the `core` domain and all seven supported target agents declared native.
 - It is **visible in the skill catalog** under the `core` domain.
+- It **declares an enforced output contract** (`outputContract.requiredReportFields` in the manifest): the concrete report fields lifecycle-v1 verification will require in `universalContracts` (ADR 0008). Choose fields that are checkable for presence, not prose quality.
 - It ships with **routed golden cases for both routing modes** (model-assisted and limited-deterministic-fallback) proving a task run includes it; verified by `pnpm eval:router`.
 
 Adding a future core skill requires no router code changes: ship the registry package under the `core` domain and it is auto-included up to `maxCoreSkills`.

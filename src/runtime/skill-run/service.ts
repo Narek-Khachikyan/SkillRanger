@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { lstat, mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { VerificationReport } from "../types.ts";
 import { createSkillRun, reduceSkillRun } from "./reducer.ts";
@@ -67,44 +68,116 @@ export const completeSkillRun = (
   input: { status: "implemented" | "failed" | "blocked"; artifacts: SkillRunArtifact[] },
 ) => store.update(runId, (run) => reduceSkillRun(run, { type: "complete-execution", ...input }));
 
+const isErrno = (error: unknown, code: string): error is NodeJS.ErrnoException => (
+  error instanceof Error && "code" in error && error.code === code
+);
+
+// ADR 0008: the server is the sole author of the verification report file. reportPath must stay
+// inside the project root (absolute paths are accepted only when they land inside it), and the
+// write walks the existing path components to reject symlink escapes, matching the router store's
+// write discipline.
+const resolveReportWriteTarget = async (projectRoot: string, reportPath: string): Promise<string> => {
+  const root = path.resolve(projectRoot);
+  if (!reportPath || reportPath.trim() === "") {
+    throw new SkillRunError("verification-blocked", "reportPath must be a non-empty project-contained path.");
+  }
+  const target = path.resolve(path.isAbsolute(reportPath) ? reportPath : path.join(root, reportPath));
+  const relative = path.relative(root, target);
+  if (relative === "" || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new SkillRunError("verification-blocked", "reportPath must stay inside the project root.");
+  }
+  const parent = path.dirname(target);
+  let current = root;
+  for (const segment of path.relative(root, parent).split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    const metadata = await lstat(current).catch((error: unknown) => {
+      if (isErrno(error, "ENOENT")) return undefined;
+      throw error;
+    });
+    if (metadata?.isSymbolicLink() || (metadata && !metadata.isDirectory())) {
+      throw new SkillRunError("verification-blocked", "reportPath passes through a symbolic link or a non-directory.");
+    }
+  }
+  return target;
+};
+
+const writeAtomicFile = async (target: string, content: string) => {
+  await mkdir(path.dirname(target), { recursive: true });
+  const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, content, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    await rename(temporary, target);
+  } finally {
+    await unlink(temporary).catch((error: unknown) => {
+      if (!isErrno(error, "ENOENT")) throw error;
+    });
+  }
+};
+
+const blockedStatusContent = (runId: string, userMessage: string) => `${JSON.stringify({
+  schemaVersion: "verification-blocked/1.0",
+  runId,
+  blockedAt: new Date().toISOString(),
+  userMessage,
+}, null, 2)}\n`;
+
 export const verifySkillRun = (
   store: SkillRunStore,
   runId: string,
   input: { reportPath: string; report: VerificationReport },
 ) => store.update(runId, async (run) => {
-  const report = validateVerificationReportForRun(run, input.report);
-  let evidenceSnapshots: VerifiedEvidenceSnapshot[] | undefined;
-  if (report.outcome === "verified") {
-    if (report.evidence.length === 0 || report.evidence.some(({ path: evidencePath }) => !evidencePath || path.isAbsolute(evidencePath))) {
-      throw new SkillRunError("verification-blocked", "Verified outcome requires readable project-contained evidence.");
-    }
-    const projectRoot = path.resolve(store.projectRoot);
-    try {
-      evidenceSnapshots = await Promise.all(report.evidence.map(async (evidence) => {
-        const relativePath = evidence.path as string;
-        const target = path.resolve(projectRoot, relativePath);
-        const relative = path.relative(projectRoot, target);
-        if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-          throw new Error("outside project root");
-        }
-        const bytes = await readContainedFile({ projectRoot, target, phase: "verification" });
-        return {
-          kind: evidence.kind,
-          path: relativePath.split(path.sep).join("/"),
-          description: evidence.description,
-          byteLength: bytes.bytes.byteLength,
-          sha256: `sha256:${createHash("sha256").update(bytes.bytes).digest("hex")}`,
-        };
-      }));
-    } catch (error) {
-      if (error instanceof SkillRunError) throw error;
-      if (error instanceof ContainedFileReadError || error instanceof Error) {
+  // The reducer's record-verification transition requires an implemented run; assert it up front so
+  // state errors keep their precedence over report validation and no report file is written.
+  if (run.state !== "implemented") {
+    throw new SkillRunError("invalid-transition", `Cannot apply record-verification while skill run is ${run.state}.`);
+  }
+  const projectRoot = path.resolve(store.projectRoot);
+  // A reportPath that escapes the project root blocks verification; no status file can be written
+  // at an unauthorized target, so the block surfaces without a file write.
+  const reportTarget = await resolveReportWriteTarget(projectRoot, input.reportPath);
+  try {
+    const report = validateVerificationReportForRun(run, input.report);
+    let evidenceSnapshots: VerifiedEvidenceSnapshot[] | undefined;
+    if (report.outcome === "verified") {
+      if (report.evidence.length === 0 || report.evidence.some(({ path: evidencePath }) => !evidencePath || path.isAbsolute(evidencePath))) {
         throw new SkillRunError("verification-blocked", "Verified outcome requires readable project-contained evidence.");
       }
-      throw error;
+      try {
+        evidenceSnapshots = await Promise.all(report.evidence.map(async (evidence) => {
+          const relativePath = evidence.path as string;
+          const target = path.resolve(projectRoot, relativePath);
+          const relative = path.relative(projectRoot, target);
+          if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+            throw new Error("outside project root");
+          }
+          const bytes = await readContainedFile({ projectRoot, target, phase: "verification" });
+          return {
+            kind: evidence.kind,
+            path: relativePath.split(path.sep).join("/"),
+            description: evidence.description,
+            byteLength: bytes.bytes.byteLength,
+            sha256: `sha256:${createHash("sha256").update(bytes.bytes).digest("hex")}`,
+          };
+        }));
+      } catch (error) {
+        if (error instanceof SkillRunError) throw error;
+        if (error instanceof ContainedFileReadError || error instanceof Error) {
+          throw new SkillRunError("verification-blocked", "Verified outcome requires readable project-contained evidence.");
+        }
+        throw error;
+      }
     }
+    const canonical = canonicalizeVerificationReport(report);
+    const reportSha256 = `sha256:${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
+    // ADR 0008: the server writes the canonical report file before recording verification, so the
+    // file at reportPath is always server-authored and its digest matches the persisted reportSha256.
+    await writeAtomicFile(reportTarget, `${canonical}\n`);
+    return reduceSkillRun(run, { type: "record-verification", reportPath: input.reportPath, reportSha256, report, evidenceSnapshots });
+  } catch (error) {
+    if (error instanceof SkillRunError && error.code === "verification-blocked") {
+      // The canonical status record at reportPath replaces any host-authored outcome claim.
+      await writeAtomicFile(reportTarget, blockedStatusContent(runId, error.message)).catch(() => undefined);
+    }
+    throw error;
   }
-  const canonical = canonicalizeVerificationReport(report);
-  const reportSha256 = `sha256:${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
-  return reduceSkillRun(run, { type: "record-verification", reportPath: input.reportPath, reportSha256, report, evidenceSnapshots });
 });

@@ -54,7 +54,18 @@
           }
         },
         "verificationRequired": { "type": "boolean" },
-        "artifacts": { "type": "object" }
+        "artifacts": {
+          "type": "object",
+          "properties": {
+            "coreOutputContracts": {
+              "type": "object",
+              "description": "Always-on guidance skill output contract requirements: skillId -> required report field ids.",
+              "additionalProperties": {
+                "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
       }
     },
     "recommendations": { "type": "array", "items": { "$ref": "#/$defs/skill" } },
@@ -171,7 +182,17 @@
           "properties": { "hardPassed": { "type": "boolean" }, "criticalFindings": { "type": "integer", "minimum": 0 }, "highFindings": { "type": "integer", "minimum": 0 } }
         },
         "evidence": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
-        "residualRisks": { "type": "array", "items": { "type": "string" } }
+        "residualRisks": { "type": "array", "items": { "type": "string" } },
+        "universalContracts": {
+          "type": "object",
+          "description": "Always-on guidance skill output contracts: skillId -> report field -> non-empty statements.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array", "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
       }
     }
   }

@@ -182,6 +182,10 @@ _Avoid_: default selection, automatic recommendation, side-effect of routing
 A core skill class that carries no execution contract, input schema, gates, or verification evidence. It is delivered through router-level mandatory reads only and is excluded from the strict runtime's contract and verification machinery, so its presence can never make a run unverifiable.
 _Avoid_: contract-less failure, unverified skill, fake-contract skill
 
+**Enforced output contract**:
+A manifest-declared set of report fields (`outputContract.requiredReportFields`) that lifecycle-v1 verification requires in the report's `universalContracts` section whenever the run selected the declaring skill (ADR 0008). Missing or empty fields block verification; the server writes the canonical report file.
+_Avoid_: advisory output contract, prose-only contract, unenforced checklist
+
 **Core domain pack**:
 The minimal `core` domain pack (`domains/core/`) that owns core skills and publishes a minimal `domain:core` routing vocabulary; it contributes no deterministic recall baseline, so it never interferes with task routing.
 _Avoid_: routing domain, task domain, core:core vocabulary

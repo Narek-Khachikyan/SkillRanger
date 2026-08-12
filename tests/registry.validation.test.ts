@@ -262,8 +262,37 @@ test("skill router metadata rejects unknown fields, normalized duplicates, confl
   assert.ok(paths.includes("dependencies"));
 });
 
-test("manifest validation accepts optional evaluation metadata statuses", () => {
-  for (const status of [
+test("manifest validation accepts output contracts and rejects malformed ones", () => {
+  const accepted = validateSkillManifest({
+    ...validManifest("core.guidance", "guidance"),
+    outputContract: { requiredReportFields: ["safetyNotes", "deliberatelyNotDone"] },
+  });
+  assert.deepEqual(accepted.filter((issue) => issue.path.startsWith("outputContract")), []);
+
+  const rejectedCases: Array<{ outputContract: unknown; path: string }> = [
+    { outputContract: { requiredReportFields: [] }, path: "outputContract.requiredReportFields" },
+    { outputContract: { requiredReportFields: ["Bad Field"] }, path: "outputContract.requiredReportFields" },
+    { outputContract: { requiredReportFields: ["dup", "dup"] }, path: "outputContract.requiredReportFields" },
+    { outputContract: { requiredReportFields: ["ok"], unexpected: true }, path: "outputContract.unexpected" },
+    { outputContract: "nope", path: "outputContract" },
+  ];
+  for (const { outputContract, path: issuePath } of rejectedCases) {
+    const issues = validateSkillManifest({ ...validManifest("core.guidance", "guidance"), outputContract });
+    assert.ok(issues.some((issue) => issue.path === issuePath), `expected ${issuePath} for ${JSON.stringify(outputContract)}`);
+  }
+});
+
+test("bundled core guidance skills declare enforced output contracts", async () => {
+  const registry = await loadLocalRegistry(undefined);
+  const coreSkills = registry.filter((skill) => skill.manifest.id.startsWith("core."));
+  assert.ok(coreSkills.length >= 2);
+  for (const skill of coreSkills) {
+    const fields = skill.manifest.outputContract?.requiredReportFields;
+    assert.ok(fields && fields.length > 0, `${skill.manifest.id} must declare outputContract.requiredReportFields`);
+  }
+});
+
+test("manifest validation accepts optional evaluation metadata statuses", () => {  for (const status of [
     "none",
     "trigger-eval",
     "task-eval",

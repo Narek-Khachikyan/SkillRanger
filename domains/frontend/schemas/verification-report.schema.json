@@ -15,7 +15,18 @@
     "findings": { "type": "array", "items": { "type": "object" } },
     "gates": { "type": "object" },
     "evidence": { "type": "array", "items": { "type": "object" } },
-    "residualRisks": { "type": "array", "items": { "type": "string" } }
+    "residualRisks": { "type": "array", "items": { "type": "string" } },
+    "universalContracts": {
+      "type": "object",
+      "description": "Always-on guidance skill output contracts: skillId -> report field -> non-empty statements. Required for every skill the run's policy declares an output contract for.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
   },
   "additionalProperties": false
 }

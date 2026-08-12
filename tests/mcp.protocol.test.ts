@@ -436,10 +436,11 @@ test("MCP tools publish complete effect and confirmation metadata", async () => 
     "exact-install-plan": ["install_skill"],
     "run-state-write": [
       "start_skill_run", "record_skill_read", "resolve_skill_run_clarifications",
-      "begin_skill_run_execution", "complete_skill_run", "verify_skill_run",
+      "begin_skill_run_execution", "complete_skill_run",
       "read_next_skill_chunk", "begin_skill_step", "add_skill_evidence", "complete_skill_step",
        "verify_skill", "finalize_skill_run", "prepare_task", "read_run_skill_file",
     ],
+    "run-state-and-contained-write": ["verify_skill_run"],
     "command-and-artifact-write": ["capture_ui_evidence"],
   } as const;
   const expectedPresets = {
@@ -452,6 +453,10 @@ test("MCP tools publish complete effect and confirmation metadata", async () => 
       confirmation: "required",
     },
     "run-state-write": {
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      confirmation: "host-managed",
+    },
+    "run-state-and-contained-write": {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       confirmation: "host-managed",
     },

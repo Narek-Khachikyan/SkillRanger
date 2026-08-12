@@ -394,15 +394,15 @@ export const runToolDefinitions: McpToolDefinition[] = [
     },
   },
   {
-    ...mcpToolEffects.runStateWrite,
+    ...mcpToolEffects.runStateAndContainedWrite,
     name: "verify_skill_run",
     title: "Verify Skill Run",
-    description: "Lifecycle-v1 only. Record a JSON-native verification report for an implemented lifecycle-v1 run. A verified outcome requires real project-contained evidence and mandatory skill content delivered by the SkillRanger router. A strict-v2 run is rejected; use verify_skill instead.",
+    description: "Lifecycle-v1 only. Record a JSON-native verification report for an implemented lifecycle-v1 run. A verified outcome requires real project-contained evidence, mandatory skill content delivered by the SkillRanger router, and satisfied always-on guidance output contracts: the report's universalContracts section must supply every required field declared by the run's core (universal) skills or verification is blocked. reportPath must stay inside the project root; the server writes the canonical report file there on success and a verification-blocked status record on block, so never author report outcome files yourself. A strict-v2 run is rejected; use verify_skill instead.",
     inputSchema: {
       type: "object",
       properties: {
         ...runIdProperties,
-        reportPath: { type: "string" },
+        reportPath: { type: "string", description: "Project-contained path the server writes the canonical verification report (or blocked status record) to." },
         report: { type: "object" },
       },
       required: ["runId", "reportPath", "report"],

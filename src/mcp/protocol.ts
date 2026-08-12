@@ -12,6 +12,7 @@ import {
   managedGuidanceBoundary,
   proposalIntegrityGuidance,
   setupBoundaryGuidance,
+  universalOutputContractGuidance,
 } from "../host-guidance.ts";
 
 const protocolVersion = "2025-06-18";
@@ -101,6 +102,7 @@ export const handleJsonRpcRequest = async (request: JsonRpcRequest): Promise<Jso
         "For strict-v2, use read_next_skill_chunk, begin_skill_step, add_skill_evidence, complete_skill_step, verify_skill, and finalize_skill_run; the lifecycle-v1 transition tools reject a strict-v2 run, so never mix the two families on one run.",
         "For material frontend work in strict mode, complete the returned frontend design workflow, capture real browser evidence with capture_ui_evidence, run a compare_design_variants critic exchange with host-attested actor separation, recheck after any repair, and call verify_visual_result.",
         "Read persisted state of either runtime with inspect_skill_run.",
+        universalOutputContractGuidance,
         "Never report that SkillRanger or strict visual verification passed unless the persisted run is verified with a passed verification status; otherwise report the exact failed or incomplete state.",
         "A finalize_skill_run that returns the run-blocked error means no verified result exists: report its userMessage and blockedSkills verbatim and do not describe the run as passed, processed, or complete.",
         "For project work, use repo scope unless the user explicitly requests user scope.",

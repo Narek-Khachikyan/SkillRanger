@@ -53,6 +53,8 @@ Raw intent is private by default. The run stores a canonical SHA-256 digest and 
 
 Only `run:verify`/`verify_skill_run` can produce a SkillRanger `verified` state, and only from an implemented run with a structurally valid report, passed hard gates, zero critical findings, and recorded evidence. Missing evidence or capabilities produces `implemented-unverified` or a verification error. External agents may bypass SkillRanger and edit a project directly, but they cannot receive a SkillRanger `verified` outcome without evidence.
 
+Always-on core (universal) skill output contracts are enforced at this gate (ADR 0008): when the run policy declares `coreOutputContracts`, the report must satisfy every required field in its `universalContracts` section regardless of the claimed outcome, or verification blocks naming the skill and the missing fields. The server is the sole author of the report file: `reportPath` must stay inside the project root, and `verify_skill_run` writes the canonical report JSON on success (digest-matching the persisted `reportSha256`) or a `verification-blocked/1.0` status record on block. Hosts must not author report outcome files; verification status is reported from `inspect_skill_run`.
+
 CLI and MCP reduce the same lifecycle events into the same canonical run artifact. The equivalent MCP sequence is `start_skill_run`, `record_skill_read`, `resolve_skill_run_clarifications` when required, `begin_skill_run_execution`, `complete_skill_run`, `verify_skill_run`, and `inspect_skill_run`. Given equivalent inputs, normalized artifacts and the verification report SHA-256 digest must match across both surfaces.
 
 ## Strict v2 preview

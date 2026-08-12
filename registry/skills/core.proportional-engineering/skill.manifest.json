@@ -25,7 +25,7 @@
     "registry": "local",
     "path": "./registry/skills/core.proportional-engineering"
   },
-  "version": "0.1.0",
+  "version": "0.1.1",
   "riskLevel": "low",
   "permissions": {
     "filesystem": [
@@ -118,6 +118,14 @@
   },
   "conflictsWith": [],
   "supersedes": [],
+  "outputContract": {
+    "requiredReportFields": [
+      "done",
+      "deliberatelyNotDone",
+      "expansions",
+      "verificationSteps"
+    ]
+  },
   "maintainer": {
     "name": "local-curated",
     "trustTier": "curated"

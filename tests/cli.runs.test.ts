@@ -101,7 +101,7 @@ test("CLI completes and verifies a run while storing raw intent only by opt-in",
   const projectRoot = path.join(tmpRoot, "project");
   const answersPath = path.join(tmpRoot, "answers.json");
   const briefPath = path.join(tmpRoot, "brief.json");
-  const verificationPath = path.join(tmpRoot, "verification.json");
+  const verificationPath = path.join(projectRoot, "verification.json");
   await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
   await mkdir(path.join(projectRoot, "artifacts"), { recursive: true });
   await writeFile(path.join(projectRoot, "artifacts/desktop.png"), "pixels");
@@ -230,7 +230,7 @@ test("CLI completes and verifies a run while storing raw intent only by opt-in",
 test("CLI rejects verification reports whose evidence, domain, gates, or hard findings are inconsistent", async () => {
   const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-cli-run-reports-"));
   const projectRoot = path.join(tmpRoot, "project");
-  const reportsRoot = path.join(tmpRoot, "reports");
+  const reportsRoot = path.join(projectRoot, "reports");
   await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
   await mkdir(reportsRoot);
 

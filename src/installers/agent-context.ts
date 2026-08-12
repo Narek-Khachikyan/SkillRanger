@@ -12,6 +12,7 @@ import {
   managedGuidanceBoundary,
   proposalIntegrityGuidance,
   setupBoundaryGuidance,
+  universalOutputContractGuidance,
 } from "../host-guidance.ts";
 
 const startMarker = "<!-- SKILLRANGER_START -->";
@@ -48,6 +49,7 @@ export const renderSkillRangerAgentBlock = () => [
   "12. Do not install skills automatically or execute skill package scripts.",
   "13. Do not claim `verified` unless SkillRanger runtime verification succeeds.",
   "13a. A `run-blocked` error from `finalize_skill_run` means no verified result exists. Report its `userMessage` and `blockedSkills` verbatim; never describe such a run as passed, processed, or complete.",
+  `14. ${universalOutputContractGuidance}`,
   endMarker,
 ].join("\n");
 

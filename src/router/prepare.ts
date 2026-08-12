@@ -267,6 +267,7 @@ const createLifecyclePayload = async (input: {
   profile: PrepareTaskCommon["taskProfile"];
   selections: PrepareTaskResult & { status: "prepared" };
   rawIntentPersistence?: boolean;
+  coreOutputContracts: Record<string, string[]>;
 }): Promise<{ payload: SkillRun; runtimeClarification?: RuntimeClarificationSummary }> => {
   const pack = getDomainPack(input.domain);
   const recommendations = recommendationsFor(input.selections.selections);
@@ -286,19 +287,33 @@ const createLifecyclePayload = async (input: {
   }));
   const selectedSkillIds = new Set(selectedSkills.map(({ skillId }) => skillId));
   assertRequiredPhaseOwnersSelected(policy, selectedSkillIds);
+  // ADR 0008: always-on guidance skill output contracts travel inside the persisted policy, so the
+  // lifecycle verification gate needs no registry access to enforce them.
+  const basePolicy = policy ?? {
+    lifecycleRequired: true,
+    mandatorySkillIds: selectedSkills.map(({ skillId }) => skillId),
+    clarification: { required: false, questions: [] },
+    verificationRequired: false,
+  };
+  const contractedPolicy = Object.keys(input.coreOutputContracts).length === 0
+    ? basePolicy
+    : {
+        ...basePolicy,
+        artifacts: { ...(basePolicy.artifacts ?? {}), coreOutputContracts: input.coreOutputContracts },
+      };
   const created = createSkillRun({
     runId: input.runtimeRunId,
     domain: input.domain,
     targetAgent: input.targetAgent,
     locale: input.profile.locale,
     intent: { sha256: digest(input.profile.normalizedGoal), normalizedGoal: input.profile.normalizedGoal, ...(input.rawIntentPersistence ? { raw: input.rawPrompt ?? input.prompt } : {}) },
-    policy: policy ?? { lifecycleRequired: true, mandatorySkillIds: selectedSkills.map(({ skillId }) => skillId), clarification: { required: false, questions: [] }, verificationRequired: false },
+    policy: contractedPolicy,
   });
   return {
     payload: reduceSkillRun(created, { type: "select-skills", skills: selectedSkills }),
-    ...(policy?.clarification.required ? {
+    ...(contractedPolicy.clarification.required ? {
       runtimeClarification: {
-        questions: policy.clarification.questions,
+        questions: contractedPolicy.clarification.questions,
       },
     } : {}),
   };
@@ -842,7 +857,14 @@ export const prepareTask = async (
       return { ...resultCommon(resultDomains, outcome), ...outcome };
     }
   } else {
-    const lifecycle = await createLifecyclePayload({ runtimeRunId, domain: composedPrimaryDomain, targetAgent, prompt: analysis.profile.normalizedGoal, rawPrompt: input.prompt, policyIntent: parsed.normalizedIntent, profile: analysis.profile, selections: provisionalBase, rawIntentPersistence: input.rawIntentPersistence === "explicitly-authorized" });
+    // ADR 0008: every selected skill that declares an output contract contributes its required
+    // report fields; today only the always-on core (universal) skills declare one.
+    const coreOutputContracts: Record<string, string[]> = {};
+    for (const item of selectedMetadata) {
+      const fields = item.skill.manifest.outputContract?.requiredReportFields;
+      if (fields && fields.length > 0) coreOutputContracts[item.id] = fields;
+    }
+    const lifecycle = await createLifecyclePayload({ runtimeRunId, domain: composedPrimaryDomain, targetAgent, prompt: analysis.profile.normalizedGoal, rawPrompt: input.prompt, policyIntent: parsed.normalizedIntent, profile: analysis.profile, selections: provisionalBase, rawIntentPersistence: input.rawIntentPersistence === "explicitly-authorized", coreOutputContracts });
     runtimePayload = lifecycle.payload;
     runtimeClarification = lifecycle.runtimeClarification;
   }
