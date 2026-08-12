@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "routing-vocabulary/1.0",
+  "owner": {
+    "kind": "domain",
+    "id": "core"
+  },
+  "entries": [
+    {
+      "kind": "intent",
+      "id": "agent-behavior",
+      "locale": "en",
+      "phrases": [
+        "agent behavior",
+        "agent behaviour",
+        "behavioral guidance",
+        "always-on guidance",
+        "universal safety rules",
+        "proportional engineering rules"
+      ]
+    }
+  ]
+}

@@ -707,5 +707,43 @@
         }
       }
     }
+,
+    {
+      "id": "core-skills-always-included",
+      "source": "implicit-intent",
+      "vocabularyMiss": true,
+      "prompt": "Make the dashboard layout feel more polished. @skillranger",
+      "strict": false,
+      "capabilities": ["filesystem", "terminal"],
+      "proposalMode": "current",
+      "proposal": {
+        "schemaVersion": "routing-proposal/1.0",
+        "catalogDigest": "$catalogDigest",
+        "catalogReceipt": "$catalogReceipt",
+        "interpretation": {
+          "domains": ["frontend"],
+          "actions": ["modify"],
+          "artifactTypes": ["web-interface"],
+          "intentTags": ["visual-design"],
+          "technologyTags": ["react"],
+          "qualityGoals": ["visual-quality"]
+        },
+        "nominations": [
+          {
+            "skillId": "frontend.visual-design-polish",
+            "role": "primary",
+            "confidence": 0.9,
+            "evidenceText": "Make the dashboard layout feel more polished"
+          }
+        ]
+      },
+      "expected": {
+        "status": "prepared",
+        "primarySkillId": "frontend.visual-design-polish",
+        "allowedSkillIds": ["frontend.visual-design-polish", "frontend.motion-audit"],
+        "forbiddenSkillIds": [],
+        "requiredSkillIds": ["core.proportional-engineering", "core.universal-safety"]
+      }
+    }
   ]
 }

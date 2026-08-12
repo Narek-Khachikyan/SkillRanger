@@ -26,6 +26,16 @@
     "capabilities": ["filesystem", "browser", "screenshots"],
     "expected": { "status": "prepared", "domainIds": ["frontend"] }
   },
+
+  {
+    "id": "frontend-core-skills",
+    "prompt": "Please make the page delightful. @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": ["filesystem", "terminal"],
+    "expected": { "status": "prepared", "domainIds": ["frontend"], "requiredSkillIds": ["core.proportional-engineering", "core.universal-safety"] }
+  },
   {
     "id": "backend-auth-synthetic",
     "prompt": "Исправь refresh token flow в NestJS и добавь integration tests. @skillranger",

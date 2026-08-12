@@ -34,6 +34,7 @@ export const routerEvalThresholds = {
   naturalLanguagePrimarySkillAccuracy: 0.9,
   requiredCompanionRecall: 1,
   forbiddenSelectionRate: 0,
+  requiredSkillInclusion: 1,
   falsePositiveCompanionRate: 0.1,
   sameDomainDecompositionErrors: 0,
   crossDomainDecompositionCorrectness: 1,
@@ -252,7 +253,9 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
     routingContext: metadata.routingContext, boundary,
   });
   const selected = composed.status === "prepared" ? composed.composed.all : [];
-  const companions = selected.filter(({ role }) => role !== "primary");
+  // Agent-context selections (core universal skills included) are always-on
+  // guidance, not companions; they never count toward companion usefulness.
+  const companions = selected.filter(({ role }) => role !== "primary" && role !== "agent-context");
   const expectedDomains = new Set(input.expected.domainIds);
   const usefulCompanions = companions.filter(({ skill, reasons }) =>
     skill.domains.some((id) => expectedDomains.has(id)) || reasons.some((reason) => !reason.startsWith("domain-match:"))
@@ -286,6 +289,11 @@ const summarize = (cases: RouterGoldenCase[], results: Awaited<ReturnType<typeof
   const predictedDomains = results.reduce((sum, result) => sum + result.domainIds.length, 0);
   const expectedDomainCount = cases.reduce((sum, input) => sum + input.expected.domainIds.length, 0);
   const preparedIndexes = cases.flatMap((input, index) => input.expected.status === "prepared" && input.expected.domainIds.length > 0 ? [index] : []);
+  const requiredSkillInclusion = (() => {
+    const declaring = cases.flatMap((input, index) => (input.expected.requiredSkillIds ?? []).length > 0 ? [index] : []);
+    if (declaring.length === 0) return 1;
+    return Number((declaring.filter((index) => (cases[index].expected.requiredSkillIds ?? []).every((skillId) => results[index].selectedSkillIds.includes(skillId))).length / declaring.length).toFixed(3));
+  })();
   const categoryAccuracy = (status: RouterGoldenCase["expected"]["status"], predicate: (actual: string) => boolean = (actual) => actual === status) => {
     const indexes = cases.flatMap((input, index) => input.expected.status === status ? [index] : []);
     return indexes.length === 0 ? 1 : indexes.filter((index) => predicate(results[index].status)).length / indexes.length;
@@ -307,6 +315,7 @@ const summarize = (cases: RouterGoldenCase[], results: Awaited<ReturnType<typeof
     noMatchCorrectness: Number(categoryAccuracy("no_matching_skills").toFixed(3)),
     clarificationCorrectness: Number(categoryAccuracy("clarification_required").toFixed(3)),
     decompositionCorrectness: Number(categoryAccuracy("decomposition_required").toFixed(3)),
+    requiredSkillInclusion,
     strictEligibilityCorrectness: strictIndexes.length === 0 ? 1 : Number((strictIndexes.filter((index) => results[index].status === cases[index].expected.status).length / strictIndexes.length).toFixed(3)),
     averageSelectedSkillCount: Number((selectedSkills / Math.max(cases.length, 1)).toFixed(3)),
     instructionByteCost: results.reduce((sum, result) => sum + result.instructionBytes, 0),
@@ -385,6 +394,7 @@ const deterministicRouterGatePassed = (
   metrics.clarificationCorrectness >= routerEvalThresholds.clarificationCorrectness &&
   metrics.decompositionCorrectness >= routerEvalThresholds.decompositionCorrectness &&
   metrics.strictEligibilityCorrectness >= routerEvalThresholds.strictEligibilityCorrectness &&
+  metrics.requiredSkillInclusion >= routerEvalThresholds.requiredSkillInclusion &&
   naturalLanguageMetrics.naturalLanguageSignalRecall >= routerEvalThresholds.naturalLanguageSignalRecall &&
   naturalLanguageMetrics.naturalLanguagePrimarySkillAccuracy >= routerEvalThresholds.naturalLanguagePrimarySkillAccuracy &&
   naturalLanguageMetrics.requiredCompanionRecall >= routerEvalThresholds.requiredCompanionRecall &&

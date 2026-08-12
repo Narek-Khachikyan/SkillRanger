@@ -182,6 +182,7 @@ test("router golden fixture covers every Task 1 scenario", async () => {
     "frontend-create",
     "frontend-review",
     "frontend-accessibility-fix",
+    "frontend-core-skills",
      "backend-auth-synthetic",
      "database-optimization-synthetic",
      "mobile-feature-synthetic",

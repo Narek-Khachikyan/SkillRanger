@@ -1,5 +1,6 @@
 import type { ProjectFingerprint } from "../types.ts";
 import type { RoutingContext } from "./context.ts";
+import { isCoreDomainSkill } from "./metadata.ts";
 import type { CanonicalRequirement } from "./requirements.ts";
 import type {
   DomainCandidate,
@@ -51,6 +52,7 @@ export type RouterLimits = {
   maxTaskCompanions: number;
   maxVerificationSkills: number;
   maxAgentContextSkills: number;
+  maxCoreSkills: number;
   maxTotalSelectedSkills: number;
   maxInstructionBytes: number;
   maxAdditionalReadBytes: number;
@@ -64,6 +66,7 @@ export const defaultRouterLimits: RouterLimits = {
   maxTaskCompanions: 2,
   maxVerificationSkills: 2,
   maxAgentContextSkills: 1,
+  maxCoreSkills: 3,
   maxTotalSelectedSkills: 7,
   maxInstructionBytes: 120_000,
   maxAdditionalReadBytes: 80_000,
@@ -246,6 +249,9 @@ const strictMissing = (selected: RouterCandidate[], input: ComposeSkillSetInput)
   const missing: Array<{ skillId: string; requirement: "installed-skill" | "lockfile-match" | "strict-contract-v2" | "skill-input" | "capability" }> = [];
   for (const candidate of selected) {
     const skill = candidate.skill;
+    // Core (universal) skills are guidance-only and are excluded from the strict
+    // runtime's contract machinery; they never create strict requirements.
+    if (isCoreDomainSkill(skill.domains)) continue;
     if (!installed.has(canonical(skill.id)) || skill.installed === false || skill.source !== "installed") missing.push({ skillId: skill.id, requirement: "installed-skill" });
     if (skill.lockfileMatch !== true || skill.installedFileSetMatch !== true) missing.push({ skillId: skill.id, requirement: "lockfile-match" });
     if (skill.strictContract !== "valid" || !skill.contractMustRead?.length) missing.push({ skillId: skill.id, requirement: "strict-contract-v2" });
@@ -480,7 +486,7 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
     }
     for (const candidate of optional("agent-context").slice(0, limits.maxAgentContextSkills)) add(candidate, "agent-context");
     const protectedIds = new Set([primary.skill.id, ...closure.closure.map(({ skill }) => skill.id)]);
-    const selected = superseded(dedupedRequired, primary.skill.id);
+    let selected = superseded(dedupedRequired, primary.skill.id);
     const selectedIdsAfterSupersession = new Set(selected.map(({ skill }) => canonical(skill.id)));
     for (const candidate of dedupedRequired) {
       if (!selectedIdsAfterSupersession.has(canonical(candidate.skill.id)) && nominatedRoles?.has(canonical(candidate.skill.id))) {
@@ -511,6 +517,42 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
       if (requiredPrimarySkillId === canonical(primary.skill.id)) return explicitPrimaryFailure("skill-limit");
       continue;
     }
+    // Core (universal) skills are always-on, domain-agnostic guidance: they are
+    // added to every prepared run up to maxCoreSkills, never compete for the
+    // agent-context slot or the total-skill cap, and are protected from
+    // context-budget eviction. A symmetric conflict with a selected task skill
+    // rejects that task skill; a conflicting required primary fails explicitly.
+    const coreSkills = input.skills
+      .filter((skill) => isCoreDomainSkill(skill.domains))
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .slice(0, limits.maxCoreSkills);
+    for (const core of coreSkills) {
+      const conflicting = selected.find(({ skill }) => symmetricConflict(skill, core));
+      if (!conflicting) continue;
+      retrieved.rejections.push({ skillId: conflicting.skill.id, reason: "skill-conflict" });
+      if (requiredPrimarySkillId === canonical(conflicting.skill.id)) return explicitPrimaryFailure("skill-conflict");
+      // A non-required primary that conflicts with a core skill is rejected like
+      // any other primary conflict: the next primary candidate is considered.
+      if (conflicting.role === "primary") continue primaryLoop;
+      const conflictingIndex = selected.findIndex(({ skill }) => canonical(skill.id) === canonical(conflicting.skill.id));
+      if (conflictingIndex >= 0) selected.splice(conflictingIndex, 1);
+    }
+    const coreSelections: SelectedRouterCandidate[] = coreSkills
+      .filter((skill) => !selected.some(({ skill: selectedSkill }) => canonical(selectedSkill.id) === canonical(skill.id)))
+      .map((skill) => ({
+        skill,
+        score: 0,
+        eligibleRoles: ["agent-context"] as const,
+        reasons: ["core-always-included"],
+        missingCapabilities: [],
+        missingOptionalCapabilities: [],
+        verificationStatus: "guidance-only" as const,
+        role: "agent-context" as const,
+      }));
+    // Core skills are placed first in the selection order, which makes them the
+    // first router-level mandatory reads for the prepared run.
+    selected = [...coreSelections, ...selected];
+    for (const core of coreSelections) protectedIds.add(core.skill.id);
     let requiredBytes = selected.reduce((sum, candidate) => sum + (candidate.skill.instructionBytes ?? 0), 0);
     while (requiredBytes > limits.maxInstructionBytes && removeWeakest("context-budget-exceeded")) {
       requiredBytes = selected.reduce((sum, candidate) => sum + (candidate.skill.instructionBytes ?? 0), 0);

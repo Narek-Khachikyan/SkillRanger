@@ -10,7 +10,7 @@
     "router": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "strictByDefault", "maxSelectedRisk", "maxEnvironmentSkills", "maxTaskCompanions", "maxVerificationSkills", "maxAgentContextSkills", "maxTotalSelectedSkills", "maxInstructionBytes", "maxAdditionalReadBytes", "maxSingleFileBytes", "maxIntentBytes"],
+      "required": ["enabled", "strictByDefault", "maxSelectedRisk", "maxEnvironmentSkills", "maxTaskCompanions", "maxVerificationSkills", "maxAgentContextSkills", "maxCoreSkills", "maxTotalSelectedSkills", "maxInstructionBytes", "maxAdditionalReadBytes", "maxSingleFileBytes", "maxIntentBytes"],
       "properties": {
         "enabled": { "type": "boolean" },
         "strictByDefault": { "type": "boolean" },
@@ -19,6 +19,7 @@
         "maxTaskCompanions": { "type": "integer", "minimum": 0, "maximum": 16 },
         "maxVerificationSkills": { "type": "integer", "minimum": 0, "maximum": 16 },
         "maxAgentContextSkills": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "maxCoreSkills": { "type": "integer", "minimum": 0, "maximum": 4 },
         "maxTotalSelectedSkills": { "type": "integer", "minimum": 1, "maximum": 32 },
         "maxInstructionBytes": { "type": "integer", "minimum": 1, "maximum": 10000000 },
         "maxAdditionalReadBytes": { "type": "integer", "minimum": 0, "maximum": 10000000 },

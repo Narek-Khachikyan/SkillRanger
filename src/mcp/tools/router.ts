@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { isCoreDomainSkill } from "../../router/metadata.ts";
 import { createRouterReader, createRouterRuntimeStore, prepareTask, RouterPrepareError, routingProposalLimits } from "../../router/index.ts";
 import type { PrepareTaskCoreInput, ReadRunSkillFileInput } from "../../router/types.ts";
 import { RouterReaderError } from "../../router/reader.ts";
@@ -217,7 +218,13 @@ const read: McpToolHandler = async (args) => {
       }
       let next = existing as Awaited<ReturnType<StrictSkillRunStore["read"]>>;
       const ledger = next.skillLedgers.find(({ skillId: id }) => id === skillId);
-      if (!ledger) throw new RouterStoreError("run-integrity", `Unknown strict skill: ${skillId}`);
+      // Core (universal) skills are guidance-only and never enter the strict
+      // runtime's ledgers; their completed router-level reads need no sync.
+      const isCoreSkill = run.selections.agentContext.some(({ skillId: id, domains }) => id === skillId && isCoreDomainSkill(domains));
+      if (!ledger) {
+        if (isCoreSkill) return { runtime, runtimePayload: next, applyRuntime: async () => {} };
+        throw new RouterStoreError("run-integrity", `Unknown strict skill: ${skillId}`);
+      }
       while (next.skillLedgers.find(({ skillId: id }) => id === skillId)?.readReceipts.length
         !== next.skillLedgers.find(({ skillId: id }) => id === skillId)?.contentChunks.length) {
         next = readNextStrictChunk(next, skillId).run;

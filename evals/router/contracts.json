@@ -1,8 +1,10 @@
 {
   "schemaVersion": "router-eval-contracts/1.0",
   "catalog": {
-    "expectedDomainIds": ["frontend"],
+    "expectedDomainIds": ["core", "frontend"],
     "expectedSkillIds": [
+      "core.proportional-engineering",
+      "core.universal-safety",
       "frontend.accessibility-review",
       "frontend.agents-md-bootstrap",
       "frontend.audit",

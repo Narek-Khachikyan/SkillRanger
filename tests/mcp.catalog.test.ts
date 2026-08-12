@@ -66,7 +66,7 @@ test("MCP exposes an explicitly activated, read-only skill catalog", async () =>
   const first = await page({ maxItems: 2, maxBytes: 100_000 });
   assert.equal(first.schemaVersion, "skill-catalog/1.0");
   assert.match(first.catalogDigest, /^sha256:[a-f0-9]{64}$/);
-  assert.deepEqual(first.domains.map(({ domainId }) => domainId), ["frontend"]);
+  assert.deepEqual(first.domains.map(({ domainId }) => domainId), ["core", "frontend"]);
   assert.equal(first.complete, false);
   assert.equal(first.skills.length, 2);
   assert.equal(first.catalogReceipt, undefined);
@@ -86,12 +86,15 @@ test("MCP exposes an explicitly activated, read-only skill catalog", async () =>
   const skills = pages.flatMap(({ skills: entries }) => entries);
   assert.equal(pages.at(-1)?.complete, true);
   assert.match(pages.at(-1)?.catalogReceipt ?? "", /^catalog-receipt\./);
-  assert.equal(skills[0]?.skillId, "frontend.accessibility-review");
+  assert.equal(skills[0]?.skillId, "core.proportional-engineering");
+  assert.equal(skills[1]?.skillId, "core.universal-safety");
   assert.equal(skills.at(-1)?.skillId, "frontend.visual-design-polish");
   assert.equal(new Set(skills.map(({ skillId }) => skillId)).size, skills.length);
-  assert.equal(skills.length, 18);
+  assert.equal(skills.length, 20);
   assert.ok(skills.every(({ domains, roles, actions, requiredCapabilities }) =>
     domains.length > 0 && roles.length > 0 && actions.length > 0 && requiredCapabilities.length > 0));
+  assert.ok(skills.filter(({ domains }) => domains.includes("core")).map(({ skillId }) => skillId).every((skillId) =>
+    ["core.proportional-engineering", "core.universal-safety"].includes(skillId)));
 });
 
 test("catalog continuation requires the current digest", async () => {

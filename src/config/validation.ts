@@ -19,6 +19,7 @@ const routerKeys = [
   "maxTaskCompanions",
   "maxVerificationSkills",
   "maxAgentContextSkills",
+  "maxCoreSkills",
   "maxTotalSelectedSkills",
   "maxInstructionBytes",
   "maxAdditionalReadBytes",
@@ -73,6 +74,7 @@ export const validateRouterConfig = (input: unknown): RouterConfig => {
   boundedInteger(router.maxTaskCompanions, "router config.router.maxTaskCompanions", 0, 16);
   boundedInteger(router.maxVerificationSkills, "router config.router.maxVerificationSkills", 0, 16);
   boundedInteger(router.maxAgentContextSkills, "router config.router.maxAgentContextSkills", 0, 4);
+  boundedInteger(router.maxCoreSkills, "router config.router.maxCoreSkills", 0, 4);
   boundedInteger(router.maxTotalSelectedSkills, "router config.router.maxTotalSelectedSkills", 1, 32);
   boundedInteger(router.maxInstructionBytes, "router config.router.maxInstructionBytes", 1, 10_000_000);
   boundedInteger(router.maxAdditionalReadBytes, "router config.router.maxAdditionalReadBytes", 0, 10_000_000);

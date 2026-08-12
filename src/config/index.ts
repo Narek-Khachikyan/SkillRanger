@@ -18,6 +18,7 @@ const builtInRouterConfig: RouterConfig = {
     maxTaskCompanions: 2,
     maxVerificationSkills: 2,
     maxAgentContextSkills: 1,
+    maxCoreSkills: 3,
     maxTotalSelectedSkills: 7,
     maxInstructionBytes: 120_000,
     maxAdditionalReadBytes: 80_000,

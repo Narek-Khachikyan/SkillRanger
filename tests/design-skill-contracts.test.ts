@@ -310,7 +310,7 @@ test("design skills carry positive direction rules beyond anti-slop keywords", a
     withFileTypes: true,
   });
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+    if (!entry.isDirectory() || !entry.name.startsWith("frontend.")) continue;
     const name = entry.name.replace("frontend.", "");
     const text = await readSkill(name);
     const hasAntiSlop = /\b(anti.slop|generic|avoid|reject|do not|must not)\b/i.test(text);

@@ -13,6 +13,7 @@ export type RouterGoldenExpected = {
   requiredPrimaryExclusionReasons?: Record<string, string[]>;
   requiredCompanionSkillIds?: string[];
   allowedOptionalSkillIds?: string[];
+  requiredSkillIds?: string[];
   forbiddenSkillIds?: string[];
 };
 
@@ -169,6 +170,7 @@ const validateGoldenExpected = (input: unknown, at: string): RouterGoldenExpecte
       "requiredPrimaryExclusionReasons",
       "requiredCompanionSkillIds",
       "allowedOptionalSkillIds",
+      "requiredSkillIds",
       "forbiddenSkillIds",
     ],
     at,
@@ -188,7 +190,7 @@ const validateGoldenExpected = (input: unknown, at: string): RouterGoldenExpecte
       stringArrayLoose(values, `${at}.requiredPrimaryExclusionReasons.${skillId}`);
     }
   }
-  for (const key of ["requiredCompanionSkillIds", "allowedOptionalSkillIds", "forbiddenSkillIds"] as const) {
+  for (const key of ["requiredCompanionSkillIds", "allowedOptionalSkillIds", "requiredSkillIds", "forbiddenSkillIds"] as const) {
     if (Object.hasOwn(expected, key)) stringArray(expected[key], `${at}.${key}`);
   }
   return expected as unknown as RouterGoldenExpected;

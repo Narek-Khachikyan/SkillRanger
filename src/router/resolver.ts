@@ -200,7 +200,7 @@ const scoreDomain = (
   const hasDirectDomainEvidence = directProfileDomainConfidence > 0 || (directRoutingSignals ?? []).some((signal) => {
     if (!["domain", "artifact", "intent", "technology", "quality"].includes(signal.kind)) return false;
     return (signal.kind === "domain" && canonical(signal.id) === canonical(domain.id)) ||
-      signal.ownerIds.some((id) => canonical(id) === canonical(domain.id));
+      signal.ownerIds.some((id) => id !== "core" && canonical(id) === canonical(domain.id));
   });
   const hostSignals = (input.routingSignals ?? []).filter((signal) => signal.source === "host-semantic" &&
     ((signal.kind === "domain" && canonical(signal.id) === canonical(domain.id)) || signal.ownerIds.some((id) => canonical(id) === canonical(domain.id))));

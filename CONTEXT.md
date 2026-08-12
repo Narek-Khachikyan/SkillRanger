@@ -167,3 +167,21 @@ _Avoid_: design scraping, pixel clone, study analysis
 **Slop-tell**:
 A closed, named anti-pattern code in the visual critic report that marks a design default as AI-generated; each tell carries a severity and a fix direction.
 _Avoid_: heuristic, style guideline, checklist item
+
+## Core (universal) skills
+
+**Core skill / universal skill**:
+A domain-agnostic behavioral guidance skill owned by the `core` domain pack and included in every SkillRanger-prepared run regardless of routing mode or strictness. It is audited and catalogued like any curated skill.
+_Avoid_: domain skill, task procedure, always-on rule from host config
+
+**Always-on inclusion**:
+The deterministic composer behavior of adding core skills to every prepared run up to `maxCoreSkills`, independent of retrieval, nomination, and task-selection limits; they never consume the agent-context slot or the total-skill cap.
+_Avoid_: default selection, automatic recommendation, side-effect of routing
+
+**Guidance-only skill**:
+A core skill class that carries no execution contract, input schema, gates, or verification evidence. It is delivered through router-level mandatory reads only and is excluded from the strict runtime's contract and verification machinery, so its presence can never make a run unverifiable.
+_Avoid_: contract-less failure, unverified skill, fake-contract skill
+
+**Core domain pack**:
+The minimal `core` domain pack (`domains/core/`) that owns core skills and publishes a minimal `domain:core` routing vocabulary; it contributes no deterministic recall baseline, so it never interferes with task routing.
+_Avoid_: routing domain, task domain, core:core vocabulary

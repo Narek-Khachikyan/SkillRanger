@@ -11,6 +11,7 @@ export type RouterConfig = {
     maxTaskCompanions: number;
     maxVerificationSkills: number;
     maxAgentContextSkills: number;
+    maxCoreSkills: number;
     maxTotalSelectedSkills: number;
     maxInstructionBytes: number;
     maxAdditionalReadBytes: number;

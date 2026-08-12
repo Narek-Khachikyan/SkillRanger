@@ -195,6 +195,12 @@ export const buildRoutingContext = (input: {
   }
   for (const [ownerKey, allowlists] of ownerAllowlists) {
     const [kind, id] = ownerKey.split(":") as ["core" | "domain", string];
+    // The always-on core domain never routes: it contributes no deterministic
+    // recall baseline, so its auto-generated claims (the word "core", universal
+    // artifacts, core quality ids, all actions) can never interfere with direct
+    // signal domain resolution. The pack's own explicit vocabulary, if declared,
+    // is validated above.
+    if (kind === "domain" && id === "core") continue;
     const aliases = kind === "domain" ? input.packs.find(({ domainId }) => domainId === id)?.routing.aliases ?? [] : [];
     validated.push(validateRoutingVocabulary({
       vocabulary: baselineVocabulary({ kind, id }, allowlists, aliases),

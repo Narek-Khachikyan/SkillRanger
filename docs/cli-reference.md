@@ -56,6 +56,8 @@ npx -y skillranger@latest uninstall frontend.next-app-router-review --project . 
 
 `setup` accepts the same flags as `install` (`--target`, `--scope`, `--copy`, `--yes`, `--intent`, `--lane`, `--limit-per-lane`) and additionally `--no-agent-context` to skip the `AGENTS.md` block for repo scope.
 
+Core (universal) skills (`core.proportional-engineering`, `core.universal-safety`) are not project-specific: install them at user scope (`--scope user`) so one lockfile covers all projects. Repo scope remains an option for team pinning, and user-scope installation is sufficient for strict-mode lockfile matching.
+
 ## Task routing
 
 The `task` family prepares a natural-language task into a bounded, reviewable skill set. Two paths are supported: a deterministic fallback that matches the prompt and repository signals against a bounded bilingual vocabulary, and catalog-assisted routing where an MCP host model reads the audited catalog and proposes a prompt-grounded set — which SkillRanger validates before composing the final set. A model cannot add arbitrary skills, bypass audit or compatibility checks, or force an ineligible skill.
@@ -74,6 +76,10 @@ npx -y skillranger@latest task:read . \
   --expected-read-revision 0 \
   --json
 ```
+
+### Router configuration
+
+Routing limits live in the project `skillranger.config.json` (`router` object, schema `schemas/router-config.schema.json`): `maxEnvironmentSkills`, `maxTaskCompanions`, `maxVerificationSkills`, `maxAgentContextSkills`, `maxCoreSkills` (default 3, range 0..4 — the always-on core universal skills included in every prepared run), `maxTotalSelectedSkills`, `maxInstructionBytes`, `maxAdditionalReadBytes`, `maxSingleFileBytes`, `maxIntentBytes`, `maxSelectedRisk`, `enabled`, and `strictByDefault`. Core skills count toward the instruction-byte budget but never toward the total-skill cap or the agent-context slot.
 
 ## Persisted runs
 

@@ -1,9 +1,11 @@
 # Bundled Skills
 
-SkillRanger ships with 18 author-curated, pre-audited, instruction-only skills — frontend today, more directions on the way. Normal recommendation never fetches arbitrary remote skills; every package below passes the registry validation, content lint, and static audit gates before release.
+SkillRanger ships with 20 author-curated, pre-audited, instruction-only skills — frontend today, more directions on the way. Normal recommendation never fetches arbitrary remote skills; every package below passes the registry validation, content lint, and static audit gates before release.
 
 | Category | Skill ID | Purpose |
 | :--- | :--- | :--- |
+| Core (always-on) | `core.proportional-engineering` | Smallest maintainable change; KISS/YAGNI/Pareto, scope expansion gate. |
+| | `core.universal-safety` | Secrets, destructive operations, history preservation, escalation. |
 | Framework & Core | `frontend.next-app-router-review` | Next.js App Router architecture and data-flow review. |
 | | `frontend.react-app-review` | React state ownership, providers, and render performance. |
 | | `frontend.react-component-design` | Component APIs, composition, and prop boundaries. |
@@ -22,6 +24,8 @@ SkillRanger ships with 18 author-curated, pre-audited, instruction-only skills �
 | | `frontend.playwright-debug` | Playwright flakiness, waits, and traces. |
 | | `frontend.audit` | Broad frontend release-readiness audit. |
 | Agent Context | `frontend.agents-md-bootstrap` | Project commands and architecture guidance for agents. |
+
+Core skills are always-on behavioral guidance: they are included in every SkillRanger-prepared run (strict and non-strict, both routing modes) and delivered first in router-level read order. They are guidance-only — no execution contract, no strict-run verification dependency — and bounded by the `maxCoreSkills` router config (default 3). Because core skills are not project-specific, the reference install flow uses `--scope user` (one lockfile covers all projects); repo scope remains an option for team pinning, and user-scope installation is sufficient for strict-mode lockfile matching.
 
 ## Package layout
 

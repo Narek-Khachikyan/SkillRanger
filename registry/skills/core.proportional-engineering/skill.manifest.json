@@ -1,0 +1,181 @@
+{
+  "id": "core.proportional-engineering",
+  "name": "proportional-engineering",
+  "displayName": "Proportional Engineering",
+  "description": "Always-on behavioral guidance to make the smallest maintainable change that satisfies the acceptance criteria, avoiding speculative extras and over-engineering.",
+  "stackTags": [
+    "agent-guidance",
+    "behavior"
+  ],
+  "taskTags": [
+    "agent-behavior",
+    "proportionality"
+  ],
+  "supportedAgents": [
+    "codex",
+    "claude-code",
+    "opencode",
+    "cursor",
+    "gemini-cli",
+    "generic-agent-skills",
+    "universal"
+  ],
+  "source": {
+    "type": "curated",
+    "registry": "local",
+    "path": "./registry/skills/core.proportional-engineering"
+  },
+  "version": "0.1.0",
+  "riskLevel": "low",
+  "permissions": {
+    "filesystem": [
+      "read-project"
+    ],
+    "network": false,
+    "shell": false,
+    "writes": []
+  },
+  "scripts": [],
+  "dependencies": [],
+  "qualityScore": 0.83,
+  "securityScore": 0.96,
+  "quality": {
+    "rubricVersion": "1.0",
+    "scores": {
+      "usefulness": 0.84,
+      "triggerSpecificity": 0.86,
+      "progressiveDisclosure": 0.84,
+      "safety": 0.96,
+      "verifiability": 0.72,
+      "maintainability": 0.84,
+      "portability": 0.88
+    }
+  },
+  "freshness": {
+    "lastReviewedAt": "2026-08-12"
+  },
+  "installTargets": [
+    "repo",
+    "user"
+  ],
+  "compatibility": {
+    "codex": {
+      "level": "native",
+      "scopes": [
+        "repo",
+        "user"
+      ],
+      "adapter": "codex"
+    },
+    "claude-code": {
+      "level": "native",
+      "scopes": [
+        "repo",
+        "user"
+      ],
+      "adapter": "claude-code"
+    },
+    "opencode": {
+      "level": "native",
+      "scopes": [
+        "repo",
+        "user"
+      ],
+      "adapter": "opencode"
+    },
+    "cursor": {
+      "level": "native",
+      "scopes": [
+        "repo",
+        "user"
+      ],
+      "adapter": "cursor"
+    },
+    "gemini-cli": {
+      "level": "native",
+      "scopes": [
+        "repo",
+        "user"
+      ],
+      "adapter": "gemini-cli"
+    },
+    "generic-agent-skills": {
+      "level": "native",
+      "scopes": [
+        "repo",
+        "user"
+      ],
+      "adapter": "generic-agent-skills"
+    },
+    "universal": {
+      "level": "native",
+      "scopes": [
+        "repo",
+        "user"
+      ],
+      "adapter": "universal"
+    }
+  },
+  "conflictsWith": [],
+  "supersedes": [],
+  "maintainer": {
+    "name": "local-curated",
+    "trustTier": "curated"
+  },
+  "license": "MIT",
+  "routing": {
+    "lane": "agent-context",
+    "category": "proportional-engineering",
+    "roles": ["agent-context"],
+    "domains": ["core"],
+    "actions": [
+      "configure",
+      "create",
+      "debug",
+      "deploy",
+      "design",
+      "document",
+      "fix",
+      "implement",
+      "investigate",
+      "migrate",
+      "modify",
+      "optimize",
+      "research",
+      "review",
+      "test",
+      "verify"
+    ],
+    "artifactTypes": [
+      "application",
+      "component",
+      "form",
+      "page",
+      "service"
+    ],
+    "intentTags": [
+      "agent-behavior",
+      "proportionality"
+    ],
+    "technologyTags": [
+      "agent-guidance"
+    ],
+    "environmentSignals": [
+      "tag:agent-guidance"
+    ],
+    "qualityGoals": [
+      "accessibility",
+      "correctness",
+      "coverage",
+      "performance",
+      "security",
+      "usability"
+    ],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": [],
+    "complements": ["core.universal-safety"]
+  },
+  "evaluation": {
+    "status": "none"
+  }
+}
