@@ -16,7 +16,6 @@ import {
 } from "../../runtime/skill-run/index.ts";
 import type { VerificationReport } from "../../runtime/types.ts";
 import {
-  assertFinalizedVerified,
   beginStrictStep,
   completeStrictStep,
   readNextStrictChunk,
@@ -35,6 +34,7 @@ import {
   requireStringArray,
   resolveRegistryRoot,
 } from "./utils.ts";
+import { finalizeStrictRunRefreshingDiversificationLog } from "../../domains/frontend/design/diversification-log.ts";
 
 const lifecycleErrorCodeMap: Record<SkillRunErrorCode, McpToolErrorCode> = {
   "run-not-found": "run-not-found",
@@ -210,11 +210,15 @@ const verifyStrict: McpToolHandler = async (args) => {
 
 // A blocked run finalized as ok:true reads like success and has been narrated as one. The terminal
 // state is still persisted first, so inspect_skill_run reports it; only the reply becomes an error.
-// assertFinalizedVerified is shared with the CLI surface so the two cannot disagree.
+// finalizeStrictRunRefreshingDiversificationLog is shared with the CLI surface so the two cannot
+// disagree about either the blocked-run reply or the post-finalize diversification-log refresh.
 const finalizeStrict: McpToolHandler = async (args) => {
-  const store = new StrictSkillRunStore(asProjectRoot(args.projectRoot));
-  return strictRunResult(assertFinalizedVerified(
-    await store.finalizeRun(requireString(args.runId, "runId")),
+  const projectRoot = asProjectRoot(args.projectRoot);
+  const store = new StrictSkillRunStore(projectRoot);
+  return strictRunResult(await finalizeStrictRunRefreshingDiversificationLog(
+    projectRoot,
+    store,
+    requireString(args.runId, "runId"),
   ));
 };
 

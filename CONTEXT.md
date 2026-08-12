@@ -156,6 +156,10 @@ _Avoid_: theme rotation, color swap, third axis system
 A deterministic hard gate that compares a design direction's identity fingerprint (theme axes + macrostructure + the existing composition/material treatment axes) against a snapshot of the last N verified run directions, requiring deviation on at least one dimension. The snapshot is recorded in the verification report so replay re-checks the same set.
 _Avoid_: variety check, repetition log, live re-derivation
 
+**Diversification log**:
+A project-scoped, tooling-derived cache (`.design/diversification-log.json`) written from verified run facts for the model's in-session awareness during a build. It is not written by the model and is not the enforcement mechanism; the gate decides.
+_Avoid_: model-written ledger, enforcement cache, identity history gate
+
 **Design DNA extraction**:
 A structured mode that reads a reference design's macrostructure, type pairing, and colour anchor into a provenance-labelled artifact without copying pixels or trade dress.
 _Avoid_: design scraping, pixel clone, study analysis

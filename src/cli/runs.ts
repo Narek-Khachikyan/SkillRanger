@@ -17,13 +17,13 @@ import type { VerificationReport } from "../runtime/types.ts";
 import {
   StrictSkillRunError,
   StrictSkillRunStore,
-  assertFinalizedVerified,
   beginStrictStep,
   completeStrictStep,
   readNextStrictChunk,
   startPreparedStrictSkillRun,
   type SkillRunV2,
 } from "../runtime/strict/index.ts";
+import { finalizeStrictRunRefreshingDiversificationLog } from "../domains/frontend/design/diversification-log.ts";
 
 export type RunCliInput = {
   command?: string;
@@ -222,7 +222,9 @@ const executeRunCommand = async (input: RunCliInput): Promise<RunCommandResult> 
   if (command === "run:skill:verify") {
     return strictStore.verifySkill(runId, flag(input.flags, "skill"));
   }
-  if (command === "run:finalize") return assertFinalizedVerified(await strictStore.finalizeRun(runId));
+  if (command === "run:finalize") {
+    return finalizeStrictRunRefreshingDiversificationLog(projectRoot, strictStore, runId);
+  }
   if (command === "run:record-read") {
     const skillId = flag(input.flags, "skill");
     const run = await store.read(runId);
