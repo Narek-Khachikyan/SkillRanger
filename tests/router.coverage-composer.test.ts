@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { actionCompatibilityScore, scoreActionCompatibility } from "../src/router/action-compatibility.ts";
 import { composeSkillSet, retrieveSkillCandidates, type RouterCandidate, type RouterSkillMetadata } from "../src/router/composer.ts";
+import { createTestRetrievalBoundary } from "../src/router/retrieval-boundary.ts";
 import { actionRequirementCovered, calculateRequirementCoverage } from "../src/router/coverage.ts";
 import { loadLocalRegistry } from "../src/registry/index.ts";
 import type { CanonicalRequirement } from "../src/router/requirements.ts";
@@ -93,7 +94,7 @@ test("inferred and context requirements create neither companions nor uncovered 
   const result = composeSkillSet({
     profile: profile(), requirements: [requirement("intent", "motion-design", "inferred"), requirement("quality", "performance", "context")],
     skills: [primary, companion], selectedDomainIds: ["frontend"], primaryDomainId: "frontend",
-    candidates: [candidate(primary), candidate(companion)],
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary), candidate(companion)] }),
   });
   assert.equal(result.status, "prepared");
   if (result.status !== "prepared") return;
@@ -107,7 +108,7 @@ test("an action-incompatible review skill cannot cover an explicit create reques
   const result = composeSkillSet({
     profile: profile(), requirements: [requirement("action", "create"), requirement("quality", "performance")],
     skills: [primary, review], selectedDomainIds: ["frontend"], primaryDomainId: "frontend",
-    candidates: [candidate(primary), candidate(review)],
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary), candidate(review)] }),
   });
   assert.equal(result.status, "prepared");
   if (result.status !== "prepared") return;
@@ -121,7 +122,7 @@ test("zero explicit weight disables coverage companions", () => {
   const result = composeSkillSet({
     profile: profile(), requirements: [requirement("intent", "motion-design", "explicit", 0)],
     skills: [primary, companion], selectedDomainIds: ["frontend"], primaryDomainId: "frontend",
-    candidates: [candidate(primary), candidate(companion)],
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary), candidate(companion)] }),
   });
   assert.equal(result.status, "prepared");
   if (result.status === "prepared") assert.deepEqual(result.composed.companions, []);
@@ -134,7 +135,7 @@ test("coverage companions recompute marginal gain deterministically on every ite
   const result = composeSkillSet({
     profile: profile(), requirements: [requirement("intent", "a"), requirement("intent", "b"), requirement("intent", "c")],
     skills: [primary, first, second], selectedDomainIds: ["frontend"], primaryDomainId: "frontend",
-    candidates: [candidate(primary), candidate(second), candidate(first)], limits: { maxTaskCompanions: 2 },
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary), candidate(second), candidate(first)] }), limits: { maxTaskCompanions: 2 },
   });
   assert.equal(result.status, "prepared");
   if (result.status !== "prepared") return;
@@ -150,7 +151,7 @@ test("complements changes companion score as a bonus, not an allowlist", () => {
   const result = composeSkillSet({
     profile: profile(), requirements: [requirement("intent", "motion-design"), requirement("intent", "responsive-design")],
     skills: [primary, complement, ordinary], selectedDomainIds: ["frontend"], primaryDomainId: "frontend",
-    candidates: [candidate(primary), candidate(ordinary), candidate(complement)], limits: { maxTaskCompanions: 2 },
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary), candidate(ordinary), candidate(complement)] }), limits: { maxTaskCompanions: 2 },
   });
   assert.equal(result.status, "prepared");
   if (result.status === "prepared") assert.deepEqual(result.composed.companions.map(({ skill: selected }) => selected.id), [complement.id, ordinary.id]);

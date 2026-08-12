@@ -10,6 +10,7 @@ import {
   type RouterCandidate,
   type RouterSkillMetadata,
 } from "../src/router/composer.ts";
+import { createRetrievalBoundary, createTestRetrievalBoundary } from "../src/router/retrieval-boundary.ts";
 import { canonicalizeJson } from "../src/router/store.ts";
 import type { TaskProfile } from "../src/router/types.ts";
 
@@ -153,9 +154,9 @@ test("composition reuses the supplied retrieval result instead of recomputing el
     nominatedPrimarySkillIds: nominatedIds,
     nominatedRoles: new Map(nominated.map(({ id }) => [id, "primary" as const])),
   };
-  const precomputed = retrieveSkillCandidates(retrievalInput);
+  const boundary = createRetrievalBoundary(retrievalInput);
   const direct = composeSkillSet({ ...retrievalInput, resolvedNomination });
-  const reused = composeSkillSet({ ...retrievalInput, resolvedNomination, retrievalResult: precomputed });
+  const reused = composeSkillSet({ ...retrievalInput, resolvedNomination, boundary });
 
   assert.equal(canonicalizeJson(direct), canonicalizeJson(reused));
   assert.equal(direct.status, "prepared");
@@ -171,20 +172,23 @@ test("composition binds the eligibility decision to the supplied retrieval resul
   const base = skills.find(({ id }) => id === "backend.auth-implementation")!;
   const explicit = { ...base, id: "backend.explicit-choice", riskLevel: "low" };
   const nominatedIds = [explicit.id];
-  const precomputed = retrieveSkillCandidates({
-    profile: profile(),
-    skills: [explicit],
-    selectedDomainIds: ["backend-api"],
-    primaryDomainId: "backend-api",
-    targetAgent: "codex",
-    capabilities: ["filesystem", "terminal"],
-    nominatedSkillIds: nominatedIds,
-    nominatedPrimarySkillIds: nominatedIds,
-    nominatedRoles: new Map([[explicit.id, "primary" as const]]),
+  // The boundary is authoritative: it carries a low-risk eligible copy of the
+  // explicit choice, so the facts derived from it can never disagree with the
+  // retrieval composition actually consumes.
+  const boundary = createTestRetrievalBoundary({
+    candidates: [{
+      skill: explicit,
+      score: 0.9,
+      eligibleRoles: ["primary"],
+      reasons: [],
+      missingCapabilities: [],
+      missingOptionalCapabilities: [],
+      verificationStatus: "not-required",
+    }],
   });
   // The input skills would reject the explicit choice as high-risk, but the
-  // supplied retrieval result is authoritative: facts are derived from it, never
-  // recomputed from the input skills.
+  // supplied boundary is authoritative: facts are derived from its retrieval,
+  // never recomputed from the input skills.
   const highRiskInRegistry = { ...base, id: explicit.id, riskLevel: "high" };
   const reused = composeSkillSet({
     profile: profile(),
@@ -193,7 +197,7 @@ test("composition binds the eligibility decision to the supplied retrieval resul
     primaryDomainId: "backend-api",
     targetAgent: "codex",
     capabilities: ["filesystem", "terminal"],
-    retrievalResult: precomputed,
+    boundary,
     resolvedNomination: {
       requiredPrimarySkillId: explicit.id,
       nominationOrder: nominatedIds,
@@ -232,9 +236,9 @@ test("reused eligibility result keeps explicit-choice blocking with the exact re
     nominatedPrimarySkillIds: ["backend.high-risk"],
     nominatedRoles: new Map([["backend.high-risk", "primary" as const]]),
   };
-  const precomputed = retrieveSkillCandidates(retrievalInput);
+  const boundary = createRetrievalBoundary(retrievalInput);
   const direct = composeSkillSet({ ...retrievalInput, resolvedNomination });
-  const reused = composeSkillSet({ ...retrievalInput, resolvedNomination, retrievalResult: precomputed });
+  const reused = composeSkillSet({ ...retrievalInput, resolvedNomination, boundary });
 
   assert.equal(canonicalizeJson(direct), canonicalizeJson(reused));
   assert.equal(direct.status, "no_matching_skills");

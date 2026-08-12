@@ -7,6 +7,7 @@ import {
   type RouterCandidate,
   type RouterSkillMetadata,
 } from "../src/router/composer.ts";
+import { createTestRetrievalBoundary } from "../src/router/retrieval-boundary.ts";
 import type { TaskProfile } from "../src/router/types.ts";
 import { scoreFreshness, scoreSharedFeatures } from "../src/recommender/scoring.ts";
 
@@ -131,7 +132,7 @@ test("composer reports dependency cycles and symmetric conflicts", async () => {
   const cycle = composeSkillSet({
     ...input,
     profile: profile({ normalizedGoal: "implement cyclic workflow", artifactTypes: ["api"] }),
-    candidates: input.skills.filter((skill) => ["backend.cycle-a", "backend.cycle-b"].includes(skill.id)).map((skill) => ({
+    boundary: createTestRetrievalBoundary({ candidates: input.skills.filter((skill) => ["backend.cycle-a", "backend.cycle-b"].includes(skill.id)).map((skill) => ({
       skill,
       score: 0.9,
       eligibleRoles: [skill.roles?.includes("primary") ? "primary" as const : "companion" as const],
@@ -139,7 +140,7 @@ test("composer reports dependency cycles and symmetric conflicts", async () => {
       missingCapabilities: [],
       missingOptionalCapabilities: [],
       verificationStatus: "not-required" as const,
-    })),
+    })) }),
   });
   assert.equal(cycle.status, "no_matching_skills");
   assert.ok(cycle.rejections.some(({ reason }) => reason === "dependency-cycle"));
@@ -147,7 +148,7 @@ test("composer reports dependency cycles and symmetric conflicts", async () => {
   const conflict = composeSkillSet({
     ...input,
     profile: profile({ normalizedGoal: "implement conflicting workflow" }),
-    candidates: input.skills.filter((skill) => ["backend.conflict-a", "backend.conflict-b"].includes(skill.id)).map((skill) => ({
+    boundary: createTestRetrievalBoundary({ candidates: input.skills.filter((skill) => ["backend.conflict-a", "backend.conflict-b"].includes(skill.id)).map((skill) => ({
       skill,
       score: 0.9,
       eligibleRoles: [skill.roles?.includes("primary") ? "primary" as const : "companion" as const],
@@ -155,7 +156,7 @@ test("composer reports dependency cycles and symmetric conflicts", async () => {
       missingCapabilities: [],
       missingOptionalCapabilities: [],
       verificationStatus: "not-required" as const,
-    })),
+    })) }),
   });
   assert.equal(conflict.status, "no_matching_skills");
   assert.ok(conflict.rejections.some(({ reason }) => reason === "skill-conflict"));
@@ -167,7 +168,7 @@ test("composer selects verification for acceptance criteria and limits companion
   const result = composeSkillSet({
     ...input,
     profile: profile({ acceptanceCriteria: ["tests-pass"] }),
-    candidates: input.skills.filter((skill) => [
+    boundary: createTestRetrievalBoundary({ candidates: input.skills.filter((skill) => [
       "backend.auth-implementation",
       "qa.api-integration-testing",
       "security.auth-review",
@@ -179,7 +180,7 @@ test("composer selects verification for acceptance criteria and limits companion
       missingCapabilities: [],
       missingOptionalCapabilities: [],
       verificationStatus: "ready" as const,
-    })),
+    })) }),
   });
   assert.equal(result.status, "prepared");
   if (result.status !== "prepared") return;
@@ -193,7 +194,7 @@ test("composer returns budget overflow for a required oversized primary", async 
   const result = composeSkillSet({
     ...input,
     profile: profile({ normalizedGoal: "use oversized workflow" }),
-    candidates: input.skills.filter((skill) => skill.id === "backend.oversized").map((skill) => ({
+    boundary: createTestRetrievalBoundary({ candidates: input.skills.filter((skill) => skill.id === "backend.oversized").map((skill) => ({
       skill,
       score: 0.9,
       eligibleRoles: ["primary" as const],
@@ -201,7 +202,7 @@ test("composer returns budget overflow for a required oversized primary", async 
       missingCapabilities: [],
       missingOptionalCapabilities: [],
       verificationStatus: "not-required" as const,
-    })),
+    })) }),
   });
   assert.deepEqual(result.status, "context_budget_exceeded");
   if (result.status === "context_budget_exceeded") assert.deepEqual(result.blockingSkillIds, ["backend.oversized"]);
@@ -218,7 +219,7 @@ test("composer asks for decomposition when independent subtasks have no primary 
         { id: "mobile-design", normalizedGoal: "design mobile", actions: ["design"], artifactTypes: [], candidateDomainIds: ["mobile"] },
       ],
     }),
-    candidates: [],
+    boundary: createTestRetrievalBoundary({ candidates: [] }),
   });
   assert.equal(result.status, "decomposition_required");
   if (result.status === "decomposition_required") assert.equal(result.subtasks.length, 2);
@@ -365,7 +366,7 @@ test("proposal-driven composition advances past a primary that exceeds the conte
   const result = composeSkillSet({
     profile: profile(),
     skills: [first, second],
-    candidates: [candidate(first, 0.99), candidate(second, 0.8)],
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(first, 0.99), candidate(second, 0.8)] }),
     selectedDomainIds: ["backend-api"],
     primaryDomainId: "backend-api",
     resolvedNomination: {
@@ -530,7 +531,7 @@ test("composer preserves nominated roles when it receives pre-retrieved candidat
   const result = composeSkillSet({
     profile: profile(),
     skills: [primary, fallback],
-    candidates: [candidate(primary), candidate(fallback)],
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary), candidate(fallback)] }),
     selectedDomainIds: ["backend-api"],
     resolvedNomination: {
       nominationOrder: [primary.id, fallback.id],
@@ -572,7 +573,7 @@ test("composer reports a hard-vetoed nominated companion instead of dropping it 
   const result = composeSkillSet({
     profile: profile(),
     skills: [primary, companion],
-    candidates: [candidate(primary), candidate(companion)],
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary), candidate(companion)] }),
     selectedDomainIds: ["backend-api"],
     resolvedNomination: {
       nominationOrder: [primary.id, companion.id],
@@ -612,7 +613,7 @@ test("composer reports when supersession removes a nominated companion", () => {
   const result = composeSkillSet({
     profile: profile(),
     skills: [primary, companion],
-    candidates: [candidate(primary), candidate(companion)],
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary), candidate(companion)] }),
     selectedDomainIds: ["backend-api"],
     resolvedNomination: {
       nominationOrder: [primary.id, companion.id],
@@ -648,7 +649,7 @@ test("composer reports a deterministic fallback budget failure after nominations
   const result = composeSkillSet({
     profile: profile(),
     skills: [nominated, fallback],
-    candidates: [candidate(nominated, 0.99), candidate(fallback, 0.9)],
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(nominated, 0.99), candidate(fallback, 0.9)] }),
     selectedDomainIds: ["backend-api"],
     resolvedNomination: {
       nominationOrder: [nominated.id],
@@ -691,7 +692,7 @@ test("composer reports when a nominated companion is removed by the total-skill 
   const result = composeSkillSet({
     profile: profile(),
     skills: [primary, companion],
-    candidates: [candidate(primary), candidate(companion)],
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary), candidate(companion)] }),
     selectedDomainIds: ["backend-api"],
     resolvedNomination: {
       nominationOrder: [primary.id, companion.id],
@@ -718,7 +719,8 @@ test("a primary-only dependency cannot become a second primary", () => {
     skill, score: skill.score!, eligibleRoles: ["primary" as const], reasons: [], missingCapabilities: [], missingOptionalCapabilities: [], verificationStatus: "not-required" as const,
   });
   const result = composeSkillSet({
-    profile: profile(), skills: [root, dependency], selectedDomainIds: ["backend-api"], candidates: [candidate(root), candidate(dependency)],
+    profile: profile(), skills: [root, dependency], selectedDomainIds: ["backend-api"],
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(root), candidate(dependency)] }),
   });
   assert.ok(result.rejections.some(({ skillId, reason }) => skillId === root.id && reason === "dependency-role-unassignable"));
   if (result.status === "prepared") assert.equal(result.composed.all.filter(({ role }) => role === "primary").length, 1);
