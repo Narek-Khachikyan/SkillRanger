@@ -253,8 +253,11 @@ test("frontend strict installed/read/steps/finalize reaches verified", async () 
   const routerStore = new RouterStore(root);
   const reader = createRouterReader(root, registry, routerStore, {
     onMandatorySkillComplete: async ({ run, skillId }) => {
-      await strictStore.update(run.runtime.runId, (current) => {
-        let next = current;
+      // Core (universal) skills have no strict ledger; only synced task skills.
+      const current = await strictStore.read(run.runtime.runId);
+      if (!current.skillLedgers.some(({ skillId: id }) => id === skillId)) return;
+      await strictStore.update(run.runtime.runId, (state) => {
+        let next = state;
         const ledger = () => next.skillLedgers.find(({ skillId: id }) => id === skillId)!;
         while (ledger().readReceipts.length !== ledger().contentChunks.length) next = readNextStrictChunk(next, skillId).run;
         return next;
@@ -497,15 +500,22 @@ test("stale checksum blocks a prepared source read without advancing revision", 
   const { root, result } = await prepareStrictPerformance();
   const routerStore = new RouterStore(root);
   const run = await routerStore.read(result.run.routerRunId);
-  const source = run.sourceInventory[0];
-  assert.equal(source.locator.kind, "installed");
-  if (source.locator.kind !== "installed") return;
+  const source = run.sourceInventory.find(({ locator }) => locator.kind === "installed");
+  assert.ok(source);
+  assert.ok(source?.locator.kind === "installed");
   await appendFile(path.join(root, source.locator.installedPath, "SKILL.md"), "\nstale mutation\n");
-  await assert.rejects(
-    () => createRouterReader(root, registry, routerStore).read({ routerRunId: run.routerRunId, readRequestId: randomUUID(), expectedReadRevision: 0, mode: "mandatory-next" }),
-    (error) => error instanceof RouterReaderError && error.code === "stale-skill-checksum",
-  );
-  assert.equal((await routerStore.read(run.routerRunId)).readRevision, 0);
+  let revision = 0;
+  let failure: unknown;
+  for (let guard = 0; guard < 8 && failure === undefined; guard += 1) {
+    try {
+      const out = await createRouterReader(root, registry, routerStore).read({ routerRunId: run.routerRunId, readRequestId: randomUUID(), expectedReadRevision: revision, mode: "mandatory-next" });
+      revision = out.readRevision;
+    } catch (error) {
+      failure = error;
+    }
+  }
+  assert.ok(failure instanceof RouterReaderError && failure.code === "stale-skill-checksum");
+  assert.equal((await routerStore.read(run.routerRunId)).readRevision, revision);
 });
 
 test("CLI direct and MCP explicit both return the canonical core result contract", async () => {

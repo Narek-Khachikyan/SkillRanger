@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1.2",
+  "id": "core",
+  "displayName": "Core",
+  "description": "Always-on, domain-agnostic behavioral guidance skills applied to every SkillRanger-prepared run.",
+  "version": "1.0.0",
+  "releaseVersion": "0.4.1",
+  "coreApi": "1.0",
+  "skillIdPrefix": "core.",
+  "capabilities": [
+    "intent-routing"
+  ],
+  "artifacts": {
+    "intents": [],
+    "schemas": [],
+    "recipes": [],
+    "workflows": [],
+    "validators": [],
+    "routingVocabulary": "routing.vocabulary.json"
+  },
+  "ownership": [
+    {
+      "intent": "agent-behavior",
+      "primarySkill": "core.proportional-engineering",
+      "supportingSkills": [
+        "core.universal-safety"
+      ]
+    }
+  ],
+  "routing": {
+    "aliases": [],
+    "intentTags": [],
+    "artifactTypes": [],
+    "technologyTags": [],
+    "projectTags": []
+  }
+}

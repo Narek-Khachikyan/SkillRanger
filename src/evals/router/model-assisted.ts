@@ -157,6 +157,7 @@ export type ModelAssistedBenchmarkExpected = {
   errorCode?: EvaluationErrorCode;
   allowedSkillIds: string[];
   forbiddenSkillIds: string[];
+  requiredSkillIds?: string[];
   roleAssignments?: RoleAwareSelections;
 };
 
@@ -446,7 +447,7 @@ export const loadRoutingProposalBenchmarkFixtures = async (filePath: string): Pr
     if (proposalMode === "absent" && proposal !== undefined) fail(`router model-assisted fixture.cases[${index}] must omit proposal in absent mode.`);
     if (proposalMode !== "absent" && proposal === undefined) fail(`router model-assisted fixture.cases[${index}] requires proposal in ${proposalMode} mode.`);
     const expectedRecord = record(value.expected, `router model-assisted fixture.cases[${index}].expected`);
-    exactKeys(expectedRecord, ["status", "allowedSkillIds", "forbiddenSkillIds"], ["primarySkillId", "fallbackStatus", "fallbackPrimarySkillId", "fallbackUnchanged", "fallbackNotWorse", "malformedRejected", "catalogIntegrityException", "errorCode", "roleAssignments"], `router model-assisted fixture.cases[${index}].expected`);
+    exactKeys(expectedRecord, ["status", "allowedSkillIds", "forbiddenSkillIds"], ["primarySkillId", "fallbackStatus", "fallbackPrimarySkillId", "fallbackUnchanged", "fallbackNotWorse", "malformedRejected", "catalogIntegrityException", "errorCode", "requiredSkillIds", "roleAssignments"], `router model-assisted fixture.cases[${index}].expected`);
     const status = stringValue(expectedRecord.status, `router model-assisted fixture.cases[${index}].expected.status`);
     if (!resultStatuses.has(status as EvaluatedStatus)) fail(`router model-assisted fixture.cases[${index}].expected.status is invalid.`);
     const fallbackStatus = expectedRecord.fallbackStatus === undefined ? undefined : stringValue(expectedRecord.fallbackStatus, `router model-assisted fixture.cases[${index}].expected.fallbackStatus`);
@@ -467,6 +468,7 @@ export const loadRoutingProposalBenchmarkFixtures = async (filePath: string): Pr
       ...(expectedRecord.malformedRejected === undefined ? {} : { malformedRejected: bool(expectedRecord.malformedRejected, `router model-assisted fixture.cases[${index}].expected.malformedRejected`) }),
       ...(expectedRecord.catalogIntegrityException === undefined ? {} : { catalogIntegrityException: bool(expectedRecord.catalogIntegrityException, `router model-assisted fixture.cases[${index}].expected.catalogIntegrityException`) }),
       ...(expectedRecord.roleAssignments === undefined ? {} : { roleAssignments: parseRoleAwareSelections(expectedRecord.roleAssignments, `router model-assisted fixture.cases[${index}].expected.roleAssignments`) }),
+      ...(expectedRecord.requiredSkillIds === undefined ? {} : { requiredSkillIds: stringArray(expectedRecord.requiredSkillIds, `router model-assisted fixture.cases[${index}].expected.requiredSkillIds`, true) }),
       ...(errorCode === undefined ? {} : { errorCode: errorCode as EvaluationErrorCode }),
     };
     return { id, source, vocabularyMiss, prompt, strict, capabilities, proposalMode, ...(proposal === undefined ? {} : { proposal }), expected };
@@ -852,12 +854,14 @@ const benchmarkFallbackMatch = (expected: ModelAssistedBenchmarkExpected, fallba
   (expected.fallbackPrimarySkillId === undefined || fallback.primarySkillId === expected.fallbackPrimarySkillId)
 );
 
-const runBenchmarkCase = async (root: string, item: ModelAssistedBenchmarkCase, binding: CatalogBinding) => {
+const runBenchmarkCase = async (root: string, item: ModelAssistedBenchmarkCase, binding: CatalogBinding, alwaysIncludedSkillIds: ReadonlySet<string>) => {
   const fallback = await runPrepare(root, { prompt: item.prompt, strict: item.strict, capabilities: item.capabilities }, binding);
   const assisted = await runPrepare(root, { prompt: item.prompt, strict: item.strict, capabilities: item.capabilities, proposal: item.proposal }, binding);
   const replay = await runPrepare(root, { prompt: item.prompt, strict: item.strict, capabilities: item.capabilities, proposal: item.proposal }, binding);
   const forbidden = assisted.selectedSkillIds.filter((skillId) => item.expected.forbiddenSkillIds.includes(skillId));
-  const irrelevant = assisted.selectedSkillIds.filter((skillId) => !item.expected.allowedSkillIds.includes(skillId));
+  // Core (universal) skills are always-on guidance in every prepared run, so
+  // they can never be irrelevant selections; only task selections count here.
+  const irrelevant = assisted.selectedSkillIds.filter((skillId) => !item.expected.allowedSkillIds.includes(skillId) && !alwaysIncludedSkillIds.has(skillId));
   const fallbackUnchanged = comparable(fallback) === comparable(assisted);
   const fallbackNotWorse = outcomeNotWorse(fallback, assisted);
   const deterministicReplay = comparable(assisted) === comparable(replay);
@@ -873,10 +877,12 @@ const runBenchmarkCase = async (root: string, item: ModelAssistedBenchmarkCase, 
     ? computeRoleRecall(item.expected.roleAssignments, assisted.selectedSkillIdsByRole)
     : undefined;
   const recallMatch = recall === undefined || recall.fullSet === 1;
+  const requiredSkillIdsMatch = (item.expected.requiredSkillIds ?? []).every((skillId) => assisted.selectedSkillIds.includes(skillId));
   const passed = benchmarkExpectedMatch(item.expected, assisted) &&
     benchmarkFallbackMatch(item.expected, fallback) &&
     forbidden.length === 0 &&
     irrelevant.length === 0 &&
+    requiredSkillIdsMatch &&
     (!item.expected.fallbackUnchanged || fallbackUnchanged) &&
     (!item.expected.fallbackNotWorse || fallbackNotWorse) &&
     (!item.expected.malformedRejected || (assisted.status === "error" && assisted.runFileCount === 0)) &&
@@ -906,8 +912,12 @@ const runBenchmarkCase = async (root: string, item: ModelAssistedBenchmarkCase, 
 export const evaluateRoutingProposalBenchmark = async (root = process.cwd()): Promise<ModelAssistedEvalReport["benchmark"]> => {
   const fixture = await loadRoutingProposalBenchmarkFixtures(path.join(root, "evals", "router", "model-assisted.json"));
   const binding = await currentCatalogBinding(root);
+  // Always-on core (universal) skills are derived from the live catalog so a
+  // future core skill never needs an eval-code change.
+  const snapshot = await buildSkillCatalog(sourceOptions(root));
+  const alwaysIncludedSkillIds = new Set(snapshot.skills.filter(({ domains }) => domains.includes("core")).map(({ skillId }) => skillId));
   const results: ModelAssistedEvalReport["benchmark"]["results"] = [];
-  for (const item of fixture.cases) results.push(await runBenchmarkCase(root, item, binding));
+  for (const item of fixture.cases) results.push(await runBenchmarkCase(root, item, binding, alwaysIncludedSkillIds));
   const primaryCases = fixture.cases.filter(({ expected }) => expected.primarySkillId !== undefined);
   const vocabularyCases = fixture.cases.filter(({ vocabularyMiss }) => vocabularyMiss);
   const selectedCount = results.reduce((sum, result) => sum + result.assisted.selectedSkillCount, 0);

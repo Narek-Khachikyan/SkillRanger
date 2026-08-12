@@ -86,10 +86,13 @@ test("source and built frontend adapters load the canonical manifest JSON", asyn
 
 test("bundled router packs are discovered as validated declarative data", async () => {
   const packs = await loadBundledRouterPacks();
-  assert.deepEqual(packs.map(({ id }) => id), ["frontend"]);
-  assert.equal(packs[0]?.id, "frontend");
-  assert.deepEqual(packs[0]?.routing.aliases, ["frontend-web", "web-ui"]);
-  assert.ok(packs[0]?.routing.projectTags.includes("react"));
+  assert.deepEqual(packs.map(({ id }) => id), ["core", "frontend"]);
+  assert.equal(packs[0]?.id, "core");
+  assert.deepEqual(packs[0]?.routing.aliases, []);
+  assert.deepEqual(packs[0]?.ownership.map(({ intent }) => intent), ["agent-behavior"]);
+  assert.equal(packs[1]?.id, "frontend");
+  assert.deepEqual(packs[1]?.routing.aliases, ["frontend-web", "web-ui"]);
+  assert.ok(packs[1]?.routing.projectTags.includes("react"));
 });
 
 test("domain routing metadata validates aliases, bounds, conflicts, and unknown fields", () => {

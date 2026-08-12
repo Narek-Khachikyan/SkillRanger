@@ -4,6 +4,7 @@ import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import "../../domains/bundled.ts";
 import { getDomainPack } from "../../domains/registry.ts";
+import { isCoreDomainSkill } from "../../router/metadata.ts";
 import { resolveInstalledSkillRoot } from "../../installers/installed-path.ts";
 import { readLockfile } from "../../lockfile/index.ts";
 import { loadLocalRegistry } from "../../registry/index.ts";
@@ -199,7 +200,10 @@ const flattenedSelections = (selections: PreparedSelections): PreparedSkillSelec
   ...selections.environment,
   ...selections.companions,
   ...selections.verification,
-  ...selections.agentContext,
+  // Core (universal) skills are guidance-only and are excluded from the strict
+  // runtime's contract/verification machinery, which cannot represent
+  // contract-less skills; they are delivered through router-level reads only.
+  ...selections.agentContext.filter(({ domains }) => !isCoreDomainSkill(domains)),
 ];
 
 export const createPreparedStrictSkillRun = async (input: PreparedStrictSkillInput): Promise<SkillRunV2> => {

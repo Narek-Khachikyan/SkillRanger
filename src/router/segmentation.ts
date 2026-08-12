@@ -34,7 +34,9 @@ export const taskSegmentId = (input: Pick<InternalTaskSegment, "requirements" | 
 const domainIds = (signals: MatchedRoutingSignal[], context: RoutingContext) => unique(signals.flatMap((signal) => {
   if (signal.kind === "domain" && context.domains.has(signal.id)) return [signal.id];
   if (!["artifact", "intent", "technology", "quality"].includes(signal.kind)) return [];
-  return signal.ownerIds.filter((id) => context.domains.has(id));
+  // The always-on core domain never routes: its owner id is filtered out of
+  // direct signal domain resolution, mirroring the resolver's host-set filter.
+  return signal.ownerIds.filter((id) => context.domains.has(id) && id !== "core");
 }));
 
 const makeSegment = (input: {

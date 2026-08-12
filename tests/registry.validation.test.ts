@@ -87,7 +87,7 @@ const writeSkillPackage = async (
 test("local registry validation accepts curated skills", async () => {
   const report = await validateLocalRegistry("registry");
   assert.equal(report.ok, true);
-  assert.equal(report.skills.length, 18);
+  assert.equal(report.skills.length, 20);
 });
 
 test("curated skills carry derived quality rubric metadata", async () => {
@@ -126,11 +126,33 @@ const convertibleSetupTargets = [
   "gemini-cli",
 ] as const;
 
+const coreAgentIds = [
+  "codex",
+  "claude-code",
+  "opencode",
+  "cursor",
+  "gemini-cli",
+  "generic-agent-skills",
+  "universal",
+] as const;
+
 test("bundled skills declare recommendation compatibility for every setup target", async () => {
   const skills = await loadLocalRegistry("registry");
   for (const skill of skills) {
+    const isCoreSkill = skill.manifest.routing?.domains?.includes("core") === true;
     assert.equal(skill.manifest.compatibility?.codex?.level, "native", skill.manifest.id);
     assert.ok(skill.manifest.compatibility?.codex?.scopes?.includes("repo"), skill.manifest.id);
+
+    if (isCoreSkill) {
+      // Core (universal) skills are domain-agnostic guidance: they ship native
+      // for every supported target agent so guidance is identical across hosts.
+      for (const agent of coreAgentIds) {
+        assert.equal(skill.manifest.compatibility?.[agent]?.level, "native", `${skill.manifest.id}:${agent}`);
+        assert.ok(skill.manifest.compatibility?.[agent]?.scopes?.includes("repo"), `${skill.manifest.id}:${agent}`);
+      }
+      assert.deepEqual(skill.manifest.supportedAgents, [...coreAgentIds]);
+      continue;
+    }
 
     for (const target of convertibleSetupTargets) {
       const compatibility = skill.manifest.compatibility?.[target];
@@ -168,7 +190,7 @@ test("curated skills carry explicit universal router metadata", async () => {
     const routing = skill.manifest.routing;
     assert.ok(routing, skill.manifest.id);
     assert.ok(routing.roles?.length, skill.manifest.id);
-    assert.ok(routing.domains?.includes("frontend"), skill.manifest.id);
+    assert.ok(routing.domains.some((domain) => ["frontend", "core"].includes(domain)), skill.manifest.id);
     assert.ok(routing.actions?.length, skill.manifest.id);
     assert.ok(routing.artifactTypes?.length, skill.manifest.id);
     assert.ok(routing.intentTags?.length, skill.manifest.id);

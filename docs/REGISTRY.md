@@ -2,6 +2,21 @@
 
 This document covers skill package metadata, registry design, own-vs-third-party handling, generated skill gates, and data file shapes.
 
+## Core skill checklist (promotion bar)
+
+The `core` domain pack (`domains/core/`) ships **core (universal) skills**: always-on, domain-agnostic behavioral guidance included in every SkillRanger-prepared run (strict and non-strict, both routing modes), delivered first in router-level mandatory read order, and bounded by the configurable `maxCoreSkills` router limit (default 3, range 0..4). They are guidance-only: they carry no execution contract, never enter the strict runtime's ledgers or verification, and are excluded from the strict machinery rather than given fake contracts.
+
+A candidate for the core library must pass every item on this checklist before it ships:
+
+- It is a **domain-agnostic behavioral rule** — guidance about how to behave on any task — not a task procedure for a specific stack.
+- It **does not overlap** with existing core skills (today: `core.proportional-engineering`, `core.universal-safety`).
+- It is **small enough** to stay within the run context budget alongside the existing core set.
+- It **passes registry validation and static audit** like any curated skill, with full routing metadata under the `core` domain and all seven supported target agents declared native.
+- It is **visible in the skill catalog** under the `core` domain.
+- It ships with **routed golden cases for both routing modes** (model-assisted and limited-deterministic-fallback) proving a task run includes it; verified by `pnpm eval:router`.
+
+Adding a future core skill requires no router code changes: ship the registry package under the `core` domain and it is auto-included up to `maxCoreSkills`.
+
 ## 5. Skill registry design
 
 Registry entry should separate skill package metadata from install metadata.

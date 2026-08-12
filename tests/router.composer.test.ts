@@ -797,3 +797,349 @@ test("a primary-only dependency cannot become a second primary", () => {
   assert.ok(result.rejections.some(({ skillId, reason }) => skillId === root.id && reason === "dependency-role-unassignable"));
   if (result.status === "prepared") assert.equal(result.composed.all.filter(({ role }) => role === "primary").length, 1);
 });
+
+const coreSkill = (id: string): RouterSkillMetadata => ({
+  id,
+  displayName: id,
+  version: "1.0.0",
+  riskLevel: "low",
+  roles: ["agent-context"],
+  domains: ["core"],
+  actions: ["implement"],
+  artifactTypes: ["application"],
+  intentTags: ["agent-behavior"],
+  technologyTags: ["agent-guidance"],
+  qualityGoals: ["correctness"],
+  requiredCapabilities: ["filesystem"],
+  optionalCapabilities: [],
+  dependencies: [],
+  conflictsWith: [],
+  supersedes: [],
+  complements: [],
+  instructionBytes: 40,
+  source: "bundled-registry",
+  auditPassed: true,
+});
+
+const frontendProfile = (overrides: Partial<TaskProfile> = {}): TaskProfile => profile({
+  normalizedGoal: "implement web interface",
+  artifactTypes: ["web-interface"],
+  domains: [{ id: "frontend", confidence: 1, role: "primary", available: true, reasons: [], evidence: [] }],
+  ...overrides,
+});
+
+test("composer always includes core skills first in a prepared run", () => {
+  const primary: RouterSkillMetadata = {
+    id: "frontend.primary", displayName: "Primary", version: "1.0.0", riskLevel: "low", roles: ["primary"],
+    domains: ["frontend"], actions: ["implement"], artifactTypes: ["web-interface"], intentTags: ["web-interface"],
+    technologyTags: [], qualityGoals: ["correctness"], requiredCapabilities: ["filesystem"], optionalCapabilities: [],
+    dependencies: [], conflictsWith: [], supersedes: [], complements: [], instructionBytes: 100,
+  };
+  const candidate = (skill: RouterSkillMetadata, score = 0.9): RouterCandidate => ({
+    skill,
+    score,
+    eligibleRoles: ["primary"],
+    reasons: [],
+    missingCapabilities: [],
+    missingOptionalCapabilities: [],
+    verificationStatus: "not-required",
+  });
+  const cores = [coreSkill("core.proportional-engineering"), coreSkill("core.universal-safety")];
+  const result = composeSkillSet({
+    profile: frontendProfile(),
+    skills: [...cores, primary],
+    selectedDomainIds: ["frontend"],
+    primaryDomainId: "frontend",
+    capabilities: ["filesystem"],
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary)] }),
+  });
+  assert.equal(result.status, "prepared");
+  if (result.status !== "prepared") return;
+  assert.deepEqual(result.composed.all.slice(0, 2).map(({ skill }) => skill.id), ["core.proportional-engineering", "core.universal-safety"]);
+  assert.deepEqual(result.composed.agentContext.map(({ skill }) => skill.id).sort(), ["core.proportional-engineering", "core.universal-safety"]);
+});
+
+test("composer caps core skills at maxCoreSkills and protects them from eviction", () => {
+  const primary: RouterSkillMetadata = {
+    id: "frontend.primary", displayName: "Primary", version: "1.0.0", riskLevel: "low", roles: ["primary"],
+    domains: ["frontend"], actions: ["implement"], artifactTypes: ["web-interface"], intentTags: ["web-interface"],
+    technologyTags: [], qualityGoals: ["correctness"], requiredCapabilities: ["filesystem"], optionalCapabilities: [],
+    dependencies: [], conflictsWith: [], supersedes: [], complements: [], instructionBytes: 100,
+  };
+  const environment: RouterSkillMetadata = {
+    ...primary,
+    id: "frontend.environment",
+    displayName: "Environment",
+    roles: ["environment"],
+    instructionBytes: 30,
+  };
+  const candidate = (skill: RouterSkillMetadata, score = 0.9): RouterCandidate => ({
+    skill,
+    score,
+    eligibleRoles: [...skill.roles!] as RouterCandidate["eligibleRoles"],
+    reasons: [],
+    missingCapabilities: [],
+    missingOptionalCapabilities: [],
+    verificationStatus: "not-required",
+  });
+  const cores = [coreSkill("core.proportional-engineering"), coreSkill("core.universal-safety"), coreSkill("core.z-future-guidance")];
+  const result = composeSkillSet({
+    profile: frontendProfile(),
+    skills: [...cores, primary, environment],
+    selectedDomainIds: ["frontend"],
+    primaryDomainId: "frontend",
+    capabilities: ["filesystem"],
+    limits: { maxCoreSkills: 2, maxInstructionBytes: 190 },
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary), candidate(environment)] }),
+  });
+  assert.equal(result.status, "prepared");
+  if (result.status !== "prepared") return;
+  assert.deepEqual(result.composed.all.map(({ skill }) => skill.id).filter((id) => id.startsWith("core.")), ["core.proportional-engineering", "core.universal-safety"]);
+  // The byte budget counts core bytes: the optional environment skill is evicted
+  // before any core skill (100 + 40 + 40 + 30 = 210 > 190), proving core skills
+  // are protected and counted in maxInstructionBytes.
+  assert.equal(result.composed.all.some(({ skill }) => skill.id === "frontend.environment"), false);
+  assert.equal(result.composed.all.some(({ skill }) => skill.id === "core.universal-safety"), true);
+});
+
+test("core skills overflow the context budget only when every optional task skill is already evicted", () => {
+  const primary: RouterSkillMetadata = {
+    id: "frontend.primary", displayName: "Primary", version: "1.0.0", riskLevel: "low", roles: ["primary"],
+    domains: ["frontend"], actions: ["implement"], artifactTypes: ["web-interface"], intentTags: ["web-interface"],
+    technologyTags: [], qualityGoals: ["correctness"], requiredCapabilities: ["filesystem"], optionalCapabilities: [],
+    dependencies: [], conflictsWith: [], supersedes: [], complements: [], instructionBytes: 100,
+  };
+  const environment: RouterSkillMetadata = {
+    ...primary,
+    id: "frontend.environment",
+    displayName: "Environment",
+    roles: ["environment"],
+    instructionBytes: 30,
+  };
+  const candidate = (skill: RouterSkillMetadata, score = 0.9): RouterCandidate => ({
+    skill,
+    score,
+    eligibleRoles: [...skill.roles!] as RouterCandidate["eligibleRoles"],
+    reasons: [],
+    missingCapabilities: [],
+    missingOptionalCapabilities: [],
+    verificationStatus: "not-required",
+  });
+  const cores = [coreSkill("core.proportional-engineering"), coreSkill("core.universal-safety")];
+  const result = composeSkillSet({
+    profile: frontendProfile(),
+    skills: [...cores, primary, environment],
+    selectedDomainIds: ["frontend"],
+    primaryDomainId: "frontend",
+    capabilities: ["filesystem"],
+    limits: { maxInstructionBytes: 175 },
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary), candidate(environment)] }),
+  });
+  assert.equal(result.status, "context_budget_exceeded");
+  if (result.status === "context_budget_exceeded") {
+    assert.ok(result.blockingSkillIds.includes("core.proportional-engineering"));
+    assert.ok(result.blockingSkillIds.includes("core.universal-safety"));
+  }
+});
+
+test("core skills do not consume the agent-context selection slot", () => {
+  const primary: RouterSkillMetadata = {
+    id: "frontend.primary", displayName: "Primary", version: "1.0.0", riskLevel: "low", roles: ["primary"],
+    domains: ["frontend"], actions: ["implement"], artifactTypes: ["web-interface"], intentTags: ["web-interface"],
+    technologyTags: [], qualityGoals: ["correctness"], requiredCapabilities: ["filesystem"], optionalCapabilities: [],
+    dependencies: [], conflictsWith: [], supersedes: [], complements: [], instructionBytes: 100,
+  };
+  const context: RouterSkillMetadata = {
+    ...primary,
+    id: "frontend.agents-md-bootstrap",
+    displayName: "Agents MD",
+    roles: ["agent-context"],
+    instructionBytes: 50,
+  };
+  const candidate = (skill: RouterSkillMetadata, score = 0.9): RouterCandidate => ({
+    skill,
+    score,
+    eligibleRoles: [...skill.roles!] as RouterCandidate["eligibleRoles"],
+    reasons: [],
+    missingCapabilities: [],
+    missingOptionalCapabilities: [],
+    verificationStatus: "not-required",
+  });
+  const cores = [coreSkill("core.proportional-engineering"), coreSkill("core.universal-safety")];
+  const result = composeSkillSet({
+    profile: frontendProfile(),
+    skills: [...cores, primary, context],
+    selectedDomainIds: ["frontend"],
+    primaryDomainId: "frontend",
+    capabilities: ["filesystem"],
+    limits: { maxAgentContextSkills: 1 },
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary), candidate(context)] }),
+  });
+  assert.equal(result.status, "prepared");
+  if (result.status !== "prepared") return;
+  assert.ok(result.composed.agentContext.some(({ skill }) => skill.id === "frontend.agents-md-bootstrap"));
+  assert.deepEqual(result.composed.agentContext.map(({ skill }) => skill.id).sort(), ["core.proportional-engineering", "core.universal-safety", "frontend.agents-md-bootstrap"]);
+});
+
+test("a core skill conflict rejects the conflicting task skill and fails a required primary", () => {
+  const primary: RouterSkillMetadata = {
+    id: "frontend.primary", displayName: "Primary", version: "1.0.0", riskLevel: "low", roles: ["primary"],
+    domains: ["frontend"], actions: ["implement"], artifactTypes: ["web-interface"], intentTags: ["web-interface"],
+    technologyTags: [], qualityGoals: ["correctness"], requiredCapabilities: ["filesystem"], optionalCapabilities: [],
+    dependencies: [], conflictsWith: [], supersedes: [], complements: [], instructionBytes: 100,
+  };
+  const companion: RouterSkillMetadata = {
+    ...primary,
+    id: "frontend.conflicting-companion",
+    displayName: "Conflicting Companion",
+    roles: ["companion"],
+    instructionBytes: 50,
+  };
+  const conflictingCore: RouterSkillMetadata = {
+    ...coreSkill("core.proportional-engineering"),
+    conflictsWith: ["frontend.conflicting-companion"],
+  };
+  const candidate = (skill: RouterSkillMetadata, score = 0.9): RouterCandidate => ({
+    skill,
+    score,
+    eligibleRoles: [...skill.roles!] as RouterCandidate["eligibleRoles"],
+    reasons: [],
+    missingCapabilities: [],
+    missingOptionalCapabilities: [],
+    verificationStatus: "not-required",
+  });
+  const removed = composeSkillSet({
+    profile: frontendProfile(),
+    skills: [conflictingCore, coreSkill("core.universal-safety"), primary, companion],
+    selectedDomainIds: ["frontend"],
+    primaryDomainId: "frontend",
+    capabilities: ["filesystem"],
+    resolvedNomination: {
+      nominationOrder: [primary.id, companion.id],
+      primaryNominationOrder: [],
+      nominatedSkillIds: [primary.id, companion.id],
+      nominatedPrimarySkillIds: [],
+      nominatedRoles: new Map([[primary.id, "primary" as const], [companion.id, "companion" as const]]),
+    },
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary), candidate(companion)] }),
+  });
+  assert.equal(removed.status, "prepared");
+  if (removed.status === "prepared") {
+    assert.equal(removed.composed.all.some(({ skill }) => skill.id === "frontend.conflicting-companion"), false);
+    assert.ok(removed.rejections.some(({ skillId, reason }) => skillId === "frontend.conflicting-companion" && reason === "skill-conflict"));
+  }
+
+  const failingPrimary: RouterSkillMetadata = {
+    ...primary,
+    conflictsWith: ["core.universal-safety"],
+  };
+  const required = composeSkillSet({
+    profile: frontendProfile(),
+    skills: [coreSkill("core.proportional-engineering"), coreSkill("core.universal-safety"), failingPrimary],
+    selectedDomainIds: ["frontend"],
+    primaryDomainId: "frontend",
+    capabilities: ["filesystem"],
+    resolvedNomination: {
+      nominationOrder: [failingPrimary.id],
+      primaryNominationOrder: [failingPrimary.id],
+      nominatedSkillIds: [failingPrimary.id],
+      nominatedPrimarySkillIds: [failingPrimary.id],
+      nominatedRoles: new Map([[failingPrimary.id, "primary" as const]]),
+      requiredPrimarySkillId: failingPrimary.id,
+    },
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(failingPrimary)] }),
+  });
+  assert.equal(required.status, "no_matching_skills");
+  assert.ok(required.rejections.some(({ skillId, reason }) => skillId === failingPrimary.id && reason === "skill-conflict"));
+
+  const fallbackPrimary: RouterSkillMetadata = {
+    ...primary,
+    id: "frontend.primary-fallback",
+    displayName: "Primary Fallback",
+    conflictsWith: ["core.proportional-engineering"],
+  };
+  const second: RouterSkillMetadata = { ...primary, id: "frontend.second", displayName: "Second" };
+  const fallback = composeSkillSet({
+    profile: frontendProfile(),
+    skills: [coreSkill("core.proportional-engineering"), coreSkill("core.universal-safety"), fallbackPrimary, second],
+    selectedDomainIds: ["frontend"],
+    primaryDomainId: "frontend",
+    capabilities: ["filesystem"],
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(fallbackPrimary, 0.99), candidate(second, 0.8)] }),
+  });
+  assert.equal(fallback.status, "prepared");
+  if (fallback.status === "prepared") {
+    assert.equal(fallback.composed.primary.skill.id, second.id);
+    assert.ok(fallback.rejections.some(({ skillId, reason }) => skillId === fallbackPrimary.id && reason === "skill-conflict"));
+  }
+});
+
+test("core skills are never counted against maxTotalSelectedSkills", () => {
+  const primary: RouterSkillMetadata = {
+    id: "frontend.primary", displayName: "Primary", version: "1.0.0", riskLevel: "low", roles: ["primary"],
+    domains: ["frontend"], actions: ["implement"], artifactTypes: ["web-interface"], intentTags: ["web-interface"],
+    technologyTags: [], qualityGoals: ["correctness"], requiredCapabilities: ["filesystem"], optionalCapabilities: [],
+    dependencies: [], conflictsWith: [], supersedes: [], complements: [], instructionBytes: 100,
+  };
+  const candidate = (skill: RouterSkillMetadata, score = 0.9): RouterCandidate => ({
+    skill,
+    score,
+    eligibleRoles: ["primary"],
+    reasons: [],
+    missingCapabilities: [],
+    missingOptionalCapabilities: [],
+    verificationStatus: "not-required",
+  });
+  const cores = [coreSkill("core.proportional-engineering"), coreSkill("core.universal-safety")];
+  const result = composeSkillSet({
+    profile: frontendProfile(),
+    skills: [...cores, primary],
+    selectedDomainIds: ["frontend"],
+    primaryDomainId: "frontend",
+    capabilities: ["filesystem"],
+    limits: { maxTotalSelectedSkills: 1 },
+    boundary: createTestRetrievalBoundary({ candidates: [candidate(primary)] }),
+  });
+  assert.equal(result.status, "prepared");
+  if (result.status === "prepared") {
+    assert.deepEqual(result.composed.all.map(({ skill }) => skill.id), ["core.proportional-engineering", "core.universal-safety", "frontend.primary"]);
+  }
+});
+
+test("a host nominating a core skill in a proposal role receives the nominated-role-ineligible rejection", () => {
+  const primary: RouterSkillMetadata = {
+    id: "frontend.primary", displayName: "Primary", version: "1.0.0", riskLevel: "low", roles: ["primary"],
+    domains: ["frontend"], actions: ["implement"], artifactTypes: ["web-interface"], intentTags: ["web-interface"],
+    technologyTags: [], qualityGoals: ["correctness"], requiredCapabilities: ["filesystem"], optionalCapabilities: [],
+    dependencies: [], conflictsWith: [], supersedes: [], complements: [], instructionBytes: 100,
+  };
+  const cores = [coreSkill("core.proportional-engineering"), coreSkill("core.universal-safety")];
+  const retrievalInput = {
+    profile: frontendProfile(),
+    skills: [...cores, primary],
+    selectedDomainIds: ["frontend"],
+    primaryDomainId: "frontend",
+    capabilities: ["filesystem"],
+    nominatedSkillIds: ["core.proportional-engineering", primary.id],
+    nominatedPrimarySkillIds: ["core.proportional-engineering", primary.id],
+    nominatedRoles: new Map([["core.proportional-engineering", "primary" as const], [primary.id, "primary" as const]]),
+  };
+  const result = composeSkillSet({
+    profile: frontendProfile(),
+    skills: [...cores, primary],
+    primaryDomainId: "frontend",
+    capabilities: ["filesystem"],
+    resolvedNomination: {
+      nominationOrder: ["core.proportional-engineering", primary.id],
+      primaryNominationOrder: ["core.proportional-engineering", primary.id],
+      nominatedSkillIds: ["core.proportional-engineering", primary.id],
+      nominatedPrimarySkillIds: ["core.proportional-engineering", primary.id],
+      nominatedRoles: new Map([["core.proportional-engineering", "primary" as const], [primary.id, "primary" as const]]),
+    },
+    boundary: createRetrievalBoundary(retrievalInput),
+  });
+  assert.equal(result.status, "prepared");
+  if (result.status === "prepared") assert.equal(result.composed.primary.skill.id, primary.id);
+  assert.ok(result.rejections.some(({ skillId, reason }) => skillId === "core.proportional-engineering" && reason === "nominated-role-ineligible"));
+  assert.ok(result.composed.agentContext.some(({ skill }) => skill.id === "core.proportional-engineering"));
+});

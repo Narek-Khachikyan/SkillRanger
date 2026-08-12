@@ -603,7 +603,9 @@ test("an ambiguity continuation cannot substitute another nomination after a sel
   });
   assert.equal(continued.status, "context_budget_exceeded");
   if (continued.status !== "context_budget_exceeded") return;
-  assert.deepEqual(continued.blockingSkillIds, ["frontend.visual-design-polish"]);
+  // Core (universal) skills count toward the instruction-byte budget and are
+  // never evicted, so they appear among the blocking skill ids.
+  assert.deepEqual(continued.blockingSkillIds, ["core.proportional-engineering", "core.universal-safety", "frontend.visual-design-polish"]);
   assert.deepEqual(await runFiles(root), { runtime: [], router: [] });
 });
 

@@ -1,0 +1,181 @@
+{
+  "id": "core.universal-safety",
+  "name": "universal-safety",
+  "displayName": "Universal Safety",
+  "description": "Always-on behavioral guidance to never expose secrets, perform unauthorized destructive operations, or erase history, with escalation when a request crosses a safety boundary.",
+  "stackTags": [
+    "agent-guidance",
+    "safety"
+  ],
+  "taskTags": [
+    "agent-behavior",
+    "safety"
+  ],
+  "supportedAgents": [
+    "codex",
+    "claude-code",
+    "opencode",
+    "cursor",
+    "gemini-cli",
+    "generic-agent-skills",
+    "universal"
+  ],
+  "source": {
+    "type": "curated",
+    "registry": "local",
+    "path": "./registry/skills/core.universal-safety"
+  },
+  "version": "0.1.0",
+  "riskLevel": "low",
+  "permissions": {
+    "filesystem": [
+      "read-project"
+    ],
+    "network": false,
+    "shell": false,
+    "writes": []
+  },
+  "scripts": [],
+  "dependencies": [],
+  "qualityScore": 0.83,
+  "securityScore": 0.96,
+  "quality": {
+    "rubricVersion": "1.0",
+    "scores": {
+      "usefulness": 0.86,
+      "triggerSpecificity": 0.88,
+      "progressiveDisclosure": 0.84,
+      "safety": 0.98,
+      "verifiability": 0.72,
+      "maintainability": 0.82,
+      "portability": 0.88
+    }
+  },
+  "freshness": {
+    "lastReviewedAt": "2026-08-12"
+  },
+  "installTargets": [
+    "repo",
+    "user"
+  ],
+  "compatibility": {
+    "codex": {
+      "level": "native",
+      "scopes": [
+        "repo",
+        "user"
+      ],
+      "adapter": "codex"
+    },
+    "claude-code": {
+      "level": "native",
+      "scopes": [
+        "repo",
+        "user"
+      ],
+      "adapter": "claude-code"
+    },
+    "opencode": {
+      "level": "native",
+      "scopes": [
+        "repo",
+        "user"
+      ],
+      "adapter": "opencode"
+    },
+    "cursor": {
+      "level": "native",
+      "scopes": [
+        "repo",
+        "user"
+      ],
+      "adapter": "cursor"
+    },
+    "gemini-cli": {
+      "level": "native",
+      "scopes": [
+        "repo",
+        "user"
+      ],
+      "adapter": "gemini-cli"
+    },
+    "generic-agent-skills": {
+      "level": "native",
+      "scopes": [
+        "repo",
+        "user"
+      ],
+      "adapter": "generic-agent-skills"
+    },
+    "universal": {
+      "level": "native",
+      "scopes": [
+        "repo",
+        "user"
+      ],
+      "adapter": "universal"
+    }
+  },
+  "conflictsWith": [],
+  "supersedes": [],
+  "maintainer": {
+    "name": "local-curated",
+    "trustTier": "curated"
+  },
+  "license": "MIT",
+  "routing": {
+    "lane": "agent-context",
+    "category": "universal-safety",
+    "roles": ["agent-context"],
+    "domains": ["core"],
+    "actions": [
+      "configure",
+      "create",
+      "debug",
+      "deploy",
+      "design",
+      "document",
+      "fix",
+      "implement",
+      "investigate",
+      "migrate",
+      "modify",
+      "optimize",
+      "research",
+      "review",
+      "test",
+      "verify"
+    ],
+    "artifactTypes": [
+      "application",
+      "component",
+      "form",
+      "page",
+      "service"
+    ],
+    "intentTags": [
+      "agent-behavior",
+      "safety"
+    ],
+    "technologyTags": [
+      "agent-guidance"
+    ],
+    "environmentSignals": [
+      "tag:agent-guidance"
+    ],
+    "qualityGoals": [
+      "accessibility",
+      "correctness",
+      "coverage",
+      "performance",
+      "security",
+      "usability"
+    ],
+    "requiredCapabilities": ["filesystem"],
+    "optionalCapabilities": [],
+    "complements": ["core.proportional-engineering"]
+  },
+  "evaluation": {
+    "status": "none"
+  }
+}

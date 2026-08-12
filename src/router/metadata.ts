@@ -33,6 +33,14 @@ export const canonicalSkillRoutingDocument = (skill: {
   },
 });
 
+// The always-on core (universal) skills domain. The owner id "core" is excluded
+// from domain resolution everywhere (host owner sets, direct signal segments,
+// strict-run flattening), so the core domain can never interfere with routing.
+export const isCoreDomainSkill = (domains: Iterable<string>) => {
+  const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
+  return [...domains].some((domain) => canonical(domain) === "core");
+};
+
 export const routerMetadataLimits = {
   maxArrayItems: 64,
   maxTokenBytes: 128,

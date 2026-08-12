@@ -71,6 +71,28 @@ test("router config rejects unknown properties and unsafe values", () => {
   );
 });
 
+test("router config defaults maxCoreSkills to 3 and rejects out-of-range values", () => {
+  assert.equal(defaultRouterConfig.router.maxCoreSkills, 3);
+  assert.throws(
+    () => validateRouterConfig({
+      ...defaultRouterConfig,
+      router: { ...defaultRouterConfig.router, maxCoreSkills: 5 },
+    }),
+    /maxCoreSkills must be an integer from 0 to 4/,
+  );
+  assert.throws(
+    () => validateRouterConfig({
+      ...defaultRouterConfig,
+      router: { ...defaultRouterConfig.router, maxCoreSkills: -1 },
+    }),
+    /maxCoreSkills must be an integer from 0 to 4/,
+  );
+  assert.deepEqual(validateRouterConfig({
+    ...defaultRouterConfig,
+    router: { ...defaultRouterConfig.router, maxCoreSkills: 0 },
+  }).router.maxCoreSkills, 0);
+});
+
 test("router config loader rejects a symlinked project config", async (context) => {
   if (process.platform === "win32") {
     context.skip("symlink creation requires platform-specific privileges on Windows");
