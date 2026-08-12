@@ -58,7 +58,8 @@
     "test": "node --test tests/*.test.ts",
     "check": "node --check src/cli/index.ts && node --check src/cli/release.ts && node --check src/release/certification.ts && node --check src/paths.ts && node --check src/evals/frontend.ts && node --check src/evals/router/index.ts && node --check src/evals/router/model-assisted.ts && node --check src/mcp/server.ts && node --check src/mcp/protocol.ts && node --check src/mcp/tools.ts && node --check src/mcp/tools/types.ts && node --check src/mcp/tools/utils.ts && node --check src/mcp/tools/project.ts && node --check src/mcp/tools/registry.ts && node --check src/mcp/tools/catalog.ts && node --check src/mcp/tools/install.ts && node --check src/mcp/tools/domains.ts && node --check src/mcp/tools/visual.ts && node --check src/mcp/tools/router.ts && node --check src/mcp/router-context.ts && node --check src/cli/task.ts && node --check src/cli/visual-eval.ts && node --check src/evals/process.ts && node --check src/evals/visual/types.ts && node --check src/evals/visual/suite.ts && node --check src/evals/visual/runner.ts && node --check src/evals/visual/review.ts && node --check src/evals/visual/metrics.ts && node --check src/evals/visual/calibration.ts && for file in src/config/*.ts src/router/*.ts; do node --check \"$file\"; done",
     "eval:visual": "node src/cli/index.ts eval:visual",
-    "eval:router": "node src/evals/router/index.ts"
+    "eval:router": "node src/evals/router/index.ts",
+    "demo": "npm run build && vhs docs/demo.tape"
   },
   "keywords": [
     "ai",

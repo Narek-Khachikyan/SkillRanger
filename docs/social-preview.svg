@@ -1,0 +1,19 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16161e"/>
+      <stop offset="1" stop-color="#24283b"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <text x="80" y="110" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="76" fill="#ffffff">SkillRanger</text>
+  <text x="80" y="170" font-family="Helvetica, Arial, sans-serif" font-size="30" fill="#a9b1d6">Find, audit, and install the right AI agent skills for your codebase.</text>
+  <rect x="80" y="240" width="1120" height="330" rx="14" fill="#12121a" stroke="#3d3d52" stroke-width="2"/>
+  <circle cx="116" cy="272" r="9" fill="#ff5f56"/>
+  <circle cx="142" cy="272" r="9" fill="#ffbd2e"/>
+  <circle cx="168" cy="272" r="9" fill="#27c93f"/>
+  <text x="116" y="352" font-family="Menlo, Monaco, monospace" font-size="34" fill="#b3b0d6">$ npx -y skillranger@latest setup</text>
+  <text x="116" y="410" font-family="Menlo, Monaco, monospace" font-size="26" fill="#5eca89">Detected: typescript, nextjs, react, tailwindcss, vitest, playwright</text>
+  <text x="116" y="456" font-family="Menlo, Monaco, monospace" font-size="26" fill="#fdd877">Selected 3 skills - audit: risk low, 0 findings</text>
+  <text x="116" y="502" font-family="Menlo, Monaco, monospace" font-size="26" fill="#b3b0d6">Done. Installed 3 skills. SkillRanger: github.com/Narek-Khachikyan/SkillRanger</text>
+</svg>
