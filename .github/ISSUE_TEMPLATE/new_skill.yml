@@ -1,0 +1,38 @@
+name: New skill
+description: Propose a bundled skill package — the domain, the task it covers, and how it stays instruction-only and auditable.
+title: "[Skill]: "
+labels: ["enhancement", "skills"]
+body:
+  - type: input
+    id: skill-id
+    attributes:
+      label: Proposed skill id
+      description: "<domain>.<name>, e.g. frontend.foo-review"
+      placeholder: "frontend.foo-review"
+    validations:
+      required: true
+  - type: textarea
+    id: task
+    attributes:
+      label: Task the skill covers
+      description: What recurring agent task this skill should carry instructions for, and when it should be recommended.
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Boundaries
+      description: What it must not do — scripts, network calls, secret handling, destructive commands. Bundled skills are instruction-only.
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: Proposed package shape
+      description: SKILL.md + skill.manifest.json under registry/skills/<id>/; which stackTags, taskTags, routing vocabulary, and supported agents.
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |-
+        New skills must pass `pnpm validate:registry`, `pnpm lint:skills`, and `pnpm audit:registry` before they can be merged.

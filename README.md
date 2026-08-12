@@ -1,73 +1,73 @@
 # SkillRanger
 
-<p align="center">
-  <img src="docs/skillranger-hero.jpg" alt="SkillRanger — Discover. Develop. Master. Your Skills." width="720">
-</p>
-
-<p align="center">
-  <strong>Find, audit, and install the right AI agent skills for your codebase.</strong>
-</p>
+AI agents are only as useful as the instructions they are given — and most skills get installed without being read. SkillRanger finds, audits, and installs the right agent skills for your codebase, with the full plan shown before anything is written.
 
 <p align="center">
   <a href="https://www.npmjs.com/package/skillranger"><img src="https://img.shields.io/npm/v/skillranger?color=blue&style=flat-square" alt="npm version"></a>
   <a href="https://github.com/Narek-Khachikyan/SkillRanger/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen?style=flat-square" alt="Node version"></a>
-  <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-Supported-purple?style=flat-square" alt="MCP Server"></a>
   <a href="https://github.com/Narek-Khachikyan/SkillRanger/actions/workflows/ci.yml"><img src="https://github.com/Narek-Khachikyan/SkillRanger/actions/workflows/ci.yml/badge.svg" alt="CI Status"></a>
 </p>
 
----
-
-**Public MVP / Beta** · Local-First · CLI + MCP · Zero Runtime Dependencies
-
-SkillRanger scans your repository, detects its stack and development context, recommends compatible skills, audits them for safety risks, and creates a reviewable install plan before writing anything.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Narek-Khachikyan/SkillRanger/main/docs/demo.gif" alt="SkillRanger setup on a Next.js project: scan, recommend, audit, confirm, install" width="720">
+</p>
 
 ## Quick Start
 
-One command, inside your project:
-
 ```bash
-cd your-project
 npx -y skillranger@latest setup
 ```
 
-SkillRanger requires Node.js 20 or newer. The setup command walks you through the whole flow in about 30 seconds:
+Run that one command inside your project. SkillRanger requires Node.js 20 or newer. The setup flow takes about 30 seconds and works like this:
 
 1. **Scan** — detects your repository's stack (`Detected:` types, languages, frameworks, styling, testing).
-2. **Recommend** — selects a small compatible skill set (`Selected N skills:`).
-3. **Plan** — shows the reviewable install plan: exactly which files would be written and updated (`Planned changes:`). Nothing is touched yet.
-4. **Audit** — prints a computed audit summary for each recommended skill: risk level and findings count (`Audit summary:`).
-5. **Install** — after you confirm, installs the reviewed instructions, writes a managed block into your `AGENTS.md`, and records checksums in `skillranger.lock.json`.
+2. **Recommend** — selects a small compatible skill set (`Selected N skills:`), not a dump of everything that exists.
+3. **Plan** — shows exactly which files would be written or updated (`Planned changes:`). Nothing is touched yet.
+4. **Audit** — prints a computed risk level and finding count for every recommended skill (`Audit summary:`).
+5. **Install** — after you confirm, writes the reviewed instructions, adds a managed block to your `AGENTS.md`, and records checksums in `skillranger.lock.json`.
 
-When setup finishes, it prints one feedback invitation: star the repo or open an issue.
-
-To script the same flow without the interactive prompts, pass `--yes` with an intent. Interactively, setup asks for the target agent, scope, and install mode:
-
-```bash
-npx -y skillranger@latest setup --yes --target codex \
-  --intent "Review this Next.js app before release"
-```
+To script the same flow, pass `--yes` with an intent. Interactively, setup asks you to confirm the target agents, scope, and install mode. In an interactive terminal, setup ends with a single line pointing to the repository; it stays quiet in CI.
 
 ### What setup creates
 
-For a repo-scoped setup, SkillRanger can create or update:
+For a repo-scoped setup, SkillRanger creates or updates:
 
 - `.agents/skills/<skill>/` — repository-local skill packages;
-- `AGENTS.md` — a bounded SkillRanger-managed context block;
+- `AGENTS.md` — a bounded, marker-delimited SkillRanger-managed context block;
 - `skillranger.lock.json` — installed versions, checksums, targets, and audit metadata.
 
-SkillRanger installs static instructions. It does not invoke a model itself or silently modify your application code.
+Installed skills are static instructions. SkillRanger does not invoke a model itself, execute skill scripts, or silently modify your application code.
 
 ## Why SkillRanger?
 
-| Feature | What it means |
-| :--- | :--- |
-| **Context-aware recommendations** | Skills are selected from repository evidence and the user's task instead of a fixed global list. |
-| **No blind installs** | Review recommendations, audit results, and planned file changes before applying them. |
-| **Hybrid prompt routing** | Deterministic vocabulary matching remains available, while an MCP host model can nominate skills from the trusted catalog for implicit intent. |
-| **Lockfile integrity** | Installed versions, checksums, target agents, and audit data are tracked in `skillranger.lock.json`. |
-| **Local-first operation** | Bundled discovery and recommendation require no API keys or network tokens. |
-| **Multiple agent targets** | One project can be prepared for Codex, Claude Code, Cursor, OpenCode, Gemini CLI, or MCP hosts. |
+Three situations that send developers looking for a skill installer:
+
+- **Copy-pasted skills rot.** The skill you pasted from a blog post has no version, no checksum, and no update path. Months later your agent still follows instructions written for an old API, and nobody knows.
+- **Install-all lists bloat your repo.** Dumping a curated list of forty skills into the project makes every agent read more context than it needs. The right two skills for your stack get lost in the noise.
+- **Trust is granted before review.** In most install flows the plan is the install. You never see what will be written, and no one checks the skill for credential access, destructive commands, or prompt-injection patterns before it lands in the context your agent trusts most.
+
+SkillRanger exists to make the review step the default instead of an exception: recommend a small set, audit it, show the plan, then write.
+
+### Honest comparison
+
+| | SkillRanger | Manual copying | Git submodule | Curated skill collections |
+| :--- | :--- | :--- | :--- | :--- |
+| **Versioning** | Lockfile-pinned installs (`skillranger.lock.json`) | None — paste and forget | Upstream commit recorded; `git submodule update` syncs to it | Whatever upstream does |
+| **Integrity checks** | SHA-256 checksums recorded and verified | None | Git hash integrity | None stated |
+| **Relevance to your repo** | Selected from detected stack + your intent | Whatever you pick | A fixed repo, not per-project selection | Browse and pick by hand |
+| **Audit before install** | Static security audit per skill, shown in the plan | None | None | None (see below) |
+| **Multiple agent targets** | Codex, Claude Code, Cursor, OpenCode, Gemini CLI, MCP hosts | Copy per agent by hand | One checkout; per-agent mapping is manual | Per collection |
+| **Review before writing** | Full plan and audit summary before confirm | None | None | None |
+
+**Best when:**
+- **Manual copying** — you need one or two files and want no tooling at all.
+- **Git submodule** — your priority is exact synchronization with an upstream repo.
+- **Curated collection** — your priority is browsing and choosing skills by hand.
+
+Third-party notes: git submodule tracks a recorded upstream commit and updates the working tree to match it (git-scm.com/docs/git-submodule, checked 2026-08-12). Curated collections such as anthropics/skills present skills for manual browsing and are described as demonstration and educational material — "always test skills thoroughly in your own environment before relying on them" (github.com/anthropics/skills README, checked 2026-08-12); they do not audit before install.
+
+**Where SkillRanger is not the best choice:** the bundled registry currently covers frontend skills only — a backend-only project will get few or no recommendations. Skills are instructions, not code: the host agent still does the work. And if you never install third-party content into your agent's context, you do not need an installer at all.
 
 ## How It Works
 
@@ -92,92 +92,27 @@ Your agent reads the selected instructions and performs the task
 
 ## Supported Agents
 
-SkillRanger supports repo-local setup for:
+Repo-local setup is supported for Codex, Claude Code, Cursor, OpenCode, Gemini CLI, and Model Context Protocol hosts through the stdio MCP server. One install can target several agents at once (`--target codex,claude-code`).
 
-- **Codex** (`codex`)
-- **Claude Code** (`claude-code`)
-- **Cursor** (`cursor`)
-- **OpenCode** (`opencode`)
-- **Gemini CLI** (`gemini-cli`)
-- **Model Context Protocol** hosts through the stdio MCP server
+## Bundled Skills
 
-## Bundled Frontend Skills
+SkillRanger ships with 18 pre-audited, instruction-only frontend skills: framework reviews (Next.js App Router, React), component and Tailwind polish, visual design, UX, interaction, motion, accessibility, performance, testing strategy, Playwright debugging, release audits, and agent-context bootstrap.
 
-SkillRanger currently ships with 18 pre-audited, instruction-only frontend skills covering:
-
-- React and Next.js architecture;
-- component design and Tailwind UI polish;
-- visual design, UX, interaction, and motion;
-- accessibility, performance, testing, and Playwright debugging;
-- release audits and AI-agent project context.
-
-<details>
-<summary><strong>View all 18 bundled skill IDs</strong></summary>
-
-| Category | Skill ID | Purpose |
-| :--- | :--- | :--- |
-| Framework & Core | `frontend.next-app-router-review` | Next.js App Router architecture and data-flow review. |
-| | `frontend.react-app-review` | React state ownership, providers, and render performance. |
-| | `frontend.react-component-design` | Component APIs, composition, and prop boundaries. |
-| | `frontend.tailwind-ui-polish` | Responsive layout and Tailwind UI cleanup. |
-| | `frontend.design-to-code` | Responsive implementation from designs and mockups. |
-| Design & Motion | `frontend.visual-design-polish` | Art direction, hierarchy, typography, and aesthetics. |
-| | `frontend.design-system` | Tokens, themes, primitives, and consistency. |
-| | `frontend.ux-critique` | Information architecture, usability, and user flows. |
-| | `frontend.interaction-polish` | Dialogs, drawers, focus, and micro-interactions. |
-| | `frontend.motion-design` | Motion choreography and reduced-motion behavior. |
-| | `frontend.motion-audit` | Animation performance and frame-drop diagnostics. |
-| | `frontend.visual-critic` | Independent visual comparison and critique. |
-| Quality & Release | `frontend.accessibility-review` | WCAG, ARIA, keyboard navigation, and focus behavior. |
-| | `frontend.performance-review` | Core Web Vitals, bundles, and render bottlenecks. |
-| | `frontend.testing-strategy` | Focused unit, integration, and E2E planning. |
-| | `frontend.playwright-debug` | Playwright flakiness, waits, and traces. |
-| | `frontend.audit` | Broad frontend release-readiness audit. |
-| Agent Context | `frontend.agents-md-bootstrap` | Project commands and architecture guidance for agents. |
-
-</details>
+The full table of skill IDs, categories, and purposes is in [`docs/bundled-skills.md`](docs/bundled-skills.md).
 
 ## Security Model
 
-- **Bundled local registry** — bundled packages ship with the distribution; normal recommendation does not fetch arbitrary remote skills.
-- **Static instructions** — installed skill packages are instructions, not scripts executed during installation.
-- **Explicit writes** — CLI installation can be previewed with `--dry-run`; MCP writes require explicit confirmation.
-- **Integrity tracking** — installed files are hashed and recorded in `skillranger.lock.json`.
-- **Host-managed execution** — the host owns model calls, tools, and application-code changes; SkillRanger validates model nominations and enforces routing and runtime guarantees.
+- **Bundled local registry** — packages ship with the distribution; normal recommendation never fetches arbitrary remote skills.
+- **Static instructions** — skills are text, not scripts; nothing executes during installation.
+- **Explicit writes** — CLI installs can be previewed with `--dry-run`; interactive setup always shows the plan before writing.
+- **Integrity tracking** — installed files are hashed and recorded in `skillranger.lock.json`; `skillranger verify` checks them.
+- **Host-managed execution** — the host owns model calls and code changes; SkillRanger validates what a model proposes and refuses ineligible or unsafe skills.
 
-## Advanced
+The full threat model lives in [`docs/SECURITY.md`](docs/SECURITY.md).
 
-The capabilities below are ready to use but are not part of the 30-second quick start.
+## For Agent Hosts (MCP)
 
-### Universal Task Router
-
-SkillRanger also routes a natural-language task into a bounded, reviewable skill set. Two paths are supported: a deterministic fallback that matches the prompt and repository signals against a bounded bilingual vocabulary, and catalog-assisted MCP routing where the host model reads the audited skill catalog and submits a prompt-grounded `routingProposal` — which SkillRanger validates before composing the final set. The model cannot add arbitrary skills, bypass audit or compatibility checks, or force an ineligible skill.
-
-- [`docs/model-assisted-routing.md`](docs/model-assisted-routing.md) — the catalog-assisted flow
-- [`docs/ROUTING_VOCABULARY.md`](docs/ROUTING_VOCABULARY.md) — vocabulary and translations
-- [ADR 0003](docs/adr/0003-model-assisted-skill-nomination.md) — design and trust boundaries
-
-### Strict runs, evidence, and recovery
-
-Persisted runs track skill reads, execution, evidence, and verification. Strict v2 requires opened steps, attached evidence, and verification before finalization — a run is only `verified` when every gate passes. Lifecycle v1 and strict v2 runs, evidence handling, verification states, and recovery behavior are documented in:
-
-- [`docs/workflow-runtime.md`](docs/workflow-runtime.md) — run lifecycle and recovery
-- [`docs/verification-engine.md`](docs/verification-engine.md) — evidence and gates
-
-### Frontend design pipeline
-
-The frontend design contract ships in release `0.4.1`: six rule families, 18 stable rules, eight recipe packs, and 80 deterministic worked-example assets. The pipeline covers briefs and recipes, rule selection, repair loops, model capability profiles, and browser-based visual verification:
-
-- [`docs/design-rule-library.md`](docs/design-rule-library.md) — rule library and recipes
-- [`docs/repair-loop.md`](docs/repair-loop.md) — bounded repair flow
-- [`docs/model-capability-profiles.md`](docs/model-capability-profiles.md) — model profiles
-- [`docs/browser-adapter.md`](docs/browser-adapter.md) and [`docs/visual-benchmark.md`](docs/visual-benchmark.md) — visual verification
-
-Run `npm run release:validate` to verify the local package artifacts; use `release:certify` to bind external visual and matched-baseline evidence into a retained promotion verdict.
-
-### MCP integration
-
-SkillRanger runs as a stdio MCP server so a host agent can analyze projects, recommend and audit skills, discover the trusted skill catalog, accept a host model's routing proposal, preview or confirm installations, prepare routed tasks, and serve mandatory skill instructions:
+SkillRanger runs as a stdio MCP server so a host agent can analyze projects, recommend and audit skills, discover the audited catalog, propose a skill set for a task, preview or confirm installations, and serve the installed instructions:
 
 ```json
 {
@@ -190,55 +125,19 @@ SkillRanger runs as a stdio MCP server so a host agent can analyze projects, rec
 }
 ```
 
-Full host configuration (Claude Code, Cursor, and other clients) is in [`docs/mcp-host-config.md`](docs/mcp-host-config.md).
+When a host model proposes skills for a task, SkillRanger validates the proposal against catalog, audit, and compatibility rules before composing the final set — a model cannot add arbitrary skills or bypass an audit gate. Host configuration for Claude Code, Cursor, and other clients: [`docs/mcp-host-config.md`](docs/mcp-host-config.md).
 
-### Advanced CLI usage
+## Documentation
 
-The commands below are optional. They are useful for inspecting individual stages, scripting SkillRanger, or integrating it into an agent host.
-
-```bash
-# Detect repository context
-npx -y skillranger@latest scan .
-
-# Explain recommendations for a task
-npx -y skillranger@latest recommend . \
-  --target codex \
-  --intent "Review this Next.js app before release" \
-  --explain
-
-# Audit one package
-npx -y skillranger@latest audit frontend.next-app-router-review
-
-# Preview installation
-npx -y skillranger@latest install frontend.next-app-router-review \
-  --project . \
-  --target codex \
-  --scope repo \
-  --dry-run
-
-# Apply the reviewed plan
-npx -y skillranger@latest install frontend.next-app-router-review \
-  --project . \
-  --target codex \
-  --scope repo \
-  --yes
-
-# Inspect installed skills
-npx -y skillranger@latest installed .
-
-# Direct task routing (structured result, no interactive flow)
-npx -y skillranger@latest task . \
-  --intent "Review accessibility and fix critical focus traps" \
-  --target codex \
-  --json
-
-# Read required instruction chunks from a routed task
-npx -y skillranger@latest task:read . \
-  --router-run <router-run-id> \
-  --mandatory-next \
-  --expected-read-revision 0 \
-  --json
-```
+- [`docs/bundled-skills.md`](docs/bundled-skills.md) — the full bundled skill catalog
+- [`docs/cli-reference.md`](docs/cli-reference.md) — every command and flag
+- [`docs/model-assisted-routing.md`](docs/model-assisted-routing.md) — catalog-assisted routing for hosts
+- [`docs/workflow-runtime.md`](docs/workflow-runtime.md) — persisted runs, evidence, and recovery
+- [`docs/verification-engine.md`](docs/verification-engine.md) — evidence and verification gates
+- [`docs/design-rule-library.md`](docs/design-rule-library.md) — frontend design rules and recipes
+- [`docs/REGISTRY.md`](docs/REGISTRY.md) — skill package metadata and registry design
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system architecture
+- [`docs/SECURITY.md`](docs/SECURITY.md) — threat model
 
 ## Development
 
@@ -252,6 +151,8 @@ pnpm check
 pnpm test
 pnpm release:check
 ```
+
+Contributions are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) for environment setup, how to create a skill package, and the PR gates.
 
 ## License
 
