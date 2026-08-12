@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/domains/frontend/reference-dna.schema.json",
+  "title": "Reference design DNA extraction",
+  "description": "Provenance-labelled artifact produced by the design-to-code DNA-extraction mode: the reference design's macrostructure, type pairing, and colour anchor recorded as named attributes, with the attribute-vs-trade-dress boundary declared explicitly. The artifact never carries pixels, exact reference tokens, brand marks, or trade-dress reproduction.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "reference", "macrostructure", "typePairing", "colourAnchor", "evidence", "boundary"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "kind", "ownership"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "kind": { "enum": ["screenshot", "mock", "figma-brief", "design-spec"] },
+        "ownership": { "enum": ["user-owned", "product-local", "competitor-inspiration", "unknown"] }
+      }
+    },
+    "macrostructure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "evidence"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "evidence": { "type": "string", "minLength": 1, "pattern": "\\S" }
+      }
+    },
+    "typePairing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["displayVoice", "bodyVoice", "evidence"],
+      "properties": {
+        "displayVoice": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "bodyVoice": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "evidence": { "type": "string", "minLength": 1, "pattern": "\\S" }
+      }
+    },
+    "colourAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paperBand", "displayStyle", "accentHue", "evidence"],
+      "properties": {
+        "paperBand": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "displayStyle": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "accentHue": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "evidence": { "type": "string", "minLength": 1, "pattern": "\\S" }
+      }
+    },
+    "evidence": { "$ref": "#/$defs/evidenceLadder" },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attributesExtracted", "protectedExpressionRefused"],
+      "properties": {
+        "attributesExtracted": { "$ref": "#/$defs/stringList" },
+        "protectedExpressionRefused": { "$ref": "#/$defs/stringList" }
+      }
+    }
+  },
+  "$defs": {
+    "stringList": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "pattern": "\\S" }
+    },
+    "evidenceLadder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed", "inferred", "assumed", "unknown"],
+      "properties": {
+        "observed": { "$ref": "#/$defs/evidenceEntries" },
+        "inferred": { "$ref": "#/$defs/evidenceEntries" },
+        "assumed": { "$ref": "#/$defs/evidenceEntries" },
+        "unknown": { "$ref": "#/$defs/evidenceEntries" }
+      }
+    },
+    "evidenceEntries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["statement"],
+        "properties": {
+          "statement": { "type": "string", "minLength": 1 },
+          "source": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

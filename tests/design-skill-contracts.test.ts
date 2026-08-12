@@ -339,6 +339,25 @@ test("design-to-code has reference ethics and positive translation rules", async
   assert.match(text, /\breusable attributes?\b/i);
 });
 
+test("design-to-code carries the DNA-extraction mode with the trade-dress boundary", async () => {
+  const text = await readSkill("design-to-code");
+  assert.match(text, /## DNA-Extraction Mode/);
+  assert.match(text, /\.design\/reference-dna\.json/);
+  assert.match(text, /macrostructure[\s\S]*type pairing[\s\S]*colour anchor/i);
+  assert.match(text, /observed\/inferred\/assumed\/unknown/i);
+  assert.match(text, /protected expression/i);
+  assert.match(text, /at least one refusal/i);
+
+  const guide = await readFile(
+    path.resolve("registry/skills/frontend.design-to-code/references/dna-extraction.md"),
+    "utf8",
+  );
+  assert.match(guide, /## When To Use/);
+  assert.match(guide, /## Boundary/);
+  assert.match(guide, /pixel clones? are refused/i);
+  assert.match(guide, /base64 image data/i);
+});
+
 test("motion design carries positive choreography rules, not only anti-slop", async () => {
   const text = await readSkill("motion-design");
   assert.match(text, /## Motion Direction And Choreography/);

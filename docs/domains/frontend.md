@@ -8,6 +8,7 @@ Frontend v1 supplies:
 - 18 versioned rules across typography, layout, responsive, color, state, and signature-move families;
 - eight worked example packs with 80 deterministic good/bad SVG evidence plates;
 - deterministic brief, axis, responsive, state, runtime, accessibility, focus, and reduced-motion gates;
+- a reference DNA artifact contract (`schemas/reference-dna.schema.json`) for the design-to-code DNA-extraction mode, validating the macrostructure, type pairing, and colour anchor attribute record plus its trade-dress boundary;
 - verification outcomes separated from host capability readiness;
 - bounded repair requests that never edit a project silently;
 - structured execution packages for `frontend.visual-design-polish`, `frontend.tailwind-ui-polish`, and `frontend.design-to-code`;
