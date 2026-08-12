@@ -66,7 +66,8 @@ Adding a rule family or silently replacing a stable identifier is a contract cha
 2. Select the policy-permitted recipe.
 3. Load `domains/frontend/rules/index.json` and select exactly one compatible rule per family.
 4. Record the six selected rule ids in the structured direction metadata before implementation.
-5. Open `domains/frontend/examples/<recipe-id>/example.json` and compare the direction with its good and bad scenes.
+5. New directions use direction schemaVersion `1.1` and also record the identity fields: a named `macrostructure` and the three `themeAxes` (`paperBand`, `displayStyle`, `accentHue`). Legacy `1.0` directions remain loadable and are pinned by the schema snapshots of existing strict runs.
+6. Open `domains/frontend/examples/<recipe-id>/example.json` and compare the direction with its good and bad scenes.
 
 The constrained profile always uses this six-rule selection. The standard profile compares alternatives using rule ids, so differences are explicit rather than described as taste. The advanced profile may deviate only after destructive critique names the violated rule, product benefit, accessibility effect, and verification replacement.
 

@@ -51,8 +51,7 @@ export type DesignRecipe = {
   validationRules: string[];
 };
 
-export type DesignDirection = {
-  schemaVersion: "1.0";
+export type DesignDirectionCommon = {
   recipeId: string;
   selectedRuleIds?: string[];
   thesis: string;
@@ -71,6 +70,21 @@ export type DesignDirection = {
   rejectedDefaults: string[];
   destructiveCritique: string;
 };
+
+export type DesignDirectionIdentity = {
+  macrostructure: string;
+  themeAxes: {
+    paperBand: string;
+    displayStyle: string;
+    accentHue: string;
+  };
+};
+
+export type DesignDirectionV10 = DesignDirectionCommon & { schemaVersion: "1.0" };
+
+export type DesignDirectionV11 = DesignDirectionCommon & DesignDirectionIdentity & { schemaVersion: "1.1" };
+
+export type DesignDirection = DesignDirectionV10 | DesignDirectionV11;
 
 export type BrowserObservation = {
   schemaVersion: "1.0";

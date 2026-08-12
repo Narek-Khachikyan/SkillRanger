@@ -1,32 +1,81 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://skillranger.local/domains/frontend/design-direction.schema.json",
-  "type": "object",
-  "required": ["schemaVersion", "recipeId", "thesis", "productReason", "axes", "typographyRoles", "colorRoles", "signatureMove", "rejectedDefaults", "destructiveCritique"],
-  "properties": {
-    "schemaVersion": { "const": "1.0" },
-    "recipeId": { "type": "string", "minLength": 1 },
-    "selectedRuleIds": { "type": "array", "minItems": 6, "maxItems": 6, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
-    "thesis": { "type": "string", "minLength": 1 },
-    "productReason": { "type": "string", "minLength": 1 },
-    "axes": {
+  "oneOf": [
+    { "$ref": "#/$defs/directionV10" },
+    { "$ref": "#/$defs/directionV11" }
+  ],
+  "$defs": {
+    "directionV10": {
       "type": "object",
-      "required": ["density", "hierarchy", "composition", "material", "motionIntensity", "expressionLevel"],
+      "required": ["schemaVersion", "recipeId", "thesis", "productReason", "axes", "typographyRoles", "colorRoles", "signatureMove", "rejectedDefaults", "destructiveCritique"],
       "properties": {
-        "density": { "enum": ["compact", "balanced", "spacious", "editorial"] },
-        "hierarchy": { "enum": ["action-first", "data-first", "narrative-first", "exception-first"] },
-        "composition": { "enum": ["structured-list", "grid", "split-pane", "timeline", "table", "editorial-grid"] },
-        "material": { "enum": ["flat", "bordered", "layered", "tactile", "document-like"] },
-        "motionIntensity": { "enum": ["none", "low", "medium", "high"] },
-        "expressionLevel": { "enum": ["restrained", "balanced", "expressive"] }
+        "schemaVersion": { "const": "1.0" },
+        "recipeId": { "type": "string", "minLength": 1 },
+        "selectedRuleIds": { "type": "array", "minItems": 6, "maxItems": 6, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "thesis": { "type": "string", "minLength": 1 },
+        "productReason": { "type": "string", "minLength": 1 },
+        "axes": {
+          "type": "object",
+          "required": ["density", "hierarchy", "composition", "material", "motionIntensity", "expressionLevel"],
+          "properties": {
+            "density": { "enum": ["compact", "balanced", "spacious", "editorial"] },
+            "hierarchy": { "enum": ["action-first", "data-first", "narrative-first", "exception-first"] },
+            "composition": { "enum": ["structured-list", "grid", "split-pane", "timeline", "table", "editorial-grid"] },
+            "material": { "enum": ["flat", "bordered", "layered", "tactile", "document-like"] },
+            "motionIntensity": { "enum": ["none", "low", "medium", "high"] },
+            "expressionLevel": { "enum": ["restrained", "balanced", "expressive"] }
+          },
+          "additionalProperties": false
+        },
+        "typographyRoles": { "type": "object", "additionalProperties": { "type": "string" } },
+        "colorRoles": { "type": "object", "additionalProperties": { "type": "string" } },
+        "signatureMove": { "type": "string", "minLength": 1 },
+        "rejectedDefaults": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "destructiveCritique": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false
     },
-    "typographyRoles": { "type": "object", "additionalProperties": { "type": "string" } },
-    "colorRoles": { "type": "object", "additionalProperties": { "type": "string" } },
-    "signatureMove": { "type": "string", "minLength": 1 },
-    "rejectedDefaults": { "type": "array", "minItems": 1, "items": { "type": "string" } },
-    "destructiveCritique": { "type": "string", "minLength": 1 }
-  },
-  "additionalProperties": false
+    "directionV11": {
+      "type": "object",
+      "required": ["schemaVersion", "recipeId", "thesis", "productReason", "axes", "typographyRoles", "colorRoles", "signatureMove", "rejectedDefaults", "destructiveCritique", "macrostructure", "themeAxes"],
+      "properties": {
+        "schemaVersion": { "const": "1.1" },
+        "recipeId": { "type": "string", "minLength": 1 },
+        "selectedRuleIds": { "type": "array", "minItems": 6, "maxItems": 6, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "thesis": { "type": "string", "minLength": 1 },
+        "productReason": { "type": "string", "minLength": 1 },
+        "axes": {
+          "type": "object",
+          "required": ["density", "hierarchy", "composition", "material", "motionIntensity", "expressionLevel"],
+          "properties": {
+            "density": { "enum": ["compact", "balanced", "spacious", "editorial"] },
+            "hierarchy": { "enum": ["action-first", "data-first", "narrative-first", "exception-first"] },
+            "composition": { "enum": ["structured-list", "grid", "split-pane", "timeline", "table", "editorial-grid"] },
+            "material": { "enum": ["flat", "bordered", "layered", "tactile", "document-like"] },
+            "motionIntensity": { "enum": ["none", "low", "medium", "high"] },
+            "expressionLevel": { "enum": ["restrained", "balanced", "expressive"] }
+          },
+          "additionalProperties": false
+        },
+        "typographyRoles": { "type": "object", "additionalProperties": { "type": "string" } },
+        "colorRoles": { "type": "object", "additionalProperties": { "type": "string" } },
+        "signatureMove": { "type": "string", "minLength": 1 },
+        "rejectedDefaults": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "destructiveCritique": { "type": "string", "minLength": 1 },
+        "macrostructure": { "type": "string", "minLength": 1 },
+        "themeAxes": {
+          "type": "object",
+          "required": ["paperBand", "displayStyle", "accentHue"],
+          "properties": {
+            "paperBand": { "type": "string", "minLength": 1 },
+            "displayStyle": { "type": "string", "minLength": 1 },
+            "accentHue": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
 }
