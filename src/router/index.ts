@@ -76,6 +76,14 @@ export {
   resolveNomination,
   resolvePrimaryArbitration,
 } from "./nomination-resolution.ts";
+export {
+  createRetrievalBoundary,
+  createTestRetrievalBoundary,
+} from "./retrieval-boundary.ts";
+export type {
+  RetrievalBoundary,
+  TestRetrievalBoundaryInput,
+} from "./retrieval-boundary.ts";
 export type {
   DeclaredPrimarySkillAmbiguity,
   DeclaredPrimarySkillClarification,
