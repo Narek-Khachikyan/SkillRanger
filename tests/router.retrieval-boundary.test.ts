@@ -179,8 +179,8 @@ test("factory parity holds for the proposal-driven strict retrieval input", () =
     contractMustRead: ["SKILL.md"],
   });
   const nominatedIds = [base.id];
-  // The exact retrieval input composition's internal retrieval runs for a
-  // proposal-driven strict composition: strict off, defer disabled.
+  // The exact retrieval input the boundary factory derives for a proposal-driven
+  // strict composition: strict off, defer disabled.
   const retrievalInput: RetrieveSkillCandidatesInput = {
     profile: profile(),
     skills: [base],

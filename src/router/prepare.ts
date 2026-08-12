@@ -19,8 +19,10 @@ import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "./vocabulary/
 import { RoutingVocabularyValidationError } from "./vocabulary/validate.ts";
 import { validateSemanticHints } from "./semantic-hints.ts";
 import { analyzeTask } from "./analyzer.ts";
-import { primarySkillAmbiguityQuestionId, resolveDeclaredPrimarySkillClarification, resolveNomination } from "./nomination-resolution.ts";
-import { buildNominatedPrimaryEligibilityFacts, composeSkillSet, defaultRouterLimits, retrieveSkillCandidates, type RouterSkillMetadata } from "./composer.ts";
+import { primarySkillAmbiguityQuestionId, resolveDeclaredPrimarySkillClarification, resolveNomination, type ResolvedNomination } from "./nomination-resolution.ts";
+import { composeSkillSet, defaultRouterLimits, type RouterSkillMetadata } from "./composer.ts";
+import type { RetrieveSkillCandidatesInput } from "./retrieval.ts";
+import { createRetrievalBoundary } from "./retrieval-boundary.ts";
 import { createContinuationToken, validateContinuation, type RouterClarificationQuestion } from "./continuation.ts";
 import { defaultRouterThresholds, normalizeDomainAlias, resolveDomains } from "./resolver.ts";
 import { parseTrigger } from "./trigger.ts";
@@ -550,7 +552,6 @@ export const prepareTask = async (
   const nominatedSkillIds = declaredResolution?.nominatedSkillIds ?? [];
   const primaryNominationOrder = declaredResolution?.primaryNominationOrder ?? [];
   const nominatedPrimarySkillIds = declaredResolution?.nominatedPrimarySkillIds ?? [];
-  const nominatedRoles = declaredResolution?.nominatedRoles;
   const resolution = resolveDomains({ profile: analysis.profile, domains, skills: allMetadata, fingerprint, availableDomainIds: packs.map(({ id }) => id), thresholds: defaultRouterThresholds, routingIntentTags: analysis.routingIntentTags, routingContext, routingSignals: analysis.matchedSignals });
   const declaredAmbiguityIds = routingProposal?.ambiguity?.primarySkillIds ?? [];
   // A continuation answer only permutes the primary nomination order (the selected
@@ -583,31 +584,37 @@ export const prepareTask = async (
     ? catalogSkill(firstPrimaryNomination.skillId)?.domains[0]
     : undefined;
   const probeSelectedPrimary = routingProposal && firstPrimaryNominationDomain ? firstPrimaryNominationDomain : resolution.primaryDomainId;
-  const ambiguityProbe = declaredAmbiguityIds.length > 0 && !explicitSkillId
-    ? retrieveSkillCandidates({
-      profile: analysis.profile,
-      requirements: analysis.requirements,
-      skills: allMetadata,
-      targetAgent,
-      capabilities,
-      strict: false,
-      installedSkillIds: allMetadata.filter(({ installed }) => installed).map(({ id }) => id),
-      selectedDomainIds: routingCandidates.map(({ id }) => id),
-      primaryDomainId: probeSelectedPrimary,
-      fingerprint,
-      routingDate,
-      routingIntentTags: analysis.routingIntentTags,
-      routingContext,
-      matchedSignals: analysis.matchedSignals,
-      nominatedSkillIds,
-      nominatedPrimarySkillIds,
-      nominatedRoles,
-      maxSelectedRisk: config.router.maxSelectedRisk,
-    })
+  // The single unified retrieval input for the boundary factory: the probe and
+  // any explicit rebuild request different primary domains, strict flags, and
+  // nomination resolutions from the same builder, so the two calls can never
+  // hand-align divergent retrieval inputs again.
+  const retrievalBoundaryInput = (primaryDomainId: string | undefined, strict: boolean, nomination: ResolvedNomination | undefined): RetrieveSkillCandidatesInput => ({
+    profile: analysis.profile,
+    requirements: analysis.requirements,
+    skills: allMetadata,
+    targetAgent,
+    capabilities,
+    strict,
+    installedSkillIds: allMetadata.filter(({ installed }) => installed).map(({ id }) => id),
+    selectedDomainIds: routingCandidates.map(({ id }) => id),
+    primaryDomainId,
+    fingerprint,
+    routingDate,
+    routingIntentTags: analysis.routingIntentTags,
+    routingContext,
+    matchedSignals: analysis.matchedSignals,
+    ...(nomination ? { nominatedSkillIds: nomination.nominatedSkillIds, nominatedPrimarySkillIds: nomination.nominatedPrimarySkillIds, nominatedRoles: nomination.nominatedRoles } : {}),
+    maxSelectedRisk: config.router.maxSelectedRisk,
+  });
+  // One boundary serves the probe and composition: the production factory owns
+  // the single unified retrieval input construction and binds the eligibility
+  // fact projection to the result it stored, so the facts the declared-ambiguity
+  // clarification decision sees can never disagree with the retrieval that
+  // composition consumes.
+  const probeBoundary = declaredAmbiguityIds.length > 0 && !explicitSkillId
+    ? createRetrievalBoundary(retrievalBoundaryInput(probeSelectedPrimary, false, declaredResolution))
     : undefined;
-  const nominatedPrimaryFacts = ambiguityProbe
-    ? buildNominatedPrimaryEligibilityFacts({ retrieval: ambiguityProbe, skillIds: nominatedPrimarySkillIds })
-    : [];
+  const nominatedPrimaryFacts = probeBoundary?.eligibilityFacts(nominatedPrimarySkillIds) ?? [];
   // The cohesive nomination decision owns declared-ambiguity eligibility, the typed
   // closed-option question, and the answer's effect on the effective nomination
   // order. The continuation module owns token signing, expiry, replay protection,
@@ -716,12 +723,18 @@ export const prepareTask = async (
     return { ...resultCommon(resolution.candidates, outcome), ...outcome };
   }
   // The ambiguity probe is the existing candidate retrieval, aligned to the composition
-  // retrieval input: the same nomination sets, roles, domains, and primary domain. Its
-  // result is reused by composition instead of running a second eligibility pass. The
-  // only axis that can diverge between the probe and the final primary domain is a
-  // continuation answer selecting a nomination that names another domain; reuse is
-  // skipped then, preserving the historical retrieval input exactly.
-  const reuseProbeRetrieval = ambiguityProbe !== undefined && probeSelectedPrimary !== undefined && canonical(probeSelectedPrimary) === canonical(selectedPrimary);
+  // retrieval input: the same nomination sets, roles, domains, and primary domain. The
+  // probe boundary's result is reused by composition instead of running a second
+  // eligibility pass. The only axis that can diverge between the probe and the final
+  // primary domain is a continuation answer selecting a nomination that names another
+  // domain; reuse is skipped then and the boundary is rebuilt explicitly through the
+  // same factory, preserving the historical retrieval input exactly.
+  const reuseProbeRetrieval = probeBoundary !== undefined && probeSelectedPrimary !== undefined && canonical(probeSelectedPrimary) === canonical(selectedPrimary);
+  const boundary = reuseProbeRetrieval
+    ? probeBoundary
+    : probeBoundary !== undefined
+      ? createRetrievalBoundary(retrievalBoundaryInput(selectedPrimary, strict, resolvedNomination))
+      : undefined;
   const composed = composeSkillSet({
     profile: analysis.profile,
     requirements: analysis.requirements,
@@ -739,7 +752,7 @@ export const prepareTask = async (
     routingContext,
     matchedSignals: analysis.matchedSignals,
     ...(resolvedNomination ? { resolvedNomination } : {}),
-    ...(reuseProbeRetrieval ? { retrievalResult: ambiguityProbe } : {}),
+    ...(boundary ? { boundary } : {}),
     limits: { ...defaultRouterLimits, maxSelectedRisk: config.router.maxSelectedRisk, maxEnvironmentSkills: config.router.maxEnvironmentSkills, maxTaskCompanions: config.router.maxTaskCompanions, maxVerificationSkills: config.router.maxVerificationSkills, maxAgentContextSkills: config.router.maxAgentContextSkills, maxTotalSelectedSkills: config.router.maxTotalSelectedSkills, maxInstructionBytes: config.router.maxInstructionBytes, maxAdditionalReadBytes: config.router.maxAdditionalReadBytes, maxSingleFileBytes: config.router.maxSingleFileBytes },
   });
   if (routingProposal) {

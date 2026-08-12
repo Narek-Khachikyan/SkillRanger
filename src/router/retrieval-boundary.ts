@@ -2,8 +2,8 @@ import type {
   RetrieveSkillCandidatesInput,
   RetrieveSkillCandidatesResult,
   RouterCandidate,
-} from "./composer.ts";
-import { buildNominatedPrimaryEligibilityFacts, retrieveSkillCandidates } from "./composer.ts";
+} from "./retrieval.ts";
+import { buildNominatedPrimaryEligibilityFacts, retrieveSkillCandidates } from "./retrieval.ts";
 import type { NominatedPrimaryEligibilityFacts } from "./nomination-resolution.ts";
 
 // The retrieval boundary: one retrieval result plus the eligibility-fact
@@ -16,10 +16,21 @@ export type RetrievalBoundary = {
   eligibilityFacts: (skillIds: Iterable<string>) => NominatedPrimaryEligibilityFacts[];
 };
 
+const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
+
 // The production factory: accepts one unified retrieval input, runs the
 // retrieval, and binds the fact projection to the result it actually stored.
+// The strict-deferral policy lives with the retrieval itself: a strict
+// composition never runs retrieval with the strict gates on (eligibility is
+// re-checked on the selected set after composition), and a proposal-driven
+// strict retrieval keeps required-capability enforcement in retrieval while a
+// bare strict retrieval defers it to the post-selection check.
 export const createRetrievalBoundary = (input: RetrieveSkillCandidatesInput): RetrievalBoundary => {
-  const retrieval = retrieveSkillCandidates(input);
+  const nominatedPrimaryIds = new Set([...(input.nominatedPrimarySkillIds ?? input.nominatedSkillIds ?? [])].map(canonical));
+  const proposalDrivenStrictRetrieval = Boolean(input.strict && nominatedPrimaryIds.size > 0);
+  const retrieval = retrieveSkillCandidates(input.strict
+    ? { ...input, strict: false, deferRequiredCapabilities: !proposalDrivenStrictRetrieval }
+    : input);
   return {
     retrieval,
     eligibilityFacts: (skillIds) => buildNominatedPrimaryEligibilityFacts({ retrieval, skillIds }),
