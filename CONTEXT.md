@@ -20,6 +20,10 @@ _Avoid_: Selected skill, forced skill, recommendation result
 The deterministic routing decision that applies explicit user choice, nomination order, and declared ambiguity to produce a primary workflow or fallback before a run is created.
 _Avoid_: Skill selection, final skill set, composition
 
+**Retrieval boundary**:
+The projection of one retrieval result into bounded eligibility facts for the primary nomination decision; facts can never disagree with the retrieval they were derived from.
+_Avoid_: Precomputed candidate result, eligibility snapshot, candidate feed
+
 **Vocabulary recall gap**:
 A class of routing failures where a task expresses a relevant intent, but the deterministic vocabulary does not recognize its phrasing, so the intent never reaches composition.
 _Avoid_: Missing skill, composition failure, host failure

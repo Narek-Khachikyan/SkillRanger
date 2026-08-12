@@ -28,6 +28,7 @@ import {
   type NominatedPrimaryEligibilityFacts,
   type ResolvedNomination,
 } from "./nomination-resolution.ts";
+import type { RetrievalBoundary } from "./retrieval-boundary.ts";
 import type { CanonicalRequirement } from "./requirements.ts";
 import type { MatchedRoutingSignal } from "./vocabulary/match.ts";
 
@@ -180,6 +181,10 @@ export type ComposeSkillSetInput = Omit<RetrieveSkillCandidatesInput, "nominated
   // composition actually consumes, never accepted as an independent input, so
   // the facts can never disagree with the retrieval they were derived from.
   retrievalResult?: RetrieveSkillCandidatesResult;
+  // The retrieval boundary owns one retrieval result and its bound eligibility
+  // fact projection; when supplied it wins over every other retrieval feed, and
+  // composition consumes exactly the retrieval the boundary stored.
+  boundary?: RetrievalBoundary;
   domainCandidates?: DomainCandidate[];
   fingerprint?: ProjectFingerprint;
   limits?: Partial<RouterLimits>;
@@ -622,7 +627,8 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
       }
       : {}),
   };
-  const retrieved = applyNominatedRoles(input.retrievalResult
+  const retrieved = applyNominatedRoles(input.boundary?.retrieval
+    ?? input.retrievalResult
     ?? (input.candidates
       ? { candidates: input.candidates, primaryCandidates: input.candidates.filter(({ eligibleRoles }) => eligibleRoles.includes("primary")), rejections: [] }
       : retrieveSkillCandidates(input.strict
