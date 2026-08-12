@@ -59,6 +59,20 @@ For material implementation, read `input.schema.json`, `workflow.json`, and `gat
 - Use at least three references or one reference plus strong product/domain constraints for broad art direction; do not use a single screenshot as a blueprint.
 - Document anti-goals when a reference is competitor-like: different composition, palette, typography genre, iconography, copy structure, and interaction language.
 
+## DNA-Extraction Mode
+
+When a studied reference should inform a build as attributes — its named macrostructure,
+type pairing, and colour anchor — use the DNA-extraction mode: record
+`.design/reference-dna.json` with those three attribute groups plus an
+observed/inferred/assumed/unknown evidence ladder, and reuse the named attributes when
+declaring the direction's identity fields (`macrostructure`, `themeAxes`). The artifact is
+an attribute record, never a blueprint: exact color literals and embedded pixel data are
+refused outright, protected expression (logo, brand marks, mascot, exact palette-plus-layout,
+trade-dress impression) is named as refused, and competitor or unknown sources must record
+at least one refusal. DNA extraction does not replace the mini-DESIGN brief extraction; it
+complements it when the reference's identity should drive the direction. Use
+[the DNA-extraction guide](references/dna-extraction.md) for the artifact shape and workflow.
+
 ## Workflow
 
 1. Inventory the reference: viewport size, layout regions, type roles, color roles, imagery, controls, states, and implied interactions.
@@ -111,6 +125,10 @@ For material implementation, read `input.schema.json`, `workflow.json`, and `gat
 
 - Use [the reference-to-DESIGN.md extraction guide](references/reference-to-design-md.md)
   when translating a reference into a DESIGN.md-style brief.
+- Use [the DNA-extraction guide](references/dna-extraction.md) when a studied reference's
+  identity (macrostructure, type pairing, colour anchor) should be recorded as a
+  provenance-labelled attribute artifact in `.design/reference-dna.json` without copying
+  pixels or trade dress.
 - Use the project's existing components, tokens, Tailwind config, global CSS, and
   adjacent screens as primary implementation references.
 
