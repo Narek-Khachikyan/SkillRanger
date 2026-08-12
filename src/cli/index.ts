@@ -408,9 +408,9 @@ const printSetupAuditSummary = async (skills: RegistrySkill[]) => {
 };
 
 const printFeedbackInvitation = () => {
+  if (!process.stdout.isTTY || process.env.CI) return;
   console.log("");
-  console.log("Enjoying SkillRanger? Star the repo: https://github.com/Narek-Khachikyan/SkillRanger");
-  console.log("Found a bug or have feedback? Open an issue: https://github.com/Narek-Khachikyan/SkillRanger/issues/new");
+  console.log("SkillRanger: https://github.com/Narek-Khachikyan/SkillRanger");
 };
 
 const printInstallSummary = (
