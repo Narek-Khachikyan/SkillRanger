@@ -97,7 +97,7 @@ export const makeVerificationInput = (overrides: {
     requiredStates: brief.surface.requiredStates,
   });
   const criticReport: VisualCriticReport = {
-    schemaVersion: "1.0", id: "c1", generatorActorId: "g1", criticActorId: "c1",
+    schemaVersion: "1.1", id: "c1", generatorActorId: "g1", criticActorId: "c1",
     candidateVariantIds: ["v1"], evidenceIds: [overrides.initialEvidence.id],
     comparisons: [{
       variantId: "v1",

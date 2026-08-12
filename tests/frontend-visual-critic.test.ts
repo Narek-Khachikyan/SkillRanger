@@ -33,7 +33,7 @@ const scores = {
 } as const;
 
 const makeCriticReport = ({ selectedVariantId }: { selectedVariantId?: string }): VisualCriticReport => ({
-  schemaVersion: "1.0",
+  schemaVersion: "1.1",
   id: "critique-1",
   generatorActorId: "generator-a",
   criticActorId: "critic-b",
@@ -100,6 +100,7 @@ test("rejects duplicate candidate and evidence entries when unique membership is
 test("rejects malformed report metadata without throwing", () => {
   const cases: Array<[string, unknown, string]> = [
     ["schemaVersion", "2.0", "critic-schema-version"],
+    ["schemaVersion", "1.2", "critic-schema-version"],
     ["outcome", "winner", "critic-outcome-invalid"],
     ["outcome", 7, "critic-outcome-invalid"],
     ["confidence", Number.NaN, "critic-confidence-invalid"],
@@ -241,6 +242,44 @@ test("rejects malformed AI-slop entries without throwing or mutation", () => {
     assert.ok(findings.some(({ code }) => code === "critic-ai-slop-finding-invalid"));
     assert.deepEqual(report, before);
   }
+});
+
+test("accepts the expanded schemaVersion-1.1 AiSlopCode vocabulary", () => {
+  const newCodes = [
+    "generic-font-stack", "gradient-abuse", "centered-hero", "eyebrow-everywhere",
+    "italic-display-heading", "glassmorphism", "glowing-orb",
+  ] as const;
+  for (const code of newCodes) {
+    const report = makeCriticReport({ selectedVariantId: "v1" });
+    report.comparisons[0].aiSlopFindings = [{
+      code, severity: "high", evidence: "e1", explanation: `${code} observed in the hero screenshot.`,
+    }];
+    assert.ok(!findingCodes(report).includes("critic-ai-slop-finding-invalid"), code);
+    assert.ok(!findingCodes(report).includes("critic-ai-slop-vocabulary"), code);
+    assert.equal(compareDesignVariants(input, report).ok, true, code);
+  }
+});
+
+test("keeps legacy version-1.0 reports loadable on their frozen 9-code vocabulary", () => {
+  const report = makeCriticReport({ selectedVariantId: "v1" });
+  (report as { schemaVersion: string }).schemaVersion = "1.0";
+  report.comparisons[0].aiSlopFindings = [{
+    code: "weak-hierarchy", severity: "high", evidence: "e1", explanation: "Primary action is visually subordinate.",
+  }];
+  assert.equal(findingCodes(report).length, 0);
+  assert.equal(compareDesignVariants(input, report).ok, true);
+});
+
+test("rejects a schemaVersion-1.1 code inside a legacy version-1.0 report as a same-version edit", () => {
+  const report = makeCriticReport({ selectedVariantId: "v1" });
+  (report as { schemaVersion: string }).schemaVersion = "1.0";
+  report.comparisons[0].aiSlopFindings = [{
+    code: "glassmorphism", severity: "high", evidence: "e1", explanation: "Frosted panel without product reason.",
+  }];
+  const findings = validateVisualCriticReport(input, report);
+  assert.ok(findings.some(({ code, evidence }) =>
+    code === "critic-ai-slop-vocabulary" && evidence.includes("glassmorphism")));
+  assert.equal(compareDesignVariants(input, report).ok, false);
 });
 
 test("rejects missing and non-array AI-slop collections without throwing", () => {

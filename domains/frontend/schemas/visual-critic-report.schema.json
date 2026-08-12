@@ -4,7 +4,7 @@
   "type": "object",
   "required": ["schemaVersion", "id", "generatorActorId", "criticActorId", "candidateVariantIds", "evidenceIds", "comparisons", "outcome", "repairFindings", "confidence", "residualUncertainty", "containsImplementationCode"],
   "properties": {
-    "schemaVersion": { "const": "1.0" },
+    "schemaVersion": { "enum": ["1.0", "1.1"] },
     "id": { "type": "string", "minLength": 1 },
     "generatorActorId": { "type": "string", "minLength": 1 },
     "criticActorId": { "type": "string", "minLength": 1 },
@@ -48,7 +48,7 @@
       "type": "object",
       "required": ["code", "severity", "evidence", "explanation"],
       "properties": {
-        "code": { "enum": ["generic-hero-copy", "interchangeable-saas-layout", "excessive-generic-cards", "meaningless-effects", "invented-proof", "repeated-icon-grid", "arbitrary-radii-shadows", "weak-hierarchy", "meaningless-decoration"] },
+        "code": { "enum": ["generic-hero-copy", "interchangeable-saas-layout", "excessive-generic-cards", "meaningless-effects", "invented-proof", "repeated-icon-grid", "arbitrary-radii-shadows", "weak-hierarchy", "meaningless-decoration", "generic-font-stack", "gradient-abuse", "centered-hero", "eyebrow-everywhere", "italic-display-heading", "glassmorphism", "glowing-orb"] },
         "severity": { "enum": ["critical", "high", "medium", "low"] },
         "evidence": { "type": "string", "minLength": 1 },
         "explanation": { "type": "string", "minLength": 1 }
