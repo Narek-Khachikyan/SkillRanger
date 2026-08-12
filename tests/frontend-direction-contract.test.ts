@@ -166,6 +166,11 @@ test("the published direction schema pins the 1.0/1.1 duality", async () => {
   assert.notDeepEqual(validateJsonSchema(schema, malformedThemeAxes), []);
   assert.notDeepEqual(validateJsonSchema(schema, v10WithIdentity), []);
   assert.notDeepEqual(validateJsonSchema(schema, { ...valid11, schemaVersion: "2.0" }), []);
+  assert.notDeepEqual(validateJsonSchema(schema, { ...valid11, macrostructure: "   " }), []);
+  assert.notDeepEqual(validateJsonSchema(schema, {
+    ...valid11,
+    themeAxes: { ...valid11.themeAxes, accentHue: "   " },
+  }), []);
 });
 
 test("a schema 1.0 direction remains a valid strict-run evidence artifact", () => {
