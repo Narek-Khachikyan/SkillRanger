@@ -18,6 +18,39 @@ const emptyMechanicalSnapshot = {
   spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [], textBlocks: [],
   touchTargets: [], motion: [],
 };
+// The identity diversification gate fingerprints the run's certified direction, so pilot evidence
+// must carry a schema-1.1 direction with declared identity fields (macrostructure, theme axes,
+// composition, material). Each pilot runs in its own empty project, so an empty verified-run
+// ledger passes the gate while the fingerprint stays real.
+const pilotDirection = {
+  schemaVersion: "1.1",
+  recipeId: "developer-tool",
+  selectedRuleIds: [
+    "typography.role-contrast",
+    "layout.direction-support",
+    "responsive.recomposition",
+    "color.role-pairing",
+    "state.state-consistency",
+    "signature-move.data-shape",
+  ],
+  thesis: "Give the operations screen an evidence-forward instrument voice.",
+  productReason: "Operators triage live production data under time pressure.",
+  axes: {
+    density: "balanced",
+    hierarchy: "data-first",
+    composition: "structured-list",
+    material: "layered",
+    motionIntensity: "low",
+    expressionLevel: "restrained",
+  },
+  macrostructure: "operations-single-pane",
+  themeAxes: { paperBand: "ink", displayStyle: "instrument", accentHue: "ocean" },
+  typographyRoles: { display: "Instrument Sans", body: "Inter" },
+  colorRoles: { surface: "paper", accent: "ocean" },
+  signatureMove: "Live metric rows reveal cause chains inline.",
+  rejectedDefaults: ["generic SaaS card grid"],
+  destructiveCritique: "Dense rows may overwhelm new operators; mitigated by inline severity cues.",
+};
 const readAll = async (store: StrictSkillRunStore, run: SkillRunV2) => {
   while (run.state === "reading") {
     const unread = run.skillLedgers.find((ledger) => ledger.readReceipts.length < ledger.contentChunks.length);
@@ -246,7 +279,7 @@ test("Visual design strict run blocks unresolved AI-slop findings, requires boun
   run = await step(root, store, run, skillId, [{ kind: "product-evidence-ledger", value: "evidence\n" }]);
 
   // Step 2: define structured direction
-  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: "direction\n" }]);
+  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: pilotDirection }]);
 
   // Step 3: implement direction
   run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: "+ <div>Hero</div>\n" }]);
@@ -490,7 +523,7 @@ test("Visual design strict run rejects same-actor critic report", async () => {
   const store = new StrictSkillRunStore(root);
   run = await readAll(store, run);
   run = await step(root, store, run, skillId, [{ kind: "product-evidence-ledger", value: "evidence\n" }]);
-  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: "direction\n" }]);
+  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: pilotDirection }]);
   run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: "+ <div>Hero</div>\n" }]);
   run = await step(root, store, run, skillId, [
     { kind: "browser-screenshot-initial-390", value: "initial-390\n" },
@@ -542,7 +575,7 @@ test("Visual design strict run rejects clean critic report missing screenshot ev
   run = await readAll(store, run);
 
   run = await step(root, store, run, skillId, [{ kind: "product-evidence-ledger", value: "e\n" }]);
-  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: "d\n" }]);
+  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: pilotDirection }]);
   run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: "+ <div>Hero</div>\n" }]);
   run = await step(root, store, run, skillId, [
     { kind: "browser-screenshot-initial-390", value: "i390\n" },
@@ -593,7 +626,7 @@ test("Visual design strict run blocks verification if fresh screenshots are not 
   run = await readAll(store, run);
 
   run = await step(root, store, run, skillId, [{ kind: "product-evidence-ledger", value: "e\n" }]);
-  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: "d\n" }]);
+  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: pilotDirection }]);
   run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: "+ <div>Hero</div>\n" }]);
   run = await step(root, store, run, skillId, [
     { kind: "browser-screenshot-initial-390", value: "i390\n" },
@@ -746,7 +779,7 @@ test("Visual design strict run rejects finding with empty evidenceArtifactIds", 
   run = await readAll(store, run);
 
   run = await step(root, store, run, skillId, [{ kind: "product-evidence-ledger", value: "e\n" }]);
-  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: "d\n" }]);
+  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: pilotDirection }]);
   run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: "+ <div>Hero</div>\n" }]);
   run = await step(root, store, run, skillId, [
     { kind: "browser-screenshot-initial-390", value: "i390\n" },
@@ -809,7 +842,7 @@ test("Visual design strict run rejects finding referencing non-screenshot eviden
   run = await step(root, store, run, skillId, [{ kind: "product-evidence-ledger", value: "non-screenshot evidence\n" }]);
   const nonScreenshotId = run.artifacts.findLast(({ kind }) => kind === "product-evidence-ledger")!.artifactId;
 
-  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: "d\n" }]);
+  run = await step(root, store, run, skillId, [{ kind: "design-direction", value: pilotDirection }]);
   run = await step(root, store, run, skillId, [{ kind: "implementation-diff", value: "+ <div>Hero</div>\n" }]);
   run = await step(root, store, run, skillId, [
     { kind: "browser-screenshot-initial-390", value: "i390\n" },

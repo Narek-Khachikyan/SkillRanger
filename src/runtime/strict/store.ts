@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { RunFileLock } from "../run-lock.ts";
 import { addStrictEvidence, verifyStrictSkill } from "./reducer.ts";
 import { assertValidCriticReportV2, criticReportV2RequiredFields } from "./critic.ts";
 import { validateJsonSchema } from "./json-schema.ts";
 import { assertValidStrictSkillRun } from "./validation.ts";
-import { StrictSkillRunError, type EvidenceArtifact, type SkillRunV2 } from "./types.ts";
+import { StrictSkillRunError, type EvidenceArtifact, type SkillRunV2, type VerifiedRunDirection } from "./types.ts";
 import { deriveStrictValidatorResults } from "./verification.ts";
 import { resolveTrustedValidatorRegistry, type TrustedValidatorRegistryResolver } from "./validator-registry.ts";
 import { deriveStrictCertificationProjection, strictCertificationMatches } from "./certification.ts";
@@ -103,6 +103,59 @@ export class StrictSkillRunStore {
   }
 
   async read(runId: string) { return this.readUnlocked(runId); }
+
+  /**
+   * Read-only verified-runs enumeration: returns every persisted run in the terminal verified state
+   * that carries a design-direction evidence artifact, newest first, with the direction's
+   * content-addressed digest and parsed payload. Unverified runs and runs without a direction are
+   * excluded; unreadable or integrity-broken entries are skipped because they cannot constrain a
+   * comparison. No lock is taken: this capability never mutates run state.
+   */
+  async listVerifiedRuns(): Promise<VerifiedRunDirection[]> {
+    const runsDir = path.join(this.projectRoot, ".skillranger", "runs");
+    let entries: string[];
+    try {
+      entries = await readdir(runsDir);
+    } catch (error) {
+      if (errno(error, "ENOENT")) return [];
+      throw error;
+    }
+    const verified: VerifiedRunDirection[] = [];
+    for (const entry of entries) {
+      if (!entry.endsWith(".json")) continue;
+      const runId = entry.slice(0, -".json".length);
+      if (!/^run_[a-z0-9_-]{7,127}$/.test(runId)) continue;
+      let run: SkillRunV2;
+      try {
+        run = await this.readUnlocked(runId);
+      } catch {
+        continue;
+      }
+      if (run.state !== "verified") continue;
+      const directionArtifact = [...run.artifacts].reverse().find(({ kind }) => kind === "design-direction");
+      if (!directionArtifact) continue;
+      let bytes: Buffer;
+      try {
+        bytes = await readFile(path.join(this.projectRoot, directionArtifact.path));
+      } catch {
+        continue;
+      }
+      if (digestBytes(bytes) !== directionArtifact.sha256) continue;
+      let direction: unknown;
+      try {
+        direction = JSON.parse(bytes.toString("utf8"));
+      } catch {
+        continue;
+      }
+      verified.push({
+        runId,
+        updatedAt: run.updatedAt,
+        directionDigest: directionArtifact.sha256,
+        direction,
+      });
+    }
+    return verified.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }
 
   async replace(runId: string, run: SkillRunV2) {
     if (run.runId !== runId) throw new StrictSkillRunError("run-integrity", "A strict runtime replacement cannot change the run ID.");
@@ -214,7 +267,8 @@ export class StrictSkillRunStore {
       const ledger = run.skillLedgers.find((candidate) => candidate.skillId === skillId);
       if (!ledger) throw new StrictSkillRunError("run-integrity", `Unknown selected skill ${skillId}.`);
       const registry = this.trustedValidatorRegistry(run);
-      const derivation = await deriveStrictValidatorResults(this.projectRoot, run, ledger, undefined, registry);
+      const verifiedRuns = await this.listVerifiedRuns();
+      const derivation = await deriveStrictValidatorResults(this.projectRoot, run, ledger, undefined, registry, { verifiedRuns });
       return verifyStrictSkill(run, skillId, derivation);
     });
   }
@@ -230,9 +284,10 @@ export class StrictSkillRunStore {
       // finalization ran, so blocked runs must always re-run the used-ledger integrity checks.
       if (current.state === "verified") return current;
       const registry = this.trustedValidatorRegistry(current);
+      const verifiedRuns = await this.listVerifiedRuns();
       for (const ledger of current.skillLedgers) {
         if (ledger.outcome !== "used") continue;
-        const derivation = await deriveStrictValidatorResults(this.projectRoot, current, ledger, undefined, registry);
+        const derivation = await deriveStrictValidatorResults(this.projectRoot, current, ledger, undefined, registry, { verifiedRuns });
         if (!derivation.artifactIntegrity.passed) {
           throw new StrictSkillRunError(
             "artifact-integrity",

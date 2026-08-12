@@ -4,7 +4,7 @@ import path from "node:path";
 import { readContainedFile } from "./contained-file.ts";
 import { assertValidCriticReportV2 } from "./critic.ts";
 import { isRfc3339DateTime } from "./date-time.ts";
-import type { CriticReportV2, EvidenceArtifact, SkillLedger } from "./types.ts";
+import type { CriticReportV2, EvidenceArtifact, SkillLedger, VerifiedRunDirection } from "./types.ts";
 
 export type Result = { passed: boolean; message?: string };
 
@@ -17,6 +17,10 @@ export type ValidatorEvaluationContext = {
   verificationInput?: unknown;
   sourceReview?: unknown;
   criticReport?: CriticReportV2;
+  /** The certified design direction of the current run, when its evidence carries one. */
+  direction?: unknown;
+  /** Read-only verified-runs enumeration supplied by the run store, newest first. */
+  verifiedRuns?: readonly VerifiedRunDirection[];
   gateId?: string;
 };
 

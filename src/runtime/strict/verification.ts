@@ -6,7 +6,7 @@ import {
   resolveTrustedValidatorRegistry,
   type TrustedValidatorRegistry,
 } from "./validator-registry.ts";
-import { StrictSkillRunError, type CriticReportV2, type EvidenceArtifact, type SkillLedger, type SkillRunV2, type StrictSystemGateResult } from "./types.ts";
+import { StrictSkillRunError, type CriticReportV2, type EvidenceArtifact, type SkillLedger, type SkillRunV2, type StrictSystemGateResult, type VerifiedRunDirection } from "./types.ts";
 
 export { criticSystemGateId };
 export type StrictValidatorDerivation = {
@@ -192,6 +192,7 @@ export const deriveStrictValidatorResults = async (
   ledger: SkillLedger,
   observer?: StrictValidatorObserver,
   registry: TrustedValidatorRegistry = resolveTrustedValidatorRegistry(run),
+  options: { verifiedRuns?: readonly VerifiedRunDirection[] } = {},
 ): Promise<StrictValidatorDerivation> => {
   const results: Record<string, Result> = {};
   const ids = new Set(deriveVerificationEvidenceIds(ledger, ledger.repairIterations));
@@ -206,6 +207,7 @@ export const deriveStrictValidatorResults = async (
 
   const output = parse(artifacts.findLast(({ validatedAs }) => validatedAs === "output"), artifactBytes);
   const verificationInput = parse(artifacts.findLast(({ kind }) => kind === "verification-input"), artifactBytes);
+  const direction = parse(artifacts.findLast(({ kind }) => kind === "design-direction"), artifactBytes);
   const latestImplementationDiff = artifacts.findLast(({ kind }) => kind === "implementation-diff");
   const latestSourceProducer = latestImplementationDiff?.attributions.find(({ relation }) => relation === "produced");
   const implementationDiffs = latestSourceProducer
@@ -226,7 +228,12 @@ export const deriveStrictValidatorResults = async (
     const evaluator = registry.resolveValidator(validatorId);
     let result: Result;
     if (evaluator) {
-      const context: ValidatorEvaluationContext = { projectRoot, ledger, artifacts, artifactBytes, output, verificationInput, sourceReview, criticReport, gateId: gate.id };
+      const context: ValidatorEvaluationContext = {
+        projectRoot, ledger, artifacts, artifactBytes, output, verificationInput, sourceReview, criticReport,
+        ...(direction === undefined ? {} : { direction }),
+        ...(options.verifiedRuns === undefined ? {} : { verifiedRuns: options.verifiedRuns }),
+        gateId: gate.id,
+      };
       result = await evaluator(context);
     } else {
       result = { passed: false, message: `Validator result missing: ${validatorId}.` };

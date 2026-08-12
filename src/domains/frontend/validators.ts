@@ -4,6 +4,12 @@ import {
   parseStrictUiEvidenceObservation,
   type FrontendUiEvidenceFacts,
 } from "./design/ui-evidence.ts";
+import {
+  defaultDiversificationCount,
+  evaluateDiversificationGate,
+  parseDiversificationMessage,
+  type DiversificationSnapshot,
+} from "./design/identity-fingerprint.ts";
 import type { DomainValidatorEvaluator, DomainValidatorProjection } from "../types.ts";
 import type { EvidenceArtifact } from "../../runtime/strict/types.ts";
 import type { Result } from "../../runtime/strict/core-validators.ts";
@@ -167,8 +173,41 @@ export const evaluateBrowserHardGates = (projection: DomainValidatorProjection) 
   return result ?? { passed: false, message: `Browser hard gate ${slug} is not a certifying gate.` };
 };
 
+/**
+ * Deterministic identity diversification hard gate. The current run's certified direction is
+ * compared against a snapshot of the last N verified run directions (execution-policy default 3),
+ * requiring deviation on at least one identity dimension (macrostructure, theme axes, composition,
+ * material). Once a verification report records the comparison snapshot, every later evaluation —
+ * including finalization's re-check — replays that recorded snapshot instead of re-deriving a live
+ * set, so a run completing between verify and finalize cannot flip the outcome.
+ */
+export const evaluateIdentityDiversification = (projection: DomainValidatorProjection): Result => {
+  const slug = gateSlug(projection.gateId);
+  if (slug !== "identity-diversification") {
+    return { passed: false, message: `Gate ${slug} is not the identity-diversification gate.` };
+  }
+  let recordedSnapshot: DiversificationSnapshot | undefined;
+  const latestReport = (projection.verificationReports ?? []).at(-1);
+  const recorded = latestReport?.gateResults.find(({ gateId }) => gateId === projection.gateId);
+  if (recorded?.message !== undefined) {
+    const parsed = parseDiversificationMessage(recorded.message);
+    if (!parsed) {
+      return { passed: false, message: "The recorded identity-diversification gate result is malformed." };
+    }
+    recordedSnapshot = parsed.snapshot;
+  }
+  const result = evaluateDiversificationGate({
+    direction: projection.direction,
+    verifiedRuns: projection.verifiedRuns ?? [],
+    count: defaultDiversificationCount,
+    ...(recordedSnapshot === undefined ? {} : { recordedSnapshot }),
+  });
+  return { passed: result.passed, message: result.message };
+};
+
 export const frontendValidatorEvaluators: Readonly<Record<string, DomainValidatorEvaluator>> = {
   "frontend/performance-claims": evaluatePerformanceClaims,
   "frontend/browser-hard-gates": evaluateBrowserHardGates,
   "frontend/tailwind-source": evaluateTailwindSource,
+  "frontend/identity-diversification": evaluateIdentityDiversification,
 };

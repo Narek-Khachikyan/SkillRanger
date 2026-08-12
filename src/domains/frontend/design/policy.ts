@@ -7,6 +7,7 @@ import type {
 } from "./policy-types.ts";
 import type { DesignDirection } from "./types.ts";
 import { loadDesignRuleLibrarySync } from "./library.ts";
+import { defaultDiversificationCount } from "./identity-fingerprint.ts";
 
 const compositionRank = { preserve: 0, "recipe-layouts": 1, free: 2 } as const;
 const primitiveRank = { "existing-only": 0, "local-variants": 1, "new-primitives": 2 } as const;
@@ -45,6 +46,7 @@ export const resolveDesignExecutionPolicy = (input: {
   capability?: DesignCapabilityConstraints;
   rankedRecipeIds: string[];
   requiredStates?: string[];
+  diversificationCount?: number;
 }): DesignExecutionPolicy => {
   if (input.rankedRecipeIds.length === 0) {
     throw new Error("policy resolution requires at least one ranked recipe");
@@ -109,6 +111,9 @@ export const resolveDesignExecutionPolicy = (input: {
     maxRepairIterations: 3,
     requiredViewports: [390, 768, 1440],
     requiredStates: [...new Set(input.requiredStates ?? [])],
+    diversificationCount: Number.isInteger(input.diversificationCount) && input.diversificationCount! >= 1
+      ? input.diversificationCount!
+      : defaultDiversificationCount,
   };
 };
 

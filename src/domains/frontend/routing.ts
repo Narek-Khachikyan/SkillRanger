@@ -433,6 +433,7 @@ export const registerFrontendDomainPack = () =>
       "frontend/browser-hard-gates",
       "frontend/tailwind-source",
       "frontend/performance-claims",
+      "frontend/identity-diversification",
     ],
     validatorEvaluators: frontendValidatorEvaluators,
   });

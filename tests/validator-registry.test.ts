@@ -133,9 +133,10 @@ test("builds an immutable registry from core and selected ledgers' domain packs"
   assert.equal(registry.has("frontend/performance-claims"), true);
   assert.equal(registry.has("frontend/browser-hard-gates"), true);
   assert.equal(registry.has("frontend/tailwind-source"), true);
+  assert.equal(registry.has("frontend/identity-diversification"), true);
   assert.equal(registry.ownerOf("frontend/performance-claims"), "frontend");
   assert.equal(registry.ownerOf("core/artifact-integrity"), "core");
-  assert.equal(registry.size, coreValidatorIds.length + 3);
+  assert.equal(registry.size, coreValidatorIds.length + 4);
   assert.deepEqual(registry.domainIds(), ["core", "frontend"]);
 
   const snapshot = registry.domainIds();

@@ -93,6 +93,18 @@ export type StrictSystemGateResult = {
   level: "hard";
   message?: string;
 };
+/**
+ * Read-only summary of one verified run's certified design direction, produced by the run store's
+ * verified-runs enumeration. `directionDigest` is the content-addressed digest of the direction
+ * evidence artifact recorded on the verified run; `direction` is its parsed payload. The shape is
+ * deliberately domain-neutral: only runs carrying a direction artifact are enumerated.
+ */
+export type VerifiedRunDirection = {
+  runId: string;
+  updatedAt: string;
+  directionDigest: string;
+  direction: unknown;
+};
 export type CriticReportV2 = {
   schemaVersion: "2.0";
   skillId: string;

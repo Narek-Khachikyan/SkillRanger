@@ -1,7 +1,7 @@
 import type { ProjectFingerprint, Recommendation, RegistrySkill, SkillLane } from "../types.ts";
 import type { SkillRunPolicyDecision } from "../runtime/skill-run/types.ts";
 import type { Result } from "../runtime/strict/core-validators.ts";
-import type { EvidenceArtifact } from "../runtime/strict/types.ts";
+import type { EvidenceArtifact, VerifiedRunDirection, VerificationReportV2 } from "../runtime/strict/types.ts";
 
 export type DomainCapability =
   | "project-signals"
@@ -138,6 +138,12 @@ export type DomainValidatorProjection = {
   output?: unknown;
   verificationInput?: unknown;
   sourceReview?: unknown;
+  /** The certified design direction of the current run, when its evidence carries one. */
+  direction?: unknown;
+  /** Read-only verified-runs enumeration supplied by the run store, newest first. */
+  verifiedRuns?: readonly VerifiedRunDirection[];
+  /** Verification reports recorded so far on the current run's ledger. */
+  verificationReports?: readonly VerificationReportV2[];
 };
 
 export type DomainValidatorEvaluator = (projection: DomainValidatorProjection) => Result;

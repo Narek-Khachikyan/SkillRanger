@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://skillranger.local/domains/frontend/design-execution-policy.schema.json",
   "type": "object",
-  "required": ["schemaVersion", "requestedMode", "effectiveMode", "profile", "capabilityClassId", "downgradeReasons", "variantLimit", "recipeSelection", "allowedRecipeIds", "freedoms", "implementationStrategy", "requiredRuleFamilies", "structuredDirectionRequired", "independentCriticRequired", "repairRequired", "maxRepairIterations", "requiredViewports", "requiredStates"],
+  "required": ["schemaVersion", "requestedMode", "effectiveMode", "profile", "capabilityClassId", "downgradeReasons", "variantLimit", "recipeSelection", "allowedRecipeIds", "freedoms", "implementationStrategy", "requiredRuleFamilies", "structuredDirectionRequired", "independentCriticRequired", "repairRequired", "maxRepairIterations", "requiredViewports", "requiredStates", "diversificationCount"],
   "properties": {
     "schemaVersion": { "const": "1.0" },
     "requestedMode": { "enum": ["repair", "refine", "explore", "reimagine"] },
@@ -41,7 +41,8 @@
       "minItems": 3,
       "maxItems": 3
     },
-    "requiredStates": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+    "requiredStates": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "diversificationCount": { "type": "integer", "minimum": 1 }
   },
   "additionalProperties": false
 }
