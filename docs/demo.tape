@@ -14,19 +14,19 @@
 # a published @latest release.
 #
 # The committed GIF is smaller than the raw VHS output: it is post-processed
-# at display size (scale 720, 10 fps, 64-color palette) with
-#   ffmpeg -i demo.gif -vf "fps=10,scale=720:-1:flags=lanczos,palettegen=max_colors=64:stats_mode=full" /tmp/pal.png
-#   ffmpeg -i demo.gif -i /tmp/pal.png -lavfi "fps=10,scale=720:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=none" /tmp/demo-opt.gif
+# at display size (scale 640, 8 fps, 64-color palette) with
+#   ffmpeg -i demo.gif -vf "fps=8,scale=640:-1:flags=lanczos,palettegen=max_colors=64:stats_mode=full" /tmp/pal.png
+#   ffmpeg -i demo.gif -i /tmp/pal.png -lavfi "fps=8,scale=640:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=none" /tmp/demo-opt.gif
 #   gifsicle -O3 /tmp/demo-opt.gif -o docs/demo.gif
 
 Output "docs/demo.gif"
-Set Width 1200
-Set Height 2200
+Set Width 960
+Set Height 1600
 Set FontSize 16
 Set Theme "PaleNightHC"
 Set Padding 24
 Set Framerate 15
-Set TypingSpeed 75ms
+Set TypingSpeed 60ms
 
 # Prepare an isolated copy of the fixture and a local `skillranger` on PATH;
 # all of this is invisible.
@@ -51,9 +51,11 @@ Enter
 Type "skillranger setup"
 Enter
 
-# Install for which agents? Enter accepts the detected set.
+# Install for which agents? Pick just the one you use.
 Wait+Screen /Install for which agents/
-Sleep 2s
+Sleep 1s
+Type "a"
+Space
 Enter
 
 # Scope and install mode prompts; Enter picks the project-safe defaults.
@@ -75,7 +77,7 @@ Sleep 2s
 Type "y"
 Enter
 
-Sleep 5s
+Sleep 4s
 
 # Clean up the temporary copies; invisible.
 Hide

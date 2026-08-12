@@ -10,11 +10,8 @@ The best agent skills are the ones already written, audited, and picked for you.
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Narek-Khachikyan/SkillRanger/main/docs/demo.gif" alt="SkillRanger setup on a Next.js project: run skillranger setup, complete the prompts, review the recommended skills and the install plan, confirm" width="720">
-</p>
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Narek-Khachikyan/SkillRanger/main/docs/demo-task.gif" alt="Describe the website you want, and SkillRanger routes the task to the skills it needs" width="720">
+  <img src="https://raw.githubusercontent.com/Narek-Khachikyan/SkillRanger/main/docs/demo.gif" alt="SkillRanger setup on a Next.js project: run skillranger setup, pick your agent, review the recommended skills and the install plan, confirm" width="460">
+  <img src="https://raw.githubusercontent.com/Narek-Khachikyan/SkillRanger/main/docs/demo-task.gif" alt="Describe the website you want, add @skillranger, and the MCP router picks the skills for the task" width="460">
 </p>
 
 ## Quick Start

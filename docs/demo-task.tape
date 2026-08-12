@@ -8,30 +8,31 @@
 #   go install github.com/charmbracelet/vhs@latest
 # VHS also needs ttyd and ffmpeg on PATH; the brew formula installs them.
 #
-# The tape builds nothing itself: `pnpm demo:task` runs `pnpm build` first,
-# then this tape drives the locally compiled dist/cli/index.js against an
-# isolated copy of fixtures/next-react-ts. Nothing here touches the network,
-# npm, or a published @latest release.
+# This tape is a lightweight illustration, not a real run: it shows a prompt
+# ending in @skillranger and the skills the MCP router would select for it.
+# A mock `opencode` REPL on PATH prints the canned selection; nothing here
+# touches the network, npm, or a published @latest release.
+#
+# The committed GIF is smaller than the raw VHS output: it is post-processed
+# at display size (scale 640, 10 fps, 64-color palette) with the same ffmpeg
+# pipeline documented in docs/demo.tape.
 
 Output "docs/demo-task.gif"
-Set Width 1200
-Set Height 1400
+Set Width 960
+Set Height 700
 Set FontSize 16
 Set Theme "PaleNightHC"
 Set Padding 24
 Set Framerate 15
-Set TypingSpeed 75ms
+Set TypingSpeed 60ms
 
-# Prepare an isolated copy of the fixture and a local `skillranger` on PATH;
-# all of this is invisible.
+# Put a mock agent REPL on PATH; all of this is invisible.
 Hide
-Type "rm -rf /tmp/skillranger-demo /tmp/skillranger-bin"
-Enter
-Type "cp -r fixtures/next-react-ts /tmp/skillranger-demo"
+Type "rm -rf /tmp/skillranger-bin"
 Enter
 Type "mkdir -p /tmp/skillranger-bin"
 Enter
-Type `ln -sf "$PWD/dist/cli/index.js" /tmp/skillranger-bin/skillranger`
+Type `printf '#!/usr/bin/env bash\nread -r prompt\nsleep 1\necho ""\necho "SkillRanger (MCP) selected skills for this task:"\necho "  primary       frontend.visual-design-polish"\necho "  companion     frontend.tailwind-ui-polish"\necho "  companion     frontend.react-component-design"\necho "  verification  frontend.testing-strategy"\n' > /tmp/skillranger-bin/opencode && chmod +x /tmp/skillranger-bin/opencode`
 Enter
 Type "export PATH=/tmp/skillranger-bin:$PATH"
 Enter
@@ -39,17 +40,18 @@ Type "clear"
 Enter
 Show
 
-# Describe what you want to build; SkillRanger routes it to the skills it needs.
-Type "cd /tmp/skillranger-demo"
+# Describe what you want to build; @skillranger makes the router pick the skills.
+Type "opencode"
 Enter
-Type `skillranger task . --intent "Create a landing page for my SaaS product" --target opencode --explain`
+Sleep 1s
+Type "Create a landing page for my SaaS product @skillranger"
 Enter
 
 Sleep 5s
 
-# Clean up the temporary copies; invisible.
+# Clean up; invisible.
 Hide
-Type "rm -rf /tmp/skillranger-demo /tmp/skillranger-bin"
+Type "rm -rf /tmp/skillranger-bin"
 Enter
 Type "clear"
 Enter
