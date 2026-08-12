@@ -76,6 +76,7 @@ Run the **final corrective gate** below immediately before handoff. It has prior
 ## Design Constraints
 
 - A direction is insufficient if it could describe any "clean, modern, premium" SaaS product. Use real user tasks, data shapes, proof, language, and product constraints.
+- The identity fingerprint — macrostructure, theme axes (paper band, display style, accent hue), composition, and material — must deviate on at least one dimension from the most recent verified run directions, or the deterministic diversification gate fails the run. Only the certified direction's identity is compared; unselected candidates do not constrain it.
 - Make hierarchy, readability, task clarity, accessibility, and responsive recomposition more important than ornament.
 - Give typography and color semantic roles. Use saturation, motion, glow, glass, gradients, and imagery only when they clarify action, state, data, trust, or an earned signature.
 - Copy and states are visual material. Use domain objects and observable verbs; account for loading, empty, error, disabled, focus-visible, selected, long-content, and permission states when relevant.

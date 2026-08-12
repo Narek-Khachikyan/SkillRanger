@@ -60,6 +60,7 @@ test("exports the frontend policy and bounded repair contracts", () => {
     maxRepairIterations: 3,
     requiredViewports: [390, 768, 1440],
     requiredStates: ["loading", "empty", "error", "success"],
+    diversificationCount: 3,
   };
   assert.equal(policy.variantLimit, 2);
 

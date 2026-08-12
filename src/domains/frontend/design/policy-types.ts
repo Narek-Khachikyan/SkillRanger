@@ -39,6 +39,12 @@ export type DesignExecutionPolicy = {
   maxRepairIterations: 1 | 2 | 3 | 4 | 5;
   requiredViewports: [390, 768, 1440];
   requiredStates: string[];
+  /**
+   * The number of most recent verified run directions the identity diversification gate compares
+   * against, defaulting to 3. Only verified runs are eligible; fewer than N available verified runs
+   * passes on the available set.
+   */
+  diversificationCount: number;
 };
 
 export type DesignChangeCategory =

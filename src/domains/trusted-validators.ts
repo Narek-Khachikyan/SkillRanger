@@ -39,6 +39,11 @@ const adaptDomainEvaluator = (validatorId: string, evaluator: DomainValidatorEva
       ...(context.output === undefined ? {} : { output: context.output }),
       ...(context.verificationInput === undefined ? {} : { verificationInput: context.verificationInput }),
       ...(context.sourceReview === undefined ? {} : { sourceReview: context.sourceReview }),
+      ...(context.direction === undefined ? {} : { direction: context.direction }),
+      ...(context.verifiedRuns === undefined ? {} : { verifiedRuns: context.verifiedRuns }),
+      ...(context.ledger.verificationReports.length === 0
+        ? {}
+        : { verificationReports: context.ledger.verificationReports }),
     };
     return evaluator(projection);
   };

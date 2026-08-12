@@ -166,6 +166,10 @@
       "description": "Define a structured visual direction with recipe and rule selections."
     },
     {
+      "id": "frontend.visual-design-polish/rule/identity-diversified",
+      "description": "Deviate from the last verified run directions on at least one identity dimension (macrostructure, theme axes, composition, material)."
+    },
+    {
       "id": "frontend.visual-design-polish/rule/no-invented-proof",
       "description": "Do not invent domain terminology, fake metrics, stock photography subjects, or brand marks."
     },
@@ -246,6 +250,17 @@
       },
       "ruleIds": [
         "frontend.visual-design-polish/rule/structured-direction-present"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/identity-diversification",
+      "level": "hard",
+      "evaluator": {
+        "type": "validator",
+        "validatorId": "frontend/identity-diversification"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/identity-diversified"
       ]
     },
     {
