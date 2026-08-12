@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   craftReferenceKinds,
+  craftReferenceKindsV10,
   loadCraftCatalog,
   validateCraftCatalog,
   validateCraftEvidenceLadder,
@@ -18,19 +19,21 @@ import {
   selectDesignRules,
 } from "../src/domains/frontend/design/index.ts";
 import { bundleFrontendCraft } from "../src/release/craft-bundle.ts";
+import { frontendRecipeIds } from "../src/domains/frontend/design/catalog.ts";
 
 const craftRoot = path.resolve("domains/frontend/craft");
 const canonicalFiles = {
   "type-pairing": "type-pairings.md",
   "palette-recipe": "palette-recipes.md",
+  "theme": "themes.md",
   "macrostructure": "macrostructures.md",
   "component-cookbook": "component-cookbooks.md",
 } as const;
 
-test("craft catalog declares the four reference kinds with present files", async () => {
+test("craft catalog declares the five reference kinds with present files", async () => {
   const { catalog, references } = await loadCraftCatalog(craftRoot);
   assert.deepEqual(Object.keys(catalog.categories), [...craftReferenceKinds]);
-  assert.equal(catalog.schemaVersion, "1.0");
+  assert.equal(catalog.schemaVersion, "1.1");
   assert.equal(catalog.id, "frontend-craft-catalog");
   for (const kind of craftReferenceKinds) {
     assert.equal(catalog.categories[kind], canonicalFiles[kind], kind);
@@ -102,13 +105,67 @@ test("craft catalog rejects rule-contract fields and unknown keys", async () => 
     /must not carry rule-contract fields/,
   );
   assert.throws(
-    () => validateCraftCatalog({ ...catalog, categories: { ...catalog.categories, "theme": "themes.md" } }),
-    /exactly the four reference kinds/,
+    () => validateCraftCatalog({ ...catalog, unknownTopLevel: true }),
+    /Invalid craft catalog contract/,
+  );
+});
+
+test("craft catalog validates schemaVersion against the kind set", async () => {
+  const catalog = JSON.parse(await readFile(path.join(craftRoot, "craft-catalog.json"), "utf8"));
+  assert.equal(catalog.schemaVersion, "1.1");
+  const v11 = validateCraftCatalog(catalog);
+  assert.deepEqual(Object.keys(v11.categories), [...craftReferenceKinds]);
+
+  const v10Categories = Object.fromEntries(
+    craftReferenceKindsV10.map((kind) => [kind, catalog.categories[kind]]),
+  );
+  const v10 = validateCraftCatalog({ ...catalog, schemaVersion: "1.0", categories: v10Categories });
+  assert.deepEqual(Object.keys(v10.categories), [...craftReferenceKindsV10]);
+
+  assert.throws(
+    () => validateCraftCatalog({ ...catalog, schemaVersion: "1.0" }),
+    /exactly the 4 reference kinds/,
+  );
+  const missingThemeCategories = Object.fromEntries(
+    craftReferenceKinds.filter((kind) => kind !== "theme").map((kind) => [kind, catalog.categories[kind]]),
   );
   assert.throws(
-    () => validateCraftCatalog({ ...catalog, schemaVersion: "1.1" }),
-    /schemaVersion must be 1.0/,
+    () => validateCraftCatalog({ ...catalog, categories: missingThemeCategories }),
+    /theme must name a safe markdown reference file/,
   );
+  assert.throws(
+    () => validateCraftCatalog({ ...catalog, categories: { ...catalog.categories, "cookbook": "cookbooks.md" } }),
+    /exactly the 5 reference kinds/,
+  );
+  assert.throws(
+    () => validateCraftCatalog({ ...catalog, schemaVersion: "2.0" }),
+    /schemaVersion must be 1.0 or 1.1/,
+  );
+});
+
+test("schemaVersion 1.0 catalogs remain loadable as legacy without the theme kind", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "skillranger-craft-v10-"));
+  try {
+    await cp(craftRoot, root, { recursive: true });
+    const file = path.join(root, "craft-catalog.json");
+    const catalog = JSON.parse(await readFile(file, "utf8"));
+    const v10Categories = Object.fromEntries(
+      craftReferenceKindsV10.map((kind) => [kind, catalog.categories[kind]]),
+    );
+    await writeFile(
+      file,
+      JSON.stringify({ ...catalog, schemaVersion: "1.0", categories: v10Categories }, null, 2),
+      "utf8",
+    );
+    const { catalog: loaded, references } = await loadCraftCatalog(root);
+    assert.equal(loaded.schemaVersion, "1.0");
+    assert.deepEqual(
+      references.map(({ kind }) => kind),
+      [...craftReferenceKindsV10],
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("craft catalog rejects malformed evidence ladder entries", () => {
@@ -197,6 +254,7 @@ test("bundle:craft copies the catalog byte-identically into the skill package re
       "references/craft/craft-catalog.json",
       "references/craft/macrostructures.md",
       "references/craft/palette-recipes.md",
+      "references/craft/themes.md",
       "references/craft/type-pairings.md",
     ]);
     const bundledDir = path.join(target, "references", "craft");
@@ -214,6 +272,7 @@ test("bundle:craft copies the catalog byte-identically into the skill package re
       "craft-catalog.json",
       "macrostructures.md",
       "palette-recipes.md",
+      "themes.md",
       "type-pairings.md",
     ]);
   } finally {
@@ -244,12 +303,101 @@ test("craft catalog schema is published in the domain manifest and matches the c
   assert.ok(manifest.artifacts.schemas.includes("schemas/craft-catalog.schema.json"));
   const schema = JSON.parse(await readFile("domains/frontend/schemas/craft-catalog.schema.json", "utf8"));
   assert.equal(schema.$id, "https://skillranger.local/domains/frontend/craft-catalog.schema.json");
-  assert.equal(schema.properties.schemaVersion.const, "1.0");
-  assert.deepEqual(Object.keys(schema.properties.categories.properties), [...craftReferenceKinds]);
-  assert.deepEqual(Object.keys(schema.properties.provenance.properties), ["observed", "inferred", "assumed", "unknown"]);
+  assert.deepEqual(schema.oneOf.map((ref: { $ref: string }) => ref.$ref), ["#/$defs/catalogV10", "#/$defs/catalogV11"]);
+  const v11Categories = schema.$defs.catalogV11.properties.categories;
+  assert.deepEqual(Object.keys(v11Categories.properties), [...craftReferenceKinds]);
+  assert.deepEqual(Object.keys(schema.$defs.catalogV10.properties.categories.properties), [...craftReferenceKindsV10]);
+  assert.deepEqual(
+    Object.keys(schema.$defs.provenance.properties),
+    ["observed", "inferred", "assumed", "unknown"],
+  );
   const catalog = JSON.parse(await readFile(path.join(craftRoot, "craft-catalog.json"), "utf8")) as CraftCatalog;
   for (const key of ["schemaVersion", "id", "displayName", "description", "categories", "provenance"]) {
-    assert.ok(Object.hasOwn(schema.properties, key), `schema missing ${key}`);
+    assert.ok(Object.hasOwn(schema.$defs.catalogV11.properties, key), `schema missing ${key}`);
     assert.ok(Object.hasOwn(catalog, key), `catalog missing ${key}`);
   }
+});
+
+type ThemeSection = {
+  index: number;
+  name: string;
+  body: string[];
+};
+
+const parseThemeSections = (markdown: string): ThemeSection[] => {
+  const lines = markdown.split("\n");
+  const sections: ThemeSection[] = [];
+  let current: ThemeSection | undefined;
+  for (const line of lines) {
+    const heading = line.match(/^### (\d+)\. (.+)$/);
+    if (heading) {
+      current = { index: Number(heading[1]), name: heading[2].trim(), body: [] };
+      sections.push(current);
+      continue;
+    }
+    if (current && line === "## Theme Grammar") {
+      current = undefined;
+      continue;
+    }
+    if (current) current.body.push(line);
+  }
+  return sections;
+};
+
+test("theme catalog ships 5-7 themes with OKLCH tokens, genre affinities, and per-theme bans", async () => {
+  const markdown = await readFile(path.join(craftRoot, "themes.md"), "utf8");
+  const sections = parseThemeSections(markdown);
+  assert.ok(sections.length >= 5 && sections.length <= 7, `expected 5-7 themes, found ${sections.length}`);
+  assert.deepEqual(
+    sections.map(({ index }) => index),
+    [...Array(sections.length).keys()].map((i) => i + 1),
+    "theme headings must be sequentially numbered",
+  );
+  const names = sections.map(({ name }) => name);
+  assert.equal(new Set(names).size, names.length, "theme names must be unique");
+
+  const oklchPattern = /oklch\([0-9.]+ [0-9.]+ [0-9.]+\)/;
+  const requiredTokenRoles = ["Canvas:", "Surface:", "Ink:", "Muted ink:", "Hairline:", "Accent:", "Accent ink:", "Status:"];
+  for (const section of sections) {
+    const body = section.body.join("\n");
+    const tokenBlock = body.match(/-\s+\*\*Tokens:\*\*\n([\s\S]*?)(?=\n- \*\*Genre affinities:\*\*)/);
+    assert.ok(tokenBlock, `${section.name} must declare a Tokens block`);
+    for (const role of requiredTokenRoles) {
+      assert.ok(tokenBlock[1].includes(role), `${section.name} tokens must include ${role}`);
+    }
+    const oklchMatches = tokenBlock[1].match(/oklch\([^)]+\)/g) ?? [];
+    assert.ok(oklchMatches.length >= 9, `${section.name} must carry at least 9 OKLCH token values`);
+    assert.ok(
+      oklchMatches.every((value) => oklchPattern.test(value)),
+      `${section.name} tokens must be OKLCH`,
+    );
+
+    const affinities = body.match(/-\s+\*\*Genre affinities:\*\* ([^\n]+)/);
+    assert.ok(affinities, `${section.name} must declare genre affinities`);
+    const affinityIds = affinities[1].match(/`([a-z-]+)`/g) ?? [];
+    assert.ok(affinityIds.length > 0, `${section.name} affinities must name at least one recipe id`);
+    for (const id of affinityIds) {
+      assert.ok(
+        frontendRecipeIds.includes(id.replaceAll("`", "")),
+        `${section.name} affinity ${id} is not a bundled recipe id`,
+      );
+    }
+
+    const bans = body.match(/-\s+\*\*Bans:\*\* ([^\n]+)/);
+    assert.ok(bans, `${section.name} must declare per-theme bans`);
+    assert.ok(bans[1].includes("no "), `${section.name} bans must be prohibitions`);
+
+    const axes = body.match(/-\s+\*\*Theme axes:\*\* ([^\n]+)/);
+    assert.ok(axes, `${section.name} must declare theme axes`);
+    assert.ok(axes[1].includes("paperBand"), `${section.name} axes must declare paperBand`);
+    assert.ok(axes[1].includes("displayStyle"), `${section.name} axes must declare displayStyle`);
+    assert.ok(axes[1].includes("accentHue"), `${section.name} axes must declare accentHue`);
+  }
+});
+
+test("theme catalog is extensible reference material with a provenance ladder", async () => {
+  const markdown = await readFile(path.join(craftRoot, "themes.md"), "utf8");
+  assert.doesNotThrow(() => validateCraftMarkdownProvenance(markdown, "themes.md"));
+  assert.ok(markdown.includes("not a closed contract"), "themes.md must state the catalog is extensible");
+  assert.ok(markdown.includes("identity-fingerprint"), "themes.md must defer enforcement to the identity fingerprint");
 });

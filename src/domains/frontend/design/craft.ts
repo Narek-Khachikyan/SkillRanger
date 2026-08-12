@@ -3,14 +3,26 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { defaultDomainsRoot } from "../../../paths.ts";
 
-export const craftReferenceKinds = [
+// The catalog schema is versioned like the direction contract: 1.0 catalogs
+// declare the original four reference kinds and stay loadable as legacy; 1.1
+// catalogs add the theme kind. The kind set is the structural contract; the
+// content of any reference (the theme list included) is extensible, not closed.
+export const craftReferenceKindsV10 = [
   "type-pairing",
   "palette-recipe",
   "macrostructure",
   "component-cookbook",
 ] as const;
 
+export const craftReferenceKinds = [...craftReferenceKindsV10, "theme"] as const;
+
 export type CraftReferenceKind = (typeof craftReferenceKinds)[number];
+export type CraftReferenceKindV10 = (typeof craftReferenceKindsV10)[number];
+
+export type CraftCatalogSchemaVersion = "1.0" | "1.1";
+
+export const craftReferenceKindsFor = (schemaVersion: CraftCatalogSchemaVersion) =>
+  schemaVersion === "1.1" ? craftReferenceKinds : craftReferenceKindsV10;
 
 export type CraftEvidenceEntry = {
   statement: string;
@@ -24,14 +36,25 @@ export type CraftEvidenceLadder = {
   unknown: CraftEvidenceEntry[];
 };
 
-export type CraftCatalog = {
+export type CraftCatalogV10 = {
   schemaVersion: "1.0";
+  id: string;
+  displayName: string;
+  description: string;
+  categories: Record<CraftReferenceKindV10, string>;
+  provenance: CraftEvidenceLadder;
+};
+
+export type CraftCatalogV11 = {
+  schemaVersion: "1.1";
   id: string;
   displayName: string;
   description: string;
   categories: Record<CraftReferenceKind, string>;
   provenance: CraftEvidenceLadder;
 };
+
+export type CraftCatalog = CraftCatalogV10 | CraftCatalogV11;
 
 export type LoadedCraftCatalog = {
   catalog: CraftCatalog;
@@ -105,34 +128,40 @@ export const validateCraftCatalog = (
       throw new Error(`Craft catalog must not carry rule-contract fields (${key}): ${at}`);
     }
   }
-  if (!hasOnlyKeys(value, catalogKeys)) throw new Error(`Invalid craft catalog contract: ${at}`);
-  if (value.schemaVersion !== "1.0") throw new Error(`Craft catalog schemaVersion must be 1.0: ${at}`);
+  if (!isRecord(value) || !hasOnlyKeys(value, catalogKeys)) throw new Error(`Invalid craft catalog contract: ${at}`);
+  const schemaVersion = value.schemaVersion as CraftCatalogSchemaVersion;
+  if (schemaVersion !== "1.0" && schemaVersion !== "1.1") {
+    throw new Error(`Craft catalog schemaVersion must be 1.0 or 1.1: ${at}`);
+  }
   if (!isNonEmptyString(value.id)) throw new Error(`Craft catalog requires a non-empty id: ${at}`);
   if (!isNonEmptyString(value.displayName)) throw new Error(`Craft catalog requires a non-empty displayName: ${at}`);
   if (!isNonEmptyString(value.description)) throw new Error(`Craft catalog requires a non-empty description: ${at}`);
-  if (!isRecord(value.categories) || !hasOnlyKeys(value.categories, craftReferenceKinds)) {
-    throw new Error(`Craft catalog must declare exactly the four reference kinds: ${at}`);
+  const expectedKinds = craftReferenceKindsFor(schemaVersion);
+  if (!isRecord(value.categories) || !hasOnlyKeys(value.categories, expectedKinds)) {
+    throw new Error(
+      `Craft catalog schemaVersion ${schemaVersion} must declare exactly the ${expectedKinds.length} reference kinds: ${at}`,
+    );
   }
-  const categories = value.categories as Record<CraftReferenceKind, string>;
-  for (const kind of craftReferenceKinds) {
+  const categories = value.categories as Record<string, string>;
+  for (const kind of expectedKinds) {
     const file = categories[kind];
     if (typeof file !== "string" || !markdownReferencePathPattern.test(file)) {
       throw new Error(`Craft catalog ${kind} must name a safe markdown reference file: ${at}`);
     }
   }
-  if (new Set(Object.values(categories)).size !== craftReferenceKinds.length) {
+  if (new Set(Object.values(categories)).size !== expectedKinds.length) {
     throw new Error(`Craft catalog must map each kind to a unique reference file: ${at}`);
   }
   const catalog = {
-    schemaVersion: "1.0" as const,
+    schemaVersion,
     id: value.id,
     displayName: value.displayName,
     description: value.description,
     categories: Object.fromEntries(
-      craftReferenceKinds.map((kind) => [kind, categories[kind]]),
+      expectedKinds.map((kind) => [kind, categories[kind]]),
     ) as CraftCatalog["categories"],
     provenance: validateCraftEvidenceLadder(value.provenance, `${at}.provenance`),
-  };
+  } as CraftCatalog;
   return catalog;
 };
 
@@ -178,8 +207,8 @@ export const loadCraftCatalog = async (
     JSON.parse(await readFile(path.join(root, "craft-catalog.json"), "utf8")) as unknown,
   );
   const references = await Promise.all(
-    craftReferenceKinds.map(async (kind) => {
-      const file = catalog.categories[kind];
+    craftReferenceKindsFor(catalog.schemaVersion).map(async (kind) => {
+      const file = (catalog.categories as Record<string, string>)[kind];
       const referencePath = resolveContainedPath(root, file, `craft ${kind}`);
       const markdown = await readFile(referencePath, "utf8");
       validateCraftMarkdownProvenance(markdown, file);
@@ -200,8 +229,8 @@ export const loadCraftCatalogSync = (
   const catalog = validateCraftCatalog(
     JSON.parse(readFileSync(path.join(root, "craft-catalog.json"), "utf8")) as unknown,
   );
-  const references = craftReferenceKinds.map((kind) => {
-    const file = catalog.categories[kind];
+  const references = craftReferenceKindsFor(catalog.schemaVersion).map((kind) => {
+    const file = (catalog.categories as Record<string, string>)[kind];
     const referencePath = resolveContainedPath(root, file, `craft ${kind}`);
     validateCraftMarkdownProvenance(readFileSync(referencePath, "utf8"), file);
     return { kind, path: referencePath, file };

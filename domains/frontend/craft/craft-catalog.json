@@ -1,18 +1,19 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "1.1",
   "id": "frontend-craft-catalog",
   "displayName": "Frontend design craft corpus",
-  "description": "Provenance-labelled parametric design knowledge — type pairings, OKLCH palette recipes, macrostructures, and component cookbooks — loaded advisory-style during a build. Craft references are knowledge, not rules: they never participate in the six-family rule-selection contract.",
+  "description": "Provenance-labelled parametric design knowledge — type pairings, OKLCH palette recipes, themes, macrostructures, and component cookbooks — loaded advisory-style during a build. Craft references are knowledge, not rules: they never participate in the six-family rule-selection contract.",
   "categories": {
     "type-pairing": "type-pairings.md",
     "palette-recipe": "palette-recipes.md",
+    "theme": "themes.md",
     "macrostructure": "macrostructures.md",
     "component-cookbook": "component-cookbooks.md"
   },
   "provenance": {
     "observed": [
       {
-        "statement": "The maintainer has applied each recipe below in shipped interfaces and reviewed artifacts: the pairing grammar, OKLCH recipe formulas, macrostructure anatomies, and cookbook items recur across the author's own frontend work.",
+        "statement": "The maintainer has applied each recipe below in shipped interfaces and reviewed artifacts: the pairing grammar, OKLCH recipe formulas, theme registers, macrostructure anatomies, and cookbook items recur across the author's own frontend work.",
         "source": "maintainer practice"
       },
       {
@@ -28,6 +29,10 @@
       {
         "statement": "Each macrostructure lists the theme axes and treatment axes it interacts with, so the direction step can pick one explicitly and state it out loud.",
         "source": "direction contract analysis"
+      },
+      {
+        "statement": "Each theme fixes one complete identity and maps onto the three declared theme axes (paperBand, displayStyle, accentHue), so a theme pick slots into the direction's declared identity without a parallel vocabulary.",
+        "source": "theme axes analysis"
       }
     ],
     "assumed": [
@@ -39,6 +44,9 @@
     "unknown": [
       {
         "statement": "Whether a future craft item should graduate into a bundled design rule is decided only through the tiered promotion bar with full human-reviewed evidence, never by the craft corpus itself."
+      },
+      {
+        "statement": "The theme catalog is not a closed contract: themes may be added or replaced as shipped work accumulates, and the identity-fingerprint mechanism, not the catalog, enforces diversification."
       }
     ]
   }

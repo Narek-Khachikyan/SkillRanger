@@ -5,7 +5,7 @@ import { readDomainPackManifest, validateDomainPackManifest } from "../domains/r
 import { frontendRecipeIds } from "../domains/frontend/design/catalog.ts";
 import { loadFrontendRecipes } from "../domains/frontend/design/index.ts";
 import { loadDesignRuleLibrary } from "../domains/frontend/design/library.ts";
-import { loadCraftCatalog, craftReferenceKinds } from "../domains/frontend/design/craft.ts";
+import { loadCraftCatalog, craftReferenceKindsFor } from "../domains/frontend/design/craft.ts";
 import { craftBundleSources, defaultCraftRoot } from "./craft-bundle.ts";
 import { designRuleFamilies, designRuleIds } from "../domains/frontend/design/library-types.ts";
 import { loadRecipeExamplePacks } from "../domains/frontend/design/examples.ts";
@@ -381,10 +381,10 @@ export const validateFrontendReleaseArtifacts = async (): Promise<FrontendReleas
 
   try {
     const { catalog } = await loadCraftCatalog();
-    const expectedKinds = new Set([...craftReferenceKinds]);
+    const expectedKinds = new Set(craftReferenceKindsFor(catalog.schemaVersion));
     const actualKinds = Object.keys(catalog.categories);
     if (actualKinds.length !== expectedKinds.size || actualKinds.some((kind) => !expectedKinds.has(kind as never))) {
-      issues.push(`frontend craft catalog must declare exactly the four reference kinds; received ${actualKinds.join(", ")}`);
+      issues.push(`frontend craft catalog schemaVersion ${catalog.schemaVersion} must declare exactly the ${expectedKinds.size} reference kinds; received ${actualKinds.join(", ")}`);
     }
     const sources = await craftBundleSources(defaultCraftRoot);
     for (const { name, sourcePath } of sources) {

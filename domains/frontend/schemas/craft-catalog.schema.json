@@ -3,22 +3,60 @@
   "$id": "https://skillranger.local/domains/frontend/craft-catalog.schema.json",
   "title": "Frontend craft catalog",
   "type": "object",
-  "additionalProperties": false,
-  "required": ["schemaVersion", "id", "displayName", "description", "categories", "provenance"],
-  "properties": {
-    "schemaVersion": { "const": "1.0" },
-    "id": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9._-]*$" },
-    "displayName": { "type": "string", "minLength": 1 },
-    "description": { "type": "string", "minLength": 1 },
-    "categories": {
+  "oneOf": [
+    {
+      "$ref": "#/$defs/catalogV10"
+    },
+    {
+      "$ref": "#/$defs/catalogV11"
+    }
+  ],
+  "$defs": {
+    "catalogV10": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type-pairing", "palette-recipe", "macrostructure", "component-cookbook"],
+      "required": ["schemaVersion", "id", "displayName", "description", "categories", "provenance"],
       "properties": {
-        "type-pairing": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.md$" },
-        "palette-recipe": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.md$" },
-        "macrostructure": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.md$" },
-        "component-cookbook": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.md$" }
+        "schemaVersion": { "const": "1.0" },
+        "id": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "categories": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type-pairing", "palette-recipe", "macrostructure", "component-cookbook"],
+          "properties": {
+            "type-pairing": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.md$" },
+            "palette-recipe": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.md$" },
+            "macrostructure": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.md$" },
+            "component-cookbook": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.md$" }
+          }
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "catalogV11": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "displayName", "description", "categories", "provenance"],
+      "properties": {
+        "schemaVersion": { "const": "1.1" },
+        "id": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "categories": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type-pairing", "palette-recipe", "macrostructure", "component-cookbook", "theme"],
+          "properties": {
+            "type-pairing": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.md$" },
+            "palette-recipe": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.md$" },
+            "macrostructure": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.md$" },
+            "component-cookbook": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.md$" },
+            "theme": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.md$" }
+          }
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
       }
     },
     "provenance": {
@@ -31,9 +69,7 @@
         "assumed": { "$ref": "#/$defs/evidenceEntries" },
         "unknown": { "$ref": "#/$defs/evidenceEntries" }
       }
-    }
-  },
-  "$defs": {
+    },
     "evidenceEntries": {
       "type": "array",
       "items": {

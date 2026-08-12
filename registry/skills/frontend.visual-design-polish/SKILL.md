@@ -150,12 +150,13 @@ examples of the thesis workflow across product types.
 The craft corpus under `references/craft/` holds parametric design knowledge loaded
 advisory-style during a build: [type pairings](references/craft/type-pairings.md),
 [OKLCH palette recipes](references/craft/palette-recipes.md),
+[themes](references/craft/themes.md),
 [macrostructures](references/craft/macrostructures.md), and
 [component cookbooks](references/craft/component-cookbooks.md). Load only the craft
-reference relevant to the macrostructure you are considering, never all four. Craft
-references are knowledge, not rules: they never replace or extend the six-family rule
-selection, they are never recorded in the direction's selected rule ids, and they
-carry no verification gates of their own. The domain pack at
+reference relevant to the identity and macrostructure you are considering, never all
+five at once. Craft references are knowledge, not rules: they never replace or extend
+the six-family rule selection, they are never recorded in the direction's selected
+rule ids, and they carry no verification gates of their own. The domain pack at
 `domains/frontend/craft/craft-catalog.json` is the source of truth; the bundled copies
 are regenerated at publish time.
 
