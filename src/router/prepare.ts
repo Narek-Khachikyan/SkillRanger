@@ -728,31 +728,25 @@ export const prepareTask = async (
   // eligibility pass. The only axis that can diverge between the probe and the final
   // primary domain is a continuation answer selecting a nomination that names another
   // domain; reuse is skipped then and the boundary is rebuilt explicitly through the
-  // same factory, preserving the historical retrieval input exactly.
+  // same factory. Composition always receives a boundary: without a probe it is built
+  // here for the effective primary domain and nomination resolution, so the boundary
+  // factory is the only retrieval construction site.
   const reuseProbeRetrieval = probeBoundary !== undefined && probeSelectedPrimary !== undefined && canonical(probeSelectedPrimary) === canonical(selectedPrimary);
   const boundary = reuseProbeRetrieval
     ? probeBoundary
-    : probeBoundary !== undefined
-      ? createRetrievalBoundary(retrievalBoundaryInput(selectedPrimary, strict, resolvedNomination))
-      : undefined;
+    : createRetrievalBoundary(retrievalBoundaryInput(selectedPrimary, strict, resolvedNomination));
   const composed = composeSkillSet({
     profile: analysis.profile,
     requirements: analysis.requirements,
     skills: allMetadata,
-    selectedDomainIds: routingCandidates.map(({ id }) => id),
     primaryDomainId: selectedPrimary,
-    targetAgent,
     capabilities,
     strict,
     installedSkillIds: allMetadata.filter(({ installed }) => installed).map(({ id }) => id),
-    skillInputs: input.skillInputs,
     fingerprint,
-    routingDate,
-    routingIntentTags: analysis.routingIntentTags,
     routingContext,
-    matchedSignals: analysis.matchedSignals,
-    ...(resolvedNomination ? { resolvedNomination } : {}),
-    ...(boundary ? { boundary } : {}),
+    resolvedNomination,
+    boundary,
     limits: { ...defaultRouterLimits, maxSelectedRisk: config.router.maxSelectedRisk, maxEnvironmentSkills: config.router.maxEnvironmentSkills, maxTaskCompanions: config.router.maxTaskCompanions, maxVerificationSkills: config.router.maxVerificationSkills, maxAgentContextSkills: config.router.maxAgentContextSkills, maxTotalSelectedSkills: config.router.maxTotalSelectedSkills, maxInstructionBytes: config.router.maxInstructionBytes, maxAdditionalReadBytes: config.router.maxAdditionalReadBytes, maxSingleFileBytes: config.router.maxSingleFileBytes },
   });
   if (routingProposal) {

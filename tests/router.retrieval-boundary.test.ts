@@ -4,7 +4,6 @@ import {
   composeSkillSet,
   defaultRouterLimits,
   retrieveSkillCandidates,
-  type ComposeSkillSetInput,
   type RetrieveSkillCandidatesInput,
   type RouterCandidate,
   type RouterSkillMetadata,
@@ -14,7 +13,6 @@ import {
   createRetrievalBoundary,
   createTestRetrievalBoundary,
 } from "../src/router/retrieval-boundary.ts";
-import { canonicalizeJson } from "../src/router/store.ts";
 import type { TaskProfile } from "../src/router/types.ts";
 
 const profile = (overrides: Partial<TaskProfile> = {}): TaskProfile => ({
@@ -137,13 +135,13 @@ test("test factory synthesizes the candidate feed result from hand-built candida
   ]);
 });
 
-test("factory retrieval output matches composition's internal retrieval for identical inputs", () => {
+test("composition consumes exactly the boundary's stored retrieval", () => {
   const skills = [
     skill({ id: "backend.primary-a", requiredCapabilities: ["filesystem"] }),
     skill({ id: "backend.primary-b", roles: ["primary", "companion"], requiredCapabilities: ["filesystem", "terminal"] }),
     skill({ id: "backend.assistant", roles: ["companion"], requiredCapabilities: [] }),
   ];
-  const shared = {
+  const retrievalInput: RetrieveSkillCandidatesInput = {
     profile: profile(),
     skills,
     selectedDomainIds: ["backend-api"],
@@ -151,22 +149,25 @@ test("factory retrieval output matches composition's internal retrieval for iden
     targetAgent: "codex",
     capabilities: ["filesystem", "terminal"],
     routingDate: "2026-08-12",
+    maxSelectedRisk: defaultRouterLimits.maxSelectedRisk,
   };
-  const retrievalInput: RetrieveSkillCandidatesInput = { ...shared, maxSelectedRisk: defaultRouterLimits.maxSelectedRisk };
-  const composeInput: ComposeSkillSetInput = { ...shared, limits: { maxSelectedRisk: defaultRouterLimits.maxSelectedRisk } };
   const boundary = createRetrievalBoundary(retrievalInput);
-  const internal = composeSkillSet(composeInput);
-  const viaBoundary = composeSkillSet({ ...composeInput, boundary });
+  const composed = composeSkillSet({
+    profile: profile(),
+    skills,
+    primaryDomainId: "backend-api",
+    capabilities: ["filesystem", "terminal"],
+    boundary,
+  });
 
   assert.deepEqual(boundary.retrieval, retrieveSkillCandidates(retrievalInput));
-  assert.equal(canonicalizeJson(viaBoundary), canonicalizeJson(internal));
-  assert.equal(internal.status, "prepared");
-  if (internal.status === "prepared" && viaBoundary.status === "prepared") {
-    assert.deepEqual(viaBoundary.composed.selections, internal.composed.selections);
+  assert.equal(composed.status, "prepared");
+  if (composed.status === "prepared") {
+    assert.equal(composed.composed.primary.skill.id, boundary.retrieval.primaryCandidates[0]?.skill.id);
   }
 });
 
-test("factory parity holds for the proposal-driven strict retrieval input", () => {
+test("the factory owns strict-deferral for the proposal-driven retrieval input", () => {
   const base = skill({
     id: "backend.strict-primary",
     requiredCapabilities: ["filesystem", "terminal"],
@@ -204,57 +205,37 @@ test("factory parity holds for the proposal-driven strict retrieval input", () =
     nominatedPrimarySkillIds: nominatedIds,
     nominatedRoles: new Map([[base.id, "primary" as const]]),
   };
-  const composeInput: ComposeSkillSetInput = {
+  const boundary = createRetrievalBoundary(retrievalInput);
+  const composed = composeSkillSet({
     profile: profile(),
     skills: [base],
-    targetAgent: "codex",
     capabilities: ["filesystem", "terminal"],
     strict: true,
-    deferRequiredCapabilities: false,
     installedSkillIds: nominatedIds,
-    selectedDomainIds: ["backend-api"],
     primaryDomainId: "backend-api",
     resolvedNomination,
-    limits: { maxSelectedRisk: defaultRouterLimits.maxSelectedRisk },
-  };
-  const boundary = createRetrievalBoundary(retrievalInput);
-  const internal = composeSkillSet(composeInput);
-  const viaBoundary = composeSkillSet({ ...composeInput, boundary });
+    boundary,
+  });
 
   assert.deepEqual(boundary.retrieval, retrieveSkillCandidates(retrievalInput));
-  assert.equal(canonicalizeJson(viaBoundary), canonicalizeJson(internal));
-  assert.equal(internal.status, "prepared");
-  if (internal.status === "prepared" && viaBoundary.status === "prepared") {
-    assert.equal(viaBoundary.composed.primary.skill.id, base.id);
-  }
+  assert.equal(composed.status, "prepared");
+  if (composed.status === "prepared") assert.equal(composed.composed.primary.skill.id, base.id);
 });
 
-test("composition consumes the supplied boundary over every other retrieval feed", () => {
+test("composition consumes the supplied boundary's retrieval, never the registry copy", () => {
   const base = skill({ id: "backend.base", requiredCapabilities: ["filesystem"] });
   const boundaryPrimary = skill({ id: "backend.boundary-primary" });
   const boundary = createTestRetrievalBoundary({ candidates: [candidate(boundaryPrimary)] });
-  // The registry copy of the boundary primary is high-risk, so the internal
-  // retrieval would reject it; the hand-built boundary carries a low-risk
-  // eligible copy that composition must consume.
+  // The registry copy of the boundary primary is high-risk, so any retrieval
+  // over the registry would reject it; the hand-built boundary carries a
+  // low-risk eligible copy, so composition's outcome is bound to the
+  // boundary's retrieval only.
   const registrySkills = [base, { ...boundaryPrimary, riskLevel: "high" }];
-  const competingResult = retrieveSkillCandidates({
-    profile: profile(),
-    skills: [skill({ id: "backend.other-primary" })],
-    selectedDomainIds: ["backend-api"],
-    primaryDomainId: "backend-api",
-    targetAgent: "codex",
-    capabilities: ["filesystem", "terminal"],
-    maxSelectedRisk: defaultRouterLimits.maxSelectedRisk,
-  });
   const composed = composeSkillSet({
     profile: profile(),
     skills: registrySkills,
-    selectedDomainIds: ["backend-api"],
     primaryDomainId: "backend-api",
-    targetAgent: "codex",
     capabilities: ["filesystem", "terminal"],
-    candidates: [candidate(skill({ id: "backend.candidates-primary" }))],
-    retrievalResult: competingResult,
     boundary,
   });
   assert.equal(composed.status, "prepared");
@@ -266,14 +247,13 @@ test("eligibility facts bind to the supplied boundary's own retrieval", () => {
   const boundaryPrimary = skill({ id: "backend.explicit-primary" });
   const boundary = createTestRetrievalBoundary({ candidates: [candidate(boundaryPrimary)] });
   // The registry copy of the explicit primary is high-risk, so facts derived
-  // from the internal retrieval would block the explicit choice; the boundary
-  // carries an eligible copy, so the explicit choice must stand.
+  // from a registry retrieval would block the explicit choice; the boundary
+  // carries an eligible copy, so facts bind to the boundary's retrieval and
+  // the explicit choice stands.
   const composed = composeSkillSet({
     profile: profile(),
     skills: [{ ...boundaryPrimary, riskLevel: "high" }, base],
-    selectedDomainIds: ["backend-api"],
     primaryDomainId: "backend-api",
-    targetAgent: "codex",
     capabilities: ["filesystem", "terminal"],
     boundary,
     resolvedNomination: {

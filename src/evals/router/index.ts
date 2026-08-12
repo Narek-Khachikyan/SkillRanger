@@ -237,24 +237,19 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
     requirements: analysis.requirements,
     skills: metadata.skills,
     fingerprint: metadata.fingerprint,
-    selectedDomainIds: resolution.candidates.map(({ id }) => id),
     primaryDomainId: resolution.primaryDomainId,
-    targetAgent: "codex",
     capabilities: input.capabilities,
     strict: input.strict,
     installedSkillIds: input.id === "strict-installed" ? ["backend.auth-implementation"] : [],
-    routingDate: "2026-07-19",
-    routingIntentTags: analysis.routingIntentTags,
     routingContext: metadata.routingContext,
-    matchedSignals: analysis.matchedSignals,
     boundary,
   });
   const replay = composeSkillSet({
     profile: analysis.profile, requirements: analysis.requirements, skills: metadata.skills, fingerprint: metadata.fingerprint,
-    selectedDomainIds: resolution.candidates.map(({ id }) => id), primaryDomainId: resolution.primaryDomainId,
-    targetAgent: "codex", capabilities: input.capabilities, strict: input.strict,
-    installedSkillIds: input.id === "strict-installed" ? ["backend.auth-implementation"] : [], routingDate: "2026-07-19", routingIntentTags: analysis.routingIntentTags,
-    routingContext: metadata.routingContext, matchedSignals: analysis.matchedSignals, boundary,
+    primaryDomainId: resolution.primaryDomainId,
+    capabilities: input.capabilities, strict: input.strict,
+    installedSkillIds: input.id === "strict-installed" ? ["backend.auth-implementation"] : [],
+    routingContext: metadata.routingContext, boundary,
   });
   const selected = composed.status === "prepared" ? composed.composed.all : [];
   const companions = selected.filter(({ role }) => role !== "primary");

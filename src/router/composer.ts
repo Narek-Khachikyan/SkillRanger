@@ -1,4 +1,6 @@
 import type { ProjectFingerprint } from "../types.ts";
+import type { RoutingContext } from "./context.ts";
+import type { CanonicalRequirement } from "./requirements.ts";
 import type {
   DomainCandidate,
   PreparedSelections,
@@ -22,7 +24,6 @@ import {
   type ResolvedNomination,
 } from "./nomination-resolution.ts";
 import type { RetrievalBoundary } from "./retrieval-boundary.ts";
-import { createRetrievalBoundary } from "./retrieval-boundary.ts";
 import {
   buildNominatedPrimaryEligibilityFacts,
   sortedPrimary,
@@ -72,20 +73,23 @@ export const defaultRouterLimits: RouterLimits = {
 
 export type SelectedRouterCandidate = RouterCandidate & { role: RouterSkillRole };
 
-export type ComposeSkillSetInput = Omit<RetrieveSkillCandidatesInput, "nominatedSkillIds" | "nominatedPrimarySkillIds" | "nominatedRoles"> & {
+export type ComposeSkillSetInput = {
+  // The retrieval boundary is the one retrieval feed: composition consumes
+  // exactly the retrieval the boundary stored and derives its eligibility
+  // facts from it. Retrieval input construction and the strict-deferral policy
+  // live in the boundary factory, never in composition.
+  boundary: RetrievalBoundary;
   resolvedNomination?: ResolvedNomination;
-  candidates?: RouterCandidate[];
-  // The retrieval owner's precomputed candidate result (e.g. the ambiguity
-  // probe). Eligibility facts are always derived from the retrieval result this
-  // composition actually consumes, never accepted as an independent input, so
-  // the facts can never disagree with the retrieval they were derived from.
-  retrievalResult?: RetrieveSkillCandidatesResult;
-  // The retrieval boundary owns one retrieval result and its bound eligibility
-  // fact projection; when supplied it wins over every other retrieval feed, and
-  // composition consumes exactly the retrieval the boundary stored.
-  boundary?: RetrievalBoundary;
-  domainCandidates?: DomainCandidate[];
+  profile: TaskProfile;
+  requirements?: CanonicalRequirement[];
+  skills: RouterSkillMetadata[];
+  strict?: boolean;
+  installedSkillIds?: Iterable<string>;
+  capabilities?: Iterable<string>;
+  primaryDomainId?: string;
+  routingContext?: RoutingContext;
   fingerprint?: ProjectFingerprint;
+  domainCandidates?: DomainCandidate[];
   limits?: Partial<RouterLimits>;
 };
 
@@ -279,26 +283,10 @@ export const composeSkillSet = (input: ComposeSkillSetInput): ComposeSkillSetRes
   const nominatedPrimarySkillIds = unique(nomination?.nominatedPrimarySkillIds ?? []);
   const requiredPrimarySkillId = nomination?.requiredPrimarySkillId ? canonical(nomination.requiredPrimarySkillId) : undefined;
   const nominatedRoles = nomination?.nominatedRoles;
-  // The internal retrieval fallback is a legacy feed: it goes through the
-  // boundary factory, so retrieval input construction and the strict-deferral
-  // policy have exactly one home and composition never reshapes retrieval
-  // inputs itself.
-  const retrievalInput: RetrieveSkillCandidatesInput = {
-    ...input,
-    maxSelectedRisk: limits.maxSelectedRisk,
-    ...(nomination
-      ? {
-        nominatedSkillIds: nomination.nominatedSkillIds,
-        nominatedPrimarySkillIds,
-        nominatedRoles: nomination.nominatedRoles,
-      }
-      : {}),
-  };
-  const retrieved = applyNominatedRoles(input.boundary?.retrieval
-    ?? input.retrievalResult
-    ?? (input.candidates
-      ? { candidates: input.candidates, primaryCandidates: input.candidates.filter(({ eligibleRoles }) => eligibleRoles.includes("primary")), rejections: [] }
-      : createRetrievalBoundary(retrievalInput).retrieval), nominatedRoles);
+  // Composition consumes exactly the retrieval the boundary stored; retrieval
+  // input construction and the strict-deferral policy live in the boundary
+  // factory, so composition never reshapes retrieval inputs itself.
+  const retrieved = applyNominatedRoles(input.boundary.retrieval, nominatedRoles);
   const byId = new Map(retrieved.candidates.map((candidate) => [canonical(candidate.skill.id), candidate]));
   const registryById = new Map(input.skills.map((skill) => [canonical(skill.id), skill]));
   // The facts always cover the required primary: the resolution puts it first in

@@ -3,11 +3,15 @@ import assert from "node:assert/strict";
 import { loadRouterFixturePacks, type RouterFixturePack } from "../src/router/fixtures.ts";
 import {
   composeSkillSet,
+  defaultRouterLimits,
   retrieveSkillCandidates,
   type RouterCandidate,
   type RouterSkillMetadata,
 } from "../src/router/composer.ts";
-import { createTestRetrievalBoundary } from "../src/router/retrieval-boundary.ts";
+import {
+  createRetrievalBoundary,
+  createTestRetrievalBoundary,
+} from "../src/router/retrieval-boundary.ts";
 import type { TaskProfile } from "../src/router/types.ts";
 import { scoreFreshness, scoreSharedFeatures } from "../src/recommender/scoring.ts";
 
@@ -116,7 +120,8 @@ test("applicability signal demotes Tailwind without project evidence or explicit
 test("composer closes dependencies and preserves one primary", async () => {
   const packs = await loadRouterFixturePacks(fixtureRoot);
   const input = backendInput(packs);
-  const result = composeSkillSet({ ...input, primaryDomainId: "backend-api" });
+  const boundary = createRetrievalBoundary({ ...input, primaryDomainId: "backend-api", maxSelectedRisk: defaultRouterLimits.maxSelectedRisk });
+  const result = composeSkillSet({ ...input, primaryDomainId: "backend-api", boundary });
 
   assert.equal(result.status, "prepared");
   if (result.status !== "prepared") return;
@@ -298,7 +303,7 @@ test("router retrieval prefers broad task-signal coverage over one generic quali
 test("strict composition reports semantic-best feasibility without substituting another workflow", async () => {
   const packs = await loadRouterFixturePacks(fixtureRoot);
   const skills = fixtureSkills(packs);
-  const result = composeSkillSet({
+  const retrievalInput = {
     profile: profile({ normalizedGoal: "fix authentication" }),
     skills,
     selectedDomainIds: ["backend-api"],
@@ -306,6 +311,16 @@ test("strict composition reports semantic-best feasibility without substituting 
     capabilities: ["filesystem", "terminal"],
     strict: true,
     installedSkillIds: [],
+    maxSelectedRisk: defaultRouterLimits.maxSelectedRisk,
+  };
+  const result = composeSkillSet({
+    profile: retrievalInput.profile,
+    skills,
+    primaryDomainId: retrievalInput.primaryDomainId,
+    capabilities: retrievalInput.capabilities,
+    strict: true,
+    installedSkillIds: [],
+    boundary: createRetrievalBoundary(retrievalInput),
   });
   assert.equal(result.status, "strict_requirements_unmet");
   if (result.status === "strict_requirements_unmet") {
@@ -327,10 +342,21 @@ test("proposal-driven strict retrieval treats missing routing capabilities as a 
     routingRequiredCapabilities: [],
     score: 0.8,
   };
-  const result = composeSkillSet({
+  const retrievalInput = {
     profile: profile(),
     skills: [first, second],
     selectedDomainIds: ["backend-api"],
+    primaryDomainId: "backend-api",
+    capabilities: ["filesystem"],
+    strict: true,
+    maxSelectedRisk: defaultRouterLimits.maxSelectedRisk,
+    nominatedSkillIds: [first.id, second.id],
+    nominatedPrimarySkillIds: [first.id, second.id],
+    nominatedRoles: new Map([[first.id, "primary"], [second.id, "primary"]]),
+  };
+  const result = composeSkillSet({
+    profile: profile(),
+    skills: [first, second],
     primaryDomainId: "backend-api",
     capabilities: ["filesystem"],
     strict: true,
@@ -341,6 +367,7 @@ test("proposal-driven strict retrieval treats missing routing capabilities as a 
       nominatedPrimarySkillIds: [first.id, second.id],
       nominatedRoles: new Map([[first.id, "primary"], [second.id, "primary"]]),
     },
+    boundary: createRetrievalBoundary(retrievalInput),
   });
   assert.equal(result.status, "strict_requirements_unmet");
   assert.ok(result.rejections.some(({ skillId, reason }) => skillId === first.id && reason === "required-capability-missing"));
@@ -396,12 +423,21 @@ test("proposal-driven primary fallback can cross an unobserved domain after a ha
     riskLevel: "low",
     domains: ["frontend"],
   };
-  const result = composeSkillSet({
+  const retrievalInput = {
     profile: profile({ domains: [
       { id: "backend-api", confidence: 1, role: "primary", available: true, reasons: [], evidence: [] },
     ] }),
     skills: [first, second],
     selectedDomainIds: ["backend-api"],
+    primaryDomainId: "backend-api",
+    maxSelectedRisk: defaultRouterLimits.maxSelectedRisk,
+    nominatedSkillIds: [first.id, second.id],
+    nominatedPrimarySkillIds: [first.id, second.id],
+    nominatedRoles: new Map([[first.id, "primary"], [second.id, "primary"]]),
+  };
+  const result = composeSkillSet({
+    profile: retrievalInput.profile,
+    skills: [first, second],
     primaryDomainId: "backend-api",
     resolvedNomination: {
       nominationOrder: [first.id, second.id],
@@ -410,6 +446,7 @@ test("proposal-driven primary fallback can cross an unobserved domain after a ha
       nominatedPrimarySkillIds: [first.id, second.id],
       nominatedRoles: new Map([[first.id, "primary"], [second.id, "primary"]]),
     },
+    boundary: createRetrievalBoundary(retrievalInput),
   });
 
   assert.equal(result.status, "prepared");
@@ -436,10 +473,25 @@ test("strict proposal workflows report uninstalled nominated companions and veri
     roles: ["verification"],
     intentTags: ["tests-pass"],
   };
-  const result = composeSkillSet({
+  const retrievalInput = {
     profile: profile({ acceptanceCriteria: ["tests-pass"] }),
     skills: [primary, companion, verification],
     selectedDomainIds: ["backend-api"],
+    primaryDomainId: "backend-api",
+    strict: true,
+    installedSkillIds: [],
+    maxSelectedRisk: defaultRouterLimits.maxSelectedRisk,
+    nominatedSkillIds: [primary.id, companion.id, verification.id],
+    nominatedPrimarySkillIds: [primary.id],
+    nominatedRoles: new Map([
+      [primary.id, "primary" as const],
+      [companion.id, "companion" as const],
+      [verification.id, "verification" as const],
+    ]),
+  };
+  const result = composeSkillSet({
+    profile: profile({ acceptanceCriteria: ["tests-pass"] }),
+    skills: [primary, companion, verification],
     primaryDomainId: "backend-api",
     strict: true,
     installedSkillIds: [],
@@ -454,6 +506,7 @@ test("strict proposal workflows report uninstalled nominated companions and veri
         [verification.id, "verification" as const],
       ]),
     },
+    boundary: createRetrievalBoundary(retrievalInput),
   });
 
   assert.equal(result.status, "strict_requirements_unmet");
@@ -473,7 +526,17 @@ test("composer keeps compatible subtasks together when one primary covers all of
       { id: "api-implement", normalizedGoal: "implement api", actions: ["implement"], artifactTypes: ["api"], candidateDomainIds: ["backend-api"] },
       { id: "api-test", normalizedGoal: "test api", actions: ["test"], artifactTypes: ["test-suite"], candidateDomainIds: ["backend-api"] },
     ] }),
-    skills: [primarySkill], selectedDomainIds: ["backend-api"], capabilities: [],
+    skills: [primarySkill],
+    capabilities: [],
+    boundary: createRetrievalBoundary({
+      profile: profile({ subtasks: [
+        { id: "api-implement", normalizedGoal: "implement api", actions: ["implement"], artifactTypes: ["api"], candidateDomainIds: ["backend-api"] },
+        { id: "api-test", normalizedGoal: "test api", actions: ["test"], artifactTypes: ["test-suite"], candidateDomainIds: ["backend-api"] },
+      ] }),
+      skills: [primarySkill],
+      selectedDomainIds: ["backend-api"],
+      maxSelectedRisk: defaultRouterLimits.maxSelectedRisk,
+    }),
   });
   assert.equal(result.status, "prepared");
 });
@@ -488,7 +551,16 @@ test("retrieval preserves every declared eligible role and selection assigns one
   const retrieved = retrieveSkillCandidates({ profile: profile(), skills: [skill], selectedDomainIds: ["backend-api"] });
   assert.deepEqual(retrieved.candidates[0]?.eligibleRoles, ["primary", "companion", "verification"]);
 
-  const composed = composeSkillSet({ profile: profile(), skills: [skill], selectedDomainIds: ["backend-api"] });
+  const composed = composeSkillSet({
+    profile: profile(),
+    skills: [skill],
+    boundary: createRetrievalBoundary({
+      profile: profile(),
+      skills: [skill],
+      selectedDomainIds: ["backend-api"],
+      maxSelectedRisk: defaultRouterLimits.maxSelectedRisk,
+    }),
+  });
   assert.equal(composed.status, "prepared");
   if (composed.status !== "prepared") return;
   assert.deepEqual(composed.composed.all.map(({ skill: selected, role }) => ({ id: selected.id, role })), [

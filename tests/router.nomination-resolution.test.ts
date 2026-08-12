@@ -16,12 +16,28 @@ import {
 import {
   buildNominatedPrimaryEligibilityFacts,
   composeSkillSet,
+  defaultRouterLimits,
   retrieveSkillCandidates,
+  type RetrieveSkillCandidatesInput,
   type RouterSkillMetadata,
 } from "../src/router/composer.ts";
+import { createRetrievalBoundary } from "../src/router/retrieval-boundary.ts";
 import type { TaskProfile } from "../src/router/types.ts";
 
 const fixtureRoot = "tests/fixtures/router-packs";
+
+// Mirrors the unified retrieval input the boundary factory consumes for a
+// composition input: the same profile, skills, domains, capabilities, and
+// nomination resolution, plus the composed max-selected-risk limit.
+const boundaryFor = (input: RetrieveSkillCandidatesInput & { resolvedNomination?: ResolvedNomination }) => createRetrievalBoundary({
+  ...input,
+  maxSelectedRisk: defaultRouterLimits.maxSelectedRisk,
+  ...(input.resolvedNomination === undefined ? {} : {
+    nominatedSkillIds: input.resolvedNomination.nominatedSkillIds,
+    nominatedPrimarySkillIds: input.resolvedNomination.nominatedPrimarySkillIds,
+    nominatedRoles: input.resolvedNomination.nominatedRoles,
+  }),
+});
 
 const profile = (overrides: Partial<TaskProfile> = {}): TaskProfile => ({
   schemaVersion: "task-profile/1.0",
@@ -452,7 +468,7 @@ test("an explicit choice outranks the declared nomination order and lexical scor
     capabilities: ["filesystem", "terminal"],
     resolvedNomination,
   };
-  const result = composeSkillSet(input);
+  const result = composeSkillSet({ ...input, boundary: boundaryFor(input) });
   assert.equal(result.status, "prepared");
   if (result.status === "prepared") assert.equal(result.composed.primary.skill.id, base.id);
 });
@@ -478,7 +494,7 @@ test("an ineligible explicit choice fails composition with the exact reason code
       nominatedRoles: new Map([[highRisk.id, "primary"]]),
     } satisfies ResolvedNomination,
   };
-  const result = composeSkillSet(input);
+  const result = composeSkillSet({ ...input, boundary: boundaryFor(input) });
   assert.equal(result.status, "no_matching_skills");
   if (result.status === "no_matching_skills") {
     assert.equal(result.reasonCode, "explicit-skill-choice-risk-blocked");
@@ -507,7 +523,7 @@ test("a composition hard veto on the explicit choice returns the exact reason co
       nominatedRoles: new Map([[cycleA.id, "primary"]]),
     } satisfies ResolvedNomination,
   };
-  const result = composeSkillSet(input);
+  const result = composeSkillSet({ ...input, boundary: boundaryFor(input) });
   assert.equal(result.status, "no_matching_skills");
   if (result.status === "no_matching_skills") assert.equal(result.reasonCode, "explicit-skill-choice-dependency-cycle");
 });
@@ -532,7 +548,7 @@ test("an invalid nomination falls through to the next valid nomination in compos
       nominatedRoles: new Map([[highRisk.id, "primary"], [base.id, "primary"]]),
     } satisfies ResolvedNomination,
   };
-  const result = composeSkillSet(input);
+  const result = composeSkillSet({ ...input, boundary: boundaryFor(input) });
   assert.equal(result.status, "prepared");
   if (result.status === "prepared") assert.equal(result.composed.primary.skill.id, base.id);
   assert.ok(result.rejections.some(({ skillId, reason }) => skillId === highRisk.id && reason === "risk-blocked"));
@@ -559,7 +575,7 @@ test("composition falls back deterministically when no nomination remains eligib
       nominatedRoles: new Map([[highRisk.id, "primary"], [blocked.id, "primary"]]),
     } satisfies ResolvedNomination,
   };
-  const result = composeSkillSet(input);
+  const result = composeSkillSet({ ...input, boundary: boundaryFor(input) });
   assert.equal(result.status, "prepared");
   if (result.status === "prepared") assert.equal(result.composed.primary.skill.id, base.id);
 });
@@ -588,10 +604,10 @@ test("strict mode never substitutes the explicit choice with another workflow", 
       nominatedRoles: new Map([[highRisk.id, "primary"], [installed.id, "primary"]]),
     } satisfies ResolvedNomination,
   };
-  const hardVeto = composeSkillSet({ ...input, resolvedNomination: { ...input.resolvedNomination, requiredPrimarySkillId: highRisk.id } });
+  const hardVeto = composeSkillSet({ ...input, resolvedNomination: { ...input.resolvedNomination, requiredPrimarySkillId: highRisk.id }, boundary: boundaryFor(input) });
   assert.equal(hardVeto.status, "no_matching_skills");
   if (hardVeto.status === "no_matching_skills") assert.equal(hardVeto.reasonCode, "explicit-skill-choice-risk-blocked");
-  const uninstalled = composeSkillSet({ ...input, resolvedNomination: { ...input.resolvedNomination, requiredPrimarySkillId: "backend.input-required" } });
+  const uninstalled = composeSkillSet({ ...input, resolvedNomination: { ...input.resolvedNomination, requiredPrimarySkillId: "backend.input-required" }, boundary: boundaryFor(input) });
   assert.equal(uninstalled.status, "strict_requirements_unmet");
   if (uninstalled.status === "strict_requirements_unmet") {
     assert.ok(uninstalled.missing.some(({ skillId, requirement }) => skillId === "backend.input-required" && requirement === "installed-skill"));
@@ -603,7 +619,7 @@ test("a nominationOrder-only caller keeps declared-order primary ranking", async
   const skills = fixtureSkills(packs);
   const base = skills.find(({ id }) => id === "backend.auth-implementation")!;
   const higherScored = { ...base, id: "backend.higher-scored", displayName: "Higher Scored", score: 0.99 };
-  const result = composeSkillSet({
+  const composeInput = {
     profile: profile(),
     skills: [base, higherScored],
     selectedDomainIds: ["backend-api"],
@@ -617,7 +633,8 @@ test("a nominationOrder-only caller keeps declared-order primary ranking", async
       nominatedPrimarySkillIds: [],
       nominatedRoles: new Map([[base.id, "primary"], [higherScored.id, "primary"]]),
     },
-  });
+  };
+  const result = composeSkillSet({ ...composeInput, boundary: boundaryFor(composeInput) });
   assert.equal(result.status, "prepared");
   if (result.status === "prepared") assert.equal(result.composed.primary.skill.id, base.id);
 });
@@ -650,7 +667,7 @@ test("facts-driven nomination decisions match the composition outcome", async ()
   }
   const ordered = resolvePrimaryArbitration({ eligibilityFacts: facts, primaryNominationOrder: nominatedPrimarySkillIds });
   assert.deepEqual(ordered, { kind: "ordered-nominations", primaryOrder: [base.id] });
-  const composed = composeSkillSet({
+  const composeInput = {
     profile: profile(),
     skills: [highRisk, base],
     selectedDomainIds: ["backend-api"],
@@ -664,7 +681,8 @@ test("facts-driven nomination decisions match the composition outcome", async ()
       nominatedPrimarySkillIds,
       nominatedRoles: new Map([[highRisk.id, "primary"], [base.id, "primary"]]),
     },
-  });
+  };
+  const composed = composeSkillSet({ ...composeInput, boundary: boundaryFor(composeInput) });
   assert.equal(composed.status, "prepared");
   if (composed.status === "prepared") assert.equal(composed.composed.primary.skill.id, base.id);
 });
@@ -688,7 +706,7 @@ test("composition outcome maps one-to-one onto the primary arbitration decision"
   const eligibilityFacts = buildNominatedPrimaryEligibilityFacts({ retrieval, skillIds: nominatedPrimarySkillIds });
   const decision = resolvePrimaryArbitration({ eligibilityFacts, primaryNominationOrder: nominatedPrimarySkillIds });
   assert.deepEqual(decision, { kind: "ordered-nominations", primaryOrder: [higherScored.id, base.id] });
-  const composed = composeSkillSet({
+  const composeInput = {
     profile: profile(),
     skills: [higherScored, base],
     selectedDomainIds: ["backend-api"],
@@ -702,7 +720,8 @@ test("composition outcome maps one-to-one onto the primary arbitration decision"
       nominatedPrimarySkillIds,
       nominatedRoles: new Map([[higherScored.id, "primary"], [base.id, "primary"]]),
     } satisfies ResolvedNomination,
-  });
+  };
+  const composed = composeSkillSet({ ...composeInput, boundary: boundaryFor(composeInput) });
   assert.equal(composed.status, "prepared");
   if (composed.status === "prepared" && decision.kind === "ordered-nominations") {
     assert.equal(composed.composed.primary.skill.id, decision.primaryOrder[0]);
@@ -737,10 +756,10 @@ test("strict routing never substitutes a less relevant installed workflow for th
     strict: true,
     installedSkillIds: [nominated.id, substitute.id],
   };
-  const withoutNomination = composeSkillSet(input);
+  const withoutNomination = composeSkillSet({ ...input, boundary: boundaryFor(input) });
   assert.equal(withoutNomination.status, "prepared");
   if (withoutNomination.status === "prepared") assert.equal(withoutNomination.composed.primary.skill.id, substitute.id);
-  const withNomination = composeSkillSet({
+  const withNominationInput = {
     ...input,
     resolvedNomination: {
       nominationOrder: [nominated.id],
@@ -749,7 +768,8 @@ test("strict routing never substitutes a less relevant installed workflow for th
       nominatedPrimarySkillIds: [nominated.id],
       nominatedRoles: new Map([[nominated.id, "primary"]]),
     } satisfies ResolvedNomination,
-  });
+  };
+  const withNomination = composeSkillSet({ ...withNominationInput, boundary: boundaryFor(withNominationInput) });
   assert.equal(withNomination.status, "prepared");
   if (withNomination.status === "prepared") assert.equal(withNomination.composed.primary.skill.id, nominated.id);
 });
@@ -843,7 +863,7 @@ test("the resolved nomination drives composition exactly like the scattered fact
     ],
   });
   assert.equal(resolved?.requiredPrimarySkillId, base.id);
-  const result = composeSkillSet({
+  const composeInput = {
     profile: profile(),
     skills: [higherScored, base],
     selectedDomainIds: ["backend-api"],
@@ -851,7 +871,8 @@ test("the resolved nomination drives composition exactly like the scattered fact
     targetAgent: "codex",
     capabilities: ["filesystem", "terminal"],
     resolvedNomination: resolved,
-  });
+  };
+  const result = composeSkillSet({ ...composeInput, boundary: boundaryFor(composeInput) });
   assert.equal(result.status, "prepared");
   if (result.status === "prepared") assert.equal(result.composed.primary.skill.id, base.id);
 });

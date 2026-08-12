@@ -11,7 +11,6 @@ import {
   type RouterSkillMetadata,
 } from "../src/router/composer.ts";
 import { createRetrievalBoundary, createTestRetrievalBoundary } from "../src/router/retrieval-boundary.ts";
-import { canonicalizeJson } from "../src/router/store.ts";
 import type { TaskProfile } from "../src/router/types.ts";
 
 const fixtureRoot = "tests/fixtures/router-packs";
@@ -126,7 +125,7 @@ test("eligibility facts are a bounded pure projection of the existing retrieval 
   assert.deepEqual(JSON.parse(JSON.stringify(retrieval)) as unknown, snapshot);
 });
 
-test("composition reuses the supplied retrieval result instead of recomputing eligibility", async () => {
+test("composition consumes the supplied boundary's retrieval instead of recomputing eligibility", async () => {
   const packs = await loadRouterFixturePacks(fixtureRoot);
   const skills = fixtureSkills(packs);
   const base = skills.find(({ id }) => id === "backend.auth-implementation")!;
@@ -155,18 +154,16 @@ test("composition reuses the supplied retrieval result instead of recomputing el
     nominatedRoles: new Map(nominated.map(({ id }) => [id, "primary" as const])),
   };
   const boundary = createRetrievalBoundary(retrievalInput);
-  const direct = composeSkillSet({ ...retrievalInput, resolvedNomination });
   const reused = composeSkillSet({ ...retrievalInput, resolvedNomination, boundary });
 
-  assert.equal(canonicalizeJson(direct), canonicalizeJson(reused));
-  assert.equal(direct.status, "prepared");
-  if (direct.status === "prepared") {
-    assert.equal(direct.composed.primary.skill.id, "backend.auth-implementation");
-    assert.deepEqual(reused.composed.selections, direct.composed.selections);
+  assert.equal(reused.status, "prepared");
+  if (reused.status === "prepared") {
+    assert.equal(reused.composed.primary.skill.id, "backend.auth-implementation");
   }
+  assert.ok(reused.rejections.some(({ skillId, reason }) => skillId === "backend.high-risk" && reason === "risk-blocked"));
 });
 
-test("composition binds the eligibility decision to the supplied retrieval result", async () => {
+test("composition binds the eligibility decision to the supplied boundary", async () => {
   const packs = await loadRouterFixturePacks(fixtureRoot);
   const skills = fixtureSkills(packs);
   const base = skills.find(({ id }) => id === "backend.auth-implementation")!;
@@ -211,7 +208,7 @@ test("composition binds the eligibility decision to the supplied retrieval resul
   if (reused.status === "prepared") assert.equal(reused.composed.primary.skill.id, explicit.id);
 });
 
-test("reused eligibility result keeps explicit-choice blocking with the exact reason code", async () => {
+test("the boundary's eligibility facts keep explicit-choice blocking with the exact reason code", async () => {
   const packs = await loadRouterFixturePacks(fixtureRoot);
   const skills = fixtureSkills(packs);
   const base = skills.find(({ id }) => id === "backend.auth-implementation")!;
@@ -237,13 +234,11 @@ test("reused eligibility result keeps explicit-choice blocking with the exact re
     nominatedRoles: new Map([["backend.high-risk", "primary" as const]]),
   };
   const boundary = createRetrievalBoundary(retrievalInput);
-  const direct = composeSkillSet({ ...retrievalInput, resolvedNomination });
   const reused = composeSkillSet({ ...retrievalInput, resolvedNomination, boundary });
 
-  assert.equal(canonicalizeJson(direct), canonicalizeJson(reused));
-  assert.equal(direct.status, "no_matching_skills");
-  if (direct.status === "no_matching_skills") {
-    assert.equal(direct.reasonCode, "explicit-skill-choice-risk-blocked");
-    assert.deepEqual(reused.rejections, direct.rejections);
+  assert.equal(reused.status, "no_matching_skills");
+  if (reused.status === "no_matching_skills") {
+    assert.equal(reused.reasonCode, "explicit-skill-choice-risk-blocked");
+    assert.deepEqual(reused.rejections, [{ skillId: "backend.high-risk", reason: "risk-blocked" }]);
   }
 });
