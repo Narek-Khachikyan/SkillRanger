@@ -1,10 +1,9 @@
-import path from "node:path";
 import { groupRecommendationsByLane, recommendSkills } from "../../recommender/index.ts";
 import { loadLocalRegistry } from "../../registry/index.ts";
 import { scanProject } from "../../scanner/index.ts";
 import { skillLanes, type SkillLane } from "../../types.ts";
 import { McpToolError, mcpToolEffects, type McpToolDefinition, type McpToolHandler } from "./types.ts";
-import { asString, jsonToolResult, optionalString, projectRootProperty, registryRootProperty, requireStringArray, resolveRegistryRoot } from "./utils.ts";
+import { asString, jsonToolResult, optionalString, projectRootProperty, registryRootProperty, requireStringArray, resolveProjectRoot, resolveRegistryRoot } from "./utils.ts";
 
 export const projectToolDefinitions: McpToolDefinition[] = [
   {
@@ -60,7 +59,7 @@ export const projectToolDefinitions: McpToolDefinition[] = [
 ];
 
 const analyzeProject: McpToolHandler = async (args) => {
-  const projectRoot = path.resolve(asString(args.projectRoot, "."));
+  const projectRoot = resolveProjectRoot(args.projectRoot);
   return jsonToolResult({
     fingerprint: await scanProject(projectRoot)
   });
@@ -94,7 +93,7 @@ const optionalHostCapabilities = (value: unknown) => {
 };
 
 const recommendProjectSkills: McpToolHandler = async (args) => {
-  const projectRoot = path.resolve(asString(args.projectRoot, "."));
+  const projectRoot = resolveProjectRoot(args.projectRoot);
   const registryRoot = resolveRegistryRoot(args.registryRoot);
   const targetAgent = asString(args.targetAgent, "codex");
   const userIntent = optionalString(args.userIntent);

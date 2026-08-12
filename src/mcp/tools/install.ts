@@ -1,4 +1,3 @@
-import path from "node:path";
 import { getAdapter } from "../../installers/codex.ts";
 import { InstallAuditBlockedError } from "../../installers/types.ts";
 import { readLockfile } from "../../lockfile/index.ts";
@@ -14,6 +13,7 @@ import {
   registryRootProperty,
   requireString,
   requireStringArray,
+  resolveProjectRoot,
   resolveRegistryRoot,
   sameStrings
 } from "./utils.ts";
@@ -105,8 +105,10 @@ export const installToolDefinitions: McpToolDefinition[] = [
   }
 ];
 
+const projectRootOf = (args: Record<string, unknown>) => resolveProjectRoot(args.projectRoot);
+
 const listInstalledSkills: McpToolHandler = async (args) => {
-  const projectRoot = path.resolve(asString(args.projectRoot, "."));
+  const projectRoot = projectRootOf(args);
   return jsonToolResult({
     projectRoot,
     installed: (await readLockfile(projectRoot)).installed
@@ -115,7 +117,7 @@ const listInstalledSkills: McpToolHandler = async (args) => {
 
 const planSkillInstall: McpToolHandler = async (args) => {
   const skillId = requireString(args.skillId, "skillId");
-  const projectRoot = path.resolve(asString(args.projectRoot, "."));
+  const projectRoot = projectRootOf(args);
   const registryRoot = resolveRegistryRoot(args.registryRoot);
   const targetAgent = asString(args.targetAgent, "codex");
   const scope = asInstallScope(args.scope);
@@ -138,7 +140,7 @@ const installSkill: McpToolHandler = async (args) => {
     throw new McpToolError("confirmation-required", "install_skill requires confirm: true after reviewing plan_skill_install output.");
   }
   const skillId = requireString(args.skillId, "skillId");
-  const projectRoot = path.resolve(asString(args.projectRoot, "."));
+  const projectRoot = projectRootOf(args);
   const registryRoot = resolveRegistryRoot(args.registryRoot);
   const targetAgent = asString(args.targetAgent, "codex");
   const scope = asInstallScope(args.scope);

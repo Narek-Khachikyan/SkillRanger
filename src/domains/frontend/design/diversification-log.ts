@@ -6,6 +6,7 @@ import type { SkillRunV2, VerifiedRunDirection } from "../../../runtime/strict/t
 import {
   defaultDiversificationCount,
   designIdentityFingerprintParts,
+  themeAxisKeys,
   type DesignIdentityFingerprintParts,
 } from "./identity-fingerprint.ts";
 
@@ -84,7 +85,6 @@ export const deriveDiversificationLog = (
 
 const entryKeys = ["runId", "updatedAt", "directionDigest", "identity"] as const;
 const identityKeys = ["macrostructure", "themeAxes", "composition", "material"] as const;
-const themeAxisKeys = ["paperBand", "displayStyle", "accentHue"] as const;
 
 /**
  * An identity object is canonical exactly when the fingerprint extractor reproduces it from the

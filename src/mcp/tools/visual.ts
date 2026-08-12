@@ -19,7 +19,7 @@ import {
 } from "../../domains/frontend/design/index.ts";
 import type { VerificationFinding } from "../../runtime/types.ts";
 import { McpToolError, mcpToolEffects, type JsonObject, type McpToolDefinition, type McpToolErrorCode, type McpToolHandler } from "./types.ts";
-import { jsonToolResult, requireString } from "./utils.ts";
+import { jsonToolResult, requireString, resolveProjectRoot } from "./utils.ts";
 
 const objectSchema = { type: "object" } as const;
 const digestSchema = { type: "string", pattern: "^sha256:[a-f0-9]{64}$" } as const;
@@ -338,7 +338,7 @@ const capture: McpToolHandler = async (args) => {
       "capture_ui_evidence requires confirm: true after reviewing commandTemplate, baseUrl, and outputDir.",
     );
   }
-  const projectRoot = path.resolve(typeof args.projectRoot === "string" ? args.projectRoot : ".");
+  const projectRoot = resolveProjectRoot(args.projectRoot);
   const { outputDir, canonicalProjectRoot } = await resolveProjectOutputDir(projectRoot, args.outputDir);
   const plan = await asToolFailure("invalid-arguments", () => createUiEvidenceCapturePlan({
     evidenceId: requireString(args.evidenceId, "evidenceId"),

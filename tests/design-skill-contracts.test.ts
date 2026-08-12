@@ -258,7 +258,9 @@ test("visual critic output schema binds selection id to outcome", async () => {
   const schema = JSON.parse(
     await readFile("registry/skills/frontend.visual-critic/output.schema.json", "utf8"),
   );
-  assert.deepEqual(schema.allOf, [
+  const selectionBranches = schema.allOf.filter((branch: Record<string, unknown>) =>
+    Object.hasOwn(branch.if.properties, "outcome"));
+  assert.deepEqual(selectionBranches, [
     {
       if: { properties: { outcome: { const: "selected" } }, required: ["outcome"] },
       then: { required: ["selectedVariantId"] },
@@ -270,7 +272,7 @@ test("visual critic output schema binds selection id to outcome", async () => {
   ]);
 
   const acceptsSelectionCondition = (instance: Record<string, unknown>) =>
-    schema.allOf.every((branch: {
+    selectionBranches.every((branch: {
       if: { properties: { outcome: { const: string } } };
       then: { required?: string[]; not?: { required: string[] } };
     }) => {
@@ -288,6 +290,29 @@ test("visual critic output schema binds selection id to outcome", async () => {
     acceptsSelectionCondition({ outcome: "no-acceptable-variant", selectedVariantId: "v1" }),
     false,
   );
+});
+
+test("critic schemas freeze version-1.0 reports to the 9-code legacy vocabulary", async () => {
+  const [domain, registry] = await Promise.all([
+    readFile("domains/frontend/schemas/visual-critic-report.schema.json", "utf8"),
+    readFile("registry/skills/frontend.visual-critic/output.schema.json", "utf8"),
+  ]).then((texts) => texts.map((text) => JSON.parse(text)));
+  assert.deepEqual(domain.allOf, registry.allOf, "both critic schemas must carry the same conditionals");
+  const legacyBranch = registry.allOf.find((branch: Record<string, unknown>) =>
+    Object.hasOwn(branch.if.properties, "schemaVersion"));
+  assert.ok(legacyBranch, "the schemaVersion 1.0 conditional must exist");
+  assert.deepEqual(registry.$defs.legacyAiSlopFinding.properties.code.enum, [...legacyAiSlopCodes]);
+  assert.equal(registry.$defs.legacyAiSlopFinding.properties.code.enum.includes("glassmorphism"), false);
+
+  const acceptsLegacyVocabulary = (report: Record<string, unknown>) =>
+    report.schemaVersion !== "1.0" || (report.comparisons as Array<{
+      aiSlopFindings: Array<{ code: string }>;
+    }>).every((comparison) => comparison.aiSlopFindings.every(({ code }) =>
+      registry.$defs.legacyAiSlopFinding.properties.code.enum.includes(code)));
+
+  assert.equal(acceptsLegacyVocabulary({ schemaVersion: "1.0", comparisons: [{ aiSlopFindings: [{ code: "weak-hierarchy" }] }] }), true);
+  assert.equal(acceptsLegacyVocabulary({ schemaVersion: "1.0", comparisons: [{ aiSlopFindings: [{ code: "glassmorphism" }] }] }), false);
+  assert.equal(acceptsLegacyVocabulary({ schemaVersion: "1.1", comparisons: [{ aiSlopFindings: [{ code: "glassmorphism" }] }] }), true);
 });
 
 test("design skills carry the anti-slop decision contracts", async () => {

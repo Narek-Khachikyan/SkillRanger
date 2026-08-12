@@ -26,7 +26,7 @@
     "registry": "local",
     "path": "./registry/skills/frontend.visual-design-polish"
   },
-  "version": "0.3.1",
+  "version": "0.3.2",
   "riskLevel": "low",
   "permissions": {
     "filesystem": [

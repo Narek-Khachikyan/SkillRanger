@@ -29,6 +29,9 @@ export type DesignIdentityFingerprintParts = {
   material?: string;
 };
 
+/** Canonical theme-axis keys shared by the direction contract, the gate, and the log. */
+export const themeAxisKeys = ["paperBand", "displayStyle", "accentHue"] as const;
+
 export type DiversificationComparison = {
   runId: string;
   directionDigest: string;

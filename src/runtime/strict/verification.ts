@@ -14,6 +14,44 @@ export type StrictValidatorDerivation = {
   validatorResults: Record<string, Result>;
   systemGateResults: StrictSystemGateResult[];
 };
+/**
+ * Resolve the certified design direction artifact: the design-direction evidence produced by the
+ * latest attempt of a contract step that requires design-direction evidence. This binds the gate to
+ * the direction the run actually certified instead of whichever direction artifact happened to be
+ * attached last, so unselected or superseded candidate directions cannot constrain the output.
+ * Runs without a direction-requiring step keep the legacy latest-artifact behavior.
+ */
+export const resolveCertifiedDirectionArtifact = (
+  ledgers: readonly Pick<SkillLedger, "skillId" | "contract" | "steps">[],
+  artifacts: readonly EvidenceArtifact[],
+): EvidenceArtifact | undefined => {
+  const directionStepIds = new Set(
+    ledgers.flatMap((ledger) => ledger.contract.steps
+      .filter((step) => step.requiredEvidenceKinds.includes("design-direction"))
+      .map(({ id }) => id)),
+  );
+  const latestArtifact = () => [...artifacts].reverse().find(({ kind }) => kind === "design-direction");
+  if (directionStepIds.size === 0) return latestArtifact();
+  let latestStepId: string | undefined;
+  let latestAttempt = -1;
+  for (const ledger of ledgers) {
+    for (const stepId of directionStepIds) {
+      const step = ledger.steps.find(({ id }) => id === stepId);
+      const attempt = step?.attempts.at(-1)?.attempt;
+      if (attempt !== undefined && attempt > latestAttempt) {
+        latestAttempt = attempt;
+        latestStepId = stepId;
+      }
+    }
+  }
+  const selected = [...artifacts].reverse().find((artifact) =>
+    artifact.kind === "design-direction"
+    && artifact.attributions.some((attribution) =>
+      attribution.relation === "produced"
+      && attribution.stepId === latestStepId
+      && attribution.attempt === latestAttempt));
+  return selected ?? latestArtifact();
+};
 const authenticDerivations = new WeakSet<object>();
 const registerDerivation = (derivation: StrictValidatorDerivation) => {
   authenticDerivations.add(derivation);
@@ -207,7 +245,13 @@ export const deriveStrictValidatorResults = async (
 
   const output = parse(artifacts.findLast(({ validatedAs }) => validatedAs === "output"), artifactBytes);
   const verificationInput = parse(artifacts.findLast(({ kind }) => kind === "verification-input"), artifactBytes);
-  const direction = parse(artifacts.findLast(({ kind }) => kind === "design-direction"), artifactBytes);
+  const direction = parse(resolveCertifiedDirectionArtifact([ledger], artifacts), artifactBytes);
+  const executionPolicy = parse(artifacts.findLast(({ kind }) => kind === "execution-policy"), artifactBytes);
+  const diversificationCount = (() => {
+    if (typeof executionPolicy !== "object" || executionPolicy === null || Array.isArray(executionPolicy)) return undefined;
+    const count = (executionPolicy as Record<string, unknown>).diversificationCount;
+    return Number.isInteger(count) && (count as number) >= 1 ? (count as number) : undefined;
+  })();
   const latestImplementationDiff = artifacts.findLast(({ kind }) => kind === "implementation-diff");
   const latestSourceProducer = latestImplementationDiff?.attributions.find(({ relation }) => relation === "produced");
   const implementationDiffs = latestSourceProducer
@@ -232,6 +276,7 @@ export const deriveStrictValidatorResults = async (
         projectRoot, ledger, artifacts, artifactBytes, output, verificationInput, sourceReview, criticReport,
         ...(direction === undefined ? {} : { direction }),
         ...(options.verifiedRuns === undefined ? {} : { verifiedRuns: options.verifiedRuns }),
+        ...(diversificationCount === undefined ? {} : { diversificationCount }),
         gateId: gate.id,
       };
       result = await evaluator(context);

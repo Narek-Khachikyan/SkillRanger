@@ -41,6 +41,7 @@ const adaptDomainEvaluator = (validatorId: string, evaluator: DomainValidatorEva
       ...(context.sourceReview === undefined ? {} : { sourceReview: context.sourceReview }),
       ...(context.direction === undefined ? {} : { direction: context.direction }),
       ...(context.verifiedRuns === undefined ? {} : { verifiedRuns: context.verifiedRuns }),
+      ...(context.diversificationCount === undefined ? {} : { diversificationCount: context.diversificationCount }),
       ...(context.ledger.verificationReports.length === 0
         ? {}
         : { verificationReports: context.ledger.verificationReports }),

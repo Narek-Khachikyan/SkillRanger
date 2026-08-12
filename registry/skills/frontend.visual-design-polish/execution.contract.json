@@ -210,6 +210,10 @@
       "description": "Verify reduced motion accessibility behavior."
     },
     {
+      "id": "frontend.visual-design-polish/rule/bounded-motion",
+      "description": "Do not leave transition-all or bouncy overshoot easing on interactive elements."
+    },
+    {
       "id": "frontend.visual-design-polish/rule/fresh-evidence-after-repair",
       "description": "Capture fresh downstream screenshots after repair."
     },
@@ -393,6 +397,17 @@
       },
       "ruleIds": [
         "frontend.visual-design-polish/rule/reduced-motion-verified"
+      ]
+    },
+    {
+      "id": "frontend.visual-design-polish/gate/bounded-motion",
+      "level": "hard",
+      "evaluator": {
+        "type": "validator",
+        "validatorId": "frontend/browser-hard-gates"
+      },
+      "ruleIds": [
+        "frontend.visual-design-polish/rule/bounded-motion"
       ]
     }
   ],

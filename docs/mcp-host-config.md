@@ -49,7 +49,7 @@ Installed-package convenience binary:
 }
 ```
 
-If the host supports environment variables, set `SKILLRANGER_PROJECT_ROOT` to the authorized project. Router tools canonicalize this root once at startup; when the variable is absent they use startup `cwd`. Startup fails if the root is not a real directory. The server does not need network tokens or registry credentials for the bundled registry.
+If the host supports environment variables, set `SKILLRANGER_PROJECT_ROOT` to the authorized project. Router tools canonicalize this root once at startup; when the variable is absent they use startup `cwd`. Low-level tools that accept a `projectRoot` argument (run lifecycle, install, project scanning, design briefs, UI capture) resolve to the same fixed server root when the argument is omitted, so a run prepared through `prepare_task` is always reachable by the lifecycle tools. Startup fails if the root is not a real directory. The server does not need network tokens or registry credentials for the bundled registry.
 
 ## Universal Router
 

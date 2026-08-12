@@ -27,11 +27,11 @@ import {
 } from "../../runtime/strict/index.ts";
 import { McpToolError, mcpToolEffects, type JsonObject, type McpToolDefinition, type McpToolErrorCode, type McpToolHandler } from "./types.ts";
 import {
-  asString,
   projectRootProperty,
   registryRootProperty,
   requireString,
   requireStringArray,
+  resolveProjectRoot,
   resolveRegistryRoot,
 } from "./utils.ts";
 import { finalizeStrictRunRefreshingDiversificationLog } from "../../domains/frontend/design/diversification-log.ts";
@@ -82,7 +82,7 @@ const strictRunResult = (run: SkillRunV2, extra: Record<string, unknown> = {}) =
   isError: false,
 });
 
-const asProjectRoot = (value: unknown) => path.resolve(asString(value, "."));
+const asProjectRoot = (value: unknown) => resolveProjectRoot(value);
 
 const asStoreIntent = (value: unknown): boolean => {
   if (value === undefined) return false;

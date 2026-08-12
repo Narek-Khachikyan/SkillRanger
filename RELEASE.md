@@ -2,11 +2,15 @@
 
 This checklist covers the current public beta. It verifies the npx/npm UX, compiled npm binaries, source-run CLI, MCP server, Universal Prompt Router, bundled registry, audit gates, frontend and router eval suites, and package hygiene before handing the beta to another user or publishing a tarball.
 
+0.5.0 is the frontend design craft release. The package and frontend domain publish the same release identity over the six-family/18-rule contract, eight recipe packs, 80 deterministic worked-example assets, and the frozen visual benchmark pinned to `visual-benchmark-v1`.
+
+The bundled library ships the first **core (universal) skills** — always-on, domain-agnostic behavioral guidance (`core.proportional-engineering`, `core.universal-safety`) owned by a new minimal `core` domain pack and included in every SkillRanger-prepared run (strict and non-strict, both routing modes), delivered first in router-level mandatory read order and bounded by the new `maxCoreSkills` router config (default 3). Core skills are guidance-only: they are audited and catalogued like curated skills but carry no execution contract and are excluded from the strict runtime's contract/verification machinery, so they can never make a run unverifiable. They count toward the instruction-byte budget but not the total-skill cap or the agent-context slot, are protected from eviction, and reject conflicting task skills. See ADR 0006 (`docs/adr/0006-core-owned-always-on-guidance-skills.md`).
+
+The frontend domain pack gains a provenance-labelled craft reference layer (`domains/frontend/craft/`): type pairings, OKLCH palette recipes, macrostructures, and component cookbooks written fresh in the maintainer's own words with the observed/inferred/assumed/unknown evidence ladder. Craft references are knowledge, not rules — they never participate in the six-family rule-selection contract. `npm run bundle:craft` validates the catalog and copies it byte-identically into `registry/skills/frontend.visual-design-polish/references/craft/` at build/publish time (`prepack` and `release:check`); the install pipeline still copies the skill package verbatim with no new install-time behaviour. `release:validate` fails if the bundled copies drift from the domain pack. The reference-handling skill also gains a DNA-extraction mode with an attribute-vs-trade-dress boundary and pixel-clone refusal, surfaced through the MCP `referenceDna` argument on the frontend result validators. See ADR 0007 (`docs/adr/0007-frontend-design-craft-reference-layer.md`).
+
+The design direction contract moves to **schemaVersion 1.1** with macrostructure and theme-axes identity fields. New directions must emit 1.1 (legacy 1.0 directions stay loadable but cannot be certified), and the deterministic identity-diversification gate compares only the certified direction's identity — resolved from the latest design-direction step attempt via `resolveCertifiedDirectionArtifact`, never a stale or unselected candidate — with the window N read from the run's optional `execution-policy` evidence (default 3) and a tooling-written `.design/diversification-log.json` awareness cache. A new `bounded-motion` hard gate (transition-all, bouncy overshoot easing) joins the browser hard gates, mechanical motion checks are `hard`, and the visual critic contract 1.1's expanded AiSlop code set stays backward-readable for 1.0 reports. Low-level MCP tools now resolve an omitted `projectRoot` to the fixed server root instead of the process working directory, keeping runs prepared via `prepare_task` reachable by the lifecycle tools.
+
 0.4.1 is a patch release. The strict runtime now routes core evaluators through a trusted validator registry with ownership validation, moving browser hard gates, performance claims, and Tailwind source checks behind the frontend domain validator and removing the legacy validator dispatch. The router gains a pure nomination-resolution module: declared ambiguity, ordered nominations, and continuation now resolve through the same nomination decision consumed by the proposal-assisted path, with cross-domain primary nominations preserved. See ADR 0004 (`docs/adr/0004-domain-owned-strict-validators.md`).
-
-The bundled library also ships the first **core (universal) skills** — always-on, domain-agnostic behavioral guidance (`core.proportional-engineering`, `core.universal-safety`) owned by a new minimal `core` domain pack and included in every SkillRanger-prepared run (strict and non-strict, both routing modes), delivered first in router-level mandatory read order and bounded by the new `maxCoreSkills` router config (default 3). Core skills are guidance-only: they are audited and catalogued like curated skills but carry no execution contract and are excluded from the strict runtime's contract/verification machinery, so they can never make a run unverifiable. They count toward the instruction-byte budget but not the total-skill cap or the agent-context slot, are protected from eviction, and reject conflicting task skills. See ADR 0006 (`docs/adr/0006-core-owned-always-on-guidance-skills.md`).
-
-The frontend domain pack gains a provenance-labelled craft reference layer (`domains/frontend/craft/`): type pairings, OKLCH palette recipes, macrostructures, and component cookbooks written fresh in the maintainer's own words with the observed/inferred/assumed/unknown evidence ladder. Craft references are knowledge, not rules — they never participate in the six-family rule-selection contract. `npm run bundle:craft` validates the catalog and copies it byte-identically into `registry/skills/frontend.visual-design-polish/references/craft/` at build/publish time (`prepack` and `release:check`); the install pipeline still copies the skill package verbatim with no new install-time behaviour. `release:validate` fails if the bundled copies drift from the domain pack.
 
 0.4.0 is the frontend design certification release. The package and frontend domain publish the same release identity, a six-family/18-rule contract, eight recipe packs, 80 deterministic worked-example assets, and the frozen visual benchmark pinned to `visual-benchmark-v1`. Validate the shipped contract with:
 
@@ -216,10 +220,10 @@ Create the tag and GitHub release first, then publish to npm. The tag must point
 From the release commit (after `release:check` passes):
 
 ```bash
-git tag -a v0.4.1 -m "SkillRanger v0.4.1"
-git push origin v0.4.1
-gh release create v0.4.1 \
-  --title "SkillRanger v0.4.1" \
+git tag -a v0.5.0 -m "SkillRanger v0.5.0"
+git push origin v0.5.0
+gh release create v0.5.0 \
+  --title "SkillRanger v0.5.0" \
   --notes-file /path/to/release-notes.md
 ```
 

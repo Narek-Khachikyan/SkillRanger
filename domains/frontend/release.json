@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "releaseVersion": "0.4.1",
+  "releaseVersion": "0.5.0",
   "domainId": "frontend",
   "domainApiVersion": "1.0.0",
   "ruleContract": {

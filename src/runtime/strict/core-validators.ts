@@ -21,6 +21,8 @@ export type ValidatorEvaluationContext = {
   direction?: unknown;
   /** Read-only verified-runs enumeration supplied by the run store, newest first. */
   verifiedRuns?: readonly VerifiedRunDirection[];
+  /** Diversification window N from the run's execution-policy evidence, when present. */
+  diversificationCount?: number;
   gateId?: string;
 };
 

@@ -10,6 +10,8 @@ import type {
 import { frontendRecipeIds } from "./catalog.ts";
 import { loadDesignRuleLibrarySync } from "./library.ts";
 import { designRuleFamilies } from "./library-types.ts";
+import { themeAxisKeys } from "./identity-fingerprint.ts";
+import { validateReferenceDna } from "./dna-extraction.ts";
 import { isValidBrowserObservation, interpretBrowserObservation } from "./ui-evidence.ts";
 
 const usageFrequencies = new Set(["rare", "occasional", "frequent", "continuous", "unknown"]);
@@ -199,7 +201,6 @@ export const validateDesignBrief = (brief: unknown): VerificationFinding[] => {
 };
 
 const directionSchemaVersions = new Set(["1.0", "1.1"]);
-const themeAxisKeys = ["paperBand", "displayStyle", "accentHue"] as const;
 const directionBaseKeys = [
   "schemaVersion",
   "recipeId",
@@ -537,6 +538,7 @@ export const validateDesignResult = (input: {
   capabilities?: string[];
   iteration?: number;
   artifactExists?: (filePath: string) => boolean;
+  referenceDna?: unknown;
 }): DesignValidationResult => {
   const capabilities = new Set(input.capabilities ?? []);
   const browserReady = capabilities.has("browser") && capabilities.has("screenshots");
@@ -570,6 +572,7 @@ export const validateDesignResult = (input: {
     ...(browserReady
       ? validateBrowserObservations(input.brief, observations, { artifactExists })
       : []),
+    ...(input.referenceDna === undefined ? [] : validateReferenceDna(input.referenceDna)),
   ];
   // Evidence may only be built from the same observations accepted by the browser contract.
   const evidenceObservations = browserReady

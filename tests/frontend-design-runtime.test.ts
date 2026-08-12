@@ -139,6 +139,44 @@ test("malformed design artifacts fail structurally without throwing", () => {
   assert.ok(result.findings.some((finding) => finding.code === "direction-axes-contract"));
 });
 
+test("a supplied DNA-extraction artifact is validated through the reference-dna contract", () => {
+  const valid = validateDesignResult({
+    workflowId: "frontend.design-generation",
+    brief: brief(),
+    direction: direction(),
+    capabilities: [],
+    referenceDna: undefined,
+  });
+  assert.ok(!valid.findings.some((finding) => finding.code.startsWith("dna-")));
+
+  const result = validateDesignResult({
+    workflowId: "frontend.design-generation",
+    brief: brief(),
+    direction: direction(),
+    capabilities: [],
+    referenceDna: { schemaVersion: "1.0" },
+  });
+  assert.ok(result.findings.some((finding) => finding.code === "dna-reference-contract"));
+  assert.ok(result.findings.some((finding) => finding.gate === "hard"));
+
+  const pixelClone = validateDesignResult({
+    workflowId: "frontend.design-generation",
+    brief: brief(),
+    direction: direction(),
+    capabilities: [],
+    referenceDna: {
+      schemaVersion: "1.0",
+      reference: { source: "competitor screenshot", kind: "screenshot", ownership: "competitor-inspiration" },
+      macrostructure: { name: "split hero", evidence: "observed" },
+      typePairing: { displayVoice: "ink", bodyVoice: "neutral", evidence: "observed" },
+      colourAnchor: { paperBand: "sand", displayStyle: "editorial", accentHue: "#3366ff", evidence: "observed" },
+      evidence: { observed: [{ statement: "x" }], inferred: [], assumed: [], unknown: [] },
+      boundary: { attributesExtracted: ["split hero"], protectedExpressionRefused: ["logo"] },
+    },
+  });
+  assert.ok(pixelClone.findings.some((finding) => finding.code === "dna-pixel-clone-refused"));
+});
+
 test("malformed evidence entries cannot receive verified outcomes", () => {
   const invalidBrief = brief();
   invalidBrief.evidence.observed = [

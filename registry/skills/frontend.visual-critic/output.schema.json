@@ -89,7 +89,34 @@
     {
       "if": { "properties": { "outcome": { "const": "no-acceptable-variant" } }, "required": ["outcome"] },
       "then": { "not": { "required": ["selectedVariantId"] } }
+    },
+    {
+      "if": { "properties": { "schemaVersion": { "const": "1.0" } }, "required": ["schemaVersion"] },
+      "then": {
+        "properties": {
+          "comparisons": {
+            "items": {
+              "properties": {
+                "aiSlopFindings": { "items": { "$ref": "#/$defs/legacyAiSlopFinding" } }
+              }
+            }
+          }
+        }
+      }
     }
   ],
+  "$defs": {
+    "legacyAiSlopFinding": {
+      "type": "object",
+      "required": ["code", "severity", "evidence", "explanation"],
+      "properties": {
+        "code": { "enum": ["generic-hero-copy", "interchangeable-saas-layout", "excessive-generic-cards", "meaningless-effects", "invented-proof", "repeated-icon-grid", "arbitrary-radii-shadows", "weak-hierarchy", "meaningless-decoration"] },
+        "severity": { "enum": ["critical", "high", "medium", "low"] },
+        "evidence": { "type": "string", "minLength": 1 },
+        "explanation": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
   "additionalProperties": false
 }

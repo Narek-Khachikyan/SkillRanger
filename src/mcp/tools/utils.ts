@@ -1,5 +1,6 @@
 import path from "node:path";
 import { defaultRegistryRoot } from "../../paths.ts";
+import { routerContext } from "../router-context.ts";
 import type { InstallScope } from "../../types.ts";
 import type { JsonObject, McpToolErrorCode, McpToolResult } from "./types.ts";
 import { McpToolError } from "./types.ts";
@@ -80,8 +81,13 @@ export const sameStrings = (left: string[], right: string[]) =>
 
 export const projectRootProperty = {
   type: "string",
-  description: "Project root to inspect. Defaults to the MCP server working directory."
+  description: "Project root to inspect. Defaults to the fixed MCP project root (SKILLRANGER_PROJECT_ROOT or startup working directory)."
 };
+
+export const resolveProjectRoot = (value: unknown) =>
+  typeof value === "string" && value.trim() !== ""
+    ? path.resolve(value)
+    : routerContext().projectRoot;
 
 export const registryRootProperty = {
   type: "string",

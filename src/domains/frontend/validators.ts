@@ -13,6 +13,7 @@ import {
 import type { DomainValidatorEvaluator, DomainValidatorProjection } from "../types.ts";
 import type { EvidenceArtifact } from "../../runtime/strict/types.ts";
 import type { Result } from "../../runtime/strict/core-validators.ts";
+import { canonicalizeJson } from "../../runtime/skill-run/validation.ts";
 import { evaluateTailwindSource, gateSlug } from "./source-validator.ts";
 
 export const evaluatePerformanceClaims = (projection: DomainValidatorProjection) => {
@@ -47,6 +48,7 @@ const browserGateSlugs = [
   "focus-visible",
   "no-runtime-console-errors",
   "reduced-motion-verified",
+  "bounded-motion",
 ];
 const observationKeys = [
   "viewport",
@@ -131,7 +133,7 @@ const deriveBrowserGateResults = (
     "horizontal-overflow", "clipped-content", "element-overlap", "unreachable-action", "sticky-overlap",
     "focus-order", "keyboard-trap", "invisible-focus", "critical-axe", "contrast", "console-error",
     "reduced-motion", "ui-state-not-rendered", "ui-state-action-missing", "ui-state-change-missing",
-    "ui-state-desynchronized",
+    "ui-state-desynchronized", "transition-all", "bouncy-easing",
   ].includes(code));
   if (unsupportedHardChecks.length > 0) {
     return failed(`Canonical frontend UI evidence contains non-certifying hard findings: ${unsupportedHardChecks.map(({ code }) => code).join(", ")}.`);
@@ -155,6 +157,7 @@ const deriveBrowserGateResults = (
     "focus-visible": { passed: hasCheck(["focus-order", "keyboard-trap", "invisible-focus", "critical-axe", "contrast"]) },
     "no-runtime-console-errors": { passed: hasCheck(["console-error"]) },
     "reduced-motion-verified": { passed: hasCheck(["reduced-motion"]) },
+    "bounded-motion": { passed: hasCheck(["transition-all", "bouncy-easing"]) },
   };
 };
 
@@ -186,6 +189,21 @@ export const evaluateIdentityDiversification = (projection: DomainValidatorProje
   if (slug !== "identity-diversification") {
     return { passed: false, message: `Gate ${slug} is not the identity-diversification gate.` };
   }
+  // New directions must emit schemaVersion 1.1: legacy 1.0 directions remain loadable by the
+  // direction validator, but a run can only be certified on a 1.1 direction carrying the declared
+  // identity fields the fingerprint needs.
+  if (isRecord(projection.direction) && typeof projection.direction.schemaVersion === "string"
+    && projection.direction.schemaVersion !== "1.1") {
+    return {
+      passed: false,
+      message: canonicalizeJson({
+        gate: "identity-diversification",
+        passed: false,
+        reason: "direction-schema-version",
+        schemaVersion: projection.direction.schemaVersion,
+      }),
+    };
+  }
   let recordedSnapshot: DiversificationSnapshot | undefined;
   const latestReport = (projection.verificationReports ?? []).at(-1);
   const recorded = latestReport?.gateResults.find(({ gateId }) => gateId === projection.gateId);
@@ -196,10 +214,13 @@ export const evaluateIdentityDiversification = (projection: DomainValidatorProje
     }
     recordedSnapshot = parsed.snapshot;
   }
+  const count = Number.isInteger(projection.diversificationCount) && projection.diversificationCount! >= 1
+    ? projection.diversificationCount!
+    : defaultDiversificationCount;
   const result = evaluateDiversificationGate({
     direction: projection.direction,
     verifiedRuns: projection.verifiedRuns ?? [],
-    count: defaultDiversificationCount,
+    count,
     ...(recordedSnapshot === undefined ? {} : { recordedSnapshot }),
   });
   return { passed: result.passed, message: result.message };

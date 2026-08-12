@@ -14,6 +14,7 @@ import {
   resolveDesignExecutionPolicy,
   type DiversificationSnapshot,
 } from "../src/domains/frontend/design/index.ts";
+import { evaluateIdentityDiversification } from "../src/domains/frontend/validators.ts";
 import {
   StrictSkillRunStore,
   StrictSkillRunError,
@@ -22,6 +23,8 @@ import {
   createContentChunks,
   createStrictSkillRun,
   readNextStrictChunk,
+  resolveCertifiedDirectionArtifact,
+  type EvidenceArtifact,
   type ExecutionContractV2,
   type SkillRunV2,
   type VerifiedRunDirection,
@@ -272,6 +275,93 @@ test("diversification count lives in the execution policy and defaults to 3", ()
   assert.equal(invalid.diversificationCount, 3);
 });
 
+test("the gate reads diversificationCount from the projection and defaults to 3", () => {
+  const gateId = "frontend.visual-design-polish/gate/identity-diversification";
+  const runs = [
+    verifiedRun("run_prior_0000001", direction({ composition: "grid" }), "2026-08-02T00:00:00.000Z"),
+    verifiedRun("run_prior_0000002", direction({ accentHue: "kelp" }), "2026-08-01T00:00:00.000Z"),
+    verifiedRun("run_prior_0000003", direction(), "2026-07-31T00:00:00.000Z"),
+  ];
+  const projection = (count: number | undefined) => ({
+    gateId,
+    validatorId: "frontend/identity-diversification",
+    skillId: "frontend.visual-design-polish",
+    artifacts: [],
+    direction: direction(),
+    verifiedRuns: runs,
+    ...(count === undefined ? {} : { diversificationCount: count }),
+  });
+  const narrowed = evaluateIdentityDiversification(projection(2));
+  assert.equal(narrowed.passed, true, "an execution-policy N of 2 must compare only the two newest runs");
+  assert.deepEqual(parseDiversificationMessage(narrowed.message!)?.snapshot.runIds,
+    ["run_prior_0000001", "run_prior_0000002"]);
+  assert.equal(evaluateIdentityDiversification(projection(undefined)).passed, false,
+    "without a policy the default N of 3 reaches the matching third-oldest run");
+});
+
+test("resolveCertifiedDirectionArtifact selects the direction step's latest attempt, not the last-attached artifact", () => {
+  const artifact = (artifactId: string, kind: string, stepId: string, attempt: number) => ({
+    artifactId,
+    kind,
+    path: `.skillranger/runs/run_diversif_sel/artifacts/${artifactId}`,
+    sha256: `sha256:${"0".repeat(64)}`,
+    size: 1,
+    attributions: [{
+      skillId: "frontend.diversification-store-test",
+      stepId,
+      attempt,
+      relation: "produced",
+      ruleIds: ["frontend.diversification-store-test/rule/direction"],
+    }],
+    sourceControl: { mode: "non-git" },
+  }) as EvidenceArtifact;
+  const directionStepId = "frontend.diversification-store-test/step/direction";
+  const reportStepId = "frontend.diversification-store-test/step/report";
+  const ledgers = [{
+    skillId: "frontend.diversification-store-test",
+    contract: gatedContract,
+    steps: [
+      { ...gatedContract.steps[0], status: "satisfied" as const, attempts: [{ attempt: 1, startedAt: "2026-08-10T00:00:00.000Z", completedAt: "2026-08-10T00:00:01.000Z", evidenceIds: ["certified"] }] },
+      { ...gatedContract.steps[1], status: "satisfied" as const, attempts: [{ attempt: 1, startedAt: "2026-08-10T00:00:02.000Z", completedAt: "2026-08-10T00:00:03.000Z", evidenceIds: ["stray"] }] },
+    ],
+  }];
+  const certified = artifact("certified", "design-direction", directionStepId, 1);
+  const stray = artifact("stray", "design-direction", reportStepId, 1);
+  assert.equal(
+    resolveCertifiedDirectionArtifact(ledgers, [certified, stray]),
+    certified,
+    "a direction attached outside the direction step must not become the certified direction",
+  );
+  assert.equal(
+    resolveCertifiedDirectionArtifact(ledgers, [stray, certified]),
+    certified,
+    "selection must not depend on attachment order",
+  );
+  const latestAttempt = artifact("revision", "design-direction", directionStepId, 2);
+  const ledgersReattempted = [{
+    ...ledgers[0],
+    steps: [
+      { ...ledgers[0].steps[0], attempts: [...ledgers[0].steps[0].attempts, { attempt: 2, startedAt: "2026-08-10T00:00:04.000Z", completedAt: "2026-08-10T00:00:05.000Z", evidenceIds: ["revision"] }] },
+      ledgers[0].steps[1],
+    ],
+  }];
+  assert.equal(
+    resolveCertifiedDirectionArtifact(ledgersReattempted, [certified, stray, latestAttempt]),
+    latestAttempt,
+    "the latest direction-step attempt supersedes earlier attempts",
+  );
+});
+
+test("a schemaVersion 1.0 certified direction cannot certify the gate", () => {
+  const gateId = "frontend.visual-design-polish/gate/identity-diversification";
+  const base = { gateId, validatorId: "frontend/identity-diversification", skillId: "frontend.visual-design-polish", artifacts: [], verifiedRuns: [] as VerifiedRunDirection[] };
+  const legacy = evaluateIdentityDiversification({ ...base, direction: { ...direction(), schemaVersion: "1.0" } });
+  assert.equal(legacy.passed, false);
+  assert.match(legacy.message ?? "", /direction-schema-version/);
+  const current = evaluateIdentityDiversification({ ...base, direction: direction() });
+  assert.equal(current.passed, true, "a 1.1 direction with an empty ledger still passes");
+});
+
 const storeContract: ExecutionContractV2 = {
   schemaVersion: "2.0",
   skillId: "frontend.diversification-store-test",
@@ -330,7 +420,7 @@ const fixtureRun = (executionContract: ExecutionContractV2, runId: string, now: 
     }],
   });
 
-const stageDirectionRun = async (root: string, store: StrictSkillRunStore, runId: string, directionValue: unknown) => {
+const stageDirectionRun = async (root: string, store: StrictSkillRunStore, runId: string, directionValue: unknown, policyCount?: number) => {
   let run = beginStrictStep(
     readNextStrictChunk(fixtureRun(gatedContract, runId, "2026-08-10T00:00:00.000Z"), gatedContract.skillId).run,
     gatedContract.skillId,
@@ -350,6 +440,21 @@ const stageDirectionRun = async (root: string, store: StrictSkillRunStore, runId
       ruleIds: gatedContract.rules.map(({ id }) => id),
     }],
   });
+  if (policyCount !== undefined) {
+    const policySource = path.join(root, `${runId}-policy.json`);
+    await writeFile(policySource, JSON.stringify({ schemaVersion: "1.0", diversificationCount: policyCount }));
+    run = await store.ingestEvidence(run.runId, {
+      sourcePath: policySource,
+      kind: "execution-policy",
+      attributions: [{
+        skillId: gatedContract.skillId,
+        stepId: gatedContract.steps[0].id,
+        attempt: 1,
+        relation: "produced",
+        ruleIds: gatedContract.rules.map(({ id }) => id),
+      }],
+    });
+  }
   run = await store.update(run.runId, (current) => completeStrictStep(current, gatedContract.skillId, gatedContract.steps[0].id));
   const outputSource = path.join(root, `${runId}-output.json`);
   await writeFile(outputSource, "{}\n");
@@ -509,4 +614,34 @@ test("finalization re-check rejects when a recorded snapshot's run drifted", asy
     store.finalizeRun(second.runId),
     (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
   );
+});
+
+test("execution-policy evidence narrows the gate window at verification", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "strict-diversif-policy-"));
+  const store = new StrictSkillRunStore(root);
+
+  for (const [runId, value] of [
+    ["run_diversif_p1", direction()],
+    ["run_diversif_p2", direction({ composition: "grid" })],
+    ["run_diversif_p3", direction({ accentHue: "kelp" })],
+  ] as const) {
+    let run = await stageDirectionRun(root, store, runId, value);
+    run = await store.verifySkill(run.runId, gatedContract.skillId);
+    assert.equal(run.skillLedgers[0].outcome, "used");
+    assert.equal((await store.finalizeRun(run.runId)).state, "verified");
+  }
+
+  // The current direction repeats the oldest (third-newest) verified identity, but the
+  // execution-policy evidence narrows the comparison window to N=2, so the matching run no
+  // longer constrains it; the default window of 3 would fail the gate.
+  let current = await stageDirectionRun(root, store, "run_diversif_cur", direction(), 2);
+  current = await store.verifySkill(current.runId, gatedContract.skillId);
+  assert.equal(current.skillLedgers[0].outcome, "used");
+  const gateResult = current.skillLedgers[0].verificationReports.at(-1)!.gateResults
+    .find(({ gateId }) => gateId === "frontend.diversification-store-test/gate/identity-diversification")!;
+  assert.equal(gateResult.passed, true);
+  const recorded = parseDiversificationMessage(gateResult.message!);
+  assert.ok(recorded);
+  assert.deepEqual(recorded.snapshot.runIds, ["run_diversif_p3", "run_diversif_p2"]);
+  assert.equal((await store.finalizeRun(current.runId)).state, "verified");
 });

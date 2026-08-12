@@ -5,7 +5,7 @@
   "required": ["schemaVersion", "releaseVersion", "domainId", "domainApiVersion", "ruleContract", "publishedArtifacts"],
   "properties": {
     "schemaVersion": { "const": "1.0" },
-    "releaseVersion": { "const": "0.4.1" },
+    "releaseVersion": { "const": "0.5.0" },
     "domainId": { "const": "frontend" },
     "domainApiVersion": { "type": "string", "minLength": 1 },
     "ruleContract": {

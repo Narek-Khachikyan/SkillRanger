@@ -189,13 +189,13 @@ test("detects bouncy and overshoot easings from computed timing functions", () =
   assert.deepEqual(clean, []);
 });
 
-test("reports motion tells as soft mechanical checks with screenshot evidence", () => {
+test("reports motion tells as hard mechanical checks with screenshot evidence", () => {
   const checks = evaluateMotion([{
     locator: "#save", transitionProperty: "all", transitionTimingFunction: "cubic-bezier(0.68, -0.55, 0.27, 1.55)",
   }]);
   assert.deepEqual([...new Set(checks.map(({ code }) => code))].sort(), ["bouncy-easing", "transition-all"]);
   assert.ok(checks.every(({ gate, severity, viewport, state, evidence }) =>
-    gate === "soft"
+    gate === "hard"
     && severity === "medium"
     && viewport === 1440
     && state === "success"

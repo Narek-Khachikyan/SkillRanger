@@ -285,14 +285,19 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
 
 const summarize = (cases: RouterGoldenCase[], results: Awaited<ReturnType<typeof evaluateCase>>[]) => {
   const expectedDomains = cases.map(({ expected }) => new Set(expected.domainIds));
-  const domainMatches = results.reduce((sum, result, index) => sum + result.domainIds.filter((id) => expectedDomains[index].has(id)).length, 0);
+  const domainMatches = results.reduce((sum, result, index) => sum + result.domainIds.filter((id) => expectedDomains[index]?.has(id) ?? false).length, 0);
   const predictedDomains = results.reduce((sum, result) => sum + result.domainIds.length, 0);
   const expectedDomainCount = cases.reduce((sum, input) => sum + input.expected.domainIds.length, 0);
   const preparedIndexes = cases.flatMap((input, index) => input.expected.status === "prepared" && input.expected.domainIds.length > 0 ? [index] : []);
   const requiredSkillInclusion = (() => {
     const declaring = cases.flatMap((input, index) => (input.expected.requiredSkillIds ?? []).length > 0 ? [index] : []);
     if (declaring.length === 0) return 1;
-    return Number((declaring.filter((index) => (cases[index].expected.requiredSkillIds ?? []).every((skillId) => results[index].selectedSkillIds.includes(skillId))).length / declaring.length).toFixed(3));
+    const covered = declaring.filter((index) => {
+      const required = cases[index]?.expected.requiredSkillIds ?? [];
+      const selected = results[index]?.selectedSkillIds ?? [];
+      return required.every((skillId) => selected.includes(skillId));
+    }).length;
+    return Number((covered / declaring.length).toFixed(3));
   })();
   const categoryAccuracy = (status: RouterGoldenCase["expected"]["status"], predicate: (actual: string) => boolean = (actual) => actual === status) => {
     const indexes = cases.flatMap((input, index) => input.expected.status === status ? [index] : []);

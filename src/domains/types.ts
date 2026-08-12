@@ -144,6 +144,8 @@ export type DomainValidatorProjection = {
   verifiedRuns?: readonly VerifiedRunDirection[];
   /** Verification reports recorded so far on the current run's ledger. */
   verificationReports?: readonly VerificationReportV2[];
+  /** Diversification window N from the run's execution-policy evidence, when present. */
+  diversificationCount?: number;
 };
 
 export type DomainValidatorEvaluator = (projection: DomainValidatorProjection) => Result;

@@ -7,7 +7,7 @@ import { assertValidCriticReportV2, criticReportV2RequiredFields } from "./criti
 import { validateJsonSchema } from "./json-schema.ts";
 import { assertValidStrictSkillRun } from "./validation.ts";
 import { StrictSkillRunError, type EvidenceArtifact, type SkillRunV2, type VerifiedRunDirection } from "./types.ts";
-import { deriveStrictValidatorResults } from "./verification.ts";
+import { deriveStrictValidatorResults, resolveCertifiedDirectionArtifact } from "./verification.ts";
 import { resolveTrustedValidatorRegistry, type TrustedValidatorRegistryResolver } from "./validator-registry.ts";
 import { deriveStrictCertificationProjection, strictCertificationMatches } from "./certification.ts";
 import { captureSourceControl } from "./git.ts";
@@ -132,7 +132,7 @@ export class StrictSkillRunStore {
         continue;
       }
       if (run.state !== "verified") continue;
-      const directionArtifact = [...run.artifacts].reverse().find(({ kind }) => kind === "design-direction");
+      const directionArtifact = resolveCertifiedDirectionArtifact(run.skillLedgers, run.artifacts);
       if (!directionArtifact) continue;
       let bytes: Buffer;
       try {

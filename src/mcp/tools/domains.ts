@@ -24,7 +24,7 @@ import { createRepairRequest } from "../../runtime/verification.ts";
 import type { VerificationReport } from "../../runtime/types.ts";
 import { scanProject } from "../../scanner/index.ts";
 import { McpToolError, mcpToolEffects, type JsonObject, type McpToolDefinition, type McpToolHandler } from "./types.ts";
-import { asString, jsonToolResult, projectRootProperty, requireString } from "./utils.ts";
+import { jsonToolResult, projectRootProperty, requireString, resolveProjectRoot } from "./utils.ts";
 
 const evidenceListSchema = {
   type: "array",
@@ -178,6 +178,10 @@ export const domainToolDefinitions: McpToolDefinition[] = [
         observations: { type: "array", items: { type: "object" } },
         capabilities: capabilitiesSchema,
         iteration: { type: "integer", minimum: 0 },
+        referenceDna: {
+          type: "object",
+          description: "Optional DNA-extraction artifact to validate against the reference-dna contract (attribute-vs-trade-dress boundary, evidence ladder, pixel-clone refusal).",
+        },
       },
       required: ["brief", "direction"],
       additionalProperties: false,
@@ -212,6 +216,10 @@ export const domainToolDefinitions: McpToolDefinition[] = [
         observations: { type: "array", items: { type: "object" } },
         capabilities: capabilitiesSchema,
         iteration: { type: "integer", minimum: 0 },
+        referenceDna: {
+          type: "object",
+          description: "Optional DNA-extraction artifact to validate against the reference-dna contract (attribute-vs-trade-dress boundary, evidence ladder, pixel-clone refusal).",
+        },
       },
       required: ["brief", "direction"],
       additionalProperties: false,
@@ -268,7 +276,7 @@ const inspectDomain: McpToolHandler = async (args) => {
 const optionalText = (value: unknown) => typeof value === "string" && value.trim() ? value : undefined;
 
 const createFrontendDesignBrief: McpToolHandler = async (args) => {
-  const projectRoot = path.resolve(asString(args.projectRoot, "."));
+  const projectRoot = resolveProjectRoot(args.projectRoot);
   const fingerprint = await scanProject(projectRoot);
   const brief = createDesignBriefScaffold(fingerprint, {
     domain: optionalText(args.domain),
@@ -303,6 +311,7 @@ const frontendResultReport = (args: JsonObject) => validateDesignResult({
   observations: Array.isArray(args.observations) ? args.observations as BrowserObservation[] : [],
   capabilities: Array.isArray(args.capabilities) ? args.capabilities as string[] : [],
   iteration: typeof args.iteration === "number" ? args.iteration : 0,
+  ...(args.referenceDna === undefined ? {} : { referenceDna: args.referenceDna }),
 }).report;
 
 // Keep the canonical report unchanged in structuredContent and content[0], so callers can pass it

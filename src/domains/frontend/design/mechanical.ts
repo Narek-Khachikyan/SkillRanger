@@ -3,7 +3,7 @@ import type { MechanicalSnapshot, UiCheckResult } from "./evidence-types.ts";
 export type MechanicalCheckPolicy = {
   spacingScalePx: readonly number[];
   maxSpacingValuesPerContext: number;
-  maxUnroledOneOffColors: number;
+  maxRolelessColorOccurrences: number;
   maxRadiusValues: number;
   maxShadowValues: number;
   maxTextMeasureCh: number;
@@ -17,7 +17,7 @@ export type MechanicalCheckPolicy = {
 export const defaultMechanicalCheckPolicy = {
   spacingScalePx: [0, 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96],
   maxSpacingValuesPerContext: 2,
-  maxUnroledOneOffColors: 0,
+  maxRolelessColorOccurrences: 0,
   maxRadiusValues: 3,
   maxShadowValues: 3,
   maxTextMeasureCh: 75,
@@ -74,7 +74,7 @@ export const evaluateMechanicalSnapshot = (input: {
     }
   }
   for (const color of snapshot.colors) {
-    if (!color.role && color.occurrences <= policy.maxUnroledOneOffColors + 1) {
+    if (!color.role && color.occurrences <= policy.maxRolelessColorOccurrences + 1) {
       checks.push(mechanicalCheck({ code: "random-color", viewport, state, locator: color.locator, measured: `${color.value} (${color.occurrences} occurrence)`, expected: "a named color role or repeated intentional use", screenshotPath, remediation: "Map this color to a semantic role or remove the one-off value." }));
     }
   }
@@ -117,10 +117,10 @@ export const evaluateMechanicalSnapshot = (input: {
   for (const motion of snapshot.motion) {
     const properties = motion.transitionProperty.split(/[\s,]+/).filter((entry) => entry.length > 0);
     if (properties.includes("all") || properties.length > policy.maxTransitionPropertiesPerElement) {
-      checks.push(mechanicalCheck({ code: "transition-all", viewport, state, locator: motion.locator, measured: properties.length > policy.maxTransitionPropertiesPerElement ? `${properties.length} transitioned properties` : motion.transitionProperty, expected: `a bounded, explicitly listed transition-property set of at most ${policy.maxTransitionPropertiesPerElement} properties, without the all keyword or an engine-expanded all list`, screenshotPath, remediation: "List the specific properties that animate instead of transitioning everything." }));
+      checks.push(mechanicalCheck({ code: "transition-all", viewport, state, locator: motion.locator, measured: properties.length > policy.maxTransitionPropertiesPerElement ? `${properties.length} transitioned properties` : motion.transitionProperty, expected: `a bounded, explicitly listed transition-property set of at most ${policy.maxTransitionPropertiesPerElement} properties, without the all keyword or an engine-expanded all list`, screenshotPath, remediation: "List the specific properties that animate instead of transitioning everything.", gate: "hard" }));
     }
     if (hasOvershootTiming(motion.transitionTimingFunction)) {
-      checks.push(mechanicalCheck({ code: "bouncy-easing", viewport, state, locator: motion.locator, measured: motion.transitionTimingFunction, expected: "a timing function whose cubic-bezier control points stay inside [0, 1]", screenshotPath, remediation: "Replace the bouncy or overshoot easing with a timing function whose control points stay within [0, 1]." }));
+      checks.push(mechanicalCheck({ code: "bouncy-easing", viewport, state, locator: motion.locator, measured: motion.transitionTimingFunction, expected: "a timing function whose cubic-bezier control points stay inside [0, 1]", screenshotPath, remediation: "Replace the bouncy or overshoot easing with a timing function whose control points stay within [0, 1].", gate: "hard" }));
     }
   }
   return sortUiCheckResults(checks);

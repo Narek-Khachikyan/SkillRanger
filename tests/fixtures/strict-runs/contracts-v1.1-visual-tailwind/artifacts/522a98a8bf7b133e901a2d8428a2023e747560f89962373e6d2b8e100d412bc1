@@ -30,7 +30,7 @@
         "motion": [
           {
             "locator": "#hero",
-            "transitionProperty": "all",
+            "transitionProperty": "opacity, transform",
             "transitionTimingFunction": "ease"
           }
         ]
@@ -73,7 +73,7 @@
         "motion": [
           {
             "locator": "#hero",
-            "transitionProperty": "all",
+            "transitionProperty": "opacity, transform",
             "transitionTimingFunction": "ease"
           }
         ]
@@ -116,7 +116,7 @@
         "motion": [
           {
             "locator": "#hero",
-            "transitionProperty": "all",
+            "transitionProperty": "opacity, transform",
             "transitionTimingFunction": "ease"
           }
         ]
