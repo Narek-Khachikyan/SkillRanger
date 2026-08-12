@@ -78,7 +78,7 @@ export const makeBundle = (input: {
         contrastViolations: [],
         mechanicalSnapshot: {
           spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [], textBlocks: [],
-          touchTargets: [],
+          touchTargets: [], motion: [],
         },
         checks: [],
       };

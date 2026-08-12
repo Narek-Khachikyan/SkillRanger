@@ -35,7 +35,7 @@ const captureArgs = async (projectRoot: string, outputDir: string) => {
       },
       mechanicalSnapshot: {
         spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [],
-        textBlocks: [], touchTargets: [],
+        textBlocks: [], touchTargets: [], motion: [],
       },
     }));
   `, "utf8");
@@ -221,7 +221,7 @@ test("capture classifies malformed mechanical facts as capture failures", async 
         },
         mechanicalSnapshot: {
           spacingContexts: [null], colors: [], radii: [], shadows: [], cards: [], typography: [],
-          textBlocks: [], touchTargets: [],
+          textBlocks: [], touchTargets: [], motion: [],
         },
       }));
     `, "utf8");
@@ -367,7 +367,7 @@ test("CLI and MCP captures agree on common observations and adapter replacements
         },
         mechanicalSnapshot: {
           spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [],
-          textBlocks: [], touchTargets: [],
+          textBlocks: [], touchTargets: [], motion: [],
         },
       }));
     `, "utf8");

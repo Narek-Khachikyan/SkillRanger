@@ -11,6 +11,7 @@ export type MechanicalCheckPolicy = {
   minHeadingScaleRatio: number;
   normalTextContrast: number;
   largeTextContrast: number;
+  maxTransitionPropertiesPerElement: number;
 };
 
 export const defaultMechanicalCheckPolicy = {
@@ -24,6 +25,7 @@ export const defaultMechanicalCheckPolicy = {
   minHeadingScaleRatio: 1.2,
   normalTextContrast: 4.5,
   largeTextContrast: 3,
+  maxTransitionPropertiesPerElement: 16,
 } as const satisfies MechanicalCheckPolicy;
 
 const severityRank = { critical: 0, high: 1, medium: 2, low: 3 } as const;
@@ -112,5 +114,25 @@ export const evaluateMechanicalSnapshot = (input: {
       checks.push(mechanicalCheck({ code: "touch-target", viewport, state, locator: target.locator, measured: `${target.widthPx}x${target.heightPx}px`, expected: `at least ${policy.minTouchTargetPx}x${policy.minTouchTargetPx}px`, screenshotPath, remediation: "Increase the interactive hit area without obscuring adjacent controls.", severity: "high", gate: "hard" }));
     }
   }
+  for (const motion of snapshot.motion) {
+    const properties = motion.transitionProperty.split(/[\s,]+/).filter((entry) => entry.length > 0);
+    if (properties.includes("all") || properties.length > policy.maxTransitionPropertiesPerElement) {
+      checks.push(mechanicalCheck({ code: "transition-all", viewport, state, locator: motion.locator, measured: properties.length > policy.maxTransitionPropertiesPerElement ? `${properties.length} transitioned properties` : motion.transitionProperty, expected: `a bounded, explicitly listed transition-property set of at most ${policy.maxTransitionPropertiesPerElement} properties, without the all keyword or an engine-expanded all list`, screenshotPath, remediation: "List the specific properties that animate instead of transitioning everything." }));
+    }
+    if (hasOvershootTiming(motion.transitionTimingFunction)) {
+      checks.push(mechanicalCheck({ code: "bouncy-easing", viewport, state, locator: motion.locator, measured: motion.transitionTimingFunction, expected: "a timing function whose cubic-bezier control points stay inside [0, 1]", screenshotPath, remediation: "Replace the bouncy or overshoot easing with a timing function whose control points stay within [0, 1]." }));
+    }
+  }
   return sortUiCheckResults(checks);
+};
+
+const cubicBezierPattern = /cubic-bezier\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)/g;
+
+const hasOvershootTiming = (timingFunction: string): boolean => {
+  for (const match of timingFunction.matchAll(cubicBezierPattern)) {
+    const y1 = Number(match[2]);
+    const y2 = Number(match[4]);
+    if (y1 < 0 || y1 > 1 || y2 < 0 || y2 > 1) return true;
+  }
+  return false;
 };

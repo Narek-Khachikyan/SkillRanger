@@ -114,7 +114,7 @@ const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]) =>
 const parseMechanicalSnapshot = (value: unknown): MechanicalSnapshot => {
   if (!isRecord(value)) throw new Error("Browser observation mechanicalSnapshot must be an object.");
   const snapshotKeys = [
-    "spacingContexts", "colors", "radii", "shadows", "cards", "typography", "textBlocks", "touchTargets",
+    "spacingContexts", "colors", "radii", "shadows", "cards", "typography", "textBlocks", "touchTargets", "motion",
   ] as const;
   if (!hasOnlyKeys(value, snapshotKeys)) {
     throw new Error("Browser observation mechanicalSnapshot contains unknown fields.");
@@ -171,7 +171,16 @@ const parseMechanicalSnapshot = (value: unknown): MechanicalSnapshot => {
     && nonNegativeNumber(entry.widthPx)
     && nonNegativeNumber(entry.heightPx)
     && typeof entry.interactive === "boolean");
-  return value as MechanicalSnapshot;
+  if (value.motion !== undefined) {
+    entries("motion", ["locator", "transitionProperty", "transitionTimingFunction"], (entry) => isRecord(entry)
+      && nonEmptyString(entry.locator)
+      && nonEmptyString(entry.transitionProperty)
+      && nonEmptyString(entry.transitionTimingFunction));
+  }
+  return {
+    ...(value as Record<string, unknown>),
+    motion: value.motion ?? [],
+  } as MechanicalSnapshot;
 };
 
 export const normalizeStateSynchronization = (value: unknown): StateSynchronization => {

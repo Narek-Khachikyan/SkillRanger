@@ -36,7 +36,7 @@ export const browserContract: ExecutionContractV2 = {
 };
 export const emptyMechanicalSnapshot = {
   spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [], textBlocks: [],
-  touchTargets: [],
+  touchTargets: [], motion: [],
 };
 export const browserObservation = (width: number) => ({
   viewport: { width, height: width === 390 ? 844 : width === 768 ? 1024 : 900 },

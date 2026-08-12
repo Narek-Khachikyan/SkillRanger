@@ -10,7 +10,7 @@ import type {
 
 const evidenceKindsFor = (code: string): RepairPassCriterion["evidenceKinds"] => {
   if (/overflow|overlap|focus|contrast|touch|keyboard|motion/.test(code)) return ["screenshot", "browser-check"];
-  if (/spacing|color|radii|shadow|card|typography|measure/.test(code)) return ["screenshot", "mechanical-check"];
+  if (/spacing|color|radii|shadow|card|typography|measure|transition|easing/.test(code)) return ["screenshot", "mechanical-check"];
   return ["test"];
 };
 

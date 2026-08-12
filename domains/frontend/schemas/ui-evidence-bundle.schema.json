@@ -46,7 +46,7 @@
       "type": "object",
       "required": ["code", "severity", "gate", "viewport", "state", "locator", "expected", "evidence", "remediation"],
       "properties": {
-        "code": { "enum": ["horizontal-overflow", "clipped-content", "element-overlap", "sticky-overlap", "console-error", "unreachable-action", "keyboard-trap", "focus-order", "invisible-focus", "contrast", "critical-axe", "reduced-motion", "state-not-rendered", "state-mismatch", "ui-state-not-rendered", "ui-state-action-missing", "ui-state-change-missing", "ui-state-desynchronized", "inconsistent-spacing", "random-color", "excessive-radii", "excessive-shadows", "generic-card-repetition", "weak-typography-hierarchy", "text-measure", "touch-target"] },
+        "code": { "enum": ["horizontal-overflow", "clipped-content", "element-overlap", "sticky-overlap", "console-error", "unreachable-action", "keyboard-trap", "focus-order", "invisible-focus", "contrast", "critical-axe", "reduced-motion", "state-not-rendered", "state-mismatch", "ui-state-not-rendered", "ui-state-action-missing", "ui-state-change-missing", "ui-state-desynchronized", "inconsistent-spacing", "random-color", "excessive-radii", "excessive-shadows", "generic-card-repetition", "weak-typography-hierarchy", "text-measure", "touch-target", "transition-all", "bouncy-easing"] },
         "severity": { "enum": ["critical", "high", "medium", "low"] }, "gate": { "enum": ["hard", "soft"] },
         "viewport": { "type": "integer" }, "state": { "type": "string" }, "locator": { "type": "string" },
         "measured": { "type": "string" }, "expected": { "type": "string" },
@@ -97,7 +97,7 @@
     },
     "mechanicalSnapshot": {
       "type": "object",
-      "required": ["spacingContexts", "colors", "radii", "shadows", "cards", "typography", "textBlocks", "touchTargets"],
+      "required": ["spacingContexts", "colors", "radii", "shadows", "cards", "typography", "textBlocks", "touchTargets", "motion"],
       "properties": {
         "spacingContexts": { "type": "array", "items": { "$ref": "#/$defs/spacingContext" } },
         "colors": { "type": "array", "items": { "$ref": "#/$defs/colorSample" } },
@@ -106,7 +106,8 @@
         "cards": { "type": "array", "items": { "$ref": "#/$defs/cardSample" } },
         "typography": { "type": "array", "items": { "$ref": "#/$defs/typographySample" } },
         "textBlocks": { "type": "array", "items": { "$ref": "#/$defs/textBlockSample" } },
-        "touchTargets": { "type": "array", "items": { "$ref": "#/$defs/touchTargetSample" } }
+        "touchTargets": { "type": "array", "items": { "$ref": "#/$defs/touchTargetSample" } },
+        "motion": { "type": "array", "items": { "$ref": "#/$defs/motionSample" } }
       },
       "additionalProperties": false
     },
@@ -190,6 +191,16 @@
         "widthPx": { "$ref": "#/$defs/nonNegativeNumber" },
         "heightPx": { "$ref": "#/$defs/nonNegativeNumber" },
         "interactive": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "motionSample": {
+      "type": "object",
+      "required": ["locator", "transitionProperty", "transitionTimingFunction"],
+      "properties": {
+        "locator": { "$ref": "#/$defs/nonEmptyString" },
+        "transitionProperty": { "$ref": "#/$defs/nonEmptyString" },
+        "transitionTimingFunction": { "$ref": "#/$defs/nonEmptyString" }
       },
       "additionalProperties": false
     },

@@ -63,12 +63,15 @@ Extended UI evidence capture also requires:
     "cards": [{ "locator": ".run", "depth": 1, "repeatedCount": 3, "semanticRole": "item" }],
     "typography": [{ "locator": "h1", "role": "h1", "fontSizePx": 24, "fontWeight": 600 }],
     "textBlocks": [{ "locator": "article p", "measureCh": 68 }],
-    "touchTargets": [{ "locator": "button", "widthPx": 44, "heightPx": 44, "interactive": true }]
+    "touchTargets": [{ "locator": "button", "widthPx": 44, "heightPx": 44, "interactive": true }],
+    "motion": [{ "locator": "#save", "transitionProperty": "opacity, transform", "transitionTimingFunction": "cubic-bezier(0.25, 0.1, 0.25, 1)" }]
   }
 }
 ```
 
 `semanticRole` is one of `generic`, `group`, `tool`, or `item`. Typography `role` is one of `h1`, `h2`, `h3`, `body`, or `meta`. Contrast entries provide a locator, measured ratio, and whether the text qualifies as large.
+
+For every interactive element with a non-empty computed `transition-property`, the adapter must also report its computed `transition-property` and computed `transition-timing-function` in `motion` entries. Computed values, not author stylesheet text, are required: browsers serialize the effective values (for example `transition: all 0.3s ease-out` computes to `transitionProperty: "all"`, and keyword easings compute to `cubic-bezier(...)`). When an engine expands `all` into the full property list, report that expanded list verbatim. These fields drive the mechanical `transition-all` and `bouncy-easing` gates: `transitionProperty` containing the `all` token — or a property list beyond the mechanical-check policy limit, which is how engine-expanded `all` lists are recognized — flags `transition-all`, and a timing function whose `cubic-bezier` control points fall outside `[0, 1]` flags `bouncy-easing`. Motion tells are mechanical gates reading computed styles; they are not critic codes.
 
 The adapter must exercise sequential `Tab` and `Shift+Tab` navigation, plus `Escape` behavior for dismissible or modal UI, to populate keyboard, focus-order, reachability, and visible-focus results. It must emulate the `prefers-reduced-motion: reduce` media feature and verify the resulting behavior before setting `reducedMotionVerified: true`.
 

@@ -72,6 +72,7 @@ test("captures observations and extended mechanical evidence", async () => {
       mechanicalSnapshot: {
         spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [], textBlocks: [],
         touchTargets: [{ locator: "button.icon", widthPx: 28, heightPx: 28, interactive: true }],
+        motion: [],
       },
       width: Number(width), state,
     }));
@@ -133,7 +134,7 @@ test("rejects missing or empty state synchronization evidence", async () => {
       contrastViolations: [],
       mechanicalSnapshot: {
         spacingContexts: [], colors: [], radii: [], shadows: [], cards: [], typography: [],
-        textBlocks: [], touchTargets: []
+        textBlocks: [], touchTargets: [], motion: []
       }
     };
     if (mode === "empty") {
@@ -169,4 +170,9 @@ test("publishes the UI evidence bundle schema", async () => {
   assert.equal(schema.$defs.stateSynchronization.allOf.length, 1);
   assert.equal(schema.$defs.mechanicalSnapshot.properties.touchTargets.items.$ref, "#/$defs/touchTargetSample");
   assert.equal(schema.$defs.mechanicalSnapshot.properties.typography.items.$ref, "#/$defs/typographySample");
+  assert.equal(schema.$defs.mechanicalSnapshot.properties.motion.items.$ref, "#/$defs/motionSample");
+  assert.deepEqual(schema.$defs.motionSample.required, ["locator", "transitionProperty", "transitionTimingFunction"]);
+  assert.ok(schema.$defs.mechanicalSnapshot.required.includes("motion"));
+  assert.ok(schema.$defs.check.properties.code.enum.includes("transition-all"));
+  assert.ok(schema.$defs.check.properties.code.enum.includes("bouncy-easing"));
 });
