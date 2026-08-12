@@ -46,6 +46,7 @@ import {
 } from "../domains/frontend/design/index.ts";
 import { createRepairRequest } from "../runtime/verification.ts";
 import type { VerificationReport } from "../runtime/types.ts";
+import { bundleFrontendCraft } from "../release/craft-bundle.ts";
 import {
   BASELINE_KINDS,
   executeRunPlan,
@@ -961,6 +962,19 @@ const run = async () => {
     }
     if (!report.ok) {
       throw new Error("Registry audit failed.");
+    }
+    return;
+  }
+
+  if (command === "bundle:craft") {
+    const result = await bundleFrontendCraft();
+    if (args.flags.json) {
+      printJson(result);
+    } else {
+      console.log(`Craft catalog bundled (${result.catalogIdentity.id}): ${result.files.length} files`);
+      for (const file of result.files) {
+        console.log(`- ${file}`);
+      }
     }
     return;
   }

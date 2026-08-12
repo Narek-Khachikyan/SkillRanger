@@ -56,7 +56,7 @@ Name the concrete problem the current UI creates for a real user task: weak hier
 Each direction must differ on at least two of: density model, hierarchy strategy, typographic voice, color temperature, composition pattern, or material treatment. Each must include a one-sentence product reason and one rejected default it intentionally avoids. Do not propose directions that could describe the same "clean modern SaaS" with different accent colors.
 
 ### 4. Choose And Thesis
-Select one direction with its product justification. Select and record one compatible rule id for typography, layout, responsive, color, state, and signature move. Use the category applicability matrix in `references/visual-rules.md`, chosen from product evidence, the primary task, and the current recipe; universal hard gates remain unchanged. State a compact visual thesis: product/audience, hierarchy and density target, type/color roles, one useful signature move, and one generic default deliberately rejected. Compare it with the recipe's good/bad pack, then set design variance, motion, and density to suit the product. Choose one primary direction and at most one supporting accent; do not mix unrelated trends.
+Select one direction with its product justification. Select and record one compatible rule id for typography, layout, responsive, color, state, and signature move. Use the category applicability matrix in `references/visual-rules.md`, chosen from product evidence, the primary task, and the current recipe; universal hard gates remain unchanged. State a compact visual thesis: product/audience, hierarchy and density target, type/color roles, one useful signature move, and one generic default deliberately rejected. Compare it with the recipe's good/bad pack, then set design variance, motion, and density to suit the product. Choose one primary direction and at most one supporting accent; do not mix unrelated trends. For open-ended direction work, load the craft reference for the macrostructure you are considering from `references/craft/` (see References below) and state the chosen macrostructure and palette anchor out loud in the thesis.
 
 ### 5. Define The Signature Move
 For material visual work, name one non-generic visual decision that supports the primary task: a treatment of a real data shape, a domain-appropriate surface material, a typographic conflict and resolution, a composition structure tied to a user workflow, a color-as-meaning rule, or a motion behavior that clarifies cause and effect. Motion is optional; when used, state its function. If the signature could describe any SaaS product, it is not specific enough.
@@ -146,6 +146,18 @@ or open-ended requests. Read [the visual rules reference](references/visual-rule
 for domain extraction, composition, typography, color, data, interaction, and pattern
 detail. Read [the evidence examples](references/evidence-examples.md) for worked
 examples of the thesis workflow across product types.
+
+The craft corpus under `references/craft/` holds parametric design knowledge loaded
+advisory-style during a build: [type pairings](references/craft/type-pairings.md),
+[OKLCH palette recipes](references/craft/palette-recipes.md),
+[macrostructures](references/craft/macrostructures.md), and
+[component cookbooks](references/craft/component-cookbooks.md). Load only the craft
+reference relevant to the macrostructure you are considering, never all four. Craft
+references are knowledge, not rules: they never replace or extend the six-family rule
+selection, they are never recorded in the direction's selected rule ids, and they
+carry no verification gates of their own. The domain pack at
+`domains/frontend/craft/craft-catalog.json` is the source of truth; the bundled copies
+are regenerated at publish time.
 
 ## Shared Contracts
 

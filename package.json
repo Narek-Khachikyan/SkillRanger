@@ -42,7 +42,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "prepack": "npm run build",
+    "bundle:craft": "node src/cli/index.ts bundle:craft",
+    "prepack": "npm run bundle:craft && npm run build",
     "scan": "node src/cli/index.ts scan",
     "recommend": "node src/cli/index.ts recommend",
     "validate:registry": "node src/cli/index.ts validate:registry",
@@ -50,7 +51,7 @@
     "audit:registry": "node src/cli/index.ts audit:registry",
     "publish:check": "node src/cli/index.ts publish:check",
     "smoke:package": "node scripts/package-smoke.mjs",
-    "release:check": "npm run build && npm run check && npm test && npm run validate:registry && npm run lint:skills && npm run audit:registry && npm run publish:check && npm run release:validate && npm run eval:frontend -- --run-routing --project fixtures/next-react-ts --json && npm run eval:frontend:ru && npm run eval:router && npm run smoke:package",
+    "release:check": "npm run build && npm run check && npm test && npm run bundle:craft && npm run validate:registry && npm run lint:skills && npm run audit:registry && npm run publish:check && npm run release:validate && npm run eval:frontend -- --run-routing --project fixtures/next-react-ts --json && npm run eval:frontend:ru && npm run eval:router && npm run smoke:package",
     "release:validate": "node src/cli/index.ts release:validate",
     "eval:frontend": "node src/cli/index.ts eval:frontend",
     "eval:frontend:ru": "node src/cli/index.ts eval:frontend --run-routing --project fixtures/next-react-ts --locale ru --json",
