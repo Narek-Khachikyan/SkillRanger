@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "1.0",
+  "id": "frontend-craft-catalog",
+  "displayName": "Frontend design craft corpus",
+  "description": "Provenance-labelled parametric design knowledge — type pairings, OKLCH palette recipes, macrostructures, and component cookbooks — loaded advisory-style during a build. Craft references are knowledge, not rules: they never participate in the six-family rule-selection contract.",
+  "categories": {
+    "type-pairing": "type-pairings.md",
+    "palette-recipe": "palette-recipes.md",
+    "macrostructure": "macrostructures.md",
+    "component-cookbook": "component-cookbooks.md"
+  },
+  "provenance": {
+    "observed": [
+      {
+        "statement": "The maintainer has applied each recipe below in shipped interfaces and reviewed artifacts: the pairing grammar, OKLCH recipe formulas, macrostructure anatomies, and cookbook items recur across the author's own frontend work.",
+        "source": "maintainer practice"
+      },
+      {
+        "statement": "The working example assets in domains/frontend/examples/ demonstrate the macrostructure anatomies (hero placement, divider treatment, button voice, image treatment) as rendered plates.",
+        "source": "domains/frontend/examples"
+      }
+    ],
+    "inferred": [
+      {
+        "statement": "Palette recipes are expressed as OKLCH lightness/chroma ranges rather than exact hues, so one recipe yields distinct palettes for different products without repeating the same color identity.",
+        "source": "parametric derivation"
+      },
+      {
+        "statement": "Each macrostructure lists the theme axes and treatment axes it interacts with, so the direction step can pick one explicitly and state it out loud.",
+        "source": "direction contract analysis"
+      }
+    ],
+    "assumed": [
+      {
+        "statement": "The consuming design skill has browser evidence or rendered screenshots available for material work; craft references sharpen decisions but never replace observed evidence.",
+        "source": "design workflow"
+      }
+    ],
+    "unknown": [
+      {
+        "statement": "Whether a future craft item should graduate into a bundled design rule is decided only through the tiered promotion bar with full human-reviewed evidence, never by the craft corpus itself."
+      }
+    ]
+  }
+}

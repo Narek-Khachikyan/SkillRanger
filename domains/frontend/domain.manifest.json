@@ -27,6 +27,7 @@
       "schemas/bounded-repair-request.schema.json",
       "schemas/verification-report.schema.json",
       "schemas/design-rule.schema.json",
+      "schemas/craft-catalog.schema.json",
       "schemas/recipe-example.schema.json",
       "schemas/design-variant.schema.json",
       "schemas/visual-critic-report.schema.json",

@@ -4,6 +4,8 @@ The frontend pack is SkillRanger's reference domain implementation. Release `0.4
 
 The canonical rule index is `rules/index.json`; worked packs are stored at `examples/<recipe-id>/example.json`. Select one compatible rule from each of the six families before material implementation, then compare the direction with the selected recipe's good and bad examples. Rule provenance and the accepted source-role/normalization boundary are documented in [`docs/design-rule-library.md`](../../docs/design-rule-library.md). Generated SVG plates are explanatory evidence, not production templates.
 
+The craft layer (`craft/craft-catalog.json` plus the four reference files it names) holds provenance-labelled parametric design knowledge — type pairings, OKLCH palette recipes, macrostructures, and component cookbooks — loaded advisory-style by the design skill during a build. Craft references are knowledge, not rules: they are structurally excluded from the six-family rule-selection contract (the catalog rejects rule-contract fields, and the loader enforces the observed/inferred/assumed/unknown evidence ladder on the catalog and every reference). `npm run bundle:craft` validates the catalog and bundles it byte-identically into `registry/skills/frontend.visual-design-polish/references/craft/` at build/publish time; the install pipeline copies the skill package verbatim, so install-time behaviour is unchanged. `release:validate` fails if the bundled copies drift from the domain pack.
+
 The host remains responsible for model execution and project edits. SkillRanger validates artifacts and browser observations, computes outcomes, and emits bounded repair requests. It never silently edits a project through this runtime.
 
 ## Structured Design Flow

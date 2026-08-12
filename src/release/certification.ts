@@ -5,6 +5,8 @@ import { readDomainPackManifest, validateDomainPackManifest } from "../domains/r
 import { frontendRecipeIds } from "../domains/frontend/design/catalog.ts";
 import { loadFrontendRecipes } from "../domains/frontend/design/index.ts";
 import { loadDesignRuleLibrary } from "../domains/frontend/design/library.ts";
+import { loadCraftCatalog, craftReferenceKinds } from "../domains/frontend/design/craft.ts";
+import { craftBundleSources, defaultCraftRoot } from "./craft-bundle.ts";
 import { designRuleFamilies, designRuleIds } from "../domains/frontend/design/library-types.ts";
 import { loadRecipeExamplePacks } from "../domains/frontend/design/examples.ts";
 import { renderExamplePlate } from "../domains/frontend/design/example-renderer.ts";
@@ -375,6 +377,32 @@ export const validateFrontendReleaseArtifacts = async (): Promise<FrontendReleas
     if (!sameArray(library.rules.map((rule) => rule.id), expectedRuleContract.ruleIds)) issues.push("frontend rule corpus does not match the stable 18-rule contract");
   } catch (error) {
     issues.push(`frontend rule corpus is invalid: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  try {
+    const { catalog } = await loadCraftCatalog();
+    const expectedKinds = new Set([...craftReferenceKinds]);
+    const actualKinds = Object.keys(catalog.categories);
+    if (actualKinds.length !== expectedKinds.size || actualKinds.some((kind) => !expectedKinds.has(kind as never))) {
+      issues.push(`frontend craft catalog must declare exactly the four reference kinds; received ${actualKinds.join(", ")}`);
+    }
+    const sources = await craftBundleSources(defaultCraftRoot);
+    for (const { name, sourcePath } of sources) {
+      const bundledPath = path.join(packageRootResolved, "registry/skills/frontend.visual-design-polish/references/craft", name);
+      try {
+        const bundled = await readFile(bundledPath);
+        const source = await readFile(sourcePath);
+        if (!bundled.equals(source)) {
+          issues.push(`craft ${name} is not bundled byte-identically into the visual-design-polish skill package`);
+        } else {
+          await addReleaseFile(files, issues, bundledPath, "craft bundled reference");
+        }
+      } catch {
+        issues.push(`craft ${name} bundled copy is missing in the visual-design-polish skill package`);
+      }
+    }
+  } catch (error) {
+    issues.push(`frontend craft corpus is invalid: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   try {

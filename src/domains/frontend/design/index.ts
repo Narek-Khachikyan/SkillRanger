@@ -11,6 +11,7 @@ export * from "./types.ts";
 export * from "./catalog.ts";
 export * from "./library-types.ts";
 export * from "./library.ts";
+export * from "./craft.ts";
 export * from "./example-types.ts";
 export * from "./examples.ts";
 export * from "./example-comparison.ts";

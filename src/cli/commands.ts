@@ -285,6 +285,13 @@ export const cliCommandDefinitions = Object.freeze([
     valueOptions: [],
   }),
   defineCommand({
+    name: "bundle:craft",
+    description: "Validate the frontend craft catalog and bundle it into the visual-design-polish skill package references/ directory.",
+    usages: ["bundle:craft [--json]"],
+    booleanOptions: ["json"],
+    valueOptions: [],
+  }),
+  defineCommand({
     name: "release:validate",
     description: "Validate the 0.4.1 frontend release artifact contract and deterministic assets.",
     usages: ["release:validate [--json]"],
