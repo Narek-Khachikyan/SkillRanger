@@ -198,14 +198,32 @@ export const validateDesignBrief = (brief: unknown): VerificationFinding[] => {
   return findings;
 };
 
+const directionSchemaVersions = new Set(["1.0", "1.1"]);
+const themeAxisKeys = ["paperBand", "displayStyle", "accentHue"] as const;
+const directionBaseKeys = [
+  "schemaVersion",
+  "recipeId",
+  "selectedRuleIds",
+  "thesis",
+  "productReason",
+  "axes",
+  "typographyRoles",
+  "colorRoles",
+  "signatureMove",
+  "rejectedDefaults",
+  "destructiveCritique",
+] as const;
+const directionIdentityKeys = ["macrostructure", "themeAxes"] as const;
+
 export const validateDesignDirection = (
   brief: unknown,
   direction: unknown,
 ): VerificationFinding[] => {
   const findings: VerificationFinding[] = [];
-  if (!isRecord(direction) || direction.schemaVersion !== "1.0") {
-    return [finding("direction-schema-version", "critical", "hard", "Design direction schemaVersion must be 1.0.", "Regenerate the direction with schemaVersion 1.0.")];
+  if (!isRecord(direction) || typeof direction.schemaVersion !== "string" || !directionSchemaVersions.has(direction.schemaVersion)) {
+    return [finding("direction-schema-version", "critical", "hard", "Design direction schemaVersion must be 1.0 or 1.1.", "Regenerate the direction with schemaVersion 1.0 or 1.1.")];
   }
+  const v11 = direction.schemaVersion === "1.1";
   for (const [field, value] of [
     ["recipeId", direction.recipeId],
     ["thesis", direction.thesis],
@@ -269,6 +287,32 @@ export const validateDesignDirection = (
     ));
   }
 
+  if (v11) {
+    if (!nonEmpty(direction.macrostructure)) {
+      findings.push(finding(
+        "direction-identity-contract",
+        "critical",
+        "hard",
+        "A schemaVersion 1.1 design direction must declare a non-empty macrostructure.",
+        "Name the page-level composition shape (hero placement, body, divider, button voice, image treatment) the direction commits to.",
+      ));
+    }
+    const themeAxes = isRecord(direction.themeAxes) ? direction.themeAxes : undefined;
+    if (
+      !themeAxes ||
+      !hasOnlyKeys(themeAxes, themeAxisKeys) ||
+      !themeAxisKeys.every((key) => nonEmpty(themeAxes[key]))
+    ) {
+      findings.push(finding(
+        "direction-theme-axes-contract",
+        "critical",
+        "hard",
+        "A schemaVersion 1.1 design direction must declare paper band, display style, and accent hue theme axes as non-empty strings.",
+        "Declare exactly the three theme axes (paperBand, displayStyle, accentHue) from the craft catalog or product evidence.",
+      ));
+    }
+  }
+
   if (!isStringRecord(direction.typographyRoles) || !isStringRecord(direction.colorRoles)) {
     findings.push(finding(
       "direction-role-contract",
@@ -291,19 +335,10 @@ export const validateDesignDirection = (
       "Name a plausible but product-inappropriate default.",
     ));
   }
-  if (!hasOnlyKeys(direction, [
-    "schemaVersion",
-    "recipeId",
-    "selectedRuleIds",
-    "thesis",
-    "productReason",
-    "axes",
-    "typographyRoles",
-    "colorRoles",
-    "signatureMove",
-    "rejectedDefaults",
-    "destructiveCritique",
-  ])) {
+  const allowedDirectionKeys = v11
+    ? [...directionBaseKeys, ...directionIdentityKeys]
+    : directionBaseKeys;
+  if (!hasOnlyKeys(direction, allowedDirectionKeys)) {
     findings.push(finding(
       "direction-structure-contract",
       "critical",
