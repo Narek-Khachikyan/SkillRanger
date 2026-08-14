@@ -52,6 +52,10 @@ _Avoid_: Strict mode, verification mode, routing quality score
 The local vocabulary routing path used only when the host submits no routing proposal. It remains deterministic but does not promise semantic recall equivalent to model-first semantic routing.
 _Avoid_: Invalid-proposal recovery, degraded strict mode, model-assisted routing
 
+**Routing pipeline**:
+The one deep, deterministic, in-memory module that turns a preloaded input object (router skill metadata, a skill catalog snapshot, config limits, a routing proposal or semantic hints, trigger info, activation) into a routing decision. Task preparation and router evaluations are adapters over it; continuation tokens, persistence, and strict feasibility live outside it.
+_Avoid_: Task preparation, router orchestration, routing service
+
 ## Positioning
 
 **Author-curated skill library**:

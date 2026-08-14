@@ -57,7 +57,7 @@ graph TD
     MCP["src/mcp/<br/>34 tools"]
   end
   subgraph Orchestration
-    ROUTER["src/router/<br/>prepareTask + reader + store"]
+    ROUTER["src/router/<br/>prepareTask adapter + pipeline + reader + store"]
     RUNTIME["src/runtime/<br/>lifecycle v1 · strict v2"]
   end
   subgraph "Core services"
@@ -255,29 +255,37 @@ a generic schema error — the reasoning is in the comment at `src/mcp/tools.ts`
 ## 7. Router lifecycle
 
 `prepareTask` in `src/router/prepare.ts` is the single core service behind both CLI `task` and MCP
-`prepare_task`. Algorithm version is pinned as `routerAlgorithmVersion = "router/2.0"`.
+`prepare_task`. It loads everything (config, fingerprint, packs, registry, per-skill metadata, routing
+context, catalog) and delegates the whole routing decision to the routing pipeline
+(`runRoutingPipeline` in `src/router/pipeline.ts`) — a deterministic, in-memory function from one
+preloaded input object to a routing decision (outcome, selections, warnings, clarification questions
+with eligibility, rejection reasons, digests). The adapter maps that decision onto the public
+preparation result; continuation tokens, the deterministic persistence key, and strict feasibility
+stay in the adapter. Algorithm version is pinned as `routerAlgorithmVersion = "router/2.1"` in the
+pipeline module.
 
 ```mermaid
 sequenceDiagram
   participant H as Host (CLI or MCP)
-  participant P as prepareTask
-  participant A as analyzer + vocabulary
+  participant P as prepareTask (adapter)
+  participant R as routing pipeline
   participant C as resolver + composer
   participant S as RouterStore
-  participant R as RouterSourceReader
+  participant RR as RouterSourceReader
 
   H->>P: prompt + target agent + capabilities
   P->>P: loadRouterConfig · parseTrigger
-  P->>P: scanProject · load packs · load registry · per-skill metadata
-  P->>A: analyzeTask (normalize → match → frame → requirements → segments)
-  A-->>P: TaskProfile + canonical requirements
-  P->>C: resolveDomains → composeSkillSet
-  C-->>P: prepared | clarification | decomposition | no-match | budget/strict failure
+  P->>P: scanProject · load packs · load registry · per-skill metadata · catalog
+  P->>R: runRoutingPipeline (preloaded input object)
+  R->>R: proposal validation · semantic hints · analyzeTask
+  R->>C: resolveDomains → composeSkillSet
+  C-->>R: prepared | clarification | decomposition | no-match | budget/strict failure
+  R-->>P: routing decision (outcome, warnings, questions, digests)
   P->>S: journaledCreate(routerRun + runtime run)
   S-->>H: router run id + mandatory read plan
-  H->>R: read_run_skill_file / task:read
-  R->>S: journaledUpdate (receipt + runtime bridge)
-  R-->>H: instruction chunk
+  H->>RR: read_run_skill_file / task:read
+  RR->>S: journaledUpdate (receipt + runtime bridge)
+  RR-->>H: instruction chunk
 ```
 
 Ordered stages inside `prepareTask`:
@@ -294,23 +302,22 @@ Ordered stages inside `prepareTask`:
 5. **Routing context** — `buildRoutingContext` (`src/router/context.ts`) compiles one deterministic
    vocabulary from `src/router/vocabulary/core.ts` plus each pack's `routingVocabulary`. Cross-owner
    collisions and undeclared IDs fail loading; every failure collapses to `routing-integrity`.
-6. **Analysis** — `analyzeTask`: Unicode normalization → owner-scoped vocabulary matching → request-frame
-   inference → bounded host semantic hints → canonical requirements → `TaskProfile` → task-head
-   segmentation.
-7. **Resolution** — `resolveDomains`. Ambiguity requires incompatible target surfaces, a score delta
-   within the threshold, and no project evidence; only then does the router ask a clarification.
-8. **Branch** — clarification (returns a signed continuation token, HMAC-SHA256, 15-minute TTL) /
-   decomposition (two or more distinct primary domains) / no match / composition.
-9. **Composition** — `retrieveSkillCandidates` then `composeSkillSet` (`src/router/composer.ts`).
-   Candidates are filtered by role, domain, required evidence, risk, audit result, target
-   compatibility, strict eligibility, and capabilities. Roles are filled in order: `environment` →
-   `primary` → `companion` (marginal-coverage loop) → `verification` → `agent-context`, under the
-   skill-count and instruction-byte budgets from the config.
-10. **Snapshot** — `createSkillSourceSnapshots` (`src/router/reader.ts`) pins package, root, file, and
-    chunk checksums into a source inventory.
-11. **Runtime** — a strict run (`createPreparedStrictSkillRun`) or a lifecycle-v1 run
-    (`createSkillRun` + a `select-skills` reduction).
-12. **Persist** — `store.journaledCreate` writes the router sidecar and the runtime record atomically.
+6. **Pipeline** — `runRoutingPipeline(input)` asserts proposal/semantic-hints mutual exclusion, then
+   runs proposal validation (shape, catalog binding, semantics), task analysis, nomination
+   resolution, domain resolution, the retrieval boundary, composition, outcome mapping, and warning
+   aggregation — all deterministically in memory, returning a routing decision. A stale catalog
+   binding returns a `catalog_refresh_required` decision that the adapter maps onto the public
+   refresh result.
+7. **Branch** — the adapter shapes the decision: clarification (returns a signed continuation token,
+   HMAC-SHA256, 15-minute TTL, bound to the decision's question eligibility) / decomposition / no
+   match / composition results. Unmet strict requirements and strict feasibility remain adapter
+   concerns: the pipeline reports `strict-requirements-unmet`, the adapter produces the public
+   `strict_requirements_unmet` outcome with installation suggestions.
+8. **Snapshot** — `createSkillSourceSnapshots` (`src/router/reader.ts`) pins package, root, file, and
+   chunk checksums into a source inventory.
+9. **Runtime** — a strict run (`createPreparedStrictSkillRun`) or a lifecycle-v1 run
+   (`createSkillRun` + a `select-skills` reduction).
+10. **Persist** — `store.journaledCreate` writes the router sidecar and the runtime record atomically.
 
 Result statuses: `prepared`, `clarification_required`, `decomposition_required`,
 `no_matching_skills`, `strict_requirements_unmet`, `context_budget_exceeded`. Only `prepared` writes

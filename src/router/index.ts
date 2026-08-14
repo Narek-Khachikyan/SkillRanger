@@ -103,6 +103,16 @@ export {
 } from "./store.ts";
 export { prepareTask, createRouterReader, createRouterRuntimeStore, deterministicRoutingKey, RouterPrepareError, routerAlgorithmVersion } from "./prepare.ts";
 export {
+  RoutingPipelineError,
+  runRoutingPipeline,
+} from "./pipeline.ts";
+export type {
+  RoutingPipelineDecision,
+  RoutingPipelineErrorCode,
+  RoutingPipelineInput,
+  RoutingPipelineOutcome,
+} from "./pipeline.ts";
+export {
   assertValidCatalogReceipt,
   buildSkillCatalog,
   inspectSkillCatalog,

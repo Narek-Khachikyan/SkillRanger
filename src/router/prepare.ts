@@ -15,23 +15,24 @@ import { canonicalSkillRoutingDocument } from "./metadata.ts";
 import { coreRoutingVocabulary } from "./vocabulary/core.ts";
 import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "./vocabulary/load.ts";
 import { RoutingVocabularyValidationError } from "./vocabulary/validate.ts";
-import { validateSemanticHints } from "./semantic-hints.ts";
-import { analyzeTask } from "./analyzer.ts";
-import { primarySkillAmbiguityQuestionId, resolveDeclaredPrimarySkillClarification, resolveNomination, type ResolvedNomination } from "./nomination-resolution.ts";
-import { composeSkillSet, defaultRouterLimits, type RouterSkillMetadata } from "./composer.ts";
-import type { RetrieveSkillCandidatesInput } from "./retrieval.ts";
-import { createRetrievalBoundary } from "./retrieval-boundary.ts";
-import { createContinuationToken, validateContinuation, type RouterClarificationQuestion } from "./continuation.ts";
-import { defaultRouterThresholds, normalizeDomainAlias, resolveDomains } from "./resolver.ts";
+import { createContinuationToken, validateContinuation, type ContinuationBinding } from "./continuation.ts";
 import { parseTrigger } from "./trigger.ts";
 import { buildSkillCatalog, SkillCatalogError } from "./catalog.ts";
 import { computeSourcePackageChecksum, createSkillSourceSnapshots, RouterSourceReader } from "./reader.ts";
-import { detectExplicitSkillChoice, RoutingProposalError, validateRoutingProposal, validateRoutingProposalCatalogBinding, validateRoutingProposalShape, type ValidatedRoutingProposal } from "./routing-proposal.ts";
 import { RouterStore, routerRecordDigest } from "./store.ts";
+import type { RoutingProposalProjection } from "./routing-proposal.ts";
+import { buildRouterSkillMetadata } from "./skill-metadata.ts";
+import {
+  routerAlgorithmVersion,
+  RoutingPipelineError,
+  runRoutingPipeline,
+  type RoutingPipelineDecision,
+  type RoutingPipelineInput,
+} from "./pipeline.ts";
 import type {
-  DomainCandidate,
   DeterministicRoutingOutcome,
   DeterministicRoutingProjection,
+  DomainCandidate,
   PrepareTaskCommon,
   PrepareTaskCoreInput,
   PrepareTaskResult,
@@ -42,14 +43,16 @@ import type {
   RuntimeClarificationSummary,
   SkillSourceSnapshot,
 } from "./types.ts";
-import { buildRouterSkillMetadata } from "./skill-metadata.ts";
 import { semanticRecallLimitedWarning } from "./types.ts";
 import { createSkillRun, reduceSkillRun } from "../runtime/skill-run/reducer.ts";
 import { SkillRunStore, type SkillRun } from "../runtime/skill-run/index.ts";
 import { createPreparedStrictSkillRun } from "../runtime/strict/service.ts";
 import { StrictSkillRunError, StrictSkillRunStore, type SkillRunV2 } from "../runtime/strict/index.ts";
 import { assertInstalledMatches } from "../runtime/strict/service.ts";
-export const routerAlgorithmVersion = "router/2.1" as const;
+import type { RouterLimits, RouterSkillMetadata } from "./composer.ts";
+import { defaultRouterLimits } from "./composer.ts";
+
+export { routerAlgorithmVersion } from "./pipeline.ts";
 export const deterministicRoutingKey = (projection: DeterministicRoutingProjection) => routerRecordDigest(projection);
 
 export class RouterPrepareError extends Error {
@@ -127,12 +130,6 @@ const displayProject = (fingerprint: ProjectFingerprint) => ({
   languages: fingerprint.languages.map(({ name }) => name),
   frameworks: fingerprint.frameworks.map(({ name }) => name),
 });
-
-const questionFor = (domains: DomainCandidate[]): RouterClarificationQuestion[] => [{
-  id: "primary-domain",
-  text: "Which target surface should be the primary workflow?",
-  options: domains.map(({ id }) => ({ value: canonical(id), label: id })),
-}];
 
 const recommendationsFor = (selections: { primary: PreparedSkillSelection; environment: PreparedSkillSelection[]; companions: PreparedSkillSelection[]; verification: PreparedSkillSelection[]; agentContext: PreparedSkillSelection[] }) => [
   selections.primary,
@@ -251,13 +248,15 @@ const common = (input: {
   signalDigest: string;
   vocabularyDigest: string;
   semanticHintsDigest: string;
-  routingProposal?: ValidatedRoutingProposal;
+  mode: RoutingMode;
+  routingProposal?: RoutingProposalProjection;
   outcome: DeterministicRoutingOutcome;
 }): PrepareTaskCommon => {
   // A routed outcome is model-assisted only when a validated routing proposal actually
   // participates. Every other routed outcome is limited deterministic fallback and must
   // carry the stable recall warning in the canonical deduplicated warning collection.
-  const mode: RoutingMode = input.routingProposal ? "model-assisted" : "limited-deterministic-fallback";
+  // The mode itself is part of the pipeline decision; this adapter only shapes it.
+  const mode = input.mode;
   const warnings = [...new Set([
     ...input.warnings,
     ...(mode === "limited-deterministic-fallback" ? [semanticRecallLimitedWarning] : []),
@@ -296,13 +295,11 @@ const common = (input: {
       routingDate: input.routingDate,
       registryDigest: input.registryDigest,
       configDigest: input.configDigest,
-      ...(input.routingProposal ? { routingProposal: input.routingProposal.projection } : {}),
+      ...(input.routingProposal ? { routingProposal: input.routingProposal } : {}),
     },
     warnings,
   };
 };
-
-const applyClarification = (domainId: string, domains: DomainCandidate[]) => domains.map((domain) => ({ ...domain, role: domain.id === domainId ? "primary" as const : "supporting" as const }));
 
 export const prepareTask = async (
   input: PrepareTaskCoreInput,
@@ -344,22 +341,17 @@ export const prepareTask = async (
   if (Boolean(input.continuationToken) !== Boolean(input.clarificationAnswers)) {
     throw new RouterPrepareError("continuation-invalid", "Continuation token and clarification answers must be supplied together.");
   }
-
-  let routingProposal: ValidatedRoutingProposal | undefined;
-  let catalogSnapshot: Awaited<ReturnType<typeof buildSkillCatalog>> | undefined;
-  let shapedProposal: ReturnType<typeof validateRoutingProposalShape> | undefined;
+  // The pipeline asserts proposal/semantic-hints mutual exclusion on its input; this
+  // pre-check preserves the error precedence and avoids building the catalog for a
+  // request that can never route.
   if (input.routingProposal !== undefined && input.semanticHints !== undefined) {
     throw new RouterPrepareError("routing-proposal-invalid", "routingProposal and semanticHints cannot be submitted together.");
   }
+
+  let catalogSnapshot: Awaited<ReturnType<typeof buildSkillCatalog>> | undefined;
   if (input.routingProposal !== undefined) {
     if (input.registry.kind !== "bundled") {
       throw new RouterPrepareError("routing-proposal-invalid", "routingProposal requires the trusted bundled catalog.");
-    }
-    try {
-      shapedProposal = validateRoutingProposalShape(input.routingProposal);
-    } catch (error) {
-      if (error instanceof RoutingProposalError) throw new RouterPrepareError(error.code, error.message);
-      throw error;
     }
     try {
       catalogSnapshot = await buildSkillCatalog({ registryRoot: input.registry.root, domainsRoot });
@@ -367,17 +359,9 @@ export const prepareTask = async (
       if (error instanceof SkillCatalogError) throw new RouterPrepareError("routing-integrity", "The trusted catalog could not be validated.");
       throw error;
     }
-    try {
-      const refresh = validateRoutingProposalCatalogBinding({ proposal: shapedProposal, catalog: catalogSnapshot });
-      if (refresh) return { ok: true, schemaVersion: "router-result/1.1", ...refresh };
-    } catch (error) {
-      if (error instanceof RoutingProposalError) throw new RouterPrepareError(error.code, error.message);
-      throw error;
-    }
   }
 
   const routingDate = input.routingDate ?? new Date().toISOString().slice(0, 10);
-  const catalogSkill = (skillId: string) => catalogSnapshot?.skills.find(({ skillId: id }) => id === skillId);
   const fingerprint = await scanProject(input.projectRoot);
   const fixturePacks = input.registry.kind === "test-fixture" ? await loadRouterFixturePacks(input.registry.root) : [];
   const packs = input.registry.kind === "test-fixture"
@@ -415,302 +399,156 @@ export const prepareTask = async (
     }
     throw error;
   }
-  if (catalogSnapshot && shapedProposal) {
+  const domains = packs.map(domainMetadata);
+  const limits: RouterLimits = {
+    ...defaultRouterLimits,
+    maxSelectedRisk: config.router.maxSelectedRisk,
+    maxEnvironmentSkills: config.router.maxEnvironmentSkills,
+    maxTaskCompanions: config.router.maxTaskCompanions,
+    maxVerificationSkills: config.router.maxVerificationSkills,
+    maxAgentContextSkills: config.router.maxAgentContextSkills,
+    maxCoreSkills: config.router.maxCoreSkills,
+    maxTotalSelectedSkills: config.router.maxTotalSelectedSkills,
+    maxInstructionBytes: config.router.maxInstructionBytes,
+    maxAdditionalReadBytes: config.router.maxAdditionalReadBytes,
+    maxSingleFileBytes: config.router.maxSingleFileBytes,
+  };
+  // The whole routing decision is delegated to the pipeline; this adapter only
+  // shapes its decision onto the public preparation result.
+  const pipelineInput: RoutingPipelineInput = {
+    trigger: parsed,
+    activation: input.activation,
+    skills: allMetadata,
+    domains,
+    fingerprint,
+    routingContext,
+    targetAgent,
+    strict,
+    capabilities,
+    routingDate,
+    limits,
+    ...(catalogSnapshot ? { catalog: catalogSnapshot } : {}),
+    ...(input.routingProposal !== undefined ? { routingProposal: input.routingProposal } : {}),
+    ...(input.semanticHints !== undefined ? { semanticHints: input.semanticHints } : {}),
+  };
+  const pipelineCall = async (answers?: RoutingPipelineInput["answers"]) => {
     try {
-      const ownerChecked = validateRoutingProposal({
-        proposal: shapedProposal,
-        prompt: parsed.normalizedIntent,
-        catalog: catalogSnapshot,
-        routingContext,
-      });
-      if ("status" in ownerChecked) return { ok: true, schemaVersion: "router-result/1.1", ...ownerChecked };
-      routingProposal = ownerChecked;
+      return runRoutingPipeline(answers === undefined ? pipelineInput : { ...pipelineInput, answers });
     } catch (error) {
-      if (error instanceof RoutingProposalError) throw new RouterPrepareError(error.code, error.message);
+      if (error instanceof RoutingPipelineError) throw new RouterPrepareError(error.code as RouterPrepareError["code"], error.message);
       throw error;
     }
+  };
+  let decision = await pipelineCall();
+  if (decision.outcome.status === "catalog_refresh_required") {
+    return { ok: true, schemaVersion: "router-result/1.1", ...decision.outcome };
   }
-  const domains = packs.map(domainMetadata);
-  const semanticHints = validateSemanticHints({ semanticHints: input.semanticHints, prompt: parsed.normalizedIntent, context: routingContext });
-  if (semanticHints.issues.length > 0) throw new RouterPrepareError("semantic-hint-invalid", "Semantic routing hints are invalid.");
-  const analysis = analyzeTask({ prompt: parsed.normalizedIntent, domains, skills: allMetadata, routingContext, semanticSignals: [...semanticHints.signals, ...(routingProposal?.semanticSignals ?? [])] });
-  const registryDigest = routingContext.routingRegistryDigest;
-  let routingWarnings = [
-    ...analysis.warnings,
-    ...(routingProposal?.rejections.map(({ skillId, reasonCode }) =>
-      `routing-proposal-rejected:${skillId ?? "unknown"}:${reasonCode}`) ?? []),
-  ];
   const activation = { mode: input.activation.mode, ...(parsed.trigger === undefined ? {} : { trigger: parsed.trigger }) };
-  const resultCommon = (resultDomains: DomainCandidate[], outcome: DeterministicRoutingOutcome) => common({
+  const resultCommon = (outcome: DeterministicRoutingOutcome): PrepareTaskCommon => common({
     activation,
-    profile: analysis.profile,
+    profile: decision.taskProfile!,
     fingerprint,
     targetAgent,
-    domains: resultDomains,
+    domains: decision.domains,
     routingDate,
-    registryDigest,
+    registryDigest: decision.digests.registryDigest,
     configDigest: configResult.digest,
-    warnings: routingWarnings,
+    warnings: decision.warnings,
     strict,
     capabilities,
-    signalDigest: analysis.signalDigest,
-    vocabularyDigest: routingContext.vocabularyDigest,
-    semanticHintsDigest: semanticHints.digest,
-    routingProposal,
+    signalDigest: decision.digests.signalDigest,
+    vocabularyDigest: decision.digests.vocabularyDigest,
+    semanticHintsDigest: decision.digests.semanticHintsDigest,
+    mode: decision.mode,
+    routingProposal: decision.routingProposal,
     outcome,
   });
-  const promptProjection = { actions: analysis.profile.actions, artifactTypes: analysis.profile.artifactTypes, technologies: analysis.profile.technologies, qualityGoals: analysis.profile.qualityGoals, acceptanceCriteria: analysis.profile.acceptanceCriteria, domains: analysis.profile.domains.map(({ id }) => id), subtasks: analysis.profile.subtasks };
-  const explicitSkillId = routingProposal
-    ? detectExplicitSkillChoice(parsed.normalizedIntent, allMetadata.map(({ id }) => id))
-    : undefined;
-  const declaredNominations = routingProposal?.nominations.map(({ skillId, role }) => ({ skillId, role })) ?? [];
-  // The declared nomination order below (with the explicit choice first) is the
-  // continuation binding projection; it must stay byte-identical to the legacy
-  // contract. The resolved nomination carries the effective orders for
-  // composition, including any ambiguity-answer permutation.
-  const nominationOrder = [
-    ...(explicitSkillId ? [explicitSkillId] : []),
-    ...(routingProposal?.nominations.map(({ skillId }) => skillId) ?? []),
-  ];
-  const declaredResolution = resolveNomination({ explicitSkillId, declaredNominations });
-  const nominatedSkillIds = declaredResolution?.nominatedSkillIds ?? [];
-  const primaryNominationOrder = declaredResolution?.primaryNominationOrder ?? [];
-  const nominatedPrimarySkillIds = declaredResolution?.nominatedPrimarySkillIds ?? [];
-  const resolution = resolveDomains({ profile: analysis.profile, domains, skills: allMetadata, fingerprint, availableDomainIds: packs.map(({ id }) => id), thresholds: defaultRouterThresholds, routingIntentTags: analysis.routingIntentTags, routingContext, routingSignals: analysis.matchedSignals });
-  const declaredAmbiguityIds = routingProposal?.ambiguity?.primarySkillIds ?? [];
-  // A continuation answer only permutes the primary nomination order (the selected
-  // nomination moves to the front), so the domain union below is permutation-invariant
-  // across clarification calls and matches the historical composition input.
-  const skillById = new Map(allMetadata.map((skill) => [canonical(skill.id), skill]));
-  const nominatedPrimaryDomains: string[] = [];
-  const visitedNominatedSkills = new Set<string>();
-  const pendingNominatedSkills = [...primaryNominationOrder];
-  while (pendingNominatedSkills.length > 0) {
-    const skillId = pendingNominatedSkills.shift()!;
-    const normalizedSkillId = canonical(skillId);
-    if (visitedNominatedSkills.has(normalizedSkillId)) continue;
-    visitedNominatedSkills.add(normalizedSkillId);
-    const skill = skillById.get(normalizedSkillId);
-    if (!skill) continue;
-    nominatedPrimaryDomains.push(...skill.domains);
-    pendingNominatedSkills.push(...(skill.dependencies ?? []));
-  }
-  const routingCandidates = [...resolution.candidates];
-  const routingCandidateIds = new Set(routingCandidates.map(({ id }) => canonical(id)));
-  for (const domainId of nominatedPrimaryDomains) {
-    const normalizedDomainId = canonical(domainId);
-    if (routingCandidateIds.has(normalizedDomainId)) continue;
-    routingCandidateIds.add(normalizedDomainId);
-    routingCandidates.push({ id: domainId, confidence: 0.75, role: "supporting", available: true, reasons: ["proposal-domain-binding"], evidence: [] });
-  }
-  const firstPrimaryNomination = routingProposal?.nominations.find(({ role }) => role === "primary");
-  const firstPrimaryNominationDomain = firstPrimaryNomination
-    ? catalogSkill(firstPrimaryNomination.skillId)?.domains[0]
-    : undefined;
-  const probeSelectedPrimary = routingProposal && firstPrimaryNominationDomain ? firstPrimaryNominationDomain : resolution.primaryDomainId;
-  // The single unified retrieval input for the boundary factory: the probe and
-  // any explicit rebuild request different primary domains, strict flags, and
-  // nomination resolutions from the same builder, so the two calls can never
-  // hand-align divergent retrieval inputs again.
-  const retrievalBoundaryInput = (primaryDomainId: string | undefined, strict: boolean, nomination: ResolvedNomination | undefined): RetrieveSkillCandidatesInput => ({
-    profile: analysis.profile,
-    requirements: analysis.requirements,
-    skills: allMetadata,
-    targetAgent,
-    capabilities,
-    strict,
-    installedSkillIds: allMetadata.filter(({ installed }) => installed).map(({ id }) => id),
-    selectedDomainIds: routingCandidates.map(({ id }) => id),
-    primaryDomainId,
-    fingerprint,
-    routingDate,
-    routingIntentTags: analysis.routingIntentTags,
-    routingContext,
-    matchedSignals: analysis.matchedSignals,
-    ...(nomination ? { nominatedSkillIds: nomination.nominatedSkillIds, nominatedPrimarySkillIds: nomination.nominatedPrimarySkillIds, nominatedRoles: nomination.nominatedRoles } : {}),
-    maxSelectedRisk: config.router.maxSelectedRisk,
-  });
-  // One boundary serves the probe and composition: the production factory owns
-  // the single unified retrieval input construction and binds the eligibility
-  // fact projection to the result it stored, so the facts the declared-ambiguity
-  // clarification decision sees can never disagree with the retrieval that
-  // composition consumes.
-  const probeBoundary = declaredAmbiguityIds.length > 0 && !explicitSkillId
-    ? createRetrievalBoundary(retrievalBoundaryInput(probeSelectedPrimary, false, declaredResolution))
-    : undefined;
-  const nominatedPrimaryFacts = probeBoundary?.eligibilityFacts(nominatedPrimarySkillIds) ?? [];
-  // The cohesive nomination decision owns declared-ambiguity eligibility, the typed
-  // closed-option question, and the answer's effect on the effective nomination
-  // order. The continuation module owns token signing, expiry, replay protection,
-  // and integrity validation; only the validated answer value reaches this decision.
-  // The same input is reused for the answer pass inside the continuation block; the
-  // binding must be built from the no-answer pass before the token is validated.
-  const ambiguityClarificationInput = {
-    declaredAmbiguityIds,
-    explicitSkillId,
-    eligibilityFacts: nominatedPrimaryFacts,
-    declaredNominations,
-    displayNameFor: (skillId: string) => catalogSkill(skillId)?.displayName,
-  };
-  const ambiguityClarification = resolveDeclaredPrimarySkillClarification(ambiguityClarificationInput);
-  if (ambiguityClarification.kind === "ambiguity-ineligible") {
-    throw new RouterPrepareError(
-      "routing-proposal-invalid",
-      `Declared primary ambiguity choices are not eligible primary nominations: ${ambiguityClarification.ineligibleSkillIds.join(", ")}.`,
-    );
-  }
-  const skillAmbiguityIds = ambiguityClarification.kind === "clarification-required"
-    ? ambiguityClarification.eligibleSkillIds
-    : [];
-  const projectIdentity = await new RouterStore(input.projectRoot).projectIdentity();
-  const continuationBinding = {
-    fingerprintDigest: digest(fingerprint),
-    registryDigest,
-    configDigest: configResult.digest,
-    routingDate,
-    targetAgent,
-    strict,
-    capabilities,
-    promptProjection,
-    routingProjection: {
-      domains: resolution.ambiguousDomainIds,
-      ...(routingProposal ? { routingProposalDigest: routingProposal.proposalDigest, nominationOrder, skillAmbiguityIds } : {}),
-    },
-    projectIdentity,
-    routerAlgorithmVersion,
-    signalDigest: analysis.signalDigest,
-    vocabularyDigest: routingContext.vocabularyDigest,
-    semanticHintsDigest: semanticHints.digest,
-  };
-  routingWarnings = [...new Set([...routingWarnings, ...resolution.warnings])];
-  if (input.continuationToken && !resolution.clarificationRequired && skillAmbiguityIds.length === 0) {
+  if (input.continuationToken && decision.outcome.status !== "clarification_required") {
     throw new RouterPrepareError("continuation-invalid", "Continuation input does not match a routing clarification.");
   }
-  const skillAmbiguityQuestion = ambiguityClarification.kind === "clarification-required"
-    ? ambiguityClarification.question
-    : undefined;
-  const questions = [
-    ...(resolution.clarificationRequired ? questionFor(resolution.ambiguousDomainIds.map((id) => resolution.candidates.find((candidate) => candidate.id === id)!).filter(Boolean)) : []),
-    ...(skillAmbiguityQuestion ? [skillAmbiguityQuestion] : []),
-  ];
-  let selectedPrimary = resolution.primaryDomainId;
-  let resolvedNomination = declaredResolution;
-  if (questions.length > 0) {
+  let projectIdentity: string | undefined;
+  const projectIdentityFor = async () => projectIdentity ??= await new RouterStore(input.projectRoot).projectIdentity();
+  if (decision.outcome.status === "clarification_required") {
+    const promptProjection = { actions: decision.taskProfile!.actions, artifactTypes: decision.taskProfile!.artifactTypes, technologies: decision.taskProfile!.technologies, qualityGoals: decision.taskProfile!.qualityGoals, acceptanceCriteria: decision.taskProfile!.acceptanceCriteria, domains: decision.taskProfile!.domains.map(({ id }) => id), subtasks: decision.taskProfile!.subtasks };
+    // The continuation module owns token signing, expiry, replay protection, and
+    // integrity validation; only the validated answer value reaches the pipeline.
+    // The binding is built from the no-answer decision, which is also what the
+    // answer pass re-derives, so the two calls can never hand-align differently.
+    const continuationBinding: ContinuationBinding = {
+      fingerprintDigest: digest(fingerprint),
+      registryDigest: decision.digests.registryDigest,
+      configDigest: configResult.digest,
+      routingDate,
+      targetAgent,
+      strict,
+      capabilities,
+      promptProjection,
+      routingProjection: {
+        domains: decision.continuation.ambiguousDomainIds,
+        ...(decision.routingProposal ? { routingProposalDigest: decision.routingProposal.proposalDigest, nominationOrder: decision.continuation.nominationOrder, skillAmbiguityIds: decision.continuation.skillAmbiguityIds } : {}),
+      },
+      projectIdentity: await projectIdentityFor(),
+      routerAlgorithmVersion,
+      signalDigest: decision.digests.signalDigest,
+      vocabularyDigest: decision.digests.vocabularyDigest,
+      semanticHintsDigest: decision.digests.semanticHintsDigest,
+    };
     if (!input.continuationToken || !input.clarificationAnswers) {
-      const token = createContinuationToken(continuationBinding, questions);
-      const clarification = { questions };
-      return { ...resultCommon(resolution.candidates, { status: "clarification_required", clarification }), status: "clarification_required", clarification, continuationToken: token.token, expiresAt: token.expiresAt };
+      const token = createContinuationToken(continuationBinding, decision.outcome.clarification.questions);
+      const clarification = { questions: decision.outcome.clarification.questions };
+      return { ...resultCommon({ status: "clarification_required", clarification }), status: "clarification_required", clarification, continuationToken: token.token, expiresAt: token.expiresAt };
     }
     try {
-      const validated = validateContinuation({ token: input.continuationToken, answers: input.clarificationAnswers, binding: continuationBinding, questions });
-      const domainAnswer = validated.answers.find(({ questionId }) => questionId === "primary-domain");
-      if (resolution.clarificationRequired) {
-        selectedPrimary = normalizeDomainAlias(domainAnswer?.value ?? "", domains);
-        if (!selectedPrimary || !resolution.ambiguousDomainIds.includes(selectedPrimary)) throw new RouterPrepareError("clarification-answer-invalid", "Clarification answer does not identify an available primary domain.");
-      }
-      const skillAnswer = validated.answers.find(({ questionId }) => questionId === primarySkillAmbiguityQuestionId);
-      if (skillAmbiguityIds.length > 0) {
-        // The answer pass reuses the no-answer decision input; any outcome other
-        // than an accepted answer fails closed, matching the guarantee that no run
-        // state is created before a valid choice is resolved.
-        const appliedClarification = resolveDeclaredPrimarySkillClarification({
-          ...ambiguityClarificationInput,
-          answer: skillAnswer?.value,
-        });
-        if (appliedClarification.kind !== "answer-accepted") {
-          throw new RouterPrepareError("clarification-answer-invalid", "Clarification answer does not identify an available nominated skill.");
-        }
-        resolvedNomination = appliedClarification.resolvedNomination;
-      }
+      const validated = validateContinuation({ token: input.continuationToken, answers: input.clarificationAnswers, binding: continuationBinding, questions: decision.outcome.clarification.questions });
+      decision = await pipelineCall(validated.answers);
     } catch (error) {
+      if (error instanceof RoutingPipelineError) throw new RouterPrepareError(error.code as RouterPrepareError["code"], error.message);
       if (error instanceof RouterPrepareError) throw error;
       const code = (error as { code?: string }).code === "continuation-expired" ? "continuation-expired" : (error as { code?: string }).code === "clarification-answer-invalid" ? "clarification-answer-invalid" : "continuation-invalid";
       throw new RouterPrepareError(code, "Continuation token or clarification answers are invalid.");
     }
   }
-  // A continuation answer permutes the resolution (the selected nomination becomes
-  // the required primary); without one the declared resolution is the effective
-  // one. The proposal-assisted path consumes this decision for both the
-  // primary-domain binding and composition instead of reconstructing the same
-  // projection from the raw explicit choice and answer sources.
-  const proposalPrimarySkillId = resolvedNomination?.requiredPrimarySkillId ?? firstPrimaryNomination?.skillId;
-  const proposalPrimaryDomain = proposalPrimarySkillId
-    ? catalogSkill(proposalPrimarySkillId)?.domains[0]
-    : undefined;
-  if (routingProposal && proposalPrimaryDomain) selectedPrimary = proposalPrimaryDomain;
-  if (!selectedPrimary) {
-    const outcome = { status: "no_matching_skills" as const, suggestedAction: "Proceed without a SkillRanger workflow or add an audited domain pack." };
-    return { ...resultCommon(resolution.candidates, outcome), ...outcome };
+  const outcome = decision.outcome;
+  // Unreachable on the answer pass (a validated continuation implies the no-answer
+  // decision was clarification_required, and the same proposal re-validates), but
+  // the type system requires the refresh case to be handled here too.
+  if (outcome.status === "catalog_refresh_required") {
+    return { ok: true, schemaVersion: "router-result/1.1", ...outcome };
   }
-  if (analysis.profile.subtasks.length >= 2) {
-    const outcome = { status: "decomposition_required" as const, decomposition: { subtasks: analysis.profile.subtasks } };
-    return { ...resultCommon(resolution.candidates, outcome), ...outcome };
+  // Also unreachable: an answered pass resolves the no-answer questions or fails
+  // closed, so a decision that still asks for clarification cannot surface here.
+  if (outcome.status === "clarification_required") {
+    throw new RouterPrepareError("continuation-invalid", "Continuation answers did not resolve the routing clarification.");
   }
-  // The ambiguity probe is the existing candidate retrieval, aligned to the composition
-  // retrieval input: the same nomination sets, roles, domains, and primary domain. The
-  // probe boundary's result is reused by composition instead of running a second
-  // eligibility pass. The only axis that can diverge between the probe and the final
-  // primary domain is a continuation answer selecting a nomination that names another
-  // domain; reuse is skipped then and the boundary is rebuilt explicitly through the
-  // same factory. Composition always receives a boundary: without a probe it is built
-  // here for the effective primary domain and nomination resolution, so the boundary
-  // factory is the only retrieval construction site.
-  const reuseProbeRetrieval = probeBoundary !== undefined && probeSelectedPrimary !== undefined && canonical(probeSelectedPrimary) === canonical(selectedPrimary);
-  const boundary = reuseProbeRetrieval
-    ? probeBoundary
-    : createRetrievalBoundary(retrievalBoundaryInput(selectedPrimary, strict, resolvedNomination));
-  const composed = composeSkillSet({
-    profile: analysis.profile,
-    requirements: analysis.requirements,
-    skills: allMetadata,
-    primaryDomainId: selectedPrimary,
-    capabilities,
-    strict,
-    installedSkillIds: allMetadata.filter(({ installed }) => installed).map(({ id }) => id),
-    fingerprint,
-    routingContext,
-    resolvedNomination,
-    boundary,
-    limits: { ...defaultRouterLimits, maxSelectedRisk: config.router.maxSelectedRisk, maxEnvironmentSkills: config.router.maxEnvironmentSkills, maxTaskCompanions: config.router.maxTaskCompanions, maxVerificationSkills: config.router.maxVerificationSkills, maxAgentContextSkills: config.router.maxAgentContextSkills, maxCoreSkills: config.router.maxCoreSkills, maxTotalSelectedSkills: config.router.maxTotalSelectedSkills, maxInstructionBytes: config.router.maxInstructionBytes, maxAdditionalReadBytes: config.router.maxAdditionalReadBytes, maxSingleFileBytes: config.router.maxSingleFileBytes },
-  });
-  if (routingProposal) {
-    const nominatedIdsForWarnings = new Set(nominatedSkillIds);
-    routingWarnings = [...new Set([
-      ...routingWarnings,
-      ...composed.rejections
-        .filter(({ skillId }) => nominatedIdsForWarnings.has(skillId))
-        .map(({ skillId, reason }) => `routing-proposal-rejected:${skillId}:${reason}`),
-    ])];
+  if (outcome.status === "no_matching_skills") {
+    const result: DeterministicRoutingOutcome = { status: outcome.status, suggestedAction: outcome.suggestedAction, ...(outcome.reasonCode ? { reasonCode: outcome.reasonCode } : {}) };
+    return { ...resultCommon(result), ...result };
   }
-  const composedPrimaryDomain = composed.status === "prepared"
-    ? composed.composed.primary.skill.domains.find((domainId) => canonical(domainId) === canonical(selectedPrimary)) ??
-      composed.composed.primary.skill.domains.find((domainId) => routingCandidateIds.has(canonical(domainId))) ??
-      composed.composed.primary.skill.domains[0] ??
-      selectedPrimary
-    : selectedPrimary;
-  const resultDomains = applyClarification(composedPrimaryDomain, routingCandidates);
-  if (composed.status !== "prepared") {
-    if (composed.status === "decomposition_required") {
-      const outcome = { status: composed.status, decomposition: { subtasks: composed.subtasks } };
-      return { ...resultCommon(resultDomains, outcome), ...outcome };
-    }
-    if (composed.status === "strict_requirements_unmet") {
-      const outcome = { status: composed.status, missing: composed.missing, installationSuggestions: composed.missing.filter(({ requirement }) => requirement === "installed-skill").map(({ skillId }) => ({ skillId, reason: "The selected strict workflow is not installed for this target agent.", nextTool: "plan_skill_install" as const })) };
-      return { ...resultCommon(resultDomains, outcome), ...outcome };
-    }
-    if (composed.status === "context_budget_exceeded") {
-      const outcome = { status: composed.status, requiredBytes: composed.requiredBytes, allowedBytes: composed.allowedBytes, blockingSkillIds: composed.blockingSkillIds };
-      return { ...resultCommon(resultDomains, outcome), ...outcome };
-    }
-    const outcome = { status: "no_matching_skills" as const, suggestedAction: "Proceed without a SkillRanger workflow or add an audited domain pack.", ...(composed.reasonCode ? { reasonCode: composed.reasonCode } : {}) };
-    return { ...resultCommon(resultDomains, outcome), ...outcome };
+  if (outcome.status === "decomposition_required") {
+    const result: DeterministicRoutingOutcome = { status: outcome.status, decomposition: outcome.decomposition };
+    return { ...resultCommon(result), ...result };
   }
-  const selectedSkillIds = new Set(composed.composed.all.map(({ skill }) => skill.id));
+  if (outcome.status === "strict-requirements-unmet") {
+    // The unmet-strict-requirements outcome is produced here from the pipeline's
+    // decision output; the pipeline never names or shapes it itself.
+    const result: DeterministicRoutingOutcome = {
+      status: "strict_requirements_unmet",
+      missing: outcome.missing,
+      installationSuggestions: outcome.missing.filter(({ requirement }) => requirement === "installed-skill").map(({ skillId }) => ({ skillId, reason: "The selected strict workflow is not installed for this target agent.", nextTool: "plan_skill_install" as const })),
+    };
+    return { ...resultCommon(result), ...result };
+  }
+  if (outcome.status === "context_budget_exceeded") {
+    const result: DeterministicRoutingOutcome = { status: outcome.status, requiredBytes: outcome.requiredBytes, allowedBytes: outcome.allowedBytes, blockingSkillIds: outcome.blockingSkillIds };
+    return { ...resultCommon(result), ...result };
+  }
+  const selectedSkillIds = new Set(outcome.selectedSkillIds);
   const unselectedInput = Object.keys(input.skillInputs ?? {}).find((skillId) => !selectedSkillIds.has(skillId));
   if (unselectedInput) throw new RouterPrepareError("routing-integrity", `Skill input was supplied for an unselected skill: ${unselectedInput}.`);
-  const selections = composed.composed.selections;
-  const base = resultCommon(resultDomains, { status: "prepared", selections });
-  const selectedMetadata = composed.composed.all.map(({ skill }) => metadata.find(({ id }) => id === skill.id)!).filter(Boolean);
+  const selections = outcome.selections;
+  const composedPrimaryDomain = outcome.primaryDomain;
+  const base = resultCommon({ status: "prepared", selections });
+  const selectedMetadata = outcome.selectedSkillIds.map((skillId) => metadata.find(({ id }) => id === skillId)!).filter(Boolean);
   const mandatoryPaths = (item: PreparedMetadata) => strict ? (item.contractMustRead?.length ? item.contractMustRead : ["SKILL.md"]) : ["SKILL.md"];
   const sourceInputs = await Promise.all(selectedMetadata.map(async (item) => {
     const sourceRoot = item.installedRoot ?? item.skill.path;
@@ -735,35 +573,35 @@ export const prepareTask = async (
   const runtime: RuntimeRunReference = { kind: strict ? "strict-v2" : "lifecycle-v1", runId: runtimeRunId };
   const verificationCapabilities = [...new Set(selectedMetadata.flatMap(({ verificationRequiredCapabilities }) => verificationRequiredCapabilities ?? []))];
   const missingVerificationCapabilities = verificationCapabilities.filter((capability) => !capabilities.includes(canonical(capability)));
-  const verificationRequired = analysis.profile.acceptanceCriteria.length > 0 || verificationCapabilities.length > 0 || selections.verification.length > 0;
-  const provisionalBase = { ...base, status: "prepared" as const, selections, requiredReads: reads, run: { routerRunId: `route_${randomUUID().replaceAll("-", "").slice(0, 16)}`, runtimeRunId, runtime: runtime.kind, strict, readRevision: 0 }, verification: { required: verificationRequired, available: verificationRequired && missingVerificationCapabilities.length === 0, missingCapabilities: missingVerificationCapabilities, expectedEvidenceKinds: analysis.profile.acceptanceCriteria } };
+  const verificationRequired = decision.taskProfile!.acceptanceCriteria.length > 0 || verificationCapabilities.length > 0 || selections.verification.length > 0;
+  const provisionalBase = { ...base, status: "prepared" as const, selections, requiredReads: reads, run: { routerRunId: `route_${randomUUID().replaceAll("-", "").slice(0, 16)}`, runtimeRunId, runtime: runtime.kind, strict, readRevision: 0 }, verification: { required: verificationRequired, available: verificationRequired && missingVerificationCapabilities.length === 0, missingCapabilities: missingVerificationCapabilities, expectedEvidenceKinds: decision.taskProfile!.acceptanceCriteria } };
   let runtimeClarification: RuntimeClarificationSummary | undefined;
   let runtimePayload: SkillRun | SkillRunV2;
   if (strict) {
     try {
-      runtimePayload = await createPreparedStrictSkillRun({ projectRoot: input.projectRoot, targetAgent, domain: composedPrimaryDomain, intent: parsed.normalizedIntent, rawIntent: input.prompt, normalizedGoal: analysis.profile.normalizedGoal, runtimeRunId, selections, metadata: selectedMetadata, fingerprint, skillInputs: input.skillInputs ?? {}, capabilities, storeRawIntent: input.rawIntentPersistence === "explicitly-authorized" });
+      runtimePayload = await createPreparedStrictSkillRun({ projectRoot: input.projectRoot, targetAgent, domain: composedPrimaryDomain, intent: parsed.normalizedIntent, rawIntent: input.prompt, normalizedGoal: decision.taskProfile!.normalizedGoal, runtimeRunId, selections, metadata: selectedMetadata, fingerprint, skillInputs: input.skillInputs ?? {}, capabilities, storeRawIntent: input.rawIntentPersistence === "explicitly-authorized" });
     } catch (error) {
       if (error instanceof StrictSkillRunError && error.code === "strict-contract-missing" && error.details?.reason === "validator-ownership") {
-        const outcome = {
-          status: "strict_requirements_unmet" as const,
+        const outcome: DeterministicRoutingOutcome = {
+          status: "strict_requirements_unmet",
           missing: [{ skillId: typeof error.details.skillId === "string" ? error.details.skillId : undefined, requirement: "strict-contract-v2" as const }],
           installationSuggestions: [],
         };
-        return { ...resultCommon(resultDomains, outcome), ...outcome };
+        return { ...resultCommon(outcome), ...outcome };
       }
       throw error;
     }
     const blocked = runtimePayload.skillLedgers.filter(({ outcome }) => outcome === "blocked");
     if (blocked.length > 0) {
-      const outcome = {
-        status: "strict_requirements_unmet" as const,
+      const outcome: DeterministicRoutingOutcome = {
+        status: "strict_requirements_unmet",
         missing: blocked.flatMap(({ skillId, applicability, contract }) => applicability.unmetPrerequisites.map((id) => ({
           skillId,
           requirement: contract.prerequisites.find((prerequisite) => prerequisite.id === id)?.kind === "input" ? "skill-input" as const : "capability" as const,
         }))),
         installationSuggestions: [],
       };
-      return { ...resultCommon(resultDomains, outcome), ...outcome };
+      return { ...resultCommon(outcome), ...outcome };
     }
   } else {
     // ADR 0008: every selected skill that declares an output contract contributes its required
@@ -773,7 +611,7 @@ export const prepareTask = async (
       const fields = item.skill.manifest.outputContract?.requiredReportFields;
       if (fields && fields.length > 0) coreOutputContracts[item.id] = fields;
     }
-    const lifecycle = await createLifecyclePayload({ runtimeRunId, domain: composedPrimaryDomain, targetAgent, prompt: analysis.profile.normalizedGoal, rawPrompt: input.prompt, policyIntent: parsed.normalizedIntent, profile: analysis.profile, selections: provisionalBase, rawIntentPersistence: input.rawIntentPersistence === "explicitly-authorized", coreOutputContracts });
+    const lifecycle = await createLifecyclePayload({ runtimeRunId, domain: composedPrimaryDomain, targetAgent, prompt: decision.taskProfile!.normalizedGoal, rawPrompt: input.prompt, policyIntent: parsed.normalizedIntent, profile: decision.taskProfile!, selections: provisionalBase, rawIntentPersistence: input.rawIntentPersistence === "explicitly-authorized", coreOutputContracts });
     runtimePayload = lifecycle.payload;
     runtimeClarification = lifecycle.runtimeClarification;
   }
@@ -785,12 +623,12 @@ export const prepareTask = async (
     state: "prepared",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    projectIdentity,
-    taskProfile: analysis.profile,
+    projectIdentity: await projectIdentityFor(),
+    taskProfile: decision.taskProfile!,
     routing: {
       ...base.routing,
       fingerprintDigest: base.project.fingerprintDigest,
-      ...(routingProposal ? { routingProposal: routingProposal.projection } : {}),
+      ...(decision.routingProposal ? { routingProposal: decision.routingProposal } : {}),
     },
     selections,
     sourceInventory,
