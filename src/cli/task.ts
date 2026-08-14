@@ -2,7 +2,7 @@ import { constants } from "node:fs";
 import { open } from "node:fs/promises";
 import path from "node:path";
 import { loadRouterConfig } from "../config/index.ts";
-import { createRouterReader, prepareTask, RouterPrepareError } from "../router/index.ts";
+import { createRouterRuntimeBridge, prepareTask, RouterPrepareError } from "../router/index.ts";
 import { SkillInputsError, validateSkillInputs } from "../router/skill-inputs.ts";
 import { limitedDeterministicFallbackMode, semanticRecallLimitedWarning } from "../router/types.ts";
 import type { PrepareTaskCoreInput, PrepareTaskResult, ReadRunSkillFileInput, RouterExplanation, RouterSkillRole } from "../router/types.ts";
@@ -160,7 +160,7 @@ export const handleTaskCliCommand = async (input: { command?: string; positional
       if ((mandatory && (skill !== undefined || relativePath !== undefined)) || (!mandatory && (skill === undefined || relativePath === undefined))) {
         invalid("task:read requires exactly one of --mandatory-next or --skill with --path.");
       }
-      const result = await createRouterReader(projectRoot, input.registryRoot).read({
+      const result = await createRouterRuntimeBridge(projectRoot, input.registryRoot).createReader().read({
         routerRunId,
         readRequestId: optional(input.flags, "read-request-id") ?? crypto.randomUUID(),
         expectedReadRevision,

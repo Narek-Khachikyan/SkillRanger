@@ -10,7 +10,8 @@ import { getAdapter } from "../src/installers/codex.ts";
 import { initializeRouterContext } from "../src/mcp/router-context.ts";
 import { callMcpTool, mcpTools } from "../src/mcp/tools.ts";
 import { findSkill } from "../src/registry/index.ts";
-import { createRouterReader, prepareTask } from "../src/router/prepare.ts";
+import { prepareTask } from "../src/router/prepare.ts";
+import { createRouterRuntimeBridge } from "../src/router/runtime-bridge.ts";
 import { RouterReaderError } from "../src/router/reader.ts";
 import { RouterStore, routerRecordDigest, type RouterRuntimeStore } from "../src/router/store.ts";
 import type { PrepareTaskResult, ReadRunSkillFileResult } from "../src/router/types.ts";
@@ -257,7 +258,7 @@ test("frontend strict installed/read/steps/finalize reaches verified", async () 
   const { root, result } = await prepareStrictPerformance();
   const strictStore = new StrictSkillRunStore(root);
   const routerStore = new RouterStore(root);
-  const reader = createRouterReader(root, registry, routerStore, {
+  const reader = createRouterRuntimeBridge(root, registry).createReader(routerStore, {
     onMandatorySkillComplete: async ({ run, skillId }) => {
       // Core (universal) skills have no strict ledger; only synced task skills.
       const current = await strictStore.read(run.runtime.runId);
@@ -514,7 +515,7 @@ test("stale checksum blocks a prepared source read without advancing revision", 
   let failure: unknown;
   for (let guard = 0; guard < 8 && failure === undefined; guard += 1) {
     try {
-      const out = await createRouterReader(root, registry, routerStore).read({ routerRunId: run.routerRunId, readRequestId: randomUUID(), expectedReadRevision: revision, mode: "mandatory-next" });
+      const out = await createRouterRuntimeBridge(root, registry).createReader(routerStore).read({ routerRunId: run.routerRunId, readRequestId: randomUUID(), expectedReadRevision: revision, mode: "mandatory-next" });
       revision = out.readRevision;
     } catch (error) {
       failure = error;

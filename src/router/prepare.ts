@@ -1,13 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { loadRouterConfig, type RouterConfig } from "../config/index.ts";
 import { agents } from "../installers/agents.ts";
-import { getDomainPack, loadBundledRouterPacks, type BundledRouterPack } from "../domains/registry.ts";
+import { loadBundledRouterPacks, type BundledRouterPack } from "../domains/registry.ts";
 import "../domains/bundled.ts";
 import { defaultDomainsRoot } from "../paths.ts";
 import { loadLocalRegistry } from "../registry/index.ts";
-import type { InstalledSkill, ProjectFingerprint, Recommendation, RegistrySkill } from "../types.ts";
+import type { InstalledSkill, ProjectFingerprint, RegistrySkill } from "../types.ts";
 import { scanProject } from "../scanner/index.ts";
 import { loadRouterFixturePacks } from "./fixtures.ts";
 import { buildRoutingContext, RoutingContextError } from "./context.ts";
@@ -18,7 +16,7 @@ import { RoutingVocabularyValidationError } from "./vocabulary/validate.ts";
 import { createContinuationToken, validateContinuation, type ContinuationBinding } from "./continuation.ts";
 import { parseTrigger } from "./trigger.ts";
 import { buildSkillCatalog, SkillCatalogError } from "./catalog.ts";
-import { computeSourcePackageChecksum, createSkillSourceSnapshots, RouterSourceReader } from "./reader.ts";
+import { computeSourcePackageChecksum, createSkillSourceSnapshots } from "./reader.ts";
 import { RouterStore, routerRecordDigest } from "./store.ts";
 import type { RoutingProposalProjection } from "./routing-proposal.ts";
 import { buildRouterSkillMetadata } from "./skill-metadata.ts";
@@ -29,6 +27,7 @@ import {
   type RoutingPipelineDecision,
   type RoutingPipelineInput,
 } from "./pipeline.ts";
+import { createRouterRuntimeBridge, RouterPrepareError } from "./runtime-bridge.ts";
 import type {
   DeterministicRoutingOutcome,
   DeterministicRoutingProjection,
@@ -36,7 +35,6 @@ import type {
   PrepareTaskCommon,
   PrepareTaskCoreInput,
   PrepareTaskResult,
-  PreparedSkillSelection,
   RoutingMode,
   RouterRun,
   RuntimeRunReference,
@@ -44,26 +42,16 @@ import type {
   SkillSourceSnapshot,
 } from "./types.ts";
 import { semanticRecallLimitedWarning } from "./types.ts";
-import { createSkillRun, reduceSkillRun } from "../runtime/skill-run/reducer.ts";
-import { SkillRunStore, type SkillRun } from "../runtime/skill-run/index.ts";
+import type { SkillRun } from "../runtime/skill-run/index.ts";
 import { createPreparedStrictSkillRun } from "../runtime/strict/service.ts";
-import { StrictSkillRunError, StrictSkillRunStore, type SkillRunV2 } from "../runtime/strict/index.ts";
+import { StrictSkillRunError, type SkillRunV2 } from "../runtime/strict/index.ts";
 import { assertInstalledMatches } from "../runtime/strict/service.ts";
 import type { RouterLimits, RouterSkillMetadata } from "./composer.ts";
 import { defaultRouterLimits } from "./composer.ts";
 
 export { routerAlgorithmVersion } from "./pipeline.ts";
+export { RouterPrepareError } from "./runtime-bridge.ts";
 export const deterministicRoutingKey = (projection: DeterministicRoutingProjection) => routerRecordDigest(projection);
-
-export class RouterPrepareError extends Error {
-  readonly code: "trigger-required" | "empty-intent" | "intent-too-large" | "router-disabled" | "target-agent-unresolved" | "project-root-unauthorized" | "continuation-invalid" | "continuation-expired" | "clarification-answer-invalid" | "capability-invalid" | "router-config-invalid" | "routing-integrity" | "semantic-hint-invalid" | "routing-proposal-invalid" | "raw-intent-confirmation-required";
-
-  constructor(code: RouterPrepareError["code"], message: string) {
-    super(message);
-    this.name = "RouterPrepareError";
-    this.code = code;
-  }
-}
 
 const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
 const digest = (value: unknown) => routerRecordDigest(value);
@@ -130,106 +118,6 @@ const displayProject = (fingerprint: ProjectFingerprint) => ({
   languages: fingerprint.languages.map(({ name }) => name),
   frameworks: fingerprint.frameworks.map(({ name }) => name),
 });
-
-const recommendationsFor = (selections: { primary: PreparedSkillSelection; environment: PreparedSkillSelection[]; companions: PreparedSkillSelection[]; verification: PreparedSkillSelection[]; agentContext: PreparedSkillSelection[] }) => [
-  selections.primary,
-  ...selections.environment,
-  ...selections.companions,
-  ...selections.verification,
-  ...selections.agentContext,
-].map((selection, index) => ({
-  skillId: selection.skillId,
-  displayName: selection.displayName,
-  role: selection.role === "primary" ? "primary" as const : "companion" as const,
-  score: selection.score,
-  reasons: selection.reasons,
-  riskLevel: "low" as const,
-  verification: { status: selection.verificationStatus === "guidance-only" ? "unverified" as const : "ready" as const, missingCapabilities: [] },
-  scoreBreakdown: { stackMatch: 0, userIntentMatch: 0, qualityScore: 0, effectiveQualityScore: 0, securityScore: 0, freshnessScore: 0, compatibilityScore: 1, duplicatePenalty: 0, evaluationPenalty: 0, laneAdjustment: 0, skillAdjustment: 0, finalScore: selection.score },
-  ...(index === 0 ? {} : {}),
-})) as unknown as Recommendation[];
-
-const assertRequiredPhaseOwnersSelected = (
-  policy: { artifacts?: Record<string, unknown> } | undefined,
-  selectedSkillIds: Set<string>,
-) => {
-  const phasePlan = policy?.artifacts?.phasePlan as { entries?: Array<{ status: string; ownerSkillId: string; phase: string }> } | undefined;
-  if (!phasePlan?.entries) return;
-
-  const missing = phasePlan.entries.filter(
-    ({ status, ownerSkillId }) =>
-      status === "required" && !selectedSkillIds.has(ownerSkillId),
-  );
-
-  if (missing.length === 0) return;
-
-  throw new RouterPrepareError(
-    "routing-integrity",
-    `Required phase owners are not selected: ${missing.map(({ phase, ownerSkillId }) => `${phase}:${ownerSkillId}`).join(",")}.`,
-  );
-};
-
-const createLifecyclePayload = async (input: {
-  runtimeRunId: string;
-  domain: string;
-  targetAgent: string;
-  prompt: string;
-  rawPrompt?: string;
-  policyIntent?: string;
-  profile: PrepareTaskCommon["taskProfile"];
-  selections: PrepareTaskResult & { status: "prepared" };
-  rawIntentPersistence?: boolean;
-  coreOutputContracts: Record<string, string[]>;
-}): Promise<{ payload: SkillRun; runtimeClarification?: RuntimeClarificationSummary }> => {
-  const pack = getDomainPack(input.domain);
-  const recommendations = recommendationsFor(input.selections.selections);
-  const policy = pack?.runPolicy?.evaluate({ intent: input.policyIntent ?? input.prompt, recommendations });
-  const selectedSkills = [
-    input.selections.selections.primary,
-    ...input.selections.selections.environment,
-    ...input.selections.selections.companions,
-    ...input.selections.selections.verification,
-    ...input.selections.selections.agentContext,
-  ].map((selection) => ({
-    skillId: selection.skillId,
-    role: selection.role === "primary" ? "primary" as const : "companion" as const,
-    version: selection.version,
-    checksum: selection.packageChecksum,
-    mandatory: true,
-  }));
-  const selectedSkillIds = new Set(selectedSkills.map(({ skillId }) => skillId));
-  assertRequiredPhaseOwnersSelected(policy, selectedSkillIds);
-  // ADR 0008: always-on guidance skill output contracts travel inside the persisted policy, so the
-  // lifecycle verification gate needs no registry access to enforce them.
-  const basePolicy = policy ?? {
-    lifecycleRequired: true,
-    mandatorySkillIds: selectedSkills.map(({ skillId }) => skillId),
-    clarification: { required: false, questions: [] },
-    verificationRequired: false,
-  };
-  const contractedPolicy = Object.keys(input.coreOutputContracts).length === 0
-    ? basePolicy
-    : {
-        ...basePolicy,
-        artifacts: { ...(basePolicy.artifacts ?? {}), coreOutputContracts: input.coreOutputContracts },
-      };
-  const created = createSkillRun({
-    runId: input.runtimeRunId,
-    domain: input.domain,
-    targetAgent: input.targetAgent,
-    locale: input.profile.locale,
-    intent: { sha256: digest(input.profile.normalizedGoal), normalizedGoal: input.profile.normalizedGoal, ...(input.rawIntentPersistence ? { raw: input.rawPrompt ?? input.prompt } : {}) },
-    policy: contractedPolicy,
-  });
-  return {
-    payload: reduceSkillRun(created, { type: "select-skills", skills: selectedSkills }),
-    ...(contractedPolicy.clarification.required ? {
-      runtimeClarification: {
-        questions: contractedPolicy.clarification.questions,
-      },
-    } : {}),
-  };
-};
 
 const requiredReadsFor = (inventory: SkillSourceSnapshot[]) => inventory.flatMap((snapshot) => snapshot.files.filter(({ mandatory }) => mandatory)).map((file, order) => ({ order, skillId: inventory.find(({ files }) => files.includes(file))?.skillId ?? "", path: file.path, checksum: file.checksum, bytes: file.bytes, mandatory: true as const }));
 
@@ -577,6 +465,10 @@ export const prepareTask = async (
   const provisionalBase = { ...base, status: "prepared" as const, selections, requiredReads: reads, run: { routerRunId: `route_${randomUUID().replaceAll("-", "").slice(0, 16)}`, runtimeRunId, runtime: runtime.kind, strict, readRevision: 0 }, verification: { required: verificationRequired, available: verificationRequired && missingVerificationCapabilities.length === 0, missingCapabilities: missingVerificationCapabilities, expectedEvidenceKinds: decision.taskProfile!.acceptanceCriteria } };
   let runtimeClarification: RuntimeClarificationSummary | undefined;
   let runtimePayload: SkillRun | SkillRunV2;
+  // The router-runtime bridge owns lifecycle payload construction, runtime-store
+  // dispatch, and the mandatory-read bridge; preparation consumes it instead of
+  // building inline adapters.
+  const bridge = createRouterRuntimeBridge(input.projectRoot, input.registry.root);
   if (strict) {
     try {
       runtimePayload = await createPreparedStrictSkillRun({ projectRoot: input.projectRoot, targetAgent, domain: composedPrimaryDomain, intent: parsed.normalizedIntent, rawIntent: input.prompt, normalizedGoal: decision.taskProfile!.normalizedGoal, runtimeRunId, selections, metadata: selectedMetadata, fingerprint, skillInputs: input.skillInputs ?? {}, capabilities, storeRawIntent: input.rawIntentPersistence === "explicitly-authorized" });
@@ -611,7 +503,7 @@ export const prepareTask = async (
       const fields = item.skill.manifest.outputContract?.requiredReportFields;
       if (fields && fields.length > 0) coreOutputContracts[item.id] = fields;
     }
-    const lifecycle = await createLifecyclePayload({ runtimeRunId, domain: composedPrimaryDomain, targetAgent, prompt: decision.taskProfile!.normalizedGoal, rawPrompt: input.prompt, policyIntent: parsed.normalizedIntent, profile: decision.taskProfile!, selections: provisionalBase, rawIntentPersistence: input.rawIntentPersistence === "explicitly-authorized", coreOutputContracts });
+    const lifecycle = await bridge.createLifecyclePayload({ runtimeRunId, domain: composedPrimaryDomain, targetAgent, prompt: decision.taskProfile!.normalizedGoal, rawPrompt: input.prompt, policyIntent: parsed.normalizedIntent, profile: decision.taskProfile!, selections: provisionalBase, rawIntentPersistence: input.rawIntentPersistence === "explicitly-authorized", coreOutputContracts });
     runtimePayload = lifecycle.payload;
     runtimeClarification = lifecycle.runtimeClarification;
   }
@@ -635,35 +527,8 @@ export const prepareTask = async (
     readLedger: [],
     runtime,
   };
-  const runtimeStore = createRouterRuntimeStore(input.projectRoot);
+  const runtimeStore = bridge.createRuntimeStore();
   const store = new RouterStore(input.projectRoot, { runtime: runtimeStore });
   await store.journaledCreate({ routerRun, runtimePayload, runtime: runtimeStore });
   return runtimeClarification ? { ...provisionalBase, runtimeClarification } : provisionalBase;
 };
-
-export const createRouterRuntimeStore = (projectRoot: string) => ({
-  async read(runId: string) {
-    const file = path.join(projectRoot, ".skillranger", "runs", `${runId}.json`);
-    try { return JSON.parse(await readFile(file, "utf8")) as unknown; }
-    catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-      throw error;
-    }
-  },
-  async create(runId: string, value: unknown) {
-    if ((value as { schemaVersion?: string }).schemaVersion === "2.0") await new StrictSkillRunStore(projectRoot).create(value as SkillRunV2);
-    else await new SkillRunStore(projectRoot).create(value as SkillRun);
-    if ((value as { runId?: string }).runId !== runId) throw new RouterPrepareError("routing-integrity", "Runtime ID does not match the preallocated journal ID.");
-  },
-  async replace(runId: string, value: unknown) {
-    if ((value as { schemaVersion?: string }).schemaVersion === "2.0") await new StrictSkillRunStore(projectRoot).replace(runId, value as SkillRunV2);
-    else await new SkillRunStore(projectRoot).replace(runId, value as SkillRun);
-  },
-});
-
-export const createRouterReader = (
-  projectRoot: string,
-  registryRoot: string,
-  store = new RouterStore(projectRoot),
-  options: ConstructorParameters<typeof RouterSourceReader>[2] = {},
-) => new RouterSourceReader(projectRoot, store, { bundledRegistryRoot: registryRoot, ...options });

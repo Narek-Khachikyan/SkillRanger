@@ -157,7 +157,7 @@ test("semantic hints use a permissive MCP envelope and one public Core error cod
     $defs: { errorCode: { enum: string[] } };
   };
   assert.ok(schema.$defs.errorCode.enum.includes("semantic-hint-invalid"));
-  for (const file of ["src/router/prepare.ts", "src/mcp/tools/router.ts", "src/mcp/tools/types.ts"]) {
+  for (const file of ["src/router/runtime-bridge.ts", "src/mcp/tools/router.ts", "src/mcp/tools/types.ts"]) {
     assert.match(await readFile(file, "utf8"), /semantic-hint-invalid/, file);
   }
 });

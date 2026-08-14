@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { isCoreDomainSkill } from "../../router/metadata.ts";
-import { createRouterReader, createRouterRuntimeStore, prepareTask, RouterPrepareError, routingProposalLimits } from "../../router/index.ts";
+import { createRouterRuntimeBridge, prepareTask, RouterPrepareError, routingProposalLimits } from "../../router/index.ts";
 import type { PrepareTaskCoreInput, ReadRunSkillFileInput } from "../../router/types.ts";
 import { RouterReaderError } from "../../router/reader.ts";
 import { RouterStore, RouterStoreError } from "../../router/store.ts";
@@ -203,10 +203,11 @@ const read: McpToolHandler = async (args) => {
     mode: args.mode,
     ...(args.mode === "optional-file" ? { skillId: requireString(args.skillId, "skillId"), path: requireString(args.path, "path") } : {}),
   } as ReadRunSkillFileInput;
-  const runtime = createRouterRuntimeStore(context.projectRoot);
+  const bridge = createRouterRuntimeBridge(context.projectRoot, context.registryRoot);
+  const runtime = bridge.createRuntimeStore();
   const routerStore = new RouterStore(context.projectRoot, { runtime });
   const routerRun = await routerStore.read(input.routerRunId);
-  const bridgedReader = createRouterReader(context.projectRoot, context.registryRoot, routerStore, {
+  const bridgedReader = bridge.createReader(routerStore, {
     prepareMandatorySkillComplete: async ({ run, skillId, packageChecksum }: { run: typeof routerRun; skillId: string; packageChecksum: string }) => {
       const existing = await runtime.read(run.runtime.runId);
       if (!existing) throw new RouterStoreError("run-not-found", `Runtime run not found: ${run.runtime.runId}`);
