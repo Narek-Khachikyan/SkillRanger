@@ -102,7 +102,7 @@ export {
   routerRecordDigest,
 } from "./store.ts";
 export { prepareTask, deterministicRoutingKey, RouterPrepareError, routerAlgorithmVersion } from "./prepare.ts";
-export { createRouterRuntimeBridge } from "./runtime-bridge.ts";
+export { createRouterRuntimeBridge, createRuntimeBridgedRouterReader } from "./runtime-bridge.ts";
 export type { LifecyclePayloadInput, RouterRuntimeBridge } from "./runtime-bridge.ts";
 export {
   RoutingPipelineError,

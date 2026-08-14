@@ -2,11 +2,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { getDomainPack } from "../domains/registry.ts";
 import type { Recommendation } from "../types.ts";
+import { isCoreDomainSkill } from "./metadata.ts";
 import { createSkillRun, reduceSkillRun } from "../runtime/skill-run/reducer.ts";
 import { SkillRunStore, type SkillRun } from "../runtime/skill-run/index.ts";
-import { StrictSkillRunStore, type SkillRunV2 } from "../runtime/strict/index.ts";
+import { StrictSkillRunStore, readNextStrictChunk, type SkillRunV2 } from "../runtime/strict/index.ts";
 import { RouterSourceReader, type RouterSourceReaderOptions } from "./reader.ts";
-import { RouterStore, routerRecordDigest } from "./store.ts";
+import { RouterStore, RouterStoreError, routerRecordDigest } from "./store.ts";
 import { RouterPrepareError } from "./errors.ts";
 import type {
   PrepareTaskCommon,
@@ -162,3 +163,38 @@ export const createRouterRuntimeBridge = (projectRoot: string, registryRoot: str
   }),
   createReader: (store, options) => new RouterSourceReader(projectRoot, store ?? new RouterStore(projectRoot), { bundledRegistryRoot: registryRoot, ...options }),
 });
+
+// The mandatory-read bridge shared by the MCP and CLI read surfaces so both record completed
+// mandatory reads into the runtime run with identical journaled semantics: a lifecycle-v1 run gains
+// a content-delivered read record; a strict-v2 ledger syncs its chunk receipts. Core (universal)
+// skills are guidance-only and never enter the strict runtime's ledgers, so their completed
+// router-level reads need no sync.
+export const createRuntimeBridgedRouterReader = (projectRoot: string, registryRoot: string) => {
+  const bridge = createRouterRuntimeBridge(projectRoot, registryRoot);
+  const runtime = bridge.createRuntimeStore();
+  const store = new RouterStore(projectRoot, { runtime });
+  return bridge.createReader(store, {
+    prepareMandatorySkillComplete: async ({ run, skillId, packageChecksum }) => {
+      const existing = await runtime.read(run.runtime.runId);
+      if (!existing) throw new RouterStoreError("run-not-found", `Runtime run not found: ${run.runtime.runId}`);
+      if (run.runtime.kind === "lifecycle-v1") {
+        const current = existing as SkillRun;
+        const reduced = reduceSkillRun(current, { type: "record-skill-read", skillId, checksum: packageChecksum, source: "content-delivered" });
+        const next = { ...reduced, revision: current.revision + 1 };
+        return { runtime, runtimePayload: next, applyRuntime: async () => { await runtime.replace(run.runtime.runId, next); } };
+      }
+      let next = existing as SkillRunV2;
+      const ledger = next.skillLedgers.find(({ skillId: id }) => id === skillId);
+      if (!ledger) {
+        const isCoreSkill = run.selections.agentContext.some(({ skillId: id, domains }) => id === skillId && isCoreDomainSkill(domains));
+        if (isCoreSkill) return { runtime, runtimePayload: next, applyRuntime: async () => {} };
+        throw new RouterStoreError("run-integrity", `Unknown strict skill: ${skillId}`);
+      }
+      while (next.skillLedgers.find(({ skillId: id }) => id === skillId)?.readReceipts.length
+        !== next.skillLedgers.find(({ skillId: id }) => id === skillId)?.contentChunks.length) {
+        next = readNextStrictChunk(next, skillId).run;
+      }
+      return { runtime, runtimePayload: next, applyRuntime: async () => { await runtime.replace(run.runtime.runId, next); } };
+    },
+  });
+};

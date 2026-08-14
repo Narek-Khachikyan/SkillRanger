@@ -1,14 +1,9 @@
 import { readFileSync } from "node:fs";
-import { randomUUID } from "node:crypto";
-import { isCoreDomainSkill } from "../../router/metadata.ts";
-import { createRouterRuntimeBridge, prepareTask, RouterPrepareError, routingProposalLimits } from "../../router/index.ts";
+import { createRuntimeBridgedRouterReader, prepareTask, RouterPrepareError, routingProposalLimits } from "../../router/index.ts";
 import type { PrepareTaskCoreInput, ReadRunSkillFileInput } from "../../router/types.ts";
 import { RouterReaderError } from "../../router/reader.ts";
-import { RouterStore, RouterStoreError } from "../../router/store.ts";
+import { RouterStoreError } from "../../router/store.ts";
 import { maxSkillInputEntries, SkillInputsError, validateSkillInputs } from "../../router/skill-inputs.ts";
-import { SkillRunStore } from "../../runtime/skill-run/index.ts";
-import { reduceSkillRun } from "../../runtime/skill-run/reducer.ts";
-import { StrictSkillRunStore, readNextStrictChunk } from "../../runtime/strict/index.ts";
 import { McpToolError, mcpToolEffects, type JsonObject, type McpToolDefinition, type McpToolHandler } from "./types.ts";
 import { jsonToolResult, requireString, requireStringArray } from "./utils.ts";
 import { routerContext } from "../router-context.ts";
@@ -203,38 +198,7 @@ const read: McpToolHandler = async (args) => {
     mode: args.mode,
     ...(args.mode === "optional-file" ? { skillId: requireString(args.skillId, "skillId"), path: requireString(args.path, "path") } : {}),
   } as ReadRunSkillFileInput;
-  const bridge = createRouterRuntimeBridge(context.projectRoot, context.registryRoot);
-  const runtime = bridge.createRuntimeStore();
-  const routerStore = new RouterStore(context.projectRoot, { runtime });
-  const routerRun = await routerStore.read(input.routerRunId);
-  const bridgedReader = bridge.createReader(routerStore, {
-    prepareMandatorySkillComplete: async ({ run, skillId, packageChecksum }: { run: typeof routerRun; skillId: string; packageChecksum: string }) => {
-      const existing = await runtime.read(run.runtime.runId);
-      if (!existing) throw new RouterStoreError("run-not-found", `Runtime run not found: ${run.runtime.runId}`);
-      if (run.runtime.kind === "lifecycle-v1") {
-        const current = existing as Awaited<ReturnType<SkillRunStore["read"]>>;
-        const reduced = reduceSkillRun(current, { type: "record-skill-read", skillId, checksum: packageChecksum, source: "content-delivered" });
-        const next = { ...reduced, revision: current.revision + 1 };
-        return { runtime, runtimePayload: next, applyRuntime: async () => { await runtime.replace(run.runtime.runId, next); } };
-      }
-      let next = existing as Awaited<ReturnType<StrictSkillRunStore["read"]>>;
-      const ledger = next.skillLedgers.find(({ skillId: id }) => id === skillId);
-      // Core (universal) skills are guidance-only and never enter the strict
-      // runtime's ledgers; their completed router-level reads need no sync.
-      const isCoreSkill = run.selections.agentContext.some(({ skillId: id, domains }) => id === skillId && isCoreDomainSkill(domains));
-      if (!ledger) {
-        if (isCoreSkill) return { runtime, runtimePayload: next, applyRuntime: async () => {} };
-        throw new RouterStoreError("run-integrity", `Unknown strict skill: ${skillId}`);
-      }
-      while (next.skillLedgers.find(({ skillId: id }) => id === skillId)?.readReceipts.length
-        !== next.skillLedgers.find(({ skillId: id }) => id === skillId)?.contentChunks.length) {
-        next = readNextStrictChunk(next, skillId).run;
-      }
-      const payload = next;
-      return { runtime, runtimePayload: payload, applyRuntime: async () => { await runtime.replace(run.runtime.runId, payload); } };
-    },
-  });
-  return jsonToolResult(await bridgedReader.read(input));
+  return jsonToolResult(await createRuntimeBridgedRouterReader(context.projectRoot, context.registryRoot).read(input));
 };
 
 export const routerToolHandlers: Record<string, McpToolHandler> = {

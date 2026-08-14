@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { validateJsonSchema } from "../src/runtime/strict/json-schema.ts";
+import type { SkillRun } from "../src/runtime/skill-run/index.ts";
 
 const execFileAsync = promisify(execFile);
 const cli = (args: string[]) => execFileAsync(process.execPath, ["src/cli/index.ts", ...args]);
@@ -100,6 +101,54 @@ test("task:read requires both optional-file selectors", async () => {
       assert.equal(result.code, "invalid-arguments");
       assert.match(result.message, /requires exactly one/);
     }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("task:read bridges completed mandatory reads into the lifecycle runtime run", async () => {
+  const root = await temporaryProject();
+  try {
+    const { stdout } = await cli([
+      "task", root,
+      "--intent", "Review and fix accessibility in this web interface, then verify the result",
+      "--target", "codex",
+      "--capabilities", "browser,screenshots",
+      "--json",
+    ]);
+    const prepared = JSON.parse(stdout) as {
+      status: string;
+      run: { routerRunId: string; runtimeRunId: string; readRevision: number };
+    };
+    assert.equal(prepared.status, "prepared");
+
+    let readRevision = prepared.run.readRevision;
+    for (let guard = 0; guard < 32; guard += 1) {
+      const readOut = JSON.parse((await cli([
+        "task:read", root,
+        "--router-run", prepared.run.routerRunId,
+        "--expected-read-revision", String(readRevision),
+        "--mandatory-next",
+        "--json",
+      ])).stdout) as { readRevision: number; readStatus: { runMandatoryReadsComplete: boolean } };
+      readRevision = readOut.readRevision;
+      if (readOut.readStatus.runMandatoryReadsComplete) break;
+    }
+
+    // The bridged reads must land in the runtime run as content-delivered records, core
+    // (universal) skills included; an unbridged read path leaves the run skills-selected forever.
+    const inspected = JSON.parse((await cli([
+      "run:inspect", root, "--run", prepared.run.runtimeRunId, "--json",
+    ])).stdout) as { run: SkillRun; notices: string[] };
+    assert.equal(inspected.run.state, "skills-read");
+    const coreReads = inspected.run.skillReads.filter((read) => read.skillId.startsWith("core."));
+    assert.ok(coreReads.length > 0, "expected content-delivered reads for the core universal skills");
+    assert.ok(inspected.run.skillReads.every((read) => read.source === "content-delivered"));
+
+    const begun = JSON.parse((await cli([
+      "run:begin", root, "--run", prepared.run.runtimeRunId, "--json",
+    ])).stdout) as { run: SkillRun };
+    assert.equal(begun.run.state, "running");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
