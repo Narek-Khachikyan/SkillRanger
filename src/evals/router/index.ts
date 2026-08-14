@@ -5,17 +5,16 @@ import "../../domains/bundled.ts";
 import { defaultDomainsRoot, defaultRegistryRoot } from "../../paths.ts";
 import { loadLocalRegistry } from "../../registry/index.ts";
 import { scanProject } from "../../scanner/index.ts";
-import { composeSkillSet, type RouterSkillMetadata } from "../../router/composer.ts";
-import { createRetrievalBoundary } from "../../router/retrieval-boundary.ts";
-import { analyzeTask, type TaskAnalyzerDomainMetadata, type TaskAnalyzerSkillMetadata } from "../../router/analyzer.ts";
+import { defaultRouterLimits, type RouterSkillMetadata } from "../../router/composer.ts";
+import type { TaskAnalyzerDomainMetadata } from "../../router/analyzer.ts";
 import { parseTrigger } from "../../router/trigger.ts";
-import { resolveDomains } from "../../router/resolver.ts";
 import { loadRouterFixturePacks, loadRouterGoldenCases, type RouterFixturePack, type RouterGoldenCase } from "../../router/fixtures.ts";
 import { buildRoutingContext } from "../../router/context.ts";
 import { canonicalSkillRoutingDocument } from "../../router/metadata.ts";
 import { buildRouterSkillMetadata } from "../../router/skill-metadata.ts";
 import { coreRoutingVocabulary } from "../../router/vocabulary/core.ts";
 import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "../../router/vocabulary/load.ts";
+import { runRoutingPipeline, type RoutingPipelineDecision } from "../../router/pipeline.ts";
 import { canonicalizeJson } from "../../router/store.ts";
 import type { RegistrySkill } from "../../types.ts";
 import { evaluateModelAssistedRouter } from "./model-assisted.ts";
@@ -126,131 +125,107 @@ const buildCaseInput = async (root: string, input: RouterGoldenCase, fixturePack
   return finalize(bundledPacks.map(domainMetadata), bundledSkills, project, false);
 };
 
+const statusFor = (status: RoutingPipelineDecision["outcome"]["status"]): string =>
+  status === "strict-requirements-unmet" ? "strict_requirements_unmet" : status;
+
 const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks: RouterFixturePack[]) => {
   const parsed = parseTrigger({ prompt: input.prompt, mode: "explicit" });
   if (!parsed.activated) return { status: parsed.reason, domainIds: [], primaryDomainId: undefined, selectedSkillCount: 0, selectedCompanionCount: 0, usefulCompanionCount: 0, instructionBytes: 0, privacyLeakageCount: 0, deterministic: true };
   const metadata = await buildCaseInput(root, input, fixturePacks, parsed.normalizedIntent);
-  const analyzerSkills = metadata.skills satisfies TaskAnalyzerSkillMetadata[];
-  const analysis = analyzeTask({ prompt: parsed.normalizedIntent, domains: metadata.domains, skills: analyzerSkills, fingerprint: metadata.fingerprint, routingContext: metadata.routingContext });
-  const replayAnalysis = analyzeTask({ prompt: parsed.normalizedIntent, domains: metadata.domains, skills: analyzerSkills, fingerprint: metadata.fingerprint, routingContext: metadata.routingContext });
-  const signalIds = [...new Set([
-    ...analysis.matchedSignals.map(({ kind, id }) => `${kind}:${id}`),
-    ...analysis.profile.evidence.filter(({ source }) => source === "prompt").map(({ kind, id }) => `${kind}:${id}`),
-    ...analysis.routingIntentTags.map((id) => `intent:${id}`),
-  ])];
-  const analysisDeterministic = canonicalizeJson(analysis) === canonicalizeJson(replayAnalysis);
-  if (analysis.profile.subtasks.length >= 2) return {
-    status: "decomposition_required",
-    domainIds: analysis.profile.subtasks.map(({ candidateDomainIds }) => candidateDomainIds[0]).filter((id): id is string => id !== undefined),
-    primaryDomainId: undefined,
-    selectedSkillCount: 0,
-    selectedCompanionCount: 0,
-    usefulCompanionCount: 0,
-    instructionBytes: 0,
-    privacyLeakageCount: 0,
-    deterministic: analysisDeterministic,
-    signalIds,
-    primarySkillId: undefined,
-    selectedCompanionIds: [],
-    selectedSkillIds: [],
-    primaryExclusionReasons: {},
-    decomposedGoals: analysis.profile.subtasks.map(({ normalizedGoal }) => normalizedGoal),
+  // Router evals enter through the same preloaded-metadata input contract as
+  // production: the pipeline decides and the eval is a second adapter over the
+  // routing decision, with no disk persistence. Replaying the whole decision
+  // (signals, outcome, warnings, selections, digests) replaces the per-stage
+  // replay checks of the hand-rolled orchestration.
+  const pipelineInput = {
+    trigger: parsed,
+    activation: { mode: "explicit" as const },
+    skills: metadata.skills,
+    domains: metadata.domains,
+    fingerprint: metadata.fingerprint,
+    routingContext: metadata.routingContext,
+    targetAgent: "codex",
+    strict: input.strict,
+    capabilities: input.capabilities,
+    routingDate: "2026-07-19",
+    limits: defaultRouterLimits,
   };
-  const resolution = resolveDomains({
-    profile: analysis.profile,
-    domains: metadata.domains,
-    skills: analyzerSkills,
-    fingerprint: metadata.fingerprint,
-    routingIntentTags: analysis.routingIntentTags,
-    routingContext: metadata.routingContext,
-    routingSignals: analysis.matchedSignals,
-  });
-  const replayResolution = resolveDomains({
-    profile: replayAnalysis.profile,
-    domains: metadata.domains,
-    skills: analyzerSkills,
-    fingerprint: metadata.fingerprint,
-    routingIntentTags: replayAnalysis.routingIntentTags,
-    routingContext: metadata.routingContext,
-    routingSignals: replayAnalysis.matchedSignals,
-  });
-  const resolutionDeterministic = analysisDeterministic && canonicalizeJson(resolution) === canonicalizeJson(replayResolution);
+  const decision = runRoutingPipeline(pipelineInput);
+  const replay = runRoutingPipeline(pipelineInput);
+  const deterministic = canonicalizeJson(decision) === canonicalizeJson(replay);
+  const outcome = decision.outcome;
+  const status = statusFor(outcome.status);
+  const expectedDomains = new Set(input.expected.domainIds);
+  const selected = outcome.status === "prepared" ? outcome.selections : undefined;
+  // Agent-context selections (core universal skills included) are always-on
+  // guidance, not companions; they never count toward companion usefulness.
+  const companions = selected ? [...selected.environment, ...selected.companions, ...selected.verification] : [];
+  const usefulCompanions = companions.filter(({ domains, reasons }) =>
+    domains.some((id) => expectedDomains.has(id)) || reasons.some((reason) => !reason.startsWith("domain-match:"))
+  );
+  const signalIds = [...new Set([
+    ...decision.signals.matchedSignals.map(({ kind, id }) => `${kind}:${id}`),
+    ...decision.taskProfile!.evidence.filter(({ source }) => source === "prompt").map(({ kind, id }) => `${kind}:${id}`),
+    ...decision.signals.routingIntentTags.map((id) => `intent:${id}`),
+  ])];
+  // An analysis-level decomposition decision (two or more subtasks) reports the
+  // per-subtask candidate domain; any other outcome reports the routed domain
+  // candidates. Clarification outcomes report the ambiguous domain ids.
+  const domainIds = outcome.status === "decomposition_required" && decision.taskProfile!.subtasks.length >= 2
+    ? decision.taskProfile!.subtasks.map(({ candidateDomainIds }) => candidateDomainIds[0]).filter((id): id is string => id !== undefined)
+    : outcome.status === "clarification_required"
+      ? decision.continuation.ambiguousDomainIds
+      : decision.domains.map(({ id }) => id);
+  const primaryDomainId = outcome.status === "prepared"
+    ? outcome.primaryDomain
+    : decision.domains.find(({ role }) => role === "primary")?.id;
+  const skillById = new Map(metadata.skills.map((skill) => [skill.id, skill]));
   const privacyCanaries = [
     ...(input.prompt.match(/SECRET_[A-Z0-9_]+/g) ?? []),
     ...(input.prompt.match(/https?:\/\/[^\s]+/g) ?? []).map((value) => value.replace(/[.,;!?]+$/, "")),
   ];
-  const privacyLeakageCount = (value: unknown) => {
-    const serialized = JSON.stringify(value);
-    return privacyCanaries.filter((canary) => serialized.includes(canary)).length;
-  };
-  const emptySelection = { signalIds, primarySkillId: undefined, selectedCompanionIds: [], selectedSkillIds: [], primaryExclusionReasons: {}, decomposedGoals: [] };
-  if (resolution.clarificationRequired) return { status: "clarification_required", domainIds: resolution.ambiguousDomainIds, primaryDomainId: undefined, selectedSkillCount: 0, selectedCompanionCount: 0, usefulCompanionCount: 0, instructionBytes: 0, privacyLeakageCount: privacyLeakageCount({ analysis, resolution }), deterministic: resolutionDeterministic, ...emptySelection };
-  if (!resolution.primaryDomainId) return { status: "no_matching_skills", domainIds: [], primaryDomainId: undefined, selectedSkillCount: 0, selectedCompanionCount: 0, usefulCompanionCount: 0, instructionBytes: 0, privacyLeakageCount: privacyLeakageCount({ analysis, resolution }), deterministic: resolutionDeterministic, ...emptySelection };
-  // Router evals build boundaries deterministically through the same production
-  // factory as prepare_task, so replays exercise the real seam: the boundary
-  // factory owns retrieval input construction, and both composition passes
-  // consume the same boundary.
-  const boundary = createRetrievalBoundary({
-    profile: analysis.profile,
-    requirements: analysis.requirements,
-    skills: metadata.skills,
-    fingerprint: metadata.fingerprint,
-    selectedDomainIds: resolution.candidates.map(({ id }) => id),
-    primaryDomainId: resolution.primaryDomainId,
-    targetAgent: "codex",
-    capabilities: input.capabilities,
-    strict: input.strict,
-    installedSkillIds: input.id === "strict-installed" ? ["backend.auth-implementation"] : [],
-    routingDate: "2026-07-19",
-    routingIntentTags: analysis.routingIntentTags,
-    routingContext: metadata.routingContext,
-    matchedSignals: analysis.matchedSignals,
-  });
-  const composed = composeSkillSet({
-    profile: analysis.profile,
-    requirements: analysis.requirements,
-    skills: metadata.skills,
-    fingerprint: metadata.fingerprint,
-    primaryDomainId: resolution.primaryDomainId,
-    capabilities: input.capabilities,
-    strict: input.strict,
-    installedSkillIds: input.id === "strict-installed" ? ["backend.auth-implementation"] : [],
-    routingContext: metadata.routingContext,
-    boundary,
-  });
-  const replay = composeSkillSet({
-    profile: analysis.profile, requirements: analysis.requirements, skills: metadata.skills, fingerprint: metadata.fingerprint,
-    primaryDomainId: resolution.primaryDomainId,
-    capabilities: input.capabilities, strict: input.strict,
-    installedSkillIds: input.id === "strict-installed" ? ["backend.auth-implementation"] : [],
-    routingContext: metadata.routingContext, boundary,
-  });
-  const selected = composed.status === "prepared" ? composed.composed.all : [];
-  // Agent-context selections (core universal skills included) are always-on
-  // guidance, not companions; they never count toward companion usefulness.
-  const companions = selected.filter(({ role }) => role !== "primary" && role !== "agent-context");
-  const expectedDomains = new Set(input.expected.domainIds);
-  const usefulCompanions = companions.filter(({ skill, reasons }) =>
-    skill.domains.some((id) => expectedDomains.has(id)) || reasons.some((reason) => !reason.startsWith("domain-match:"))
-  );
-  const primaryExclusionReasons = Object.fromEntries([...new Set(composed.rejections.map(({ skillId }) => skillId))].map((skillId) => [
+  const serialized = JSON.stringify(decision);
+  const privacyLeakageCount = privacyCanaries.filter((canary) => serialized.includes(canary)).length;
+  const primaryExclusionReasons = Object.fromEntries([...new Set(decision.rejections.map(({ skillId }) => skillId))].map((skillId) => [
     skillId,
-    composed.rejections.filter((rejection) => rejection.skillId === skillId).map(({ reason }) => reason),
+    decision.rejections.filter((rejection) => rejection.skillId === skillId).map(({ reason }) => reason),
   ]));
+  if (outcome.status !== "prepared") {
+    return {
+      status,
+      domainIds,
+      primaryDomainId,
+      selectedSkillCount: 0,
+      selectedCompanionCount: 0,
+      usefulCompanionCount: 0,
+      instructionBytes: 0,
+      privacyLeakageCount,
+      deterministic,
+      signalIds,
+      primarySkillId: undefined,
+      selectedCompanionIds: [],
+      selectedSkillIds: [],
+      primaryExclusionReasons,
+      decomposedGoals: outcome.status === "decomposition_required" && decision.taskProfile!.subtasks.length >= 2
+        ? decision.taskProfile!.subtasks.map(({ normalizedGoal }) => normalizedGoal)
+        : [],
+    };
+  }
+  const selectedCompanions = [...outcome.selections.environment, ...outcome.selections.companions, ...outcome.selections.verification];
   return {
-    status: composed.status,
-    domainIds: resolution.candidates.map(({ id }) => id),
-    primaryDomainId: resolution.primaryDomainId,
-    selectedSkillCount: selected.length,
-    selectedCompanionCount: companions.length,
+    status,
+    domainIds,
+    primaryDomainId,
+    selectedSkillCount: outcome.selectedSkillIds.length,
+    selectedCompanionCount: selectedCompanions.length,
     usefulCompanionCount: usefulCompanions.length,
-    instructionBytes: composed.status === "prepared" ? composed.composed.instructionBytes : 0,
-    privacyLeakageCount: privacyLeakageCount({ analysis, resolution, composed }),
-    deterministic: resolutionDeterministic && canonicalizeJson(composed) === canonicalizeJson(replay),
+    instructionBytes: outcome.selectedSkillIds.reduce((sum, skillId) => sum + (skillById.get(skillId)?.instructionBytes ?? 0), 0),
+    privacyLeakageCount,
+    deterministic,
     signalIds,
-    primarySkillId: selected.find(({ role }) => role === "primary")?.skill.id,
-    selectedCompanionIds: selected.filter(({ role }) => role === "companion").map(({ skill }) => skill.id),
-    selectedSkillIds: selected.map(({ skill }) => skill.id),
+    primarySkillId: outcome.selections.primary.skillId,
+    selectedCompanionIds: outcome.selections.companions.map(({ skillId }) => skillId),
+    selectedSkillIds: outcome.selectedSkillIds,
     primaryExclusionReasons,
     decomposedGoals: [],
   };

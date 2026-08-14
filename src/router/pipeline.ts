@@ -31,6 +31,7 @@ import {
   type ValidatedRoutingProposal,
 } from "./routing-proposal.ts";
 import { validateSemanticHints } from "./semantic-hints.ts";
+import type { MatchedRoutingSignal } from "./vocabulary/match.ts";
 import type {
   DomainCandidate,
   PreparedSelections,
@@ -111,6 +112,14 @@ export type RoutingPipelineDecision = {
   // semantic-recall-limited warning is added by the adapter during result
   // shaping, since it derives from the routing mode.
   warnings: string[];
+  // The analysis signal projection: the matched vocabulary signals and the
+  // canonical routing intent tags that produced the task profile. Adapters
+  // that assert recall (router evaluations) consume it without re-running
+  // analysis; task preparation ignores it.
+  signals: {
+    matchedSignals: MatchedRoutingSignal[];
+    routingIntentTags: string[];
+  };
   // Absent only for catalog_refresh_required outcomes, which carry no routed
   // task profile at all.
   taskProfile?: TaskProfile;
@@ -171,6 +180,7 @@ const decisionFor = (input: {
   profile?: TaskProfile;
   domains: DomainCandidate[];
   digests: RoutingPipelineDecision["digests"];
+  signals: RoutingPipelineDecision["signals"];
   routingProposal?: ValidatedRoutingProposal;
   continuation: RoutingPipelineDecision["continuation"];
   rejections: CandidateRejection[];
@@ -182,6 +192,7 @@ const decisionFor = (input: {
   ...(input.profile ? { taskProfile: input.profile } : {}),
   domains: input.domains,
   digests: input.digests,
+  signals: input.signals,
   ...(input.routingProposal ? { routingProposal: input.routingProposal.projection } : {}),
   continuation: input.continuation,
   rejections: input.rejections,
@@ -251,6 +262,10 @@ export const runRoutingPipeline = (input: RoutingPipelineInput): RoutingPipeline
     semanticHintsDigest: semanticHints.digest,
   };
   const mode: RoutingMode = routingProposal ? modelAssistedMode : limitedDeterministicFallbackMode;
+  const signals: RoutingPipelineDecision["signals"] = {
+    matchedSignals: analysis.matchedSignals,
+    routingIntentTags: analysis.routingIntentTags,
+  };
   let routingWarnings = [
     ...analysis.warnings,
     ...(routingProposal?.rejections.map(({ skillId, reasonCode }) =>
@@ -421,6 +436,7 @@ export const runRoutingPipeline = (input: RoutingPipelineInput): RoutingPipeline
       profile: analysis.profile,
       domains: resolution.candidates,
       digests,
+      signals,
       routingProposal,
       continuation: { ambiguousDomainIds: resolution.ambiguousDomainIds, nominationOrder, skillAmbiguityIds },
       rejections: [],
@@ -435,6 +451,7 @@ export const runRoutingPipeline = (input: RoutingPipelineInput): RoutingPipeline
       profile: analysis.profile,
       domains: resolution.candidates,
       digests,
+      signals,
       routingProposal,
       continuation: { ambiguousDomainIds: resolution.ambiguousDomainIds, nominationOrder, skillAmbiguityIds },
       rejections: [],
@@ -449,6 +466,7 @@ export const runRoutingPipeline = (input: RoutingPipelineInput): RoutingPipeline
       profile: analysis.profile,
       domains: resolution.candidates,
       digests,
+      signals,
       routingProposal,
       continuation: { ambiguousDomainIds: resolution.ambiguousDomainIds, nominationOrder, skillAmbiguityIds },
       rejections: [],
@@ -503,6 +521,7 @@ export const runRoutingPipeline = (input: RoutingPipelineInput): RoutingPipeline
     warnings: routingWarnings,
     profile: analysis.profile,
     digests,
+    signals,
     routingProposal,
     continuation,
     rejections: composed.rejections,
@@ -538,6 +557,7 @@ const refreshDecision = (refresh: RoutingProposalRefresh): RoutingPipelineDecisi
   warnings: [],
   domains: [],
   digests: { registryDigest: "", signalDigest: "", vocabularyDigest: "", semanticHintsDigest: "" },
+  signals: { matchedSignals: [], routingIntentTags: [] },
   continuation: { ambiguousDomainIds: [], nominationOrder: [], skillAmbiguityIds: [] },
   rejections: [],
 });

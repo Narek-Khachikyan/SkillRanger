@@ -1382,7 +1382,7 @@
       "terminal"
     ],
     "expected": {
-      "status": "decomposition_required",
+      "status": "clarification_required",
       "domainIds": [
         "frontend",
         "mobile"

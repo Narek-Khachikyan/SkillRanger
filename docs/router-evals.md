@@ -1,9 +1,13 @@
 # Universal Router Evaluations
 
 `npm run eval:router` executes the checked-in deterministic corpus and the captured-proposal
-benchmark through the trigger parser, analyzer, domain resolver, candidate composer, and
-deterministic replay checks. SkillRanger never calls a model or the network while evaluating:
-model-assisted cases contain host-captured proposals as frozen JSON.
+benchmark as a second adapter over the routing pipeline: every case builds the same
+preloaded-metadata input contract as production (`prepare_task`) and consumes the routing
+decision returned by `runRoutingPipeline` directly, with no disk persistence. The harness never
+re-implements trigger parsing, analysis, resolution, retrieval, or composition, and it never
+persists runs. Deterministic replay re-runs the whole decision and compares it canonically.
+SkillRanger never calls a model or the network while evaluating: model-assisted cases contain
+host-captured proposals as frozen JSON.
 
 The report exposes `suites.shipped`, `suites.synthetic`, and the gated
 `suites.naturalLanguage` summary, plus `suites.modelAssisted`. The legacy
@@ -31,9 +35,9 @@ behavior, ambiguity, refresh, privacy, replay, and proposal-absent behavior.
 
 `evals/router/model-assisted.json` is a captured-host-proposal benchmark. Its cases cover implicit
 intents where vocabulary recovery matters, hard paraphrases, and indirect Russian paraphrases. The
-evaluator compares each proposal-backed result with deterministic fallback, records selected-skill
-count and instruction byte cost, and checks malformed/invalid/absent proposals without persisting
-rejected runs.
+evaluator compares each proposal-backed decision with the deterministic fallback decision, records
+selected-skill count and instruction byte cost, and checks malformed/invalid/absent proposals —
+all in memory, since evaluations never persist runs.
 
 Cases may declare `expected.roleAssignments` with the expected primary, companion, and verification
 skill IDs. When declared, the evaluator computes role-specific recall and full-set recall over the
