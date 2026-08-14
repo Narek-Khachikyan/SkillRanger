@@ -114,7 +114,7 @@ graph TD
 | `mcp/tools.ts` | Tool aggregation and `callMcpTool` dispatch with argument validation |
 | `mcp/tools/*.ts` | The eight tool groups plus shared `types.ts` / `utils.ts` |
 | `mcp/router-context.ts` | The fixed, canonicalized project root for router tools |
-| `router/` | 28 modules; see [§7](#7-router-lifecycle) |
+| `router/` | 29 modules; see [§7](#7-router-lifecycle) |
 | `runtime/skill-run/` | Lifecycle v1 state machine, store, verification |
 | `runtime/strict/` | Strict v2 state machine, contracts, evidence, certification |
 | `runtime/run-lock.ts` | The file lock shared by every store |
@@ -153,6 +153,9 @@ Dependencies flow one way; no cycles.
 - `audit` → `registry`. `installers` → `audit` and `lockfile`.
 - `router` → `config` and `runtime` (creation and reads).
 - `router` and `runtime` are consumed by both surfaces (`src/mcp/tools/*`, `src/cli/*`).
+- The router-runtime coupling lives in one bridge module (`src/router/runtime-bridge.ts`): lifecycle
+  payload construction, runtime-store dispatch, and the mandatory-read bridge behind one small
+  `RouterRuntimeBridge` interface.
 
 Two deliberate exceptions worth knowing:
 
@@ -318,8 +321,13 @@ Ordered stages inside `prepareTask`:
 8. **Snapshot** — `createSkillSourceSnapshots` (`src/router/reader.ts`) pins package, root, file, and
    chunk checksums into a source inventory.
 9. **Runtime** — a strict run (`createPreparedStrictSkillRun`) or a lifecycle-v1 run
-   (`createSkillRun` + a `select-skills` reduction).
-10. **Persist** — `store.journaledCreate` writes the router sidecar and the runtime record atomically.
+   (`createSkillRun` + a `select-skills` reduction). The three router-runtime adapter sites —
+   lifecycle payload construction (with the recommendations shim's synthetic scores for lifecycle
+   policy), runtime-store dispatch, and the mandatory-read bridge — are colocated in the bridge
+   module (`src/router/runtime-bridge.ts`); `prepareTask` and the read surface consume them through
+   `createRouterRuntimeBridge` instead of building inline adapters.
+10. **Persist** — `store.journaledCreate` writes the router sidecar and the runtime record atomically
+    through the bridge's runtime-store dispatch.
 
 Result statuses: `prepared`, `clarification_required`, `decomposition_required`,
 `no_matching_skills`, `strict_requirements_unmet`, `context_budget_exceeded`. Only `prepared` writes
@@ -331,7 +339,8 @@ otherwise); requires reads in inventory order (`read-order-invalid` on a revisio
 enforces a separate byte budget for optional files. Replaying a `readRequestId` is idempotent. When a
 skill's mandatory reads complete, the reader bridges into the runtime — lifecycle v1 gets a
 `record-skill-read` event with `source: "content-delivered"`, strict v2 drains `readNextStrictChunk`
-until every chunk has a receipt.
+until every chunk has a receipt. The reader is constructed by the runtime bridge
+(`createRouterRuntimeBridge(...).createReader(...)`), which is the only site that builds it.
 
 Routing performs no network calls, no package installation, no child processes, and no application
 edits. Production flows use the bundled registry; the synthetic packs in `tests/fixtures/router-packs/`

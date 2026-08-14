@@ -8,7 +8,7 @@ Navigation-level layout and execution flows. Deep dive: [`docs/ARCHITECTURE.md`]
 | :--- | :--- |
 | `src/cli/` | CLI entry (`index.ts`), command schema (`commands.ts`), sub-handlers for task/runs/visual-eval/release |
 | `src/mcp/` | stdio JSON-RPC server, protocol, tool registry; `tools/` holds the tool groups |
-| `src/router/` | Universal task router: trigger, vocabulary, analyzer, resolver, composer, catalog, store, reader |
+| `src/router/` | Universal task router: trigger, vocabulary, analyzer, resolver, composer, catalog, store, reader, pipeline, runtime bridge |
 | `src/runtime/` | `skill-run/` = lifecycle v1, `strict/` = strict v2, plus shared `run-lock.ts`, `verification.ts` |
 | `src/registry/` | Loads and validates `registry/`; computes skill checksums |
 | `src/scanner/` | Project fingerprinting + pluggable signal providers |
@@ -64,8 +64,10 @@ lazy `import()` for the `mcp` command.
 - **MCP** — newline-delimited JSON-RPC 2.0 over stdio, protocol `2025-06-18`, no SDK.
   `src/mcp/server.ts` → `src/mcp/protocol.ts` → `callMcpTool` in `src/mcp/tools.ts`.
 - **Router** — `prepareTask` (`src/router/prepare.ts`): config → trigger → scan + packs + registry →
-  per-skill metadata → routing context → `analyzeTask` → `resolveDomains` → `composeSkillSet` →
-  source snapshots → runtime run → journaled write to `.skillranger/runs/router/`.
+  per-skill metadata → routing context → `runRoutingPipeline` (`src/router/pipeline.ts`) →
+  source snapshots → runtime run → journaled write to `.skillranger/runs/router/`. The runtime
+  adapters — lifecycle payload construction, runtime-store dispatch, and the mandatory-read bridge —
+  live in `src/router/runtime-bridge.ts`, consumed through `createRouterRuntimeBridge`.
 - **Runtime** — a prepared run is either lifecycle v1 (`src/runtime/skill-run/`) or strict v2
   (`src/runtime/strict/`). Skill instructions are then served in inventory order through
   `src/router/reader.ts`, which bridges each completed read into the runtime ledger.

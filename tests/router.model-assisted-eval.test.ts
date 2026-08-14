@@ -12,7 +12,8 @@ import {
   loadRoutingProposalContractFixtures,
 } from "../src/evals/router/model-assisted.ts";
 import { buildSkillCatalog, inspectSkillCatalog } from "../src/router/catalog.ts";
-import { createRouterReader, prepareTask } from "../src/router/prepare.ts";
+import { prepareTask } from "../src/router/prepare.ts";
+import { createRouterRuntimeBridge } from "../src/router/runtime-bridge.ts";
 import { RouterStore } from "../src/router/store.ts";
 import type { PrepareTaskResult, ReadRunSkillFileResult } from "../src/router/types.ts";
 import type { SkillRun } from "../src/runtime/skill-run/types.ts";
@@ -296,7 +297,7 @@ test("a captured proposal still follows the mandatory-read ledger", async () => 
     assert.equal(prepared.status, "prepared");
     if (prepared.status !== "prepared") return;
     const store = new RouterStore(root);
-    const reader = createRouterReader(root, path.resolve("registry"), store);
+    const reader = createRouterRuntimeBridge(root, path.resolve("registry")).createReader(store);
     let readRevision = 0;
     let lastRead: Awaited<ReturnType<typeof reader.read>> | undefined;
     for (let attempt = 0; attempt < prepared.requiredReads.length * 4 + 4; attempt += 1) {

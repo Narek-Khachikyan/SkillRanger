@@ -101,7 +101,9 @@ export {
   RouterStoreError,
   routerRecordDigest,
 } from "./store.ts";
-export { prepareTask, createRouterReader, createRouterRuntimeStore, deterministicRoutingKey, RouterPrepareError, routerAlgorithmVersion } from "./prepare.ts";
+export { prepareTask, deterministicRoutingKey, RouterPrepareError, routerAlgorithmVersion } from "./prepare.ts";
+export { createRouterRuntimeBridge } from "./runtime-bridge.ts";
+export type { LifecyclePayloadInput, RouterRuntimeBridge } from "./runtime-bridge.ts";
 export {
   RoutingPipelineError,
   runRoutingPipeline,

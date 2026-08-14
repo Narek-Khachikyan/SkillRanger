@@ -11,7 +11,8 @@ import { loadBundledRouterPacks } from "../src/domains/registry.ts";
 import { defaultDomainsRoot } from "../src/paths.ts";
 import { buildRoutingContext } from "../src/router/context.ts";
 import { canonicalSkillRoutingDocument } from "../src/router/metadata.ts";
-import { createRouterReader, prepareTask } from "../src/router/prepare.ts";
+import { prepareTask } from "../src/router/prepare.ts";
+import { createRouterRuntimeBridge } from "../src/router/runtime-bridge.ts";
 import { resolveDomains } from "../src/router/resolver.ts";
 import type { RouterSkillMetadata } from "../src/router/composer.ts";
 import { coreRoutingVocabulary } from "../src/router/vocabulary/core.ts";
@@ -41,7 +42,7 @@ const installPerformanceReview = async (root: string) => {
 };
 
 const readAllMandatory = async (root: string, routerRunId: string) => {
-  const reader = createRouterReader(root, registry);
+  const reader = createRouterRuntimeBridge(root, registry).createReader();
   const order: string[] = [];
   let revision = 0;
   for (let attempt = 0; attempt < 8; attempt += 1) {
