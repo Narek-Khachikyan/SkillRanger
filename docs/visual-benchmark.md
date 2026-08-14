@@ -1,6 +1,6 @@
 # Visual benchmark and capability calibration
 
-The frozen benchmark is published as the `0.5.0` frontend release contract. Confirm the checked-in suite, its eight briefs, and deterministic example assets before running external candidates:
+The frozen benchmark is published as the `0.5.1` frontend release contract. Confirm the checked-in suite, its eight briefs, and deterministic example assets before running external candidates:
 
 ```bash
 npm run release:validate

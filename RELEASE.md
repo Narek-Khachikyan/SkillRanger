@@ -2,6 +2,10 @@
 
 This checklist covers the current public beta. It verifies the npx/npm UX, compiled npm binaries, source-run CLI, MCP server, Universal Prompt Router, bundled registry, audit gates, frontend and router eval suites, and package hygiene before handing the beta to another user or publishing a tarball.
 
+0.5.1 is a patch release. The router's runtime adapters are consolidated into one bridge module (`src/router/runtime-bridge.ts`): lifecycle payload construction, the runtime-store dispatch between the lifecycle-v1 and strict-v2 stores, and the mandatory-read bridge now live in a single place. The routing pipeline itself is extracted into `src/router/pipeline.ts`, router skill metadata unifies behind one canonical factory, and the router evaluations migrate onto the same pipeline consumed by production routing. CLI `task:read` now records completed mandatory reads into the runtime run through the shared bridged reader with the same journaled semantics as MCP `read_run_skill_file`, so a lifecycle-v1 run gains a content-delivered read record and a strict-v2 run syncs its chunk receipts.
+
+Always-on core (universal) skills now carry enforced output contracts (ADR 0008): a skill manifest may declare `outputContract.requiredReportFields`, and lifecycle `verify_skill_run` blocks until the verification report's `universalContracts` section satisfies every required field declared by the run's selected core skills. The server is the sole author of the verification report file: `reportPath` must stay inside the project root (symlink-escape rejected), and the report (or a verification-blocked status record) is written atomically. For a lifecycle-v1 run whose policy has `verificationRequired`, verification is mandatory (ADR 0009): a run closed as implemented without recorded verification carries the `verification-required-unrecorded` notice on both `complete_skill_run` and `inspect_skill_run`, and the derived signal surfaces as an extra content block while the structured run payload stays exactly the persisted record.
+
 0.5.0 is the frontend design craft release. The package and frontend domain publish the same release identity over the six-family/18-rule contract, eight recipe packs, 80 deterministic worked-example assets, and the frozen visual benchmark pinned to `visual-benchmark-v1`.
 
 The bundled library ships the first **core (universal) skills** — always-on, domain-agnostic behavioral guidance (`core.proportional-engineering`, `core.universal-safety`) owned by a new minimal `core` domain pack and included in every SkillRanger-prepared run (strict and non-strict, both routing modes), delivered first in router-level mandatory read order and bounded by the new `maxCoreSkills` router config (default 3). Core skills are guidance-only: they are audited and catalogued like curated skills but carry no execution contract and are excluded from the strict runtime's contract/verification machinery, so they can never make a run unverifiable. They count toward the instruction-byte budget but not the total-skill cap or the agent-context slot, are protected from eviction, and reject conflicting task skills. See ADR 0006 (`docs/adr/0006-core-owned-always-on-guidance-skills.md`).
@@ -215,15 +219,17 @@ See `docs/mcp-host-config.md` for example host config and JSON-RPC messages.
 
 ## Manual Publish Steps
 
+Release ownership is split: **the agent prepares the version, commits it, and creates the tag and GitHub release; the user always runs the npm publish themselves.** The agent never publishes to npm.
+
 Create the tag and GitHub release first, then publish to npm. The tag must point at the exact commit whose contents will be published; if in doubt, verify checksum parity between the npm tarball and the tagged tree.
 
 From the release commit (after `release:check` passes):
 
 ```bash
-git tag -a v0.5.0 -m "SkillRanger v0.5.0"
-git push origin v0.5.0
-gh release create v0.5.0 \
-  --title "SkillRanger v0.5.0" \
+git tag -a v0.5.1 -m "SkillRanger v0.5.1"
+git push origin v0.5.1
+gh release create v0.5.1 \
+  --title "SkillRanger v0.5.1" \
   --notes-file /path/to/release-notes.md
 ```
 

@@ -35,7 +35,7 @@ test("domain manifest v1.2 release identity preserves v1.1 and v1.0 compatibilit
   const bundled = structuredClone(getDomainPack("frontend")?.manifest);
   assert.ok(bundled);
   assert.equal(bundled.schemaVersion, "1.2");
-  assert.equal(bundled.releaseVersion, "0.5.0");
+  assert.equal(bundled.releaseVersion, "0.5.1");
   const { releaseVersion: _releaseVersion, ...legacyBundled } = bundled;
   const { routingVocabulary: _routingVocabulary, releaseManifest: _releaseManifest, ...v10Artifacts } = legacyBundled.artifacts;
   const v10 = {

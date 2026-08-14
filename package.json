@@ -1,6 +1,6 @@
 {
   "name": "skillranger",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Author-curated agent skills for your stack — SkillRanger picks the right ones for your project, audits them, and installs them behind a reviewed plan.",
   "repository": {
     "type": "git",
