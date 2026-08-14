@@ -44,6 +44,8 @@ test("renders the exact SkillRanger universal router block", () => {
       "13. Do not claim `verified` unless SkillRanger runtime verification succeeds.\n" +
       "13a. A `run-blocked` error from `finalize_skill_run` means no verified result exists. Report its `userMessage` and `blockedSkills` verbatim; never describe such a run as passed, processed, or complete.\n" +
       "14. Always-on core (universal) skills carry enforced output contracts: verify_skill_run blocks until the report's universalContracts section satisfies every declared required field, and the server itself writes the canonical report file (or a verification-blocked status record) at reportPath, which must stay inside the project root. Never author report outcome files yourself and report verification status only from the persisted run via inspect_skill_run.\n" +
+      "14a. For a lifecycle-v1 run whose policy has `verificationRequired`, `verify_skill_run` is mandatory: record it with any allowed outcome, including `implemented-unverified`. A `verification-required-unrecorded` notice on `complete_skill_run` or `inspect_skill_run` means no verification is recorded, and a run closed without recorded verification is incomplete and must be reported as such.\n" +
+      "14b. Name an outcome only if it exists in the persisted run: the only source of outcome claims is `inspect_skill_run`. Narrating `implemented-unverified` (or any other state) without that confirmation is a violation.\n" +
       "<!-- SKILLRANGER_END -->",
   );
 });

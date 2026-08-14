@@ -30,10 +30,16 @@ plus a non-blocking server signal, not a transition change.
   run's policy has `verificationRequired`, calling `verify_skill_run` is a mandatory lifecycle step
   with any allowed outcome — including `implemented-unverified` — and a run closed without a
   recorded verification is incomplete and must be reported as such.
-- **Non-blocking server notice.** `complete_skill_run` on a run with `verificationRequired: true`
-  and no recorded verification returns a deterministic notice (`verification-required-unrecorded`)
-  on both the MCP and CLI surfaces. The persisted run schema and state machine are unchanged; the
-  notice does not block the `implemented` transition (see circularity above).
+- **Non-blocking server notice.** `complete_skill_run` on a run closed as `implemented` with
+  `verificationRequired: true` and no recorded verification returns a deterministic notice
+  (`verification-required-unrecorded`) on both the MCP and CLI surfaces. The same notice rides
+  `inspect_skill_run` until an outcome is recorded — MCP carries it as an extra content block while
+  the structured content stays exactly the persisted run (the narrative rule's source of truth must
+  not carry derived signals); CLI `run:inspect` returns it in the `notices` field. The notice is
+  scoped to the `implemented` state, the only state `record-verification` accepts: a `failed` or
+  `blocked` closure makes verification unreachable, so signalling there would be noise that teaches
+  hosts to ignore it. The persisted run schema and state machine are unchanged; the notice does not
+  block the `implemented` transition (see circularity above).
 - **Persisted-state narrative rule.** Guidance forbids naming any verification outcome that is not
   present in the persisted run: the only source of outcome claims is `inspect_skill_run`. Narrating
   `implemented-unverified` (or any state) without a recorded verification is a violation and must
@@ -43,8 +49,9 @@ plus a non-blocking server signal, not a transition change.
 
 ## Consequences
 
-- `complete_skill_run` gains a notice field in its result envelope without changing the run schema;
-  MCP/CLI parity tests cover it.
+- `complete_skill_run` and CLI `run:inspect` gain a notice field in their result envelopes without
+  changing the run schema; MCP `inspect_skill_run` keeps the bare persisted run as structured
+  content and carries the notice as an extra text block. MCP/CLI parity tests cover both surfaces.
 - Managed guidance and tool descriptions change; the AGENTS.md block snapshot test is updated.
 - Regression tests cover the notice (verification-required + unrecorded), its absence (verification
   recorded), and parity.

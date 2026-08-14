@@ -381,12 +381,12 @@ test("proposal-backed preparation preserves lifecycle evidence gates", async () 
     assert.equal(running.state, "running");
     await mkdir(path.join(root, "artifacts"), { recursive: true });
     await writeFile(path.join(root, "artifacts", "result.json"), "ok\n");
-    const implemented = structured<SkillRun>(await callMcpTool("complete_skill_run", {
+    const implemented = structured<{ run: SkillRun }>(await callMcpTool("complete_skill_run", {
       projectRoot: root,
       runId: prepared.run.runtimeRunId,
       status: "implemented",
       artifacts: [{ kind: "result", path: "artifacts/result.json", description: "Accessibility fixes" }],
-    }));
+    })).run;
     const coreContracts = (implemented.policy.artifacts as { coreOutputContracts?: Record<string, string[]> } | undefined)?.coreOutputContracts ?? {};
     const universalContracts: Record<string, Record<string, string[]>> = {};
     for (const [skillId, fields] of Object.entries(coreContracts)) {

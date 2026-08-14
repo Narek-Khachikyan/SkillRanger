@@ -7,8 +7,10 @@ import {
   recordSkillRead,
   resolveSkillRunClarifications,
   SkillRunError,
+  skillRunNoticeText,
   SkillRunStore,
   startSkillRunExecution,
+  verificationNoticeFor,
   verifySkillRun,
   type SkillRun,
   type SkillRunArtifact,
@@ -253,11 +255,22 @@ const completeRun: McpToolHandler = async (args) => {
       argument: "status",
     });
   }
-  return runResult(await completeSkillRun(
+  const completed = await completeSkillRun(
     new SkillRunStore(asProjectRoot(args.projectRoot)),
     requireString(args.runId, "runId"),
     { status, artifacts: asArtifacts(args.artifacts) },
-  ));
+  );
+  const result = runResult(completed.run);
+  return {
+    ...result,
+    structuredContent: { run: completed.run, notices: completed.notices },
+    ...(completed.notices.length === 0 ? {} : {
+      content: [
+        ...result.content,
+        { type: "text" as const, text: completed.notices.map((notice) => skillRunNoticeText[notice]).join(" ") },
+      ],
+    }),
+  };
 };
 
 const verifyRun: McpToolHandler = async (args) => runResult(await verifySkillRun(
@@ -279,9 +292,18 @@ const inspectRun: McpToolHandler = async (args) => {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") throw new McpToolError("run-not-found", `Skill run not found: ${runId}.`);
     throw new McpToolError("run-integrity", `Skill run ${runId} is not valid persisted JSON.`);
   }
-  return persisted.schemaVersion === "2.0"
-    ? strictRunResult(await new StrictSkillRunStore(projectRoot).read(runId))
-    : runResult(await new SkillRunStore(projectRoot).read(runId));
+  if (persisted.schemaVersion === "2.0") {
+    return strictRunResult(await new StrictSkillRunStore(projectRoot).read(runId));
+  }
+  const run = await new SkillRunStore(projectRoot).read(runId);
+  const result = runResult(run);
+  const notice = verificationNoticeFor(run);
+  // The structured content stays exactly the persisted run: it is the source of truth outcome
+  // claims are checked against, so a derived signal must never ride inside it. The notice goes
+  // out as an extra content block, mirroring complete_skill_run's text surfacing.
+  return notice === undefined
+    ? result
+    : { ...result, content: [...result.content, { type: "text" as const, text: skillRunNoticeText[notice] }] };
 };
 
 const runIdProperties = {
@@ -381,7 +403,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.runStateWrite,
     name: "complete_skill_run",
     title: "Complete Skill Run",
-    description: "Lifecycle-v1 only. Complete execution with a lifecycle status and JSON-native artifacts. A strict-v2 run is rejected; use complete_skill_step and finalize_skill_run instead.",
+    description: "Lifecycle-v1 only. Complete execution with a lifecycle status and JSON-native artifacts. When the run's policy has verificationRequired, verify_skill_run is mandatory: a run closed as implemented without recorded verification carries the verification-required-unrecorded notice here and on inspect_skill_run until an outcome is recorded, and a run closed without recorded verification is incomplete. Name outcomes only from the persisted run via inspect_skill_run. A strict-v2 run is rejected; use complete_skill_step and finalize_skill_run instead.",
     inputSchema: {
       type: "object",
       properties: {
@@ -397,7 +419,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.runStateAndContainedWrite,
     name: "verify_skill_run",
     title: "Verify Skill Run",
-    description: "Lifecycle-v1 only. Record a JSON-native verification report for an implemented lifecycle-v1 run. A verified outcome requires real project-contained evidence, mandatory skill content delivered by the SkillRanger router, and satisfied always-on guidance output contracts: the report's universalContracts section must supply every required field declared by the run's core (universal) skills or verification is blocked. reportPath must stay inside the project root; the server writes the canonical report file there on success and a verification-blocked status record on block, so never author report outcome files yourself. A strict-v2 run is rejected; use verify_skill instead.",
+    description: "Lifecycle-v1 only. Record a JSON-native verification report for an implemented lifecycle-v1 run. Mandatory when the run's policy has verificationRequired: record any allowed outcome, including implemented-unverified, or report the run as incomplete. A verified outcome requires real project-contained evidence, mandatory skill content delivered by the SkillRanger router, and satisfied always-on guidance output contracts: the report's universalContracts section must supply every required field declared by the run's core (universal) skills or verification is blocked. reportPath must stay inside the project root; the server writes the canonical report file there on success and a verification-blocked status record on block, so never author report outcome files yourself. A strict-v2 run is rejected; use verify_skill instead.",
     inputSchema: {
       type: "object",
       properties: {
@@ -413,7 +435,7 @@ export const runToolDefinitions: McpToolDefinition[] = [
     ...mcpToolEffects.readOnly,
     name: "inspect_skill_run",
     title: "Inspect Skill Run",
-    description: "Read the current persisted skill run state. Accepts both lifecycle-v1 and strict-v2 runs.",
+    description: "Read the current persisted skill run state. Accepts both lifecycle-v1 and strict-v2 runs. The structured content is exactly the persisted run; when a lifecycle-v1 run requires verification and none is recorded, the response content also carries the verification-required-unrecorded notice.",
     inputSchema: {
       type: "object",
       properties: runIdProperties,

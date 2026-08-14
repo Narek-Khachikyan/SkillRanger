@@ -16,9 +16,11 @@ import {
   recordSkillContentDelivered,
   recordSkillRead,
   resolveSkillRunClarifications,
+  skillRunNoticeText,
   startSkillRun,
   startSkillRunExecution,
   validateVerificationReportForRun,
+  verificationNoticeFor,
   verifySkillRun,
   reduceSkillRun,
   type CreateSkillRunInput,
@@ -481,7 +483,9 @@ test("store-backed lifecycle hashes intent and canonical verification before per
   await Promise.all(fixtureSkills.map((skill) => recordSkillContentDelivered(store, run.runId, { skillId: skill.skillId, checksum: skill.checksum })));
   run = await resolveSkillRunClarifications(store, run.runId, { answers: fixtureAnswers, declinedFields: [], assumptions: [] });
   run = await startSkillRunExecution(store, run.runId);
-  run = await completeSkillRun(store, run.runId, { status: "implemented", artifacts: [] });
+  const completed = await completeSkillRun(store, run.runId, { status: "implemented", artifacts: [] });
+  assert.deepEqual(completed.notices, ["verification-required-unrecorded"]);
+  run = completed.run;
   run = await verifySkillRun(store, run.runId, { reportPath: "report.json", report: fixtureReport });
   assert.equal(run.state, "verified");
   assert.equal(run.verification?.reportSha256, `sha256:${createHash("sha256").update(canonicalizeVerificationReport(fixtureReport), "utf8").digest("hex")}`);
@@ -491,6 +495,68 @@ test("store-backed lifecycle hashes intent and canonical verification before per
     sha256: `sha256:${createHash("sha256").update("x").digest("hex")}`,
   }]);
   assert.deepEqual(JSON.parse(await readFile(path.join(projectRoot, ".skillranger/runs", `${run.runId}.json`), "utf8")), run);
+});
+
+test("completeSkillRun emits no notice when verification is not required", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  let run = await startSkillRun(store, {
+    runId: fixtureInput.runId,
+    domain: fixtureInput.domain,
+    targetAgent: fixtureInput.targetAgent,
+    locale: fixtureInput.locale,
+    rawIntent: " redesign the landing ",
+    normalizedGoal: fixtureInput.intent.normalizedGoal,
+    storeRawIntent: false,
+    policy: { ...fixtureInput.policy, verificationRequired: false },
+    selectedSkills: fixtureSkills,
+    now: fixtureInput.now,
+  });
+  await Promise.all(fixtureSkills.map((skill) => recordSkillRead(store, run.runId, { skillId: skill.skillId, checksum: skill.checksum })));
+  run = await resolveSkillRunClarifications(store, run.runId, { answers: fixtureAnswers, declinedFields: [], assumptions: [] });
+  run = await startSkillRunExecution(store, run.runId);
+  const completed = await completeSkillRun(store, run.runId, { status: "implemented", artifacts: [] });
+  assert.deepEqual(completed.notices, []);
+  assert.equal(completed.run.state, "implemented");
+});
+
+test("verificationNoticeFor fires only while verification is recordable: the implemented state", () => {
+  // A failed or blocked closure makes verification unreachable, so the notice must not fire there.
+  const failed = reduceSkillRun(runningRun, { type: "complete-execution", status: "failed", artifacts: [] });
+  const blocked = reduceSkillRun(runningRun, { type: "complete-execution", status: "blocked", artifacts: [] });
+  assert.equal(failed.policy.verificationRequired, true);
+  assert.equal(verificationNoticeFor(failed), undefined, "failed");
+  assert.equal(verificationNoticeFor(blocked), undefined, "blocked");
+  const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
+  assert.equal(verificationNoticeFor(implemented), "verification-required-unrecorded");
+});
+
+test("verificationNoticeFor emits no notice once verification is recorded for any outcome", () => {
+  const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
+  const delivered = { ...implemented, skillReads: implemented.skillReads.map((read) => ({ ...read, source: "content-delivered" as const })) };
+  const reportSha256 = `sha256:${createHash("sha256").update(canonicalizeVerificationReport(fixtureReport), "utf8").digest("hex")}`;
+  const outcomes: VerificationReport["outcome"][] = ["verified", "implemented-unverified", "failed", "blocked"];
+  for (const outcome of outcomes) {
+    const run = reduceSkillRun(delivered, {
+      type: "record-verification",
+      reportPath: "report.json",
+      reportSha256,
+      report: { ...fixtureReport, outcome },
+      ...(outcome === "verified" ? { evidenceSnapshots: [fixtureEvidenceSnapshot] } : {}),
+    });
+    assert.equal(run.state, outcome);
+    assert.notEqual(run.verification, undefined);
+    assert.equal(verificationNoticeFor(run), undefined, outcome);
+  }
+});
+
+test("the verification-required-unrecorded notice text carries the mandatory-verify and narrative obligations", () => {
+  const text = skillRunNoticeText["verification-required-unrecorded"];
+  assert.match(text, /VERIFICATION-REQUIRED-UNRECORDED/);
+  assert.match(text, /verify_skill_run/);
+  assert.match(text, /implemented-unverified/);
+  assert.match(text, /inspect_skill_run/);
+  assert.match(text, /incomplete/);
 });
 
 test("verified lifecycle rejects missing project evidence", async () => {

@@ -6,12 +6,15 @@ import {
   recordSkillRead,
   resolveSkillRunClarifications,
   SkillRunError,
+  skillRunNoticeText,
   SkillRunStore,
   startSkillRunExecution,
+  verificationNoticeFor,
   verifySkillRun,
   type SkillRun,
   type SkillRunArtifact,
   type SkillRunErrorCode,
+  type SkillRunNotice,
 } from "../runtime/skill-run/index.ts";
 import type { VerificationReport } from "../runtime/types.ts";
 import {
@@ -111,12 +114,17 @@ const parseArtifacts = (value: string | boolean | undefined): SkillRunArtifact[]
   });
 };
 
-type RunCommandResult = SkillRun | SkillRunV2 | { run: SkillRunV2; chunk: SkillRunV2["skillLedgers"][number]["contentChunks"][number] };
+type RunCommandResult = SkillRun | SkillRunV2 | { run: SkillRunV2; chunk: SkillRunV2["skillLedgers"][number]["contentChunks"][number] } | { run: SkillRun; notices: SkillRunNotice[] };
 
 const printRun = (result: RunCommandResult, json: boolean) => {
   const run = "run" in result ? result.run : result;
   if (json) console.log(JSON.stringify({ ok: true, ...( "run" in result ? result : { run }) }, null, 2));
-  else console.log(`${run.runId}: ${run.state}`);
+  else {
+    console.log(`${run.runId}: ${run.state}`);
+    if ("notices" in result) {
+      for (const notice of result.notices) console.log(`Notice: ${skillRunNoticeText[notice]}`);
+    }
+  }
 };
 
 const printError = (error: SkillRunError | StrictSkillRunError, json: boolean) => {
@@ -185,7 +193,14 @@ const executeRunCommand = async (input: RunCliInput): Promise<RunCommandResult> 
       throw new SkillRunError("run-integrity", `Could not read skill run at ${persistedPath}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  if (command === "run:inspect") return persisted?.schemaVersion === "2.0" ? strictStore.read(runId) : store.read(runId);
+  if (command === "run:inspect") {
+    if (persisted?.schemaVersion === "2.0") return strictStore.read(runId);
+    const run = await store.read(runId);
+    const notice = verificationNoticeFor(run);
+    // MCP/CLI parity: the derived notice surfaces on inspect exactly like on run:complete, while
+    // the run payload itself stays precisely the persisted record.
+    return { run, notices: notice === undefined ? [] : [notice] };
+  }
   if (command === "run:read-next") {
     const skillId = flag(input.flags, "skill");
     let chunk: SkillRunV2["skillLedgers"][number]["contentChunks"][number] | undefined;

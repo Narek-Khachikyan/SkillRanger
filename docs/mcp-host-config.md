@@ -120,7 +120,7 @@ These tools use host-managed mutation approval and update the persisted run JSON
 - `record_skill_read` records checksum attestation only; standalone attestation cannot produce `verified`.
 - `resolve_skill_run_clarifications` resolves required clarifications with JSON-native answers, declines, and assumptions.
 - `begin_skill_run_execution` transitions a prepared skill run into execution.
-- `complete_skill_run` records an execution status and JSON-native artifacts.
+- `complete_skill_run` records an execution status and JSON-native artifacts. When the run's policy has `verificationRequired`, the run closed as `implemented`, and no verification is recorded, the result envelope carries the `verification-required-unrecorded` notice (`structuredContent: {run, notices}` plus a notice text block); the notice is non-blocking and the persisted run schema is unchanged. `verify_skill_run` is then mandatory with any allowed outcome, including `implemented-unverified`. The same notice rides `inspect_skill_run` content until an outcome is recorded; inspect's structured content stays exactly the persisted run.
 - `verify_skill_run` records a JSON-native verification report for an implemented skill run.
 - `read_next_skill_chunk` reads the next strict-skill content chunk and writes persisted read progress, despite its name.
 - `begin_skill_step` starts a strict v2 skill step in the persisted run.

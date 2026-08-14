@@ -13,7 +13,7 @@ const execFileAsync = promisify(execFile);
 
 const runCli = async (...args: string[]) => {
   const { stdout } = await execFileAsync(process.execPath, ["src/cli/index.ts", ...args]);
-  return JSON.parse(stdout) as { ok: true; run: SkillRun };
+  return JSON.parse(stdout) as { ok: true; run: SkillRun; notices?: string[] };
 };
 
 const passedReport = (outcome: VerificationReport["outcome"] = "verified"): VerificationReport => ({
@@ -154,7 +154,7 @@ test("CLI completes and verifies a run while storing raw intent only by opt-in",
 
   current = (await runCli("run:begin", projectRoot, "--run", current.runId, "--json")).run;
   assert.equal(current.state, "running");
-  current = (await runCli(
+  const completed = await runCli(
     "run:complete",
     projectRoot,
     "--run",
@@ -164,12 +164,20 @@ test("CLI completes and verifies a run while storing raw intent only by opt-in",
     "--artifacts",
     "browser-screenshot=artifacts/desktop.png,build-log=artifacts/build.log",
     "--json",
-  )).run;
+  );
+  // ADR 0009: this run's policy requires verification, so closing it without a recorded
+  // verification carries the deterministic notice.
+  assert.equal(current.policy.verificationRequired, true);
+  assert.deepEqual(completed.notices, ["verification-required-unrecorded"]);
+  current = completed.run;
   assert.equal(current.state, "implemented");
   assert.deepEqual(current.artifacts.map(({ kind, path: artifactPath }) => ({ kind, path: artifactPath })), [
     { kind: "browser-screenshot", path: "artifacts/desktop.png" },
     { kind: "build-log", path: "artifacts/build.log" },
   ]);
+  // The unrecorded-verification gap also surfaces on inspect until verification is recorded.
+  const unrecordedInspect = await runCli("run:inspect", projectRoot, "--run", current.runId, "--json");
+  assert.deepEqual(unrecordedInspect.notices, ["verification-required-unrecorded"]);
 
   const report = passedReport("implemented-unverified");
   await writeJson(verificationPath, report);
@@ -189,6 +197,7 @@ test("CLI completes and verifies a run while storing raw intent only by opt-in",
   );
   const inspected = await runCli("run:inspect", projectRoot, "--run", current.runId, "--json");
   assert.deepEqual(inspected.run, current);
+  assert.deepEqual(inspected.notices, []);
 
   await writeJson(briefPath, {
     schemaVersion: "1.0",
@@ -225,6 +234,56 @@ test("CLI completes and verifies a run while storing raw intent only by opt-in",
   );
   assert.equal(optedIn.run.intent.raw, "Сделай редизайн лендинга и используй скиллы");
   assert.equal(optedIn.run.clarification.status, "not-required");
+});
+
+test("CLI prints the verification-required-unrecorded notice in human output", async () => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-cli-run-notice-"));
+  const projectRoot = path.join(tmpRoot, "project");
+  const briefPath = path.join(tmpRoot, "brief.json");
+  await cp("fixtures/next-react-ts", projectRoot, { recursive: true });
+  await writeJson(briefPath, {
+    schemaVersion: "1.0",
+    product: {
+      domain: "developer tooling",
+      primaryUserOrActor: "Skill author",
+      primaryTask: "Review lifecycle state",
+      contentTypes: [],
+      usageFrequency: "frequent",
+      stakes: [],
+    },
+    surface: {
+      type: "landing page",
+      primaryAction: "Start a verified run",
+      supportedViewports: [390, 1440],
+      requiredStates: ["loading", "empty", "error", "success"],
+    },
+    direction: { requestedTone: [], antiGoals: [], existingDirection: "existing" },
+    evidence: { observed: [], inferred: [], assumed: [], unknown: [] },
+  });
+
+  let current = (await runCli(
+    "run:start", projectRoot,
+    "--target", "opencode",
+    "--domain", "frontend",
+    "--intent", "Сделай редизайн лендинга и используй скиллы",
+    "--brief", briefPath,
+    "--json",
+  )).run;
+  for (const selected of current.selectedSkills) {
+    current = (await runCli(
+      "run:record-read", projectRoot, "--run", current.runId, "--skill", selected.skillId, "--json",
+    )).run;
+  }
+  assert.equal(current.clarification.status, "not-required");
+  current = (await runCli("run:begin", projectRoot, "--run", current.runId, "--json")).run;
+
+  const { stdout } = await execFileAsync(process.execPath, [
+    "src/cli/index.ts", "run:complete", projectRoot, "--run", current.runId, "--status", "implemented",
+  ]);
+  assert.match(stdout, new RegExp(`${current.runId}: implemented`));
+  assert.match(stdout, /Notice: VERIFICATION-REQUIRED-UNRECORDED/);
+  assert.match(stdout, /verify_skill_run/);
+  assert.match(stdout, /inspect_skill_run/);
 });
 
 test("CLI rejects verification reports whose evidence, domain, gates, or hard findings are inconsistent", async () => {

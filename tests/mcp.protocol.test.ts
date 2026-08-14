@@ -59,6 +59,10 @@ test("MCP protocol initializes with tool capability", async () => {
     "verify_visual_result",
     "inspect_skill_run",
     "Never report that SkillRanger or strict visual verification passed unless the persisted run is verified",
+    "`verify_skill_run` is mandatory",
+    "verification-required-unrecorded",
+    "Name an outcome only if it exists in the persisted run",
+    "only source of outcome claims is `inspect_skill_run`",
   ]) {
     assert.ok(instructions.includes(requiredInstruction), requiredInstruction);
   }
@@ -85,6 +89,20 @@ test("lifecycle-v1 transition tools are labelled as incompatible with a strict-v
     assert.match(byName.get(tool) ?? "", /strict-v2 run is rejected/, tool);
   }
   assert.match(byName.get("inspect_skill_run") ?? "", /both lifecycle-v1 and strict-v2/);
+  assert.match(byName.get("inspect_skill_run") ?? "", /verification-required-unrecorded/);
+});
+
+test("lifecycle-v1 complete and verify descriptions carry the mandatory-verify and narrative obligations", async () => {
+  const listed = await handleJsonRpcRequest({ jsonrpc: "2.0", id: "verification-guidance", method: "tools/list", params: {} });
+  const tools = (listed?.result as { tools: Array<{ name: string; description: string }> }).tools;
+  const complete = tools.find(({ name }) => name === "complete_skill_run")?.description ?? "";
+  const verify = tools.find(({ name }) => name === "verify_skill_run")?.description ?? "";
+  for (const phrase of ["verificationRequired", "verification-required-unrecorded", "incomplete", "inspect_skill_run"]) {
+    assert.ok(complete.includes(phrase), `complete_skill_run: ${phrase}`);
+  }
+  for (const phrase of ["verificationRequired", "implemented-unverified", "Mandatory", "incomplete"]) {
+    assert.ok(verify.includes(phrase), `verify_skill_run: ${phrase}`);
+  }
 });
 
 test("MCP protocol ignores notifications", async () => {

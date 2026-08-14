@@ -4,7 +4,7 @@ import path from "node:path";
 import type { VerificationReport } from "../types.ts";
 import { createSkillRun, reduceSkillRun } from "./reducer.ts";
 import { ContainedFileReadError, readContainedFile } from "../strict/contained-file.ts";
-import { SkillRunError, type CreateSkillRunInput, type SkillRunArtifact, type SkillRunPolicyDecision, type SkillRunSkill, type SkillRunLocale, type VerifiedEvidenceSnapshot } from "./types.ts";
+import { SkillRunError, type CreateSkillRunInput, type SkillRun, type SkillRunArtifact, type SkillRunPolicyDecision, type SkillRunSkill, type SkillRunLocale, type VerifiedEvidenceSnapshot } from "./types.ts";
 import type { SkillRunStore } from "./store.ts";
 import { canonicalizeVerificationReport, validateVerificationReportForRun } from "./verification.ts";
 
@@ -62,11 +62,31 @@ export const startSkillRunExecution = (store: SkillRunStore, runId: string) => (
   store.update(runId, (run) => reduceSkillRun(run, { type: "start-execution" }))
 );
 
-export const completeSkillRun = (
+export type SkillRunNotice = "verification-required-unrecorded";
+
+export const skillRunNoticeText: Record<SkillRunNotice, string> = {
+  "verification-required-unrecorded":
+    "VERIFICATION-REQUIRED-UNRECORDED: this run's policy requires verification and none is recorded. Record it now with verify_skill_run using any allowed outcome (including implemented-unverified). A run closed without recorded verification is incomplete and must be reported as such; name outcomes only from the persisted run via inspect_skill_run.",
+};
+
+// The notice fires only while verification is both required and recordable: the run must sit in
+// the implemented state (the only state record-verification accepts). A failed or blocked closure
+// makes verification unreachable, so signalling there would be noise that teaches hosts to ignore it.
+export const verificationNoticeFor = (run: SkillRun): SkillRunNotice | undefined => (
+  run.state === "implemented" && run.policy.verificationRequired && run.verification === undefined
+    ? "verification-required-unrecorded"
+    : undefined
+);
+
+export const completeSkillRun = async (
   store: SkillRunStore,
   runId: string,
   input: { status: "implemented" | "failed" | "blocked"; artifacts: SkillRunArtifact[] },
-) => store.update(runId, (run) => reduceSkillRun(run, { type: "complete-execution", ...input }));
+): Promise<{ run: SkillRun; notices: SkillRunNotice[] }> => {
+  const run = await store.update(runId, (current) => reduceSkillRun(current, { type: "complete-execution", ...input }));
+  const notice = verificationNoticeFor(run);
+  return { run, notices: notice === undefined ? [] : [notice] };
+};
 
 const isErrno = (error: unknown, code: string): error is NodeJS.ErrnoException => (
   error instanceof Error && "code" in error && error.code === code
