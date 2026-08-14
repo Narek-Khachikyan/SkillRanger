@@ -1,15 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { lstat, readFile, realpath } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { loadRouterConfig, type RouterConfig } from "../config/index.ts";
 import { agents } from "../installers/agents.ts";
-import { getDomainPack, loadBundledRouterPacks, resolveDomainPackForSkill, type BundledRouterPack } from "../domains/registry.ts";
+import { getDomainPack, loadBundledRouterPacks, type BundledRouterPack } from "../domains/registry.ts";
 import "../domains/bundled.ts";
-import { auditSkill } from "../audit/index.ts";
-import { readLockfile } from "../lockfile/index.ts";
 import { defaultDomainsRoot } from "../paths.ts";
 import { loadLocalRegistry } from "../registry/index.ts";
-import type { ProjectFingerprint, Recommendation, RegistrySkill } from "../types.ts";
+import type { InstalledSkill, ProjectFingerprint, Recommendation, RegistrySkill } from "../types.ts";
 import { scanProject } from "../scanner/index.ts";
 import { loadRouterFixturePacks } from "./fixtures.ts";
 import { buildRoutingContext, RoutingContextError } from "./context.ts";
@@ -44,13 +42,13 @@ import type {
   RuntimeClarificationSummary,
   SkillSourceSnapshot,
 } from "./types.ts";
+import { buildRouterSkillMetadata } from "./skill-metadata.ts";
 import { semanticRecallLimitedWarning } from "./types.ts";
 import { createSkillRun, reduceSkillRun } from "../runtime/skill-run/reducer.ts";
 import { SkillRunStore, type SkillRun } from "../runtime/skill-run/index.ts";
 import { createPreparedStrictSkillRun } from "../runtime/strict/service.ts";
 import { StrictSkillRunError, StrictSkillRunStore, type SkillRunV2 } from "../runtime/strict/index.ts";
 import { assertInstalledMatches } from "../runtime/strict/service.ts";
-
 export const routerAlgorithmVersion = "router/2.1" as const;
 export const deterministicRoutingKey = (projection: DeterministicRoutingProjection) => routerRecordDigest(projection);
 
@@ -82,108 +80,25 @@ const domainMetadata = (pack: { id: string; targetSurface?: string; routing: Bun
   routing: pack.routing,
 });
 
-import { resolveInstalledSkillRoot } from "../installers/installed-path.ts";
-
-const installedEntryFor = async (projectRoot: string, skillId: string, targetAgent: string) => {
-  const lockfile = await readLockfile(projectRoot);
-  return lockfile.installed.find((entry) => entry.skillId === skillId && entry.targetAgent === targetAgent && entry.scope === "repo");
-};
-
-const safeInstalledRoot = async (projectRoot: string, installedPath: string) => {
-  try {
-    return await resolveInstalledSkillRoot(projectRoot, installedPath);
-  } catch {
-    return undefined;
-  }
-};
-
 const skillMetadata = async (
   projectRoot: string,
   targetAgent: string,
   skill: RegistrySkill,
-  strict: boolean,
   inputs: Record<string, Record<string, unknown>>,
-  capabilities: string[],
   intent?: string,
 ): Promise<PreparedMetadata | undefined> => {
-  const routing = skill.manifest.routing;
-  if (!routing?.roles || !routing.domains || !routing.actions || !routing.artifactTypes || !routing.intentTags || !routing.technologyTags || !routing.qualityGoals) return undefined;
-  const audit = await auditSkill(skill);
-  const entry = await installedEntryFor(projectRoot, skill.manifest.id, targetAgent);
-  const installedRoot = entry ? await safeInstalledRoot(projectRoot, entry.installedPath) : undefined;
-  const installed = Boolean(entry && installedRoot && entry.checksum === skill.checksum && await assertInstalledMatches(skill, installedRoot, entry.checksum).then(() => true).catch(() => false));
-  const contract = skill.executionContract;
-  const contractInputAccepted = contract
-    ? (await import("../runtime/strict/json-schema.ts")).validateJsonSchema(
-      JSON.parse(await readFile(path.join(skill.path, contract.inputSchema), "utf8")) as Record<string, unknown>,
-      inputs[skill.manifest.id] ?? {},
-    ).length === 0
-    : false;
-  const requiredCapabilities = [...new Set([
-    ...(routing.requiredCapabilities ?? []),
-    ...(skill.manifest.verification?.requiredCapabilities ?? []),
-  ])];
-  const domainPack = resolveDomainPackForSkill(skill.manifest.id);
-  const laneAdjustment = domainPack?.routing.laneAdjustment(routing.lane, intent) ?? 0;
-  const skillAdjustment = domainPack?.routing.skillAdjustment(skill, intent) ?? 0;
-  return {
-    id: skill.manifest.id,
-    displayName: skill.manifest.displayName,
-    version: skill.manifest.version,
-    riskLevel: skill.manifest.riskLevel,
-    domains: routing.domains,
-    roles: routing.roles,
-    actions: routing.actions,
-    artifactTypes: routing.artifactTypes,
-    intentTags: routing.intentTags,
-    technologyTags: routing.technologyTags,
-    qualityGoals: routing.qualityGoals,
-    environmentSignals: routing.environmentSignals,
-    ...(contract?.applicability?.op === "signal" ? {
-      applicabilitySignal: {
-        collection: contract.applicability.collection,
-        name: contract.applicability.name,
-        minConfidence: contract.applicability.minConfidence ?? 0.5,
-      },
-    } : {}),
-    requiredCapabilities,
-    routingRequiredCapabilities: routing.requiredCapabilities ?? [],
-    verificationRequiredCapabilities: skill.manifest.verification?.requiredCapabilities ?? [],
-    strictPrerequisiteCapabilities: contract?.prerequisites.flatMap((prerequisite) => prerequisite.kind === "capability" ? [prerequisite.capability] : []) ?? [],
-    optionalCapabilities: routing.optionalCapabilities,
-    complements: routing.complements,
-    dependencies: skill.manifest.dependencies,
-    conflictsWith: skill.manifest.conflictsWith,
-    supersedes: skill.manifest.supersedes,
-    packageChecksum: skill.checksum,
-    source: installed ? "installed" as const : "bundled-registry" as const,
-    installed,
-    lockfileMatch: installed,
-    installedFileSetMatch: installed,
-    auditPassed: audit.riskLevel !== "high" && audit.riskLevel !== "block" && audit.checksum === skill.checksum,
-    auditDigest: digest(audit),
-    strictContract: contract ? "valid" as const : "missing" as const,
-    contractInputAccepted,
-    contractMustRead: contract?.mustRead,
-    instructionBytes: Buffer.byteLength(await readFile(skill.skillPath), "utf8"),
-    qualityScore: skill.manifest.qualityScore,
-    securityScore: skill.manifest.securityScore,
-    freshnessDate: skill.manifest.freshness?.lastReviewedAt,
-    laneAdjustment,
-    skillAdjustment,
-    supportedTargets: [...new Set([
-      ...skill.manifest.supportedAgents,
-      ...Object.entries(skill.manifest.compatibility ?? {})
-        .filter(([, compatibility]) => compatibility.level !== "unsupported")
-        .map(([agent]) => agent),
-    ])],
-    skill,
-    ...(installedRoot && installed ? { installedRoot } : {}),
-    entry,
-  };
+  const built = await buildRouterSkillMetadata({
+    source: { kind: "registry", skill },
+    projectRoot,
+    targetAgent,
+    inputs,
+    intent,
+  });
+  if (!built) return undefined;
+  return { ...built.metadata, skill, installedRoot: built.installedRoot, entry: built.entry };
 };
 
-type PreparedMetadata = RouterSkillMetadata & { skill: RegistrySkill; installedRoot?: string; entry?: Awaited<ReturnType<typeof installedEntryFor>> };
+type PreparedMetadata = RouterSkillMetadata & { skill: RegistrySkill; installedRoot?: string; entry?: InstalledSkill };
 
 const routingFingerprintDigest = (fingerprint: ProjectFingerprint) => digest({
   schemaVersion: fingerprint.schemaVersion,
@@ -471,20 +386,14 @@ export const prepareTask = async (
   const skills = input.registry.kind === "test-fixture"
     ? []
     : await loadLocalRegistry(input.registry.root);
-  const fixtureMetadata = fixturePacks.flatMap((pack) => pack.skills.map((skill) => ({
-    ...skill,
-    packageChecksum: digest(skill.id),
-    source: "test-fixture-registry" as const,
-    installed: false,
-    lockfileMatch: false,
-    installedFileSetMatch: false,
-    auditPassed: true,
-    auditDigest: digest({ skillId: skill.id, fixture: true }),
-    strictContract: skill.strictContract === "valid" ? "valid" as const : skill.strictContract === "missing" ? "missing" as const : "input-required" as const,
-    contractInputAccepted: false,
-    contractMustRead: ["SKILL.md"],
-  })));
-  const metadata = (await Promise.all(skills.map((skill) => skillMetadata(input.projectRoot, targetAgent, skill, strict, input.skillInputs ?? {}, capabilities, parsed.normalizedIntent))))
+  const fixtureMetadata = (await Promise.all(fixturePacks.flatMap((pack) => pack.skills.map((skill) => buildRouterSkillMetadata({
+    source: { kind: "fixture", skill, installed: false },
+    projectRoot: input.projectRoot,
+    targetAgent,
+    inputs: input.skillInputs ?? {},
+    intent: parsed.normalizedIntent,
+  }))))).map((built) => built!.metadata);
+  const metadata = (await Promise.all(skills.map((skill) => skillMetadata(input.projectRoot, targetAgent, skill, input.skillInputs ?? {}, parsed.normalizedIntent))))
     .filter((skill): skill is PreparedMetadata => skill !== undefined);
   const allMetadata = [...metadata, ...fixtureMetadata] as RouterSkillMetadata[];
   const canonicalSkills = allMetadata.map(canonicalSkillRoutingDocument);

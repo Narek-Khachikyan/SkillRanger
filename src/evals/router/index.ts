@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { readFile } from "node:fs/promises";
 import { loadBundledRouterPacks } from "../../domains/registry.ts";
+import "../../domains/bundled.ts";
 import { defaultDomainsRoot, defaultRegistryRoot } from "../../paths.ts";
 import { loadLocalRegistry } from "../../registry/index.ts";
 import { scanProject } from "../../scanner/index.ts";
@@ -13,12 +13,13 @@ import { resolveDomains } from "../../router/resolver.ts";
 import { loadRouterFixturePacks, loadRouterGoldenCases, type RouterFixturePack, type RouterGoldenCase } from "../../router/fixtures.ts";
 import { buildRoutingContext } from "../../router/context.ts";
 import { canonicalSkillRoutingDocument } from "../../router/metadata.ts";
+import { buildRouterSkillMetadata } from "../../router/skill-metadata.ts";
 import { coreRoutingVocabulary } from "../../router/vocabulary/core.ts";
 import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "../../router/vocabulary/load.ts";
 import { canonicalizeJson } from "../../router/store.ts";
+import type { RegistrySkill } from "../../types.ts";
 import { evaluateModelAssistedRouter } from "./model-assisted.ts";
 
-const digest = (value: string) => `sha256:${value.padEnd(64, "0").slice(0, 64)}`;
 export const routerEvalThresholds = {
   statusAccuracy: 1,
   primaryAccuracy: 1,
@@ -58,57 +59,29 @@ const domainMetadata = (domain: RouterFixturePack["domain"] | { id: string; rout
   routing: domain.routing,
 });
 
-const fixtureSkillMetadata = (skill: RouterFixturePack["skills"][number], strictInstalled: boolean): RouterSkillMetadata => ({
-  ...skill,
-  packageChecksum: digest(skill.id),
-  source: strictInstalled ? "installed" : "test-fixture-registry",
-  installed: strictInstalled,
-  lockfileMatch: strictInstalled,
-  installedFileSetMatch: strictInstalled,
-  contractInputAccepted: strictInstalled && skill.strictContract === "valid",
-  contractMustRead: skill.strictContract === "valid" ? ["SKILL.md"] : [],
-  auditPassed: true,
-});
-
-const registrySkillMetadata = async (skill: Awaited<ReturnType<typeof loadLocalRegistry>>[number]): Promise<RouterSkillMetadata | undefined> => {
-  const routing = skill.manifest.routing;
-  if (!routing?.roles || !routing.domains || !routing.actions || !routing.artifactTypes || !routing.intentTags || !routing.technologyTags || !routing.qualityGoals) return undefined;
-  return {
-    id: skill.manifest.id,
-    displayName: skill.manifest.displayName,
-    version: skill.manifest.version,
-    riskLevel: skill.manifest.riskLevel,
-    domains: routing.domains,
-    roles: routing.roles,
-    actions: routing.actions,
-    artifactTypes: routing.artifactTypes,
-    intentTags: routing.intentTags,
-    technologyTags: routing.technologyTags,
-    qualityGoals: routing.qualityGoals,
-    environmentSignals: routing.environmentSignals,
-    requiredCapabilities: routing.requiredCapabilities,
-    optionalCapabilities: routing.optionalCapabilities,
-    complements: routing.complements,
-    dependencies: skill.manifest.dependencies,
-    conflictsWith: skill.manifest.conflictsWith,
-    supersedes: skill.manifest.supersedes,
-    packageChecksum: skill.checksum,
-    source: "bundled-registry",
-    auditPassed: true,
-    strictContract: skill.executionContract ? "valid" : "missing",
-    instructionBytes: Buffer.byteLength(await readFile(skill.skillPath)),
-    qualityScore: skill.manifest.qualityScore,
-    securityScore: skill.manifest.securityScore,
-    freshnessDate: skill.manifest.freshness?.lastReviewedAt,
-  };
+const registrySkillMetadata = async (skill: RegistrySkill, intent: string, projectRoot: string): Promise<RouterSkillMetadata | undefined> => {
+  const built = await buildRouterSkillMetadata({
+    source: { kind: "registry", skill },
+    projectRoot,
+    targetAgent: "codex",
+    inputs: {},
+    intent,
+  });
+  return built?.metadata;
 };
 
-const buildCaseInput = async (root: string, input: RouterGoldenCase, fixturePacks: RouterFixturePack[]) => {
+const buildCaseInput = async (root: string, input: RouterGoldenCase, fixturePacks: RouterFixturePack[], normalizedIntent: string) => {
   const bundledPacks = await loadBundledRouterPacks(defaultDomainsRoot);
   const loadedBundledPacks = await loadBundledRoutingPacks(bundledPacks);
-  const bundledSkills = (await Promise.all((await loadLocalRegistry(defaultRegistryRoot)).map(registrySkillMetadata)))
+  const bundledSkills = (await Promise.all((await loadLocalRegistry(defaultRegistryRoot)).map((skill) => registrySkillMetadata(skill, normalizedIntent, root))))
     .filter((skill): skill is RouterSkillMetadata => skill !== undefined);
-  const synthetic = fixturePacks.flatMap((pack) => pack.skills.map((skill) => fixtureSkillMetadata(skill, input.id === "strict-installed" && skill.id === "backend.auth-implementation")));
+  const synthetic = (await Promise.all(fixturePacks.flatMap((pack) => pack.skills.map((skill) => buildRouterSkillMetadata({
+    source: { kind: "fixture", skill, installed: input.id === "strict-installed" && skill.id === "backend.auth-implementation" },
+    projectRoot: root,
+    targetAgent: "codex",
+    inputs: {},
+    intent: normalizedIntent,
+  }))))).map((built) => built!.metadata);
   const syntheticDomains = fixturePacks.map(({ domain }) => domainMetadata(domain));
   const finalize = (domains: TaskAnalyzerDomainMetadata[], skills: RouterSkillMetadata[], fingerprint: Awaited<ReturnType<typeof scanProject>> | ReturnType<typeof emptyFingerprint>, useFixturePacks: boolean) => {
     const fixtureRoutingPacks = adaptFixtureRoutingPacks(fixturePacks);
@@ -156,7 +129,7 @@ const buildCaseInput = async (root: string, input: RouterGoldenCase, fixturePack
 const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks: RouterFixturePack[]) => {
   const parsed = parseTrigger({ prompt: input.prompt, mode: "explicit" });
   if (!parsed.activated) return { status: parsed.reason, domainIds: [], primaryDomainId: undefined, selectedSkillCount: 0, selectedCompanionCount: 0, usefulCompanionCount: 0, instructionBytes: 0, privacyLeakageCount: 0, deterministic: true };
-  const metadata = await buildCaseInput(root, input, fixturePacks);
+  const metadata = await buildCaseInput(root, input, fixturePacks, parsed.normalizedIntent);
   const analyzerSkills = metadata.skills satisfies TaskAnalyzerSkillMetadata[];
   const analysis = analyzeTask({ prompt: parsed.normalizedIntent, domains: metadata.domains, skills: analyzerSkills, fingerprint: metadata.fingerprint, routingContext: metadata.routingContext });
   const replayAnalysis = analyzeTask({ prompt: parsed.normalizedIntent, domains: metadata.domains, skills: analyzerSkills, fingerprint: metadata.fingerprint, routingContext: metadata.routingContext });

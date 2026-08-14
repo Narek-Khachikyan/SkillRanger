@@ -177,7 +177,7 @@
         "artifact:web-interface",
         "intent:visual-reference"
       ],
-      "primarySkillId": "frontend.visual-design-polish"
+      "primarySkillId": "frontend.design-to-code"
     }
   },
   {
@@ -271,7 +271,7 @@
         "intent:visual-design",
         "intent:responsive-design"
       ],
-      "primarySkillId": "frontend.visual-design-polish"
+      "primarySkillId": "frontend.tailwind-ui-polish"
     }
   },
   {
@@ -294,7 +294,7 @@
         "artifact:web-interface",
         "intent:motion-design"
       ],
-      "primarySkillId": "frontend.visual-design-polish"
+      "primarySkillId": "frontend.motion-design"
     }
   },
   {
@@ -340,7 +340,7 @@
         "artifact:page",
         "intent:visual-reference"
       ],
-      "primarySkillId": "frontend.visual-design-polish"
+      "primarySkillId": "frontend.design-to-code"
     }
   },
   {
@@ -386,7 +386,7 @@
         "artifact:form",
         "quality:accessibility"
       ],
-      "primarySkillId": "frontend.visual-design-polish"
+      "primarySkillId": "frontend.ux-critique"
     }
   },
   {
@@ -433,7 +433,7 @@
         "intent:visual-design",
         "intent:responsive-design"
       ],
-      "primarySkillId": "frontend.visual-design-polish"
+      "primarySkillId": "frontend.tailwind-ui-polish"
     }
   },
   {
@@ -479,7 +479,7 @@
         "artifact:web-interface",
         "intent:motion-design"
       ],
-      "primarySkillId": "frontend.visual-design-polish"
+      "primarySkillId": "frontend.motion-design"
     }
   },
   {
@@ -502,7 +502,7 @@
         "artifact:web-interface",
         "intent:responsive-design"
       ],
-      "primarySkillId": "frontend.visual-design-polish"
+      "primarySkillId": "frontend.tailwind-ui-polish"
     }
   },
   {
@@ -525,7 +525,7 @@
         "artifact:web-interface",
         "intent:visual-reference"
       ],
-      "primarySkillId": "frontend.visual-design-polish"
+      "primarySkillId": "frontend.design-to-code"
     }
   },
   {
