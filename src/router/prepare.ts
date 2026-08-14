@@ -27,7 +27,8 @@ import {
   type RoutingPipelineDecision,
   type RoutingPipelineInput,
 } from "./pipeline.ts";
-import { createRouterRuntimeBridge, RouterPrepareError } from "./runtime-bridge.ts";
+import { createRouterRuntimeBridge } from "./runtime-bridge.ts";
+import { RouterPrepareError } from "./errors.ts";
 import type {
   DeterministicRoutingOutcome,
   DeterministicRoutingProjection,
@@ -50,7 +51,7 @@ import type { RouterLimits, RouterSkillMetadata } from "./composer.ts";
 import { defaultRouterLimits } from "./composer.ts";
 
 export { routerAlgorithmVersion } from "./pipeline.ts";
-export { RouterPrepareError } from "./runtime-bridge.ts";
+export { RouterPrepareError } from "./errors.ts";
 export const deterministicRoutingKey = (projection: DeterministicRoutingProjection) => routerRecordDigest(projection);
 
 const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();

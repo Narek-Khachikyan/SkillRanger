@@ -8,13 +8,13 @@ import { scanProject } from "../../scanner/index.ts";
 import { defaultRouterLimits, type RouterSkillMetadata } from "../../router/composer.ts";
 import type { TaskAnalyzerDomainMetadata } from "../../router/analyzer.ts";
 import { parseTrigger } from "../../router/trigger.ts";
-import { loadRouterFixturePacks, loadRouterGoldenCases, type RouterFixturePack, type RouterGoldenCase } from "../../router/fixtures.ts";
+import { loadRouterFixturePacks, loadRouterGoldenCases, routerEvalRoutingDate, type RouterFixturePack, type RouterGoldenCase } from "../../router/fixtures.ts";
 import { buildRoutingContext } from "../../router/context.ts";
 import { canonicalSkillRoutingDocument } from "../../router/metadata.ts";
 import { buildRouterSkillMetadata } from "../../router/skill-metadata.ts";
 import { coreRoutingVocabulary } from "../../router/vocabulary/core.ts";
 import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "../../router/vocabulary/load.ts";
-import { runRoutingPipeline, type RoutingPipelineDecision } from "../../router/pipeline.ts";
+import { publicOutcomeStatus, runRoutingPipeline, skillIndexById, type RoutingPipelineDecision } from "../../router/pipeline.ts";
 import { canonicalizeJson } from "../../router/store.ts";
 import type { RegistrySkill } from "../../types.ts";
 import { evaluateModelAssistedRouter } from "./model-assisted.ts";
@@ -125,9 +125,6 @@ const buildCaseInput = async (root: string, input: RouterGoldenCase, fixturePack
   return finalize(bundledPacks.map(domainMetadata), bundledSkills, project, false);
 };
 
-const statusFor = (status: RoutingPipelineDecision["outcome"]["status"]): string =>
-  status === "strict-requirements-unmet" ? "strict_requirements_unmet" : status;
-
 const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks: RouterFixturePack[]) => {
   const parsed = parseTrigger({ prompt: input.prompt, mode: "explicit" });
   if (!parsed.activated) return { status: parsed.reason, domainIds: [], primaryDomainId: undefined, selectedSkillCount: 0, selectedCompanionCount: 0, usefulCompanionCount: 0, instructionBytes: 0, privacyLeakageCount: 0, deterministic: true };
@@ -147,14 +144,14 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
     targetAgent: "codex",
     strict: input.strict,
     capabilities: input.capabilities,
-    routingDate: "2026-07-19",
+    routingDate: routerEvalRoutingDate,
     limits: defaultRouterLimits,
   };
   const decision = runRoutingPipeline(pipelineInput);
   const replay = runRoutingPipeline(pipelineInput);
   const deterministic = canonicalizeJson(decision) === canonicalizeJson(replay);
   const outcome = decision.outcome;
-  const status = statusFor(outcome.status);
+  const status = publicOutcomeStatus(outcome.status);
   const expectedDomains = new Set(input.expected.domainIds);
   const selected = outcome.status === "prepared" ? outcome.selections : undefined;
   // Agent-context selections (core universal skills included) are always-on
@@ -165,7 +162,7 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
   );
   const signalIds = [...new Set([
     ...decision.signals.matchedSignals.map(({ kind, id }) => `${kind}:${id}`),
-    ...decision.taskProfile!.evidence.filter(({ source }) => source === "prompt").map(({ kind, id }) => `${kind}:${id}`),
+    ...(decision.taskProfile?.evidence.filter(({ source }) => source === "prompt").map(({ kind, id }) => `${kind}:${id}`) ?? []),
     ...decision.signals.routingIntentTags.map((id) => `intent:${id}`),
   ])];
   // An analysis-level decomposition decision (two or more subtasks) reports the
@@ -179,7 +176,7 @@ const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks:
   const primaryDomainId = outcome.status === "prepared"
     ? outcome.primaryDomain
     : decision.domains.find(({ role }) => role === "primary")?.id;
-  const skillById = new Map(metadata.skills.map((skill) => [skill.id, skill]));
+  const skillById = skillIndexById(metadata.skills);
   const privacyCanaries = [
     ...(input.prompt.match(/SECRET_[A-Z0-9_]+/g) ?? []),
     ...(input.prompt.match(/https?:\/\/[^\s]+/g) ?? []).map((value) => value.replace(/[.,;!?]+$/, "")),
@@ -383,7 +380,7 @@ export const evaluateRouterFixtures = async (
     syntheticSkillCount: packs.reduce((total, pack) => total + pack.skills.length, 0),
     caseIds: [...cases, ...quarantineCases].map(({ id }) => id),
     domainIds: packs.map(({ domain }) => domain.id),
-    routingDate: "2026-07-19",
+    routingDate: routerEvalRoutingDate,
     thresholds: routerEvalThresholds,
     metrics,
     suites: {

@@ -157,7 +157,7 @@ test("semantic hints use a permissive MCP envelope and one public Core error cod
     $defs: { errorCode: { enum: string[] } };
   };
   assert.ok(schema.$defs.errorCode.enum.includes("semantic-hint-invalid"));
-  for (const file of ["src/router/runtime-bridge.ts", "src/mcp/tools/router.ts", "src/mcp/tools/types.ts"]) {
+  for (const file of ["src/router/errors.ts", "src/mcp/tools/router.ts", "src/mcp/tools/types.ts"]) {
     assert.match(await readFile(file, "utf8"), /semantic-hint-invalid/, file);
   }
 });
@@ -213,6 +213,7 @@ test("router golden fixture covers every Task 1 scenario", async () => {
   assert.deepEqual(cases.filter(({ reviewNote }) => reviewNote !== undefined).map(({ id, reviewNote }) => ({ id, reviewNote })), [
     { id: "backend-auth-synthetic", reviewNote: "router/2.0 decomposition contract" },
     { id: "mixed-synthetic-domains", reviewNote: "router/2.0 decomposition contract" },
+    { id: "missing-production-pack", reviewNote: "router/2.1 pipeline migration corpus delta" },
   ]);
 });
 
@@ -220,6 +221,18 @@ test("natural-language quarantine freezes 60 validated cases and rich selection 
   const cases = await loadRouterGoldenCases("tests/fixtures/router-paraphrase-cases.json");
   assert.equal(cases.length, 60);
   assert.equal(new Set(cases.map(({ id }) => id)).size, 60);
+  assert.deepEqual(cases.filter(({ reviewNote }) => reviewNote !== undefined).map(({ id, reviewNote }) => ({ id, reviewNote })), [
+    { id: "frontend-ru-figma-reference", reviewNote: "router/2.1 pipeline migration corpus delta" },
+    { id: "frontend-en-cupcakes", reviewNote: "router/2.1 pipeline migration corpus delta" },
+    { id: "frontend-en-motion", reviewNote: "router/2.1 pipeline migration corpus delta" },
+    { id: "frontend-en-reference", reviewNote: "router/2.1 pipeline migration corpus delta" },
+    { id: "frontend-en-accessibility", reviewNote: "router/2.1 pipeline migration corpus delta" },
+    { id: "frontend-en-component", reviewNote: "router/2.1 pipeline migration corpus delta" },
+    { id: "frontend-mixed-motion", reviewNote: "router/2.1 pipeline migration corpus delta" },
+    { id: "frontend-mixed-responsive", reviewNote: "router/2.1 pipeline migration corpus delta" },
+    { id: "frontend-mixed-figma", reviewNote: "router/2.1 pipeline migration corpus delta" },
+    { id: "cross-en-frontend-mobile", reviewNote: "router/2.1 pipeline migration corpus delta" },
+  ]);
   const cupcake = cases.find(({ id }) => id === "frontend-cupcake-natural-language");
   assert.deepEqual(cupcake?.expected, {
     status: "prepared",

@@ -159,6 +159,7 @@
   },
   {
     "id": "frontend-ru-figma-reference",
+    "reviewNote": "router/2.1 pipeline migration corpus delta",
     "prompt": "реализуй интерфейс по макету из Figma @skillranger",
     "fixture": "frontend",
     "registry": "bundled",
@@ -252,6 +253,7 @@
   },
   {
     "id": "frontend-en-cupcakes",
+    "reviewNote": "router/2.1 pipeline migration corpus delta",
     "prompt": "build a cupcake website with polished visuals and responsive layout @skillranger",
     "fixture": "frontend",
     "registry": "bundled",
@@ -276,6 +278,7 @@
   },
   {
     "id": "frontend-en-motion",
+    "reviewNote": "router/2.1 pipeline migration corpus delta",
     "prompt": "create a landing page with smooth animations @skillranger",
     "fixture": "frontend",
     "registry": "bundled",
@@ -322,6 +325,7 @@
   },
   {
     "id": "frontend-en-reference",
+    "reviewNote": "router/2.1 pipeline migration corpus delta",
     "prompt": "build the page from this screenshot @skillranger",
     "fixture": "frontend",
     "registry": "bundled",
@@ -368,6 +372,7 @@
   },
   {
     "id": "frontend-en-accessibility",
+    "reviewNote": "router/2.1 pipeline migration corpus delta",
     "prompt": "develop an accessible checkout form @skillranger",
     "fixture": "frontend",
     "registry": "bundled",
@@ -414,6 +419,7 @@
   },
   {
     "id": "frontend-en-component",
+    "reviewNote": "router/2.1 pipeline migration corpus delta",
     "prompt": "add a polished responsive pricing component @skillranger",
     "fixture": "frontend",
     "registry": "bundled",
@@ -461,6 +467,7 @@
   },
   {
     "id": "frontend-mixed-motion",
+    "reviewNote": "router/2.1 pipeline migration corpus delta",
     "prompt": "create сайт с плавными animations @skillranger",
     "fixture": "frontend",
     "registry": "bundled",
@@ -484,6 +491,7 @@
   },
   {
     "id": "frontend-mixed-responsive",
+    "reviewNote": "router/2.1 pipeline migration corpus delta",
     "prompt": "собери landing page с responsive design @skillranger",
     "fixture": "frontend",
     "registry": "bundled",
@@ -507,6 +515,7 @@
   },
   {
     "id": "frontend-mixed-figma",
+    "reviewNote": "router/2.1 pipeline migration corpus delta",
     "prompt": "build интерфейс по макету из Figma @skillranger",
     "fixture": "frontend",
     "registry": "bundled",
@@ -1373,6 +1382,7 @@
   },
   {
     "id": "cross-en-frontend-mobile",
+    "reviewNote": "router/2.1 pipeline migration corpus delta",
     "prompt": "create a polished website, then build a mobile app @skillranger",
     "fixture": "synthetic",
     "registry": "test-fixture",
