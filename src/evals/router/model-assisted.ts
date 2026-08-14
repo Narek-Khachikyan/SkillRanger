@@ -1,21 +1,35 @@
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { readFile } from "node:fs/promises";
+import { loadBundledRouterPacks } from "../../domains/registry.ts";
+import "../../domains/bundled.ts";
+import { defaultDomainsRoot } from "../../paths.ts";
+import { loadLocalRegistry } from "../../registry/index.ts";
 import {
-  assertValidCatalogReceipt,
   buildSkillCatalog,
   inspectSkillCatalog,
   type SkillCatalogPage,
   type SkillCatalogSnapshot,
 } from "../../router/catalog.ts";
 import { parseTrigger } from "../../router/trigger.ts";
+import { defaultRouterLimits, type RouterSkillMetadata } from "../../router/composer.ts";
+import { buildRoutingContext } from "../../router/context.ts";
+import { canonicalSkillRoutingDocument } from "../../router/metadata.ts";
+import { buildRouterSkillMetadata } from "../../router/skill-metadata.ts";
+import { coreRoutingVocabulary } from "../../router/vocabulary/core.ts";
+import { loadBundledRoutingPacks } from "../../router/vocabulary/load.ts";
+import { assertValidCatalogReceipt } from "../../router/catalog.ts";
+import { routerRecordDigest } from "../../router/store.ts";
 import {
-  validateRoutingProposal,
-  type RoutingProposalInput,
-} from "../../router/routing-proposal.ts";
-import { prepareTask, RouterPrepareError } from "../../router/prepare.ts";
-import { semanticRecallLimitedWarning, type PrepareTaskResult, type RoutingMode } from "../../router/types.ts";
+  RoutingPipelineError,
+  runRoutingPipeline,
+  type RoutingPipelineDecision,
+  type RoutingPipelineErrorCode,
+} from "../../router/pipeline.ts";
+import { semanticRecallLimitedWarning, type RoutingMode } from "../../router/types.ts";
 import { canonicalizeJson } from "../../router/store.ts";
+import type { RoutingProposalInput } from "../../router/routing-proposal.ts";
+import type { ProjectFingerprint } from "../../types.ts";
+import type { RoutingContext } from "../../router/context.ts";
 
 const contractSchemaVersion = "router-eval-contracts/1.0" as const;
 const benchmarkSchemaVersion = "router-model-assisted/1.0" as const;
@@ -34,7 +48,15 @@ const contractKinds = new Set([
   "proposal-absent",
 ] as const);
 type EvaluatedStatus = "prepared" | "clarification_required" | "decomposition_required" | "no_matching_skills" | "strict_requirements_unmet" | "context_budget_exceeded" | "catalog_refresh_required" | "error";
-type EvaluationErrorCode = RouterPrepareError["code"] | "evaluation-error";
+// The evaluation error vocabulary is the routing pipeline's own error-code set;
+// the harness never duplicates adapter-level error codes it cannot produce.
+type EvaluationErrorCode = RoutingPipelineErrorCode | "evaluation-error";
+const routingPipelineErrorCodes = new Set<RoutingPipelineErrorCode>([
+  "routing-proposal-invalid",
+  "semantic-hint-invalid",
+  "clarification-answer-invalid",
+  "continuation-invalid",
+]);
 const benchmarkSources = new Set(["implicit-intent", "hard-paraphrase", "russian-paraphrase"] as const);
 const proposalModes = new Set(["current", "absent", "malformed", "stale"] as const);
 const resultStatuses = new Set<EvaluatedStatus>([
@@ -47,23 +69,6 @@ const resultStatuses = new Set<EvaluatedStatus>([
   "catalog_refresh_required",
   "error",
 ] as const);
-const routerPrepareErrorCodes = new Set<RouterPrepareError["code"]>([
-  "trigger-required",
-  "empty-intent",
-  "intent-too-large",
-  "router-disabled",
-  "target-agent-unresolved",
-  "project-root-unauthorized",
-  "continuation-invalid",
-  "continuation-expired",
-  "clarification-answer-invalid",
-  "capability-invalid",
-  "router-config-invalid",
-  "routing-integrity",
-  "semantic-hint-invalid",
-  "routing-proposal-invalid",
-  "raw-intent-confirmation-required",
-]);
 
 export type RoutingProposalContractKind =
   | "catalog"
@@ -344,36 +349,15 @@ const bool = (value: unknown, at: string): boolean => {
   return value as boolean;
 };
 
-const numberValue = (value: unknown, at: string): number => {
-  if (typeof value !== "number" || !Number.isFinite(value)) fail(`${at} must be a finite number.`);
-  return value as number;
-};
-
+// The captured proposal is fixture data, not a validated routing proposal: only
+// its JSON envelope is checked here. Shape (schema, limits, canonical ids) and
+// semantics (catalog binding, owner scoping, nomination rules) are validated by
+// the routing pipeline itself on every proposal-backed evaluation, so the
+// harness never duplicates the pipeline's proposal validators.
 const validateCapturedProposal = (value: unknown, at: string): CapturedRoutingProposal => {
   const proposal = record(value, at);
   exactKeys(proposal, ["schemaVersion", "catalogDigest", "catalogReceipt", "interpretation", "nominations"], ["ambiguity"], at);
   if (proposal.schemaVersion !== "routing-proposal/1.0") fail(`${at}.schemaVersion is invalid.`);
-  stringValue(proposal.catalogDigest, `${at}.catalogDigest`);
-  stringValue(proposal.catalogReceipt, `${at}.catalogReceipt`);
-  const interpretation = record(proposal.interpretation, `${at}.interpretation`);
-  const interpretationFields = ["domains", "actions", "artifactTypes", "intentTags", "technologyTags", "qualityGoals"];
-  exactKeys(interpretation, interpretationFields, [], `${at}.interpretation`);
-  for (const field of interpretationFields) stringArray(interpretation[field], `${at}.interpretation.${field}`, true);
-  if (!Array.isArray(proposal.nominations) || proposal.nominations.length === 0) fail(`${at}.nominations must not be empty.`);
-  for (const [index, rawNomination] of (proposal.nominations as unknown[]).entries()) {
-    const nomination = record(rawNomination, `${at}.nominations[${index}]`);
-    exactKeys(nomination, ["skillId", "role", "confidence", "evidenceText"], [], `${at}.nominations[${index}]`);
-    canonicalId(nomination.skillId, `${at}.nominations[${index}].skillId`);
-    stringValue(nomination.role, `${at}.nominations[${index}].role`);
-    const confidence = numberValue(nomination.confidence, `${at}.nominations[${index}].confidence`);
-    if (confidence < 0 || confidence > 1) fail(`${at}.nominations[${index}].confidence is outside [0, 1].`);
-    stringValue(nomination.evidenceText, `${at}.nominations[${index}].evidenceText`);
-  }
-  if (proposal.ambiguity !== undefined) {
-    const ambiguity = record(proposal.ambiguity, `${at}.ambiguity`);
-    exactKeys(ambiguity, ["primarySkillIds"], [], `${at}.ambiguity`);
-    stringArray(ambiguity.primarySkillIds, `${at}.ambiguity.primarySkillIds`, true);
-  }
   return structuredClone(value) as CapturedRoutingProposal;
 };
 
@@ -453,7 +437,7 @@ export const loadRoutingProposalBenchmarkFixtures = async (filePath: string): Pr
     const fallbackStatus = expectedRecord.fallbackStatus === undefined ? undefined : stringValue(expectedRecord.fallbackStatus, `router model-assisted fixture.cases[${index}].expected.fallbackStatus`);
     if (fallbackStatus !== undefined && !resultStatuses.has(fallbackStatus as EvaluatedStatus)) fail(`router model-assisted fixture.cases[${index}].expected.fallbackStatus is invalid.`);
     const errorCode = expectedRecord.errorCode === undefined ? undefined : stringValue(expectedRecord.errorCode, `router model-assisted fixture.cases[${index}].expected.errorCode`);
-    if (errorCode !== undefined && errorCode !== "evaluation-error" && !routerPrepareErrorCodes.has(errorCode as RouterPrepareError["code"])) fail(`router model-assisted fixture.cases[${index}].expected.errorCode is invalid.`);
+    if (errorCode !== undefined && errorCode !== "evaluation-error" && !routingPipelineErrorCodes.has(errorCode as RoutingPipelineErrorCode)) fail(`router model-assisted fixture.cases[${index}].expected.errorCode is invalid.`);
     const allowedSkillIds = stringArray(expectedRecord.allowedSkillIds, `router model-assisted fixture.cases[${index}].expected.allowedSkillIds`, true);
     const forbiddenSkillIds = stringArray(expectedRecord.forbiddenSkillIds, `router model-assisted fixture.cases[${index}].expected.forbiddenSkillIds`, true);
     const expected: ModelAssistedBenchmarkExpected = {
@@ -482,6 +466,37 @@ const sourceOptions = (root: string) => ({
   domainsRoot: path.join(root, "domains"),
 });
 
+const emptyFingerprint = (root: string): ProjectFingerprint => ({
+  schemaVersion: "1.0",
+  root,
+  projectTypes: [], languages: [], frameworks: [], styling: [], testing: [], infrastructure: [], dependencies: [],
+  agentContext: {
+    agentsMd: { present: false, paths: [] }, codexSkills: { present: false, paths: [] }, claudeSkills: { present: false, paths: [] },
+  },
+  signals: [], tags: [], warnings: [],
+});
+
+// The preloaded-metadata input contract is shared with production: registry
+// packs and the catalog snapshot load once per evaluation; per-case metadata is
+// built through the canonical factory with the case's normalized intent, exactly
+// like prepare_task builds it. Evaluations then consume the routing decision
+// directly — the second adapter over the pipeline — with no disk persistence.
+type LoadedEvalInput = {
+  binding: CatalogBinding;
+  catalog: SkillCatalogSnapshot;
+  bundledPacks: Awaited<ReturnType<typeof loadBundledRouterPacks>>;
+  bundledRoutingPacks: Awaited<ReturnType<typeof loadBundledRoutingPacks>>;
+  registrySkills: Awaited<ReturnType<typeof loadLocalRegistry>>;
+};
+
+type BuiltEvalMetadata = {
+  skills: RouterSkillMetadata[];
+  domains: Array<{ id: string; targetSurface?: string; routing: { aliases: string[]; intentTags: string[]; artifactTypes: string[]; technologyTags: string[]; projectTags: string[] } }>;
+  fingerprint: ProjectFingerprint;
+  routingContext: RoutingContext;
+  skillById: Map<string, RouterSkillMetadata>;
+};
+
 const collectCatalog = async (root: string, maxItems: number, now: number) => {
   const options = sourceOptions(root);
   const pages: SkillCatalogPage[] = [];
@@ -506,6 +521,45 @@ const currentCatalogBinding = async (root: string): Promise<CatalogBinding> => {
   return { catalogDigest: page.catalogDigest, catalogReceipt: receipt };
 };
 
+const loadEvalInput = async (root: string): Promise<LoadedEvalInput> => {
+  const bundledPacks = await loadBundledRouterPacks(defaultDomainsRoot);
+  return {
+    binding: await currentCatalogBinding(root),
+    catalog: await buildSkillCatalog(sourceOptions(root)),
+    bundledPacks,
+    bundledRoutingPacks: await loadBundledRoutingPacks(bundledPacks),
+    registrySkills: await loadLocalRegistry(sourceOptions(root).registryRoot),
+  };
+};
+
+const buildEvalMetadata = async (root: string, intent: string, loaded: LoadedEvalInput): Promise<BuiltEvalMetadata> => {
+  const skills = (await Promise.all(loaded.registrySkills.map((skill) => buildRouterSkillMetadata({
+    source: { kind: "registry", skill },
+    projectRoot: root,
+    targetAgent: "codex",
+    inputs: {},
+    intent,
+  })))).filter((built): built is NonNullable<typeof built> => built !== undefined).map((built) => built.metadata);
+  const domains = loaded.bundledPacks.map((pack: { id: string; targetSurface?: string; routing: (typeof loaded.bundledPacks)[number]["routing"] }) => ({
+    id: pack.id,
+    ...(pack.targetSurface ? { targetSurface: pack.targetSurface } : {}),
+    routing: pack.routing,
+  }));
+  const routingContext = buildRoutingContext({
+    packs: loaded.bundledRoutingPacks,
+    skills: skills.map(canonicalSkillRoutingDocument),
+    coreVocabulary: coreRoutingVocabulary,
+    baseRegistryDigest: routerRecordDigest(skills),
+  });
+  return {
+    skills,
+    domains,
+    fingerprint: emptyFingerprint(root),
+    routingContext,
+    skillById: new Map(skills.map((skill) => [skill.id, skill])),
+  };
+};
+
 const materializeProposal = (captured: CapturedRoutingProposal, binding: CatalogBinding): RoutingProposalInput => {
   const value = structuredClone(captured) as unknown as Record<string, unknown>;
   if (value.catalogDigest === "$catalogDigest") value.catalogDigest = binding.catalogDigest;
@@ -514,137 +568,107 @@ const materializeProposal = (captured: CapturedRoutingProposal, binding: Catalog
   return value as unknown as RoutingProposalInput;
 };
 
-const intentFor = (prompt: string) => {
-  const parsed = parseTrigger({ prompt, mode: "explicit" });
-  if (!("normalizedIntent" in parsed)) throw new Error(`evaluation prompt is not explicitly activated: ${parsed.reason}`);
-  return parsed.normalizedIntent;
-};
-
 const canariesFor = (prompt: string) => [...new Set([
   ...(prompt.match(/SECRET_[A-Z0-9_]+/g) ?? []),
   ...(prompt.match(/https?:\/\/[^\s]+/g) ?? []).map((value) => value.replace(/[.,;!?]+$/, "")),
 ])];
 
-const isMissingFile = (error: unknown) => error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT";
+const statusFor = (status: RoutingPipelineDecision["outcome"]["status"]): EvaluatedStatus =>
+  status === "strict-requirements-unmet" ? "strict_requirements_unmet" : status as EvaluatedStatus;
 
-const readDirectoryEntries = async (directory: string) => {
-  try {
-    return await readdir(directory);
-  } catch (error) {
-    if (isMissingFile(error)) return [] as string[];
-    throw error;
-  }
-};
-
-const runFileCount = async (root: string) => {
-  const runtime = await readDirectoryEntries(path.join(root, ".skillranger", "runs"));
-  const router = await readDirectoryEntries(path.join(root, ".skillranger", "runs", "router"));
-  return [...runtime, ...router].filter((entry) => entry.endsWith(".json")).length;
-};
-
-const persistedRunPayloads = async (root: string) => {
-  const directories = [path.join(root, ".skillranger", "runs"), path.join(root, ".skillranger", "runs", "router")];
-  const paths = (await Promise.all(directories.map(async (directory) => {
-    const entries = await readDirectoryEntries(directory);
-    return entries.filter((entry) => entry.endsWith(".json")).map((entry) => path.join(directory, entry));
-  }))).flat();
-  return Promise.all(paths.map(async (filePath) => {
-    try {
-      return await readFile(filePath, "utf8");
-    } catch (error) {
-      if (isMissingFile(error)) return "";
-      throw error;
-    }
-  }));
-};
-
-const privacyLeakageCountFor = async (root: string, prompt: string, transientPayloads: string[]) => {
-  const canaries = canariesFor(prompt);
-  const persisted = await persistedRunPayloads(root);
-  return canaries.filter((canary) => transientPayloads.some((payload) => payload.includes(canary)) || persisted.some((payload) => payload.includes(canary))).length;
-};
+// Mirrors the production adapter's capability shaping: filesystem is always
+// server-observed, remaining capabilities are deduplicated and canonicalized.
+const capabilitiesFor = (capabilities: string[] = []) =>
+  [...new Set(["filesystem", ...capabilities.filter((id) => id !== "filesystem")])].sort();
 
 const roleAwareRoles: readonly RoleAwareRole[] = ["primary", "companion", "verification"];
 
 const emptyRoleSelections = (): RoleAwareSelections => ({ primary: [], companion: [], verification: [] });
 
-const summarizePrepareResult = async (root: string, prompt: string, result: PrepareTaskResult): Promise<PreparedEvaluation> => {
-  const routing = "routing" in result ? result.routing : undefined;
-  const selections = result.status === "prepared"
-    ? [result.selections.primary, ...result.selections.environment, ...result.selections.companions, ...result.selections.verification, ...result.selections.agentContext]
-    : [];
-  const selectedSkillIdsByRole: RoleAwareSelections = result.status === "prepared"
+const summarizeDecision = (prompt: string, decision: RoutingPipelineDecision, skillById: Map<string, RouterSkillMetadata>): PreparedEvaluation => {
+  const outcome = decision.outcome;
+  const refresh = outcome.status === "catalog_refresh_required";
+  const selections = outcome.status === "prepared" ? outcome.selections : undefined;
+  const selectedSkillIds = outcome.status === "prepared" ? outcome.selectedSkillIds : [];
+  const selectedSkillIdsByRole: RoleAwareSelections = selections
     ? {
-        primary: [result.selections.primary.skillId],
-        companion: result.selections.companions.map(({ skillId }) => skillId),
-        verification: result.selections.verification.map(({ skillId }) => skillId),
+        primary: [selections.primary.skillId],
+        companion: selections.companions.map(({ skillId }) => skillId),
+        verification: selections.verification.map(({ skillId }) => skillId),
       }
     : emptyRoleSelections();
-  const serialized = JSON.stringify(result);
-  const privacyLeakageCount = await privacyLeakageCountFor(root, prompt, [serialized]);
+  const serialized = JSON.stringify(decision);
   return {
-    status: result.status,
-    ...(result.status === "prepared" ? { primarySkillId: result.selections.primary.skillId } : {}),
-    selectedSkillIds: selections.map(({ skillId }) => skillId),
+    status: statusFor(outcome.status),
+    ...(selections ? { primarySkillId: selections.primary.skillId } : {}),
+    selectedSkillIds,
     selectedSkillIdsByRole,
-    selectedSkillCount: selections.length,
-    instructionBytes: result.status === "prepared" ? result.requiredReads.reduce((sum, read) => sum + read.bytes, 0) : 0,
-    warnings: "warnings" in result ? result.warnings : [],
-    ...(typeof (result as { reasonCode?: unknown }).reasonCode === "string" ? { reasonCode: (result as { reasonCode: string }).reasonCode } : {}),
-    runFileCount: await runFileCount(root),
-    privacyLeakageCount,
-    ...(routing === undefined ? {} : { deterministicKey: routing.deterministicKey }),
-    ...(routing === undefined ? {} : { routingMode: routing.mode }),
-    questionIds: result.status === "clarification_required" ? result.clarification.questions.map(({ id }) => id) : [],
+    selectedSkillCount: selectedSkillIds.length,
+    instructionBytes: selectedSkillIds.reduce((sum, skillId) => sum + (skillById.get(skillId)?.instructionBytes ?? 0), 0),
+    // The eval adapter shapes warnings like the production adapter: the stable
+    // semantic-recall-limited warning is added only for limited-deterministic
+    // outcomes, and refresh outcomes carry no routing shape at all.
+    warnings: refresh ? [] : [...new Set([
+      ...decision.warnings,
+      ...(decision.mode === "limited-deterministic-fallback" ? [semanticRecallLimitedWarning] : []),
+    ])],
+    ...(outcome.status === "no_matching_skills" || refresh ? { reasonCode: outcome.reasonCode } : {}),
+    // Evaluations never touch disk: the no-persistence property holds by
+    // construction, and the run file count is always zero.
+    runFileCount: 0,
+    privacyLeakageCount: canariesFor(prompt).filter((canary) => serialized.includes(canary)).length,
+    ...(refresh ? {} : { routingMode: decision.mode }),
+    questionIds: outcome.status === "clarification_required" ? outcome.clarification.questions.map(({ id }) => id) : [],
   };
 };
 
 const errorCodeFor = (error: unknown): EvaluationErrorCode => {
-  if (error instanceof RouterPrepareError) return error.code;
+  if (error instanceof RoutingPipelineError) return error.code;
   const code = (error as { code?: unknown })?.code;
-  return typeof code === "string" && routerPrepareErrorCodes.has(code as RouterPrepareError["code"])
-    ? code as RouterPrepareError["code"]
+  return typeof code === "string" && routingPipelineErrorCodes.has(code as RoutingPipelineErrorCode)
+    ? code as RoutingPipelineErrorCode
     : "evaluation-error";
 };
 
-const runPrepare = async (root: string, input: {
+const runDecision = async (root: string, input: {
   prompt: string;
   strict?: boolean;
   capabilities?: string[];
   proposal?: CapturedRoutingProposal;
-}, binding: CatalogBinding): Promise<PreparedEvaluation> => {
-  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-router-eval-"));
+}, loaded: LoadedEvalInput): Promise<PreparedEvaluation> => {
   try {
-    const proposal = input.proposal === undefined ? undefined : materializeProposal(input.proposal, binding);
-    try {
-      const result = await prepareTask({
-        projectRoot,
-        registry: { kind: "bundled", root: path.join(root, "registry") },
-        prompt: input.prompt,
-        activation: { mode: "explicit" },
-        targetAgent: "codex",
-        strict: input.strict,
-        capabilities: (input.capabilities ?? []).map((id) => ({ id, source: "host-reported" as const })),
-        routingDate: "2026-07-19",
-        ...(proposal === undefined ? {} : { routingProposal: proposal }),
-      });
-      return await summarizePrepareResult(projectRoot, input.prompt, result);
-    } catch (error) {
-      return {
-        status: "error",
-        selectedSkillIds: [],
-        selectedSkillIdsByRole: emptyRoleSelections(),
-        selectedSkillCount: 0,
-        instructionBytes: 0,
-        warnings: [],
-        errorCode: errorCodeFor(error),
-        runFileCount: await runFileCount(projectRoot),
-        privacyLeakageCount: await privacyLeakageCountFor(projectRoot, input.prompt, [String(error)]),
-        questionIds: [],
-      };
-    }
-  } finally {
-    await rm(projectRoot, { recursive: true, force: true });
+    const parsed = parseTrigger({ prompt: input.prompt, mode: "explicit" });
+    if (!parsed.activated) throw new Error(`evaluation prompt is not explicitly activated: ${parsed.reason}`);
+    const proposal = input.proposal === undefined ? undefined : materializeProposal(input.proposal, loaded.binding);
+    const metadata = await buildEvalMetadata(root, parsed.normalizedIntent, loaded);
+    const decision = runRoutingPipeline({
+      trigger: parsed,
+      activation: { mode: "explicit" },
+      skills: metadata.skills,
+      domains: metadata.domains,
+      fingerprint: metadata.fingerprint,
+      routingContext: metadata.routingContext,
+      targetAgent: "codex",
+      strict: input.strict ?? false,
+      capabilities: capabilitiesFor(input.capabilities),
+      routingDate: "2026-07-19",
+      limits: defaultRouterLimits,
+      ...(proposal === undefined ? {} : { catalog: loaded.catalog, routingProposal: proposal }),
+    });
+    return summarizeDecision(input.prompt, decision, metadata.skillById);
+  } catch (error) {
+    return {
+      status: "error",
+      selectedSkillIds: [],
+      selectedSkillIdsByRole: emptyRoleSelections(),
+      selectedSkillCount: 0,
+      instructionBytes: 0,
+      warnings: [],
+      errorCode: errorCodeFor(error),
+      runFileCount: 0,
+      privacyLeakageCount: canariesFor(input.prompt).filter((canary) => JSON.stringify(String(error)).includes(canary)).length,
+      questionIds: [],
+    };
   }
 };
 
@@ -658,12 +682,6 @@ const comparable = (result: PreparedEvaluation) => canonicalizeJson({
   errorCode: result.errorCode,
   deterministicKey: result.deterministicKey,
   questionIds: result.questionIds,
-});
-
-const validatedProposal = (proposal: CapturedRoutingProposal, binding: CatalogBinding, prompt: string, snapshot: SkillCatalogSnapshot) => validateRoutingProposal({
-  proposal: materializeProposal(proposal, binding),
-  prompt: intentFor(prompt),
-  catalog: snapshot,
 });
 
 const runCatalogContract = async (root: string, fixture: RoutingProposalContractFixture): Promise<CatalogEvaluation> => {
@@ -714,7 +732,37 @@ const contractExpected = (kind: RoutingProposalContractKind, expected: Record<st
   }
 };
 
-const runContractCase = async (root: string, fixture: RoutingProposalContractFixture, item: RoutingProposalContractCase, binding: CatalogBinding, snapshot: SkillCatalogSnapshot) => {
+// Grounding and item-rejection contracts observe the pipeline's own proposal
+// validation output: the validated projection rides inside the routing decision
+// (accepted nominations and rejection reasons), so the harness never calls the
+// proposal validators directly.
+const runProposalGrounding = async (root: string, prompt: string, capabilities: string[] | undefined, proposal: CapturedRoutingProposal, loaded: LoadedEvalInput) => {
+  const parsed = parseTrigger({ prompt, mode: "explicit" });
+  if (!parsed.activated) throw new Error(`evaluation prompt is not explicitly activated: ${parsed.reason}`);
+  const metadata = await buildEvalMetadata(root, parsed.normalizedIntent, loaded);
+  const decision = runRoutingPipeline({
+    trigger: parsed,
+    activation: { mode: "explicit" },
+    skills: metadata.skills,
+    domains: metadata.domains,
+    fingerprint: metadata.fingerprint,
+    routingContext: metadata.routingContext,
+    targetAgent: "codex",
+    strict: false,
+    capabilities: capabilitiesFor(capabilities),
+    routingDate: "2026-07-19",
+    limits: defaultRouterLimits,
+    catalog: loaded.catalog,
+    routingProposal: materializeProposal(proposal, loaded.binding),
+  });
+  if (decision.outcome.status === "catalog_refresh_required") throw new Error(`${prompt} grounding run requested a catalog refresh.`);
+  return {
+    acceptedSkillIds: decision.routingProposal?.nominations.map(({ skillId }) => skillId) ?? [],
+    rejections: decision.routingProposal?.rejections ?? [],
+  };
+};
+
+const runContractCase = async (root: string, fixture: RoutingProposalContractFixture, item: RoutingProposalContractCase, loaded: LoadedEvalInput) => {
   const expected = item.expected;
   try {
     if (item.kind === "catalog") {
@@ -726,28 +774,26 @@ const runContractCase = async (root: string, fixture: RoutingProposalContractFix
     if (item.kind === "proposal-grounding" || item.kind === "item-rejection") {
       const proposal = item.proposal;
       if (proposal === undefined) throw new Error(`${item.id} has no proposal.`);
-      const result = validatedProposal(proposal, binding, prompt, snapshot);
-      if ("status" in result) throw new Error(`${item.id} unexpectedly requested a refresh.`);
-      const observed = { acceptedSkillIds: result.nominations.map(({ skillId }) => skillId), rejections: result.rejections };
+      const observed = await runProposalGrounding(root, prompt, item.capabilities, proposal, loaded);
       return { id: item.id, kind: item.kind, passed: contractExpected(item.kind, expected, observed), observed };
     }
     if (item.kind === "proposal-ownership") {
       const proposal = item.proposal;
       if (proposal === undefined) throw new Error(`${item.id} has no proposal.`);
-      const prepared = await runPrepare(root, { prompt, strict: item.strict, capabilities: item.capabilities, proposal }, binding);
+      const prepared = await runDecision(root, { prompt, strict: item.strict, capabilities: item.capabilities, proposal }, loaded);
       const observed = { errorCode: prepared.errorCode, noPersistence: prepared.runFileCount === 0 };
       return { id: item.id, kind: item.kind, passed: contractExpected(item.kind, expected, observed), observed };
     }
     if (item.kind === "proposal-absent") {
-      const fallback = await runPrepare(root, { prompt, strict: item.strict, capabilities: item.capabilities }, binding);
-      const assisted = await runPrepare(root, { prompt, strict: item.strict, capabilities: item.capabilities }, binding);
+      const fallback = await runDecision(root, { prompt, strict: item.strict, capabilities: item.capabilities }, loaded);
+      const assisted = await runDecision(root, { prompt, strict: item.strict, capabilities: item.capabilities }, loaded);
       const observed = { fallbackPrimarySkillId: fallback.primarySkillId, assistedStatus: assisted.status, assistedPrimarySkillId: assisted.primarySkillId, unchanged: comparable(fallback) === comparable(assisted) };
       return { id: item.id, kind: item.kind, passed: contractExpected(item.kind, expected, observed), observed };
     }
     const proposal = item.proposal;
     if (proposal === undefined) throw new Error(`${item.id} has no proposal.`);
-    const fallback = await runPrepare(root, { prompt, strict: item.strict, capabilities: item.capabilities }, binding);
-    const assisted = await runPrepare(root, { prompt, strict: item.strict, capabilities: item.capabilities, proposal }, binding);
+    const fallback = await runDecision(root, { prompt, strict: item.strict, capabilities: item.capabilities }, loaded);
+    const assisted = await runDecision(root, { prompt, strict: item.strict, capabilities: item.capabilities, proposal }, loaded);
     const observed: Record<string, unknown> = {
       fallbackPrimarySkillId: fallback.primarySkillId,
       assistedStatus: assisted.status,
@@ -765,7 +811,7 @@ const runContractCase = async (root: string, fixture: RoutingProposalContractFix
     if (item.kind === "refresh") {
       const refreshedProposal = structuredClone(proposal);
       refreshedProposal.catalogDigest = "$catalogDigest";
-      const refreshed = await runPrepare(root, { prompt, strict: item.strict, capabilities: item.capabilities, proposal: refreshedProposal }, binding);
+      const refreshed = await runDecision(root, { prompt, strict: item.strict, capabilities: item.capabilities, proposal: refreshedProposal }, loaded);
       observed.refreshStatus = refreshed.status;
       observed.recoveredPrimarySkillId = refreshed.primarySkillId;
     }
@@ -773,7 +819,7 @@ const runContractCase = async (root: string, fixture: RoutingProposalContractFix
       observed.noForbiddenSelection = !assisted.selectedSkillIds.includes("frontend.design-to-code");
     }
     if (item.kind === "privacy-replay") {
-      const replay = await runPrepare(root, { prompt, strict: item.strict, capabilities: item.capabilities, proposal }, binding);
+      const replay = await runDecision(root, { prompt, strict: item.strict, capabilities: item.capabilities, proposal }, loaded);
       observed.deterministicReplay = comparable(assisted) === comparable(replay);
     }
     return { id: item.id, kind: item.kind, passed: contractExpected(item.kind, expected, observed), observed };
@@ -784,10 +830,9 @@ const runContractCase = async (root: string, fixture: RoutingProposalContractFix
 
 export const evaluateRoutingProposalContracts = async (root = process.cwd()): Promise<ModelAssistedEvalReport["contracts"]> => {
   const fixture = await loadRoutingProposalContractFixtures(path.join(root, "evals", "router", "contracts.json"));
-  const binding = await currentCatalogBinding(root);
-  const snapshot = await buildSkillCatalog(sourceOptions(root));
+  const loaded = await loadEvalInput(root);
   const results: ModelAssistedEvalReport["contracts"]["results"] = [];
-  for (const item of fixture.cases) results.push(await runContractCase(root, fixture, item, binding, snapshot));
+  for (const item of fixture.cases) results.push(await runContractCase(root, fixture, item, loaded));
   return {
     schemaVersion: "router-contract-eval/1.0",
     caseCount: results.length,
@@ -854,10 +899,10 @@ const benchmarkFallbackMatch = (expected: ModelAssistedBenchmarkExpected, fallba
   (expected.fallbackPrimarySkillId === undefined || fallback.primarySkillId === expected.fallbackPrimarySkillId)
 );
 
-const runBenchmarkCase = async (root: string, item: ModelAssistedBenchmarkCase, binding: CatalogBinding, alwaysIncludedSkillIds: ReadonlySet<string>) => {
-  const fallback = await runPrepare(root, { prompt: item.prompt, strict: item.strict, capabilities: item.capabilities }, binding);
-  const assisted = await runPrepare(root, { prompt: item.prompt, strict: item.strict, capabilities: item.capabilities, proposal: item.proposal }, binding);
-  const replay = await runPrepare(root, { prompt: item.prompt, strict: item.strict, capabilities: item.capabilities, proposal: item.proposal }, binding);
+const runBenchmarkCase = async (root: string, item: ModelAssistedBenchmarkCase, loaded: LoadedEvalInput, alwaysIncludedSkillIds: ReadonlySet<string>) => {
+  const fallback = await runDecision(root, { prompt: item.prompt, strict: item.strict, capabilities: item.capabilities }, loaded);
+  const assisted = await runDecision(root, { prompt: item.prompt, strict: item.strict, capabilities: item.capabilities, proposal: item.proposal }, loaded);
+  const replay = await runDecision(root, { prompt: item.prompt, strict: item.strict, capabilities: item.capabilities, proposal: item.proposal }, loaded);
   const forbidden = assisted.selectedSkillIds.filter((skillId) => item.expected.forbiddenSkillIds.includes(skillId));
   // Core (universal) skills are always-on guidance in every prepared run, so
   // they can never be irrelevant selections; only task selections count here.
@@ -911,13 +956,12 @@ const runBenchmarkCase = async (root: string, item: ModelAssistedBenchmarkCase, 
 
 export const evaluateRoutingProposalBenchmark = async (root = process.cwd()): Promise<ModelAssistedEvalReport["benchmark"]> => {
   const fixture = await loadRoutingProposalBenchmarkFixtures(path.join(root, "evals", "router", "model-assisted.json"));
-  const binding = await currentCatalogBinding(root);
+  const loaded = await loadEvalInput(root);
   // Always-on core (universal) skills are derived from the live catalog so a
   // future core skill never needs an eval-code change.
-  const snapshot = await buildSkillCatalog(sourceOptions(root));
-  const alwaysIncludedSkillIds = new Set(snapshot.skills.filter(({ domains }) => domains.includes("core")).map(({ skillId }) => skillId));
+  const alwaysIncludedSkillIds = new Set(loaded.catalog.skills.filter(({ domains }) => domains.includes("core")).map(({ skillId }) => skillId));
   const results: ModelAssistedEvalReport["benchmark"]["results"] = [];
-  for (const item of fixture.cases) results.push(await runBenchmarkCase(root, item, binding, alwaysIncludedSkillIds));
+  for (const item of fixture.cases) results.push(await runBenchmarkCase(root, item, loaded, alwaysIncludedSkillIds));
   const primaryCases = fixture.cases.filter(({ expected }) => expected.primarySkillId !== undefined);
   const vocabularyCases = fixture.cases.filter(({ vocabularyMiss }) => vocabularyMiss);
   const selectedCount = results.reduce((sum, result) => sum + result.assisted.selectedSkillCount, 0);

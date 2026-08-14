@@ -312,7 +312,9 @@ Ordered stages inside `prepareTask`:
    HMAC-SHA256, 15-minute TTL, bound to the decision's question eligibility) / decomposition / no
    match / composition results. Unmet strict requirements and strict feasibility remain adapter
    concerns: the pipeline reports `strict-requirements-unmet`, the adapter produces the public
-   `strict_requirements_unmet` outcome with installation suggestions.
+   `strict_requirements_unmet` outcome with installation suggestions. Router evaluations are the
+   second adapter: they build the same preloaded input contract and consume the routing decision
+   directly, in memory, with no disk persistence.
 8. **Snapshot** — `createSkillSourceSnapshots` (`src/router/reader.ts`) pins package, root, file, and
    chunk checksums into a source inventory.
 9. **Runtime** — a strict run (`createPreparedStrictSkillRun`) or a lifecycle-v1 run
