@@ -515,6 +515,29 @@ export const validateSkillManifest = (
     }
   }
 
+  if (input.outputContract !== undefined) {
+    if (!isRecord(input.outputContract)) {
+      issues.push({ path: "outputContract", message: "Must be an object when present." });
+    } else {
+      const unknownOutputContractField = Object.keys(input.outputContract).find((key) => key !== "requiredReportFields");
+      if (unknownOutputContractField) issues.push({ path: `outputContract.${unknownOutputContractField}`, message: "Unknown outputContract property." });
+      const fields = input.outputContract.requiredReportFields;
+      if (
+        !Array.isArray(fields) ||
+        fields.length === 0 ||
+        fields.length > routerMetadataLimits.maxArrayItems ||
+        !fields.every((field) => typeof field === "string" && /^[a-z][a-zA-Z0-9._-]*$/.test(field) && !hasPathTraversal(field))
+      ) {
+        issues.push({
+          path: "outputContract.requiredReportFields",
+          message: `Must be a non-empty array of at most ${routerMetadataLimits.maxArrayItems} safe field ids.`,
+        });
+      } else if (new Set(fields).size !== fields.length) {
+        issues.push({ path: "outputContract.requiredReportFields", message: "Field ids must be unique." });
+      }
+    }
+  }
+
   if (input.execution !== undefined) {
     if (!isRecord(input.execution)) {
       issues.push({ path: "execution", message: "Must be an object when present." });

@@ -145,6 +145,9 @@ export type SkillManifest = {
   >;
   conflictsWith: string[];
   supersedes: string[];
+  outputContract?: {
+    requiredReportFields: string[];
+  };
   maintainer: {
     name: string;
     trustTier: string;

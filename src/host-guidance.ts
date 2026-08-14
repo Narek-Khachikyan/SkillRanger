@@ -29,3 +29,6 @@ export const managedGuidanceBoundary =
 
 export const mandatoryReadGuidance =
   "After prepare_task returns prepared, call read_run_skill_file in mandatory-next mode in the returned order until readStatus.runMandatoryReadsComplete is true; only then branch on run.runtime, resolve runtime clarification, or begin the returned runtime run.";
+
+export const universalOutputContractGuidance =
+  "Always-on core (universal) skills carry enforced output contracts: verify_skill_run blocks until the report's universalContracts section satisfies every declared required field, and the server itself writes the canonical report file (or a verification-blocked status record) at reportPath, which must stay inside the project root. Never author report outcome files yourself and report verification status only from the persisted run via inspect_skill_run.";

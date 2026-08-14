@@ -115,6 +115,11 @@ test("frontend lifecycle prepared/read/begin/complete/verify, unread gate, MCP e
     status: "implemented",
     artifacts: [{ kind: "result", path: "artifacts/result.json", description: "Implemented accessibility fixes" }],
   }));
+  const coreContracts = (runtime.policy.artifacts as { coreOutputContracts?: Record<string, string[]> } | undefined)?.coreOutputContracts ?? {};
+  const universalContracts: Record<string, Record<string, string[]>> = {};
+  for (const [skillId, fields] of Object.entries(coreContracts)) {
+    universalContracts[skillId] = Object.fromEntries(fields.map((field) => [field, [`${field} satisfied for ${skillId}`]]));
+  }
   const report: VerificationReport = {
     schemaVersion: "1.0",
     domain: "frontend",
@@ -128,6 +133,7 @@ test("frontend lifecycle prepared/read/begin/complete/verify, unread gate, MCP e
     gates: { hardPassed: true, criticalFindings: 0, highFindings: 0 },
     evidence: [{ kind: "test", path: "artifacts/result.json", description: "Accessibility checks passed" }],
     residualRisks: [],
+    universalContracts,
   };
   const missingEvidence = await callMcpTool("verify_skill_run", {
     projectRoot: mcpRoot,

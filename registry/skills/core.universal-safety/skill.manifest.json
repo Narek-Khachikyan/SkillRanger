@@ -25,7 +25,7 @@
     "registry": "local",
     "path": "./registry/skills/core.universal-safety"
   },
-  "version": "0.1.0",
+  "version": "0.1.1",
   "riskLevel": "low",
   "permissions": {
     "filesystem": [
@@ -118,6 +118,13 @@
   },
   "conflictsWith": [],
   "supersedes": [],
+  "outputContract": {
+    "requiredReportFields": [
+      "safetyNotes",
+      "redactions",
+      "escalations"
+    ]
+  },
   "maintainer": {
     "name": "local-curated",
     "trustTier": "curated"

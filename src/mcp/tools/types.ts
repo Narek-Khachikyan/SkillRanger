@@ -11,6 +11,7 @@ export type McpToolEffect =
   | "read-only"
   | "exact-install-plan"
   | "run-state-write"
+  | "run-state-and-contained-write"
   | "command-and-artifact-write";
 
 export type McpToolEffectMetadata = {
@@ -41,6 +42,10 @@ export const mcpToolEffects = {
   runStateWrite: {
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     _meta: { "skillranger/effect": "run-state-write", "skillranger/confirmation": "host-managed" },
+  },
+  runStateAndContainedWrite: {
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    _meta: { "skillranger/effect": "run-state-and-contained-write", "skillranger/confirmation": "host-managed" },
   },
   commandAndArtifactWrite: {
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },

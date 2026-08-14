@@ -39,6 +39,11 @@ export type VerificationReport = {
     description: string;
   }>;
   residualRisks: string[];
+  /**
+   * Always-on guidance skill output contracts: skillId → report field → non-empty statements.
+   * Required by the run's policy for every selected skill that declares an output contract.
+   */
+  universalContracts?: Record<string, Record<string, string[]>>;
 };
 
 export type WorkflowStep = {

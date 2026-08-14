@@ -15,6 +15,7 @@ import { buildSkillCatalog, inspectSkillCatalog } from "../src/router/catalog.ts
 import { createRouterReader, prepareTask } from "../src/router/prepare.ts";
 import { RouterStore } from "../src/router/store.ts";
 import type { PrepareTaskResult, ReadRunSkillFileResult } from "../src/router/types.ts";
+import type { SkillRun } from "../src/runtime/skill-run/types.ts";
 
 const structured = <T>(value: { structuredContent?: unknown }) => value.structuredContent as T;
 
@@ -379,12 +380,17 @@ test("proposal-backed preparation preserves lifecycle evidence gates", async () 
     assert.equal(running.state, "running");
     await mkdir(path.join(root, "artifacts"), { recursive: true });
     await writeFile(path.join(root, "artifacts", "result.json"), "ok\n");
-    await callMcpTool("complete_skill_run", {
+    const implemented = structured<SkillRun>(await callMcpTool("complete_skill_run", {
       projectRoot: root,
       runId: prepared.run.runtimeRunId,
       status: "implemented",
       artifacts: [{ kind: "result", path: "artifacts/result.json", description: "Accessibility fixes" }],
-    });
+    }));
+    const coreContracts = (implemented.policy.artifacts as { coreOutputContracts?: Record<string, string[]> } | undefined)?.coreOutputContracts ?? {};
+    const universalContracts: Record<string, Record<string, string[]>> = {};
+    for (const [skillId, fields] of Object.entries(coreContracts)) {
+      universalContracts[skillId] = Object.fromEntries(fields.map((field) => [field, [`${field} satisfied for ${skillId}`]]));
+    }
     const verified = structured<{ state: string }>(await callMcpTool("verify_skill_run", {
       projectRoot: root,
       runId: prepared.run.runtimeRunId,
@@ -402,6 +408,7 @@ test("proposal-backed preparation preserves lifecycle evidence gates", async () 
         gates: { hardPassed: true, criticalFindings: 0, highFindings: 0 },
         evidence: [{ kind: "test", path: "artifacts/result.json", description: "Accessibility checks passed" }],
         residualRisks: [],
+        universalContracts,
       },
     }));
     assert.equal(verified.state, "verified");

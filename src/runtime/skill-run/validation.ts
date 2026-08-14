@@ -129,7 +129,7 @@ const validateFinding = (input: unknown, path: string): VerificationFinding => {
 };
 
 export const assertValidVerificationReport: (input: unknown) => asserts input is VerificationReport = (input) => {
-  const value = keys(input, ["schemaVersion", "domain", "workflowId", "iteration", "capabilityStatus", "executionStatus", "verificationStatus", "outcome", "findings", "gates", "evidence", "residualRisks"], [], "verification report");
+  const value = keys(input, ["schemaVersion", "domain", "workflowId", "iteration", "capabilityStatus", "executionStatus", "verificationStatus", "outcome", "findings", "gates", "evidence", "residualRisks"], ["universalContracts"], "verification report");
   if (value.schemaVersion !== "1.0") fail("verification report.schemaVersion must be 1.0.");
   string(value.domain, "verification report.domain");
   string(value.workflowId, "verification report.workflowId");
@@ -145,6 +145,20 @@ export const assertValidVerificationReport: (input: unknown) => asserts input is
   integer(gateValue.highFindings, "verification report.gates.highFindings");
   array(value.evidence, "verification report.evidence").forEach((artifact, index) => validateArtifact(artifact, `verification report.evidence[${index}]`));
   stringArray(value.residualRisks, "verification report.residualRisks");
+  if (Object.hasOwn(value, "universalContracts")) {
+    const contracts = object(value.universalContracts, "verification report.universalContracts");
+    for (const [skillId, section] of Object.entries(contracts)) {
+      const sectionPath = `verification report.universalContracts.${skillId}`;
+      const fields = object(section, sectionPath);
+      for (const [field, statements] of Object.entries(fields)) {
+        const statementsPath = `${sectionPath}.${field}`;
+        // Emptiness is a semantic contract failure (verification-blocked naming the field), not a
+        // shape violation, so empty arrays are shape-valid here.
+        const values = stringArray(statements, statementsPath);
+        if (values.some((statement) => statement.trim() === "")) fail(`${statementsPath} must not contain blank statements.`);
+      }
+    }
+  }
 };
 
 const validateReportConsistency = (run: Pick<SkillRun, "domain">, report: VerificationReport) => {
@@ -155,6 +169,48 @@ const validateReportConsistency = (run: Pick<SkillRun, "domain">, report: Verifi
   if (report.gates.criticalFindings !== critical || report.gates.highFindings !== high) {
     fail("Verification report gate counts do not match its findings.");
   }
+};
+
+export type UniversalOutputContracts = Record<string, string[]>;
+
+type PolicyCarrier = { policy: { artifacts?: Record<string, unknown> } };
+
+const universalOutputContractsOf = (run: PolicyCarrier): UniversalOutputContracts => {
+  const artifacts = run.policy.artifacts;
+  if (artifacts === undefined) return {};
+  const declared = artifacts.coreOutputContracts;
+  if (declared === undefined) return {};
+  return declared as UniversalOutputContracts;
+};
+
+const validateUniversalOutputContracts = (input: unknown, path: string) => {
+  const contracts = object(input, path);
+  for (const [skillId, fields] of Object.entries(contracts)) {
+    const fieldsPath = `${path}.${skillId}`;
+    const values = stringArray(fields, fieldsPath, true);
+    if (values.length === 0) fail(`${fieldsPath} must contain at least one field id.`);
+    if (values.some((field) => field.trim() === "")) fail(`${fieldsPath} must not contain blank field ids.`);
+  }
+};
+
+/**
+ * Returns the declared contract fields a report fails to satisfy, keyed by skill.
+ * Empty when the run declares no universal output contracts or the report satisfies them all.
+ */
+export const missingUniversalContractFields = (
+  run: PolicyCarrier,
+  report: VerificationReport,
+): Array<{ skillId: string; fields: string[] }> => {
+  const missing: Array<{ skillId: string; fields: string[] }> = [];
+  for (const [skillId, fields] of Object.entries(universalOutputContractsOf(run))) {
+    const section = report.universalContracts?.[skillId];
+    const absent = fields.filter((field) => {
+      const statements = section?.[field];
+      return !Array.isArray(statements) || statements.length === 0 || statements.some((statement) => typeof statement !== "string" || statement.trim() === "");
+    });
+    if (absent.length > 0) missing.push({ skillId, fields: absent });
+  }
+  return missing;
 };
 
 export const assertValidSkillRun: (input: unknown) => asserts input is SkillRun = (input) => {
@@ -180,7 +236,12 @@ export const assertValidSkillRun: (input: unknown) => asserts input is SkillRun 
   }
 
   const policy = keys(value.policy, ["lifecycleRequired", "mandatorySkillIds", "clarification", "verificationRequired"], ["artifacts"], "skill run.policy");
-  if (Object.hasOwn(policy, "artifacts")) object(policy.artifacts, "skill run.policy.artifacts");
+  if (Object.hasOwn(policy, "artifacts")) {
+    const artifacts = object(policy.artifacts, "skill run.policy.artifacts");
+    if (Object.hasOwn(artifacts, "coreOutputContracts")) {
+      validateUniversalOutputContracts(artifacts.coreOutputContracts, "skill run.policy.artifacts.coreOutputContracts");
+    }
+  }
   boolean(policy.lifecycleRequired, "skill run.policy.lifecycleRequired");
   const mandatoryIds = stringArray(policy.mandatorySkillIds, "skill run.policy.mandatorySkillIds", true);
   boolean(policy.verificationRequired, "skill run.policy.verificationRequired");
@@ -303,6 +364,10 @@ export const assertValidSkillRun: (input: unknown) => asserts input is SkillRun 
       });
     }
     validateReportConsistency({ domain }, verification.report);
+    const missingContracts = missingUniversalContractFields({ policy }, verification.report);
+    if (missingContracts.length > 0) {
+      fail(`Persisted verification report is missing required universal output contract fields: ${missingContracts.map(({ skillId, fields }) => `${skillId}:${fields.join(",")}`).join("; ")}.`);
+    }
     const expectedDigest = `sha256:${createHash("sha256").update(canonicalizeJson(verification.report), "utf8").digest("hex")}`;
     if (reportSha256 !== expectedDigest) fail("Verification report digest does not match its canonical content.");
     if (state !== verification.report.outcome) fail("Skill run state must match its verification outcome.");

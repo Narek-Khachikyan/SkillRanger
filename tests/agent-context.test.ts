@@ -43,6 +43,7 @@ test("renders the exact SkillRanger universal router block", () => {
       "12. Do not install skills automatically or execute skill package scripts.\n" +
       "13. Do not claim `verified` unless SkillRanger runtime verification succeeds.\n" +
       "13a. A `run-blocked` error from `finalize_skill_run` means no verified result exists. Report its `userMessage` and `blockedSkills` verbatim; never describe such a run as passed, processed, or complete.\n" +
+      "14. Always-on core (universal) skills carry enforced output contracts: verify_skill_run blocks until the report's universalContracts section satisfies every declared required field, and the server itself writes the canonical report file (or a verification-blocked status record) at reportPath, which must stay inside the project root. Never author report outcome files yourself and report verification status only from the persisted run via inspect_skill_run.\n" +
       "<!-- SKILLRANGER_END -->",
   );
 });

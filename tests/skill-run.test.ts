@@ -910,3 +910,140 @@ test("run ids cannot escape the runs directory", async () => {
     (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity",
   );
 });
+
+// ADR 0008 — enforced always-on guidance skill output contracts.
+
+const coreContractPolicy: SkillRun["policy"] = {
+  ...fixtureInput.policy,
+  artifacts: {
+    coreOutputContracts: {
+      "core.universal-safety": ["safetyNotes", "redactions", "escalations"],
+      "core.proportional-engineering": ["done", "deliberatelyNotDone", "expansions", "verificationSteps"],
+    },
+  },
+};
+
+const contractedImplemented = () => {
+  const base = createSkillRun({ ...fixtureInput, policy: coreContractPolicy });
+  let run = reduceSkillRun(base, { type: "select-skills", skills: fixtureSkills });
+  run = reduceSkillRun(run, { type: "record-skill-read", skillId: fixtureSkills[0].skillId, checksum: fixtureSkills[0].checksum, source: "content-delivered" });
+  run = reduceSkillRun(run, { type: "record-skill-read", skillId: fixtureSkills[1].skillId, checksum: fixtureSkills[1].checksum, source: "content-delivered" });
+  run = reduceSkillRun(run, { type: "resolve-clarification", answers: fixtureAnswers, declinedFields: [], assumptions: [] });
+  run = reduceSkillRun(run, { type: "start-execution" });
+  return reduceSkillRun(run, { type: "complete-execution", status: "implemented", artifacts: [] });
+};
+
+const satisfiedUniversalContracts: VerificationReport["universalContracts"] = {
+  "core.universal-safety": {
+    safetyNotes: ["No secrets touched; artifacts owned by this task only."],
+    redactions: ["None."],
+    escalations: ["None."],
+  },
+  "core.proportional-engineering": {
+    done: ["Built the minimal change required by the criteria."],
+    deliberatelyNotDone: ["Speculative abstractions, unrelated refactors."],
+    expansions: ["None."],
+    verificationSteps: ["Ran the selected verification skill matrix."],
+  },
+};
+
+test("verify_skill_run blocks when declared universal output contracts are missing", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  const implemented = contractedImplemented();
+  await store.create(implemented);
+  const before = await store.read(implemented.runId);
+  await assert.rejects(
+    verifySkillRun(store, implemented.runId, { reportPath: "report.json", report: fixtureReport }),
+    (error: unknown) => error instanceof SkillRunError && error.code === "verification-blocked" && error.message.includes("core.universal-safety"),
+  );
+  assert.deepEqual(await store.read(implemented.runId), before);
+  const blocked = JSON.parse(await readFile(path.join(projectRoot, "report.json"), "utf8"));
+  assert.equal(blocked.schemaVersion, "verification-blocked/1.0");
+  assert.equal(blocked.runId, implemented.runId);
+  assert.match(blocked.userMessage, /universalContracts/);
+});
+
+test("verify_skill_run blocks when universal contract fields are empty", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  await store.create(contractedImplemented());
+  const report: VerificationReport = {
+    ...fixtureReport,
+    universalContracts: {
+      "core.universal-safety": { safetyNotes: [], redactions: ["None."], escalations: ["None."] },
+      "core.proportional-engineering": satisfiedUniversalContracts!["core.proportional-engineering"],
+    },
+  };
+  await assert.rejects(
+    verifySkillRun(store, fixtureInput.runId, { reportPath: "report.json", report }),
+    (error: unknown) => error instanceof SkillRunError && error.code === "verification-blocked" && error.message.includes("safetyNotes"),
+  );
+});
+
+test("verify_skill_run writes the canonical server-authored report file on success", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  await mkdir(path.join(projectRoot, "artifacts"), { recursive: true });
+  await writeFile(path.join(projectRoot, "artifacts/desktop.png"), "x");
+  const implemented = contractedImplemented();
+  await store.create(implemented);
+  const report: VerificationReport = { ...fixtureReport, universalContracts: satisfiedUniversalContracts };
+  const run = await verifySkillRun(store, implemented.runId, { reportPath: "qa/verification-report.json", report });
+  assert.equal(run.state, "verified");
+  const canonical = canonicalizeVerificationReport(report);
+  const fileContent = await readFile(path.join(projectRoot, "qa/verification-report.json"), "utf8");
+  assert.equal(fileContent, `${canonical}\n`);
+  assert.equal(run.verification?.reportSha256, `sha256:${createHash("sha256").update(canonical, "utf8").digest("hex")}`);
+});
+
+test("verify_skill_run rejects report paths outside the project root", async () => {
+  const parentRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const projectRoot = path.join(parentRoot, "project");
+  await mkdir(projectRoot);
+  const store = new SkillRunStore(projectRoot);
+  await store.create(contractedImplemented());
+  await assert.rejects(
+    verifySkillRun(store, fixtureInput.runId, {
+      reportPath: path.join(parentRoot, "verification.json"),
+      report: { ...fixtureReport, universalContracts: satisfiedUniversalContracts },
+    }),
+    (error: unknown) => error instanceof SkillRunError && error.code === "verification-blocked",
+  );
+  await assert.rejects(readFile(path.join(parentRoot, "verification.json"), "utf8"));
+});
+
+test("persisted verification records must satisfy declared universal contracts", () => {
+  const implemented = contractedImplemented();
+  const delivered = implemented;
+  const verifiedReport: VerificationReport = { ...fixtureReport, universalContracts: satisfiedUniversalContracts };
+  const verifiedSha = `sha256:${createHash("sha256").update(canonicalizeVerificationReport(verifiedReport), "utf8").digest("hex")}`;
+  const verified = reduceSkillRun(delivered, {
+    type: "record-verification",
+    reportPath: "report.json",
+    reportSha256: verifiedSha,
+    report: verifiedReport,
+    evidenceSnapshots: [fixtureEvidenceSnapshot],
+  });
+  assert.equal(assertValidSkillRun(verified), undefined);
+  const missingContracts = reduceSkillRun(delivered, {
+    type: "record-verification",
+    reportPath: "report.json",
+    reportSha256: reportChecksum,
+    report: fixtureReport,
+    evidenceSnapshots: [fixtureEvidenceSnapshot],
+  });
+  assert.throws(
+    () => assertValidSkillRun(missingContracts),
+    (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity" && error.message.includes("universal output contract"),
+  );
+});
+
+test("validateVerificationReportForRun names the unsatisfied contract skills", () => {
+  const implemented = contractedImplemented();
+  assert.throws(
+    () => validateVerificationReportForRun(implemented, fixtureReport),
+    (error: unknown) => error instanceof SkillRunError && error.code === "verification-blocked"
+      && error.message.includes("core.universal-safety") && error.message.includes("core.proportional-engineering"),
+  );
+});
