@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { routerAlgorithmVersion } from "./pipeline.ts";
 
 const tokenVersion = "router-continuation/2.0" as const;
-const routerVersion = "router/2.1" as const;
 const algorithm = "HS256" as const;
 const defaultTtlMs = 15 * 60 * 1000;
 const maxTokenBytes = 4096;
@@ -32,7 +32,7 @@ export type ContinuationBinding = {
   promptProjection: unknown;
   routingProjection: unknown;
   projectIdentity: string;
-  routerAlgorithmVersion: typeof routerVersion;
+  routerAlgorithmVersion: typeof routerAlgorithmVersion;
   signalDigest: string;
   vocabularyDigest: string;
   semanticHintsDigest: string;
@@ -50,7 +50,7 @@ export type ContinuationTokenClaims = {
   strict: boolean;
   capabilities: string[];
   projectIdentity: string;
-  routerAlgorithmVersion: typeof routerVersion;
+  routerAlgorithmVersion: typeof routerAlgorithmVersion;
   signalDigest: string;
   vocabularyDigest: string;
   semanticHintsDigest: string;
@@ -196,7 +196,7 @@ const normalizedQuestions = (questions: readonly RouterClarificationQuestion[]) 
 const normalizedBinding = (binding: ContinuationBinding) => {
   if (!binding || typeof binding !== "object") invalid("Continuation binding is invalid.");
   if (typeof binding.strict !== "boolean") invalid("Continuation strict flag is invalid.");
-  if (binding.routerAlgorithmVersion !== routerVersion) invalid("Continuation router algorithm version is invalid.");
+  if (binding.routerAlgorithmVersion !== routerAlgorithmVersion) invalid("Continuation router algorithm version is invalid.");
   return {
     fingerprintDigest: normalizeText(binding.fingerprintDigest, "fingerprintDigest"),
     registryDigest: normalizeText(binding.registryDigest, "registryDigest"),
@@ -292,7 +292,7 @@ const parseClaims = (token: string, secret: Uint8Array): ContinuationTokenClaims
     typeof claims.routingDate !== "string" || typeof claims.targetAgent !== "string" || typeof claims.strict !== "boolean" ||
     !Array.isArray(claims.capabilities) || !claims.capabilities.every((value) => typeof value === "string") ||
     typeof claims.projectIdentity !== "string" ||
-    claims.routerAlgorithmVersion !== routerVersion || typeof claims.signalDigest !== "string" ||
+    claims.routerAlgorithmVersion !== routerAlgorithmVersion || typeof claims.signalDigest !== "string" ||
     typeof claims.vocabularyDigest !== "string" || typeof claims.semanticHintsDigest !== "string" ||
     typeof claims.promptDigest !== "string" || typeof claims.routingDigest !== "string" || typeof claims.questionDigest !== "string") {
     invalid("Continuation token claims have invalid types.");
