@@ -58,10 +58,13 @@ export type SkillRun = {
 
 export class SkillRunError extends Error {
   readonly code: SkillRunErrorCode;
+  /** Machine-readable contract facts, surfaced to hosts as McpToolError details. */
+  readonly details?: Record<string, unknown>;
 
-  constructor(code: SkillRunErrorCode, message: string) {
+  constructor(code: SkillRunErrorCode, message: string, details?: Record<string, unknown>) {
     super(message);
     this.name = "SkillRunError";
     this.code = code;
+    if (details) this.details = details;
   }
 }

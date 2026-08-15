@@ -172,6 +172,20 @@ _Avoid_: design scraping, pixel clone, study analysis
 A closed, named anti-pattern code in the visual critic report that marks a design default as AI-generated; each tell carries a severity and a fix direction.
 _Avoid_: heuristic, style guideline, checklist item
 
+## Runtimes and migration
+
+**Lifecycle-v1 runtime**:
+The legacy persisted-run runtime whose verification report is authored by the host agent and validated by the server. It receives stopgap ergonomics only; structural verification work routes to strict-v2 instead.
+_Avoid_: default runtime, maintained runtime, verification path going forward
+
+**Strict-v2 runtime**:
+The runtime whose declared verification gates are evaluated server-side from attached evidence; the host never authors a verification report. It is the only path that can certify a strict run.
+_Avoid_: new lifecycle, report-in runtime, verified mode
+
+**Strict migration**:
+The act of a host opting into the strict-v2 runtime (`strict: true` on `prepare_task`, or the router config default). It is orthogonal to routing mode (model-assisted vs limited-deterministic fallback).
+_Avoid_: routing migration, verification upgrade, mode switch
+
 ## Core (universal) skills
 
 **Core skill / universal skill**:

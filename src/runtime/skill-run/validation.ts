@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { VerificationFinding, VerificationReport } from "../types.ts";
+import type { VerificationReport } from "../types.ts";
 import { SkillRunError, type SkillRun, type SkillRunArtifact, type SkillRunSkill } from "./types.ts";
 
 const sha256Pattern = /^sha256:[a-f0-9]{64}$/;
@@ -8,12 +8,47 @@ const locales = new Set(["en", "ru", "mixed", "unknown"]);
 const states = new Set(["created", "skills-selected", "skills-read", "clarified", "running", "implemented", "verified", "implemented-unverified", "failed", "blocked"]);
 const clarificationStatuses = new Set(["not-required", "pending", "resolved", "declined"]);
 const roles = new Set(["primary", "companion"]);
-const severities = new Set(["critical", "high", "medium", "low", "info"]);
-const gates = new Set(["hard", "soft"]);
-const capabilityStatuses = new Set(["ready", "degraded", "unavailable"]);
-const executionStatuses = new Set(["not-started", "running", "implemented", "failed", "blocked"]);
-const verificationStatuses = new Set(["not-run", "passed", "failed", "partial"]);
-const outcomes = new Set(["verified", "implemented-unverified", "failed", "blocked"]);
+
+// Single source of truth for the lifecycle-v1 verification report contract (ADR 0010): the
+// hand-rolled validator below and the JSON Schema published through verify_skill_run's
+// inputSchema (report-schema.ts) are both composed from these exported constants, so the
+// enforced shape and the published shape cannot drift apart.
+export const verificationReportSchemaVersion = "1.0";
+
+export const verificationReportEnums = {
+  severity: ["critical", "high", "medium", "low", "info"],
+  gate: ["hard", "soft"],
+  capabilityStatus: ["ready", "degraded", "unavailable"],
+  executionStatus: ["not-started", "running", "implemented", "failed", "blocked"],
+  verificationStatus: ["not-run", "passed", "failed", "partial"],
+  outcome: ["verified", "implemented-unverified", "failed", "blocked"],
+} as const;
+
+export const verificationReportFieldSets = {
+  root: {
+    required: ["schemaVersion", "domain", "workflowId", "iteration", "capabilityStatus", "executionStatus", "verificationStatus", "outcome", "findings", "gates", "evidence", "residualRisks"],
+    optional: ["universalContracts"],
+  },
+  finding: {
+    required: ["id", "code", "source", "severity", "gate", "message", "evidence", "remediation", "autofixable"],
+    optional: ["affectedSurface"],
+  },
+  artifact: {
+    required: ["kind", "description"],
+    optional: ["path"],
+  },
+  gates: {
+    required: ["hardPassed", "criticalFindings", "highFindings"],
+    optional: [],
+  },
+} as const;
+
+const severities = new Set<string>(verificationReportEnums.severity);
+const gates = new Set<string>(verificationReportEnums.gate);
+const capabilityStatuses = new Set<string>(verificationReportEnums.capabilityStatus);
+const executionStatuses = new Set<string>(verificationReportEnums.executionStatus);
+const verificationStatuses = new Set<string>(verificationReportEnums.verificationStatus);
+const outcomes = new Set<string>(verificationReportEnums.outcome);
 
 export const canonicalizeJson = (value: unknown): string => {
   const order = (nested: unknown): unknown => {
@@ -117,47 +152,158 @@ const validateArtifact = (input: unknown, path: string): SkillRunArtifact => {
   return value as SkillRunArtifact;
 };
 
-const validateFinding = (input: unknown, path: string): VerificationFinding => {
-  const value = keys(input, ["id", "code", "source", "severity", "gate", "message", "evidence", "remediation", "autofixable"], ["affectedSurface"], path);
-  for (const field of ["id", "code", "source", "message", "remediation"] as const) string(value[field], `${path}.${field}`);
-  enumeration(value.severity, severities, `${path}.severity`);
-  enumeration(value.gate, gates, `${path}.gate`);
-  stringArray(value.evidence, `${path}.evidence`);
-  boolean(value.autofixable, `${path}.autofixable`);
-  if (Object.hasOwn(value, "affectedSurface")) string(value.affectedSurface, `${path}.affectedSurface`);
-  return value as VerificationFinding;
+// Collect-all helpers (ADR 0010): the report form is validated in one pass so a host authoring a
+// report learns every violation per call, as prose and as a machine-readable problems list.
+const collectObject = (input: unknown, path: string, problems: string[]): Record<string, unknown> | undefined => {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    problems.push(`${path} must be an object.`);
+    return undefined;
+  }
+  return input as Record<string, unknown>;
+};
+
+const collectKeys = (
+  input: unknown,
+  required: readonly string[],
+  optional: readonly string[],
+  path: string,
+  problems: string[],
+): Record<string, unknown> | undefined => {
+  const value = collectObject(input, path, problems);
+  if (!value) return undefined;
+  const allowed = new Set([...required, ...optional]);
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) problems.push(`${path} contains unknown property ${key}.`);
+  }
+  for (const key of required) {
+    if (!Object.hasOwn(value, key)) problems.push(`${path} is missing required property ${key}.`);
+  }
+  return value;
+};
+
+const collectString = (input: unknown, path: string, problems: string[]): string | undefined => {
+  if (typeof input !== "string") {
+    problems.push(`${path} must be a string.`);
+    return undefined;
+  }
+  return input;
+};
+
+const collectBoolean = (input: unknown, path: string, problems: string[]): boolean | undefined => {
+  if (typeof input !== "boolean") {
+    problems.push(`${path} must be a boolean.`);
+    return undefined;
+  }
+  return input;
+};
+
+const collectInteger = (input: unknown, path: string, problems: string[]): number | undefined => {
+  if (!Number.isInteger(input) || (input as number) < 0) {
+    problems.push(`${path} must be a non-negative integer.`);
+    return undefined;
+  }
+  return input as number;
+};
+
+const collectArray = (input: unknown, path: string, problems: string[]): unknown[] | undefined => {
+  if (!Array.isArray(input)) {
+    problems.push(`${path} must be an array.`);
+    return undefined;
+  }
+  return input;
+};
+
+const collectEnumeration = (input: unknown, allowed: Set<string>, path: string, problems: string[]): string | undefined => {
+  if (typeof input !== "string" || !allowed.has(input)) {
+    problems.push(`${path} has an invalid value.`);
+    return undefined;
+  }
+  return input;
+};
+
+const collectStringArray = (input: unknown, path: string, problems: string[]): string[] | undefined => {
+  const values = collectArray(input, path, problems);
+  if (!values) return undefined;
+  const strings = values.map((item, index) => collectString(item, `${path}[${index}]`, problems));
+  return strings.every((item) => item !== undefined) ? strings as string[] : undefined;
+};
+
+/**
+ * Validates the verification report form and returns every violation in one pass.
+ * Empty when the report's shape satisfies the published contract.
+ */
+export const collectVerificationReportProblems = (input: unknown): string[] => {
+  const problems: string[] = [];
+  const root = collectKeys(input, verificationReportFieldSets.root.required, verificationReportFieldSets.root.optional, "verification report", problems);
+  if (!root) return problems;
+  if (root.schemaVersion !== undefined && root.schemaVersion !== verificationReportSchemaVersion) problems.push(`verification report.schemaVersion must be ${verificationReportSchemaVersion}.`);
+  if (root.domain !== undefined) collectString(root.domain, "verification report.domain", problems);
+  if (root.workflowId !== undefined) collectString(root.workflowId, "verification report.workflowId", problems);
+  if (root.iteration !== undefined) collectInteger(root.iteration, "verification report.iteration", problems);
+  if (root.capabilityStatus !== undefined) collectEnumeration(root.capabilityStatus, capabilityStatuses, "verification report.capabilityStatus", problems);
+  if (root.executionStatus !== undefined) collectEnumeration(root.executionStatus, executionStatuses, "verification report.executionStatus", problems);
+  if (root.verificationStatus !== undefined) collectEnumeration(root.verificationStatus, verificationStatuses, "verification report.verificationStatus", problems);
+  if (root.outcome !== undefined) collectEnumeration(root.outcome, outcomes, "verification report.outcome", problems);
+  if (root.findings !== undefined) {
+    const findings = collectArray(root.findings, "verification report.findings", problems);
+    findings?.forEach((finding, index) => {
+      const path = `verification report.findings[${index}]`;
+      const item = collectKeys(finding, verificationReportFieldSets.finding.required, verificationReportFieldSets.finding.optional, path, problems);
+      if (!item) return;
+      for (const field of ["id", "code", "source", "message", "remediation"] as const) {
+        if (item[field] !== undefined) collectString(item[field], `${path}.${field}`, problems);
+      }
+      if (item.severity !== undefined) collectEnumeration(item.severity, severities, `${path}.severity`, problems);
+      if (item.gate !== undefined) collectEnumeration(item.gate, gates, `${path}.gate`, problems);
+      if (item.evidence !== undefined) collectStringArray(item.evidence, `${path}.evidence`, problems);
+      if (item.autofixable !== undefined) collectBoolean(item.autofixable, `${path}.autofixable`, problems);
+      if (item.affectedSurface !== undefined) collectString(item.affectedSurface, `${path}.affectedSurface`, problems);
+    });
+  }
+  if (root.gates !== undefined) {
+    const gateValue = collectKeys(root.gates, verificationReportFieldSets.gates.required, verificationReportFieldSets.gates.optional, "verification report.gates", problems);
+    if (gateValue) {
+      if (gateValue.hardPassed !== undefined) collectBoolean(gateValue.hardPassed, "verification report.gates.hardPassed", problems);
+      if (gateValue.criticalFindings !== undefined) collectInteger(gateValue.criticalFindings, "verification report.gates.criticalFindings", problems);
+      if (gateValue.highFindings !== undefined) collectInteger(gateValue.highFindings, "verification report.gates.highFindings", problems);
+    }
+  }
+  if (root.evidence !== undefined) {
+    const evidence = collectArray(root.evidence, "verification report.evidence", problems);
+    evidence?.forEach((artifact, index) => {
+      const path = `verification report.evidence[${index}]`;
+      const item = collectKeys(artifact, verificationReportFieldSets.artifact.required, verificationReportFieldSets.artifact.optional, path, problems);
+      if (!item) return;
+      if (item.kind !== undefined) collectString(item.kind, `${path}.kind`, problems);
+      if (item.description !== undefined) collectString(item.description, `${path}.description`, problems);
+      if (item.path !== undefined) collectString(item.path, `${path}.path`, problems);
+    });
+  }
+  if (root.residualRisks !== undefined) collectStringArray(root.residualRisks, "verification report.residualRisks", problems);
+  if (Object.hasOwn(root, "universalContracts")) {
+    const contracts = collectObject(root.universalContracts, "verification report.universalContracts", problems);
+    if (contracts) {
+      for (const [skillId, section] of Object.entries(contracts)) {
+        const sectionPath = `verification report.universalContracts.${skillId}`;
+        const fields = collectObject(section, sectionPath, problems);
+        if (!fields) continue;
+        for (const [field, statements] of Object.entries(fields)) {
+          const statementsPath = `${sectionPath}.${field}`;
+          // Emptiness is a semantic contract failure (verification-blocked naming the field), not a
+          // shape violation, so empty arrays are shape-valid here.
+          const values = collectStringArray(statements, statementsPath, problems);
+          if (values && values.some((statement) => statement.trim() === "")) problems.push(`${statementsPath} must not contain blank statements.`);
+        }
+      }
+    }
+  }
+  return problems;
 };
 
 export const assertValidVerificationReport: (input: unknown) => asserts input is VerificationReport = (input) => {
-  const value = keys(input, ["schemaVersion", "domain", "workflowId", "iteration", "capabilityStatus", "executionStatus", "verificationStatus", "outcome", "findings", "gates", "evidence", "residualRisks"], ["universalContracts"], "verification report");
-  if (value.schemaVersion !== "1.0") fail("verification report.schemaVersion must be 1.0.");
-  string(value.domain, "verification report.domain");
-  string(value.workflowId, "verification report.workflowId");
-  integer(value.iteration, "verification report.iteration");
-  enumeration(value.capabilityStatus, capabilityStatuses, "verification report.capabilityStatus");
-  enumeration(value.executionStatus, executionStatuses, "verification report.executionStatus");
-  enumeration(value.verificationStatus, verificationStatuses, "verification report.verificationStatus");
-  enumeration(value.outcome, outcomes, "verification report.outcome");
-  array(value.findings, "verification report.findings").forEach((finding, index) => validateFinding(finding, `verification report.findings[${index}]`));
-  const gateValue = keys(value.gates, ["hardPassed", "criticalFindings", "highFindings"], [], "verification report.gates");
-  boolean(gateValue.hardPassed, "verification report.gates.hardPassed");
-  integer(gateValue.criticalFindings, "verification report.gates.criticalFindings");
-  integer(gateValue.highFindings, "verification report.gates.highFindings");
-  array(value.evidence, "verification report.evidence").forEach((artifact, index) => validateArtifact(artifact, `verification report.evidence[${index}]`));
-  stringArray(value.residualRisks, "verification report.residualRisks");
-  if (Object.hasOwn(value, "universalContracts")) {
-    const contracts = object(value.universalContracts, "verification report.universalContracts");
-    for (const [skillId, section] of Object.entries(contracts)) {
-      const sectionPath = `verification report.universalContracts.${skillId}`;
-      const fields = object(section, sectionPath);
-      for (const [field, statements] of Object.entries(fields)) {
-        const statementsPath = `${sectionPath}.${field}`;
-        // Emptiness is a semantic contract failure (verification-blocked naming the field), not a
-        // shape violation, so empty arrays are shape-valid here.
-        const values = stringArray(statements, statementsPath);
-        if (values.some((statement) => statement.trim() === "")) fail(`${statementsPath} must not contain blank statements.`);
-      }
-    }
+  const problems = collectVerificationReportProblems(input);
+  if (problems.length > 0) {
+    throw new SkillRunError("run-integrity", problems.join(" "), { problems });
   }
 };
 

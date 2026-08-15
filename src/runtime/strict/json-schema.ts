@@ -51,11 +51,18 @@ export const validateJsonSchema = (
       if (!record(value)) { errors.push(`${at}: expected object.`); break; }
       const properties = record(schema.properties) ? schema.properties : {};
       if (typeof schema.minProperties === "number" && Object.keys(value).length < schema.minProperties) errors.push(`${at}: requires at least ${schema.minProperties} properties.`);
+      if (typeof schema.maxProperties === "number" && Object.keys(value).length > schema.maxProperties) errors.push(`${at}: allows at most ${schema.maxProperties} properties.`);
       if (Array.isArray(schema.required)) for (const key of schema.required) {
         if (typeof key === "string" && (!Object.hasOwn(value, key) || value[key] === undefined)) errors.push(`${at}.${key}: required property is missing.`);
       }
       if (schema.additionalProperties === false) for (const key of Object.keys(value)) {
         if (!Object.hasOwn(properties, key)) errors.push(`${at}.${key}: additional property is not allowed.`);
+      } else if (record(schema.additionalProperties)) {
+        // Schema-form additionalProperties: unmatched keys validate against the declared schema,
+        // so a published open-object promise is enforced at the boundary instead of silently skipped.
+        for (const key of Object.keys(value)) {
+          if (!Object.hasOwn(properties, key)) errors.push(...validateJsonSchema(schema.additionalProperties, value[key], `${at}.${key}`, root));
+        }
       }
       for (const [key, child] of Object.entries(properties)) if (Object.hasOwn(value, key)) errors.push(...validateJsonSchema(child, value[key], `${at}.${key}`, root));
       break;

@@ -17,6 +17,7 @@ import {
   type SkillRunErrorCode,
 } from "../../runtime/skill-run/index.ts";
 import type { VerificationReport } from "../../runtime/types.ts";
+import { verificationReportInputSchema } from "../../runtime/skill-run/report-schema.ts";
 import {
   beginStrictStep,
   completeStrictStep,
@@ -59,7 +60,7 @@ const strictErrorCodeMap: Record<StrictSkillRunErrorCode, McpToolErrorCode> = {
 };
 
 export const mapSkillRunError = (error: SkillRunError): McpToolError => (
-  new McpToolError(lifecycleErrorCodeMap[error.code], error.message, { lifecycleCode: error.code })
+  new McpToolError(lifecycleErrorCodeMap[error.code], error.message, { lifecycleCode: error.code, ...error.details })
 );
 
 const withSkillRunErrors = (handler: McpToolHandler): McpToolHandler => async (args) => {
@@ -425,7 +426,10 @@ export const runToolDefinitions: McpToolDefinition[] = [
       properties: {
         ...runIdProperties,
         reportPath: { type: "string", description: "Project-contained path the server writes the canonical verification report (or blocked status record) to." },
-        report: { type: "object" },
+        report: {
+          ...verificationReportInputSchema,
+          description: "Verification report matching the published shape. Per-run required universalContracts fields come from policy.artifacts.coreOutputContracts on inspect_skill_run. On invalid form, the error carries every problem in details.problems; on unsatisfied contracts, details.requiredContractFields.",
+        },
       },
       required: ["runId", "reportPath", "report"],
       additionalProperties: false,
