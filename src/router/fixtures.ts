@@ -4,6 +4,11 @@ import { taskActionIds, type RiskLevel, type RouterSkillRole, type TaskAction } 
 import type { RequiredEvidenceRef } from "../domains/types.ts";
 import type { RoutingVocabularyFile } from "./vocabulary/types.ts";
 
+// The frozen corpus routing date shared by the router evaluations and the parity
+// check. The date is fixed so routing decisions stay byte-identical across runs
+// and so the production parity run replays the same decisions as the eval harness.
+export const routerEvalRoutingDate = "2026-07-19" as const;
+
 export type RouterGoldenExpected = {
   status: "prepared" | "clarification_required" | "decomposition_required" | "no_matching_skills" | "strict_requirements_unmet" | "context_budget_exceeded";
   domainIds: string[];
@@ -25,7 +30,7 @@ export type RouterGoldenCase = {
   strict: boolean;
   capabilities: string[];
   expected: RouterGoldenExpected;
-  reviewNote?: "router/2.0 decomposition contract";
+  reviewNote?: "router/2.0 decomposition contract" | "router/2.1 pipeline migration corpus delta";
 };
 
 export type RouterFixtureDomain = {
@@ -207,7 +212,7 @@ const validateGoldenCase = (input: unknown, index: number): RouterGoldenCase => 
   if (typeof value.strict !== "boolean") throw new Error(`${at}.strict must be a boolean`);
   stringArray(value.capabilities, `${at}.capabilities`);
   validateGoldenExpected(value.expected, `${at}.expected`);
-  if (value.reviewNote !== undefined && value.reviewNote !== "router/2.0 decomposition contract") throw new Error(`${at}.reviewNote is invalid`);
+  if (value.reviewNote !== undefined && value.reviewNote !== "router/2.0 decomposition contract" && value.reviewNote !== "router/2.1 pipeline migration corpus delta") throw new Error(`${at}.reviewNote is invalid`);
   return structuredClone(value) as RouterGoldenCase;
 };
 

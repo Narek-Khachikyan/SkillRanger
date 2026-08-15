@@ -60,6 +60,11 @@ export type RouterSkillMetadataBuildInput = {
   targetAgent: string;
   inputs: Record<string, Record<string, unknown>>;
   intent?: string;
+  // Explicit installed-skill marking. When supplied it replaces the project
+  // lockfile read, so evaluation and task-preparation callers can pass a
+  // controlled marking instead of depending on the machine's lockfile. When
+  // absent, the builder falls back to lockfile-driven marking.
+  installed?: InstalledSkill[];
 };
 
 export type RouterSkillMetadataBuildResult = {
@@ -68,9 +73,9 @@ export type RouterSkillMetadataBuildResult = {
   entry?: InstalledSkill;
 };
 
-const installedEntryFor = async (projectRoot: string, skillId: string, targetAgent: string) => {
-  const lockfile = await readLockfile(projectRoot);
-  return lockfile.installed.find((entry) => entry.skillId === skillId && entry.targetAgent === targetAgent && entry.scope === "repo");
+const installedEntryFor = async (projectRoot: string, skillId: string, targetAgent: string, installed?: InstalledSkill[]) => {
+  const entries = installed ?? (await readLockfile(projectRoot)).installed;
+  return entries.find((entry) => entry.skillId === skillId && entry.targetAgent === targetAgent && entry.scope === "repo");
 };
 
 const safeInstalledRoot = async (projectRoot: string, installedPath: string) => {
@@ -88,7 +93,7 @@ const buildRegistryMetadata = async (
   const routing = skill.manifest.routing;
   if (!routing?.roles || !routing.domains || !routing.actions || !routing.artifactTypes || !routing.intentTags || !routing.technologyTags || !routing.qualityGoals) return undefined;
   const audit = await auditSkill(skill);
-  const entry = await installedEntryFor(input.projectRoot, skill.manifest.id, input.targetAgent);
+  const entry = await installedEntryFor(input.projectRoot, skill.manifest.id, input.targetAgent, input.installed);
   const installedRoot = entry ? await safeInstalledRoot(input.projectRoot, entry.installedPath) : undefined;
   const installed = Boolean(entry && installedRoot && entry.checksum === skill.checksum && await assertInstalledMatches(skill, installedRoot, entry.checksum).then(() => true).catch(() => false));
   const contract = skill.executionContract;

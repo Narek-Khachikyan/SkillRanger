@@ -11,14 +11,19 @@ import {
   SkillRunError,
   assertValidSkillRun,
   canonicalizeVerificationReport,
+  collectVerificationReportProblems,
   completeSkillRun,
   createSkillRun,
   recordSkillContentDelivered,
   recordSkillRead,
   resolveSkillRunClarifications,
+  skillRunNoticeText,
   startSkillRun,
   startSkillRunExecution,
   validateVerificationReportForRun,
+  verificationNoticeFor,
+  verificationReportEnums,
+  verificationReportFieldSets,
   verifySkillRun,
   reduceSkillRun,
   type CreateSkillRunInput,
@@ -27,6 +32,9 @@ import {
   type SkillRunEvent,
   type SkillRunSkill,
 } from "../src/runtime/skill-run/index.ts";
+import { verificationReportInputSchema } from "../src/runtime/skill-run/report-schema.ts";
+import { mapSkillRunError, runToolDefinitions } from "../src/mcp/tools/runs.ts";
+import { validateJsonSchema } from "../src/runtime/strict/json-schema.ts";
 import type { VerificationReport } from "../src/runtime/types.ts";
 
 const visualChecksum = `sha256:${"a".repeat(64)}`;
@@ -481,7 +489,9 @@ test("store-backed lifecycle hashes intent and canonical verification before per
   await Promise.all(fixtureSkills.map((skill) => recordSkillContentDelivered(store, run.runId, { skillId: skill.skillId, checksum: skill.checksum })));
   run = await resolveSkillRunClarifications(store, run.runId, { answers: fixtureAnswers, declinedFields: [], assumptions: [] });
   run = await startSkillRunExecution(store, run.runId);
-  run = await completeSkillRun(store, run.runId, { status: "implemented", artifacts: [] });
+  const completed = await completeSkillRun(store, run.runId, { status: "implemented", artifacts: [] });
+  assert.deepEqual(completed.notices, ["verification-required-unrecorded"]);
+  run = completed.run;
   run = await verifySkillRun(store, run.runId, { reportPath: "report.json", report: fixtureReport });
   assert.equal(run.state, "verified");
   assert.equal(run.verification?.reportSha256, `sha256:${createHash("sha256").update(canonicalizeVerificationReport(fixtureReport), "utf8").digest("hex")}`);
@@ -491,6 +501,68 @@ test("store-backed lifecycle hashes intent and canonical verification before per
     sha256: `sha256:${createHash("sha256").update("x").digest("hex")}`,
   }]);
   assert.deepEqual(JSON.parse(await readFile(path.join(projectRoot, ".skillranger/runs", `${run.runId}.json`), "utf8")), run);
+});
+
+test("completeSkillRun emits no notice when verification is not required", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  let run = await startSkillRun(store, {
+    runId: fixtureInput.runId,
+    domain: fixtureInput.domain,
+    targetAgent: fixtureInput.targetAgent,
+    locale: fixtureInput.locale,
+    rawIntent: " redesign the landing ",
+    normalizedGoal: fixtureInput.intent.normalizedGoal,
+    storeRawIntent: false,
+    policy: { ...fixtureInput.policy, verificationRequired: false },
+    selectedSkills: fixtureSkills,
+    now: fixtureInput.now,
+  });
+  await Promise.all(fixtureSkills.map((skill) => recordSkillRead(store, run.runId, { skillId: skill.skillId, checksum: skill.checksum })));
+  run = await resolveSkillRunClarifications(store, run.runId, { answers: fixtureAnswers, declinedFields: [], assumptions: [] });
+  run = await startSkillRunExecution(store, run.runId);
+  const completed = await completeSkillRun(store, run.runId, { status: "implemented", artifacts: [] });
+  assert.deepEqual(completed.notices, []);
+  assert.equal(completed.run.state, "implemented");
+});
+
+test("verificationNoticeFor fires only while verification is recordable: the implemented state", () => {
+  // A failed or blocked closure makes verification unreachable, so the notice must not fire there.
+  const failed = reduceSkillRun(runningRun, { type: "complete-execution", status: "failed", artifacts: [] });
+  const blocked = reduceSkillRun(runningRun, { type: "complete-execution", status: "blocked", artifacts: [] });
+  assert.equal(failed.policy.verificationRequired, true);
+  assert.equal(verificationNoticeFor(failed), undefined, "failed");
+  assert.equal(verificationNoticeFor(blocked), undefined, "blocked");
+  const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
+  assert.equal(verificationNoticeFor(implemented), "verification-required-unrecorded");
+});
+
+test("verificationNoticeFor emits no notice once verification is recorded for any outcome", () => {
+  const implemented = reduceSkillRun(runningRun, { type: "complete-execution", status: "implemented", artifacts: [] });
+  const delivered = { ...implemented, skillReads: implemented.skillReads.map((read) => ({ ...read, source: "content-delivered" as const })) };
+  const reportSha256 = `sha256:${createHash("sha256").update(canonicalizeVerificationReport(fixtureReport), "utf8").digest("hex")}`;
+  const outcomes: VerificationReport["outcome"][] = ["verified", "implemented-unverified", "failed", "blocked"];
+  for (const outcome of outcomes) {
+    const run = reduceSkillRun(delivered, {
+      type: "record-verification",
+      reportPath: "report.json",
+      reportSha256,
+      report: { ...fixtureReport, outcome },
+      ...(outcome === "verified" ? { evidenceSnapshots: [fixtureEvidenceSnapshot] } : {}),
+    });
+    assert.equal(run.state, outcome);
+    assert.notEqual(run.verification, undefined);
+    assert.equal(verificationNoticeFor(run), undefined, outcome);
+  }
+});
+
+test("the verification-required-unrecorded notice text carries the mandatory-verify and narrative obligations", () => {
+  const text = skillRunNoticeText["verification-required-unrecorded"];
+  assert.match(text, /VERIFICATION-REQUIRED-UNRECORDED/);
+  assert.match(text, /verify_skill_run/);
+  assert.match(text, /implemented-unverified/);
+  assert.match(text, /inspect_skill_run/);
+  assert.match(text, /incomplete/);
 });
 
 test("verified lifecycle rejects missing project evidence", async () => {
@@ -1046,4 +1118,127 @@ test("validateVerificationReportForRun names the unsatisfied contract skills", (
     (error: unknown) => error instanceof SkillRunError && error.code === "verification-blocked"
       && error.message.includes("core.universal-safety") && error.message.includes("core.proportional-engineering"),
   );
+});
+
+// ADR 0010 — stopgap ergonomics: collect-all form validation, machine-readable error details,
+// and a published inputSchema composed from the same constants the validator enforces.
+
+test("report form validation collects every violation in one pass", () => {
+  const brokenReport = {
+    ...fixtureReport,
+    executionStatus: "bogus",
+    iteration: -1,
+    gates: { hardPassed: true, criticalFindings: 0 },
+    findings: [{ id: "f1", severity: "huge", gate: "hard", evidence: "not-an-array", autofixable: "yes" }],
+    status: "narrated-outcome",
+  } as unknown as VerificationReport;
+  assert.throws(
+    () => validateVerificationReportForRun(contractedImplemented(), brokenReport),
+    (error: unknown) => {
+      if (!(error instanceof SkillRunError) || error.code !== "run-integrity") return false;
+      const problems = error.details?.problems;
+      if (!Array.isArray(problems)) return false;
+      assert.ok(problems.includes("verification report contains unknown property status."));
+      assert.ok(problems.includes("verification report.executionStatus has an invalid value."));
+      assert.ok(problems.includes("verification report.iteration must be a non-negative integer."));
+      assert.ok(problems.includes("verification report.gates is missing required property highFindings."));
+      assert.ok(problems.includes("verification report.findings[0] is missing required property code."));
+      assert.ok(problems.includes("verification report.findings[0].severity has an invalid value."));
+      assert.ok(problems.includes("verification report.findings[0].evidence must be an array."));
+      assert.ok(problems.includes("verification report.findings[0].autofixable must be a boolean."));
+      assert.ok(problems.length >= 11, `expected every violation collected, got ${problems.length}`);
+      return true;
+    },
+  );
+});
+
+test("collectVerificationReportProblems accepts the fixture report without findings", () => {
+  assert.deepEqual(collectVerificationReportProblems(fixtureReport), []);
+});
+
+test("published schema and validator agree on whitespace-only contract statements", () => {
+  const blankStatementReport = {
+    ...fixtureReport,
+    universalContracts: { "core.universal-safety": { safetyNotes: ["   "] } },
+  } as unknown as VerificationReport;
+  // Validator: a whitespace-only statement is a blank statement.
+  assert.ok(
+    collectVerificationReportProblems(blankStatementReport)
+      .includes("verification report.universalContracts.core.universal-safety.safetyNotes must not contain blank statements."),
+  );
+  // Published schema: pattern \\S rejects the same input the validator rejects — no gap where the
+  // schema promises acceptance and the enforced contract blocks.
+  const tool = runToolDefinitions.find(({ name }) => name === "verify_skill_run");
+  assert.ok(tool);
+  const { description: _ignored, ...publishedSchema } = (tool.inputSchema as { properties: { report: Record<string, unknown> } }).properties.report;
+  const errors = validateJsonSchema({ ...publishedSchema, type: "object" }, blankStatementReport.universalContracts ? { ...blankStatementReport } : {});
+  assert.ok(errors.length > 0, "whitespace-only statements must fail the published schema too");
+});
+
+test("unsatisfied universal contracts surface machine-readable requiredContractFields", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  await store.create(contractedImplemented());
+  await assert.rejects(
+    verifySkillRun(store, fixtureInput.runId, { reportPath: "report.json", report: fixtureReport }),
+    (error: unknown) => {
+      if (!(error instanceof SkillRunError) || error.code !== "verification-blocked") return false;
+      assert.deepEqual((error.details as { requiredContractFields: unknown }).requiredContractFields, [
+        { skillId: "core.universal-safety", fields: ["safetyNotes", "redactions", "escalations"] },
+        { skillId: "core.proportional-engineering", fields: ["done", "deliberatelyNotDone", "expansions", "verificationSteps"] },
+      ]);
+      return true;
+    },
+  );
+});
+
+test("published report inputSchema stays composed from the enforced contract constants", () => {
+  const shape = verificationReportInputSchema as {
+    required: string[];
+    properties: Record<string, { enum?: string[]; properties?: Record<string, unknown>; items?: { properties?: Record<string, { enum?: string[] }> } }>;
+  };
+  const sorted = (values: string[]) => [...values].sort();
+  assert.deepEqual(sorted(shape.required), sorted([...verificationReportFieldSets.root.required]));
+  assert.deepEqual(sorted(Object.keys(shape.properties)), sorted([...verificationReportFieldSets.root.required, ...verificationReportFieldSets.root.optional]));
+  for (const [field, key] of [
+    ["capabilityStatus", "capabilityStatus"],
+    ["executionStatus", "executionStatus"],
+    ["verificationStatus", "verificationStatus"],
+    ["outcome", "outcome"],
+  ] as const) {
+    assert.deepEqual(sorted(shape.properties[field].enum ?? []), sorted(verificationReportEnums[key]), `${field} enum must match the validator`);
+  }
+  const finding = shape.properties.findings?.items as { required: string[]; properties: Record<string, { enum?: string[] }> };
+  assert.deepEqual(sorted(finding.required), sorted([...verificationReportFieldSets.finding.required]));
+  assert.deepEqual(sorted(Object.keys(finding.properties)), sorted([...verificationReportFieldSets.finding.required, ...verificationReportFieldSets.finding.optional]));
+  assert.deepEqual(sorted(finding.properties.severity?.enum ?? []), sorted(verificationReportEnums.severity));
+  assert.deepEqual(sorted(finding.properties.gate?.enum ?? []), sorted(verificationReportEnums.gate));
+  const gates = shape.properties.gates as { required: string[]; properties: Record<string, unknown> };
+  assert.deepEqual(sorted(Object.keys(gates.properties)), sorted([...verificationReportFieldSets.gates.required, ...verificationReportFieldSets.gates.optional]));
+  const artifact = shape.properties.evidence?.items as { required: string[]; properties: Record<string, unknown> };
+  assert.deepEqual(sorted(Object.keys(artifact.properties)), sorted([...verificationReportFieldSets.artifact.required, ...verificationReportFieldSets.artifact.optional]));
+});
+
+test("verify_skill_run publishes the full report shape and error details reach the host", async () => {
+  const tool = runToolDefinitions.find(({ name }) => name === "verify_skill_run");
+  assert.ok(tool, "verify_skill_run tool definition exists");
+  const reportSchema = (tool.inputSchema as { properties: { report: Record<string, unknown> & { description?: unknown } } }).properties.report;
+  assert.equal(reportSchema.type, "object");
+  // The tool must publish the module export itself (plus a description), never an independent
+  // copy: an inlined duplicate could drift from the enforced contract with the suite green.
+  const { description, ...published } = reportSchema;
+  assert.ok(typeof description === "string" && description.length > 0);
+  assert.deepEqual(published, verificationReportInputSchema);
+
+  const mapped = mapSkillRunError(new SkillRunError("run-integrity", "shape rejected", { problems: ["verification report.gates is missing required property hardPassed."] }));
+  assert.equal(mapped.code, "run-integrity");
+  assert.deepEqual({ ...mapped.details }, {
+    lifecycleCode: "run-integrity",
+    problems: ["verification report.gates is missing required property hardPassed."],
+  });
+  const blocked = mapSkillRunError(new SkillRunError("verification-blocked", "contracts unsatisfied", { requiredContractFields: [{ skillId: "core.universal-safety", fields: ["safetyNotes"] }] }));
+  assert.deepEqual({ ...blocked.details }, {
+    lifecycleCode: "verification-blocked",
+    requiredContractFields: [{ skillId: "core.universal-safety", fields: ["safetyNotes"] }],
+  });
 });

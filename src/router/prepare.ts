@@ -1,17 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { loadRouterConfig, type RouterConfig } from "../config/index.ts";
 import { agents } from "../installers/agents.ts";
-import { loadBundledRouterPacks, type BundledRouterPack } from "../domains/registry.ts";
-import "../domains/bundled.ts";
 import { defaultDomainsRoot } from "../paths.ts";
-import { loadLocalRegistry } from "../registry/index.ts";
+import { readLockfile } from "../lockfile/index.ts";
 import type { InstalledSkill, ProjectFingerprint, RegistrySkill } from "../types.ts";
 import { scanProject } from "../scanner/index.ts";
-import { loadRouterFixturePacks } from "./fixtures.ts";
-import { buildRoutingContext, RoutingContextError } from "./context.ts";
-import { canonicalSkillRoutingDocument } from "./metadata.ts";
-import { coreRoutingVocabulary } from "./vocabulary/core.ts";
-import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "./vocabulary/load.ts";
+import { RoutingContextError } from "./context.ts";
 import { RoutingVocabularyValidationError } from "./vocabulary/validate.ts";
 import { createContinuationToken, validateContinuation, type ContinuationBinding } from "./continuation.ts";
 import { parseTrigger } from "./trigger.ts";
@@ -19,7 +13,7 @@ import { buildSkillCatalog, SkillCatalogError } from "./catalog.ts";
 import { computeSourcePackageChecksum, createSkillSourceSnapshots } from "./reader.ts";
 import { RouterStore, routerRecordDigest } from "./store.ts";
 import type { RoutingProposalProjection } from "./routing-proposal.ts";
-import { buildRouterSkillMetadata } from "./skill-metadata.ts";
+import { loadRoutingWorld, type RoutingWorld } from "./world.ts";
 import {
   routerAlgorithmVersion,
   RoutingPipelineError,
@@ -27,7 +21,8 @@ import {
   type RoutingPipelineDecision,
   type RoutingPipelineInput,
 } from "./pipeline.ts";
-import { createRouterRuntimeBridge, RouterPrepareError } from "./runtime-bridge.ts";
+import { createRouterRuntimeBridge } from "./runtime-bridge.ts";
+import { RouterPrepareError } from "./errors.ts";
 import type {
   DeterministicRoutingOutcome,
   DeterministicRoutingProjection,
@@ -50,7 +45,7 @@ import type { RouterLimits, RouterSkillMetadata } from "./composer.ts";
 import { defaultRouterLimits } from "./composer.ts";
 
 export { routerAlgorithmVersion } from "./pipeline.ts";
-export { RouterPrepareError } from "./runtime-bridge.ts";
+export { RouterPrepareError } from "./errors.ts";
 export const deterministicRoutingKey = (projection: DeterministicRoutingProjection) => routerRecordDigest(projection);
 
 const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
@@ -63,30 +58,6 @@ const capabilityIds = (capabilities: PrepareTaskCoreInput["capabilities"] = []) 
     throw new RouterPrepareError("capability-invalid", "Capabilities must be unique canonical IDs.");
   }
   return values.sort();
-};
-
-const domainMetadata = (pack: { id: string; targetSurface?: string; routing: BundledRouterPack["routing"] }) => ({
-  id: pack.id,
-  ...(pack.targetSurface ? { targetSurface: pack.targetSurface } : {}),
-  routing: pack.routing,
-});
-
-const skillMetadata = async (
-  projectRoot: string,
-  targetAgent: string,
-  skill: RegistrySkill,
-  inputs: Record<string, Record<string, unknown>>,
-  intent?: string,
-): Promise<PreparedMetadata | undefined> => {
-  const built = await buildRouterSkillMetadata({
-    source: { kind: "registry", skill },
-    projectRoot,
-    targetAgent,
-    inputs,
-    intent,
-  });
-  if (!built) return undefined;
-  return { ...built.metadata, skill, installedRoot: built.installedRoot, entry: built.entry };
 };
 
 type PreparedMetadata = RouterSkillMetadata & { skill: RegistrySkill; installedRoot?: string; entry?: InstalledSkill };
@@ -251,34 +222,20 @@ export const prepareTask = async (
 
   const routingDate = input.routingDate ?? new Date().toISOString().slice(0, 10);
   const fingerprint = await scanProject(input.projectRoot);
-  const fixturePacks = input.registry.kind === "test-fixture" ? await loadRouterFixturePacks(input.registry.root) : [];
-  const packs = input.registry.kind === "test-fixture"
-    ? fixturePacks.map(({ domain }) => ({ id: domain.id, displayName: domain.displayName, ...(domain.targetSurface ? { targetSurface: domain.targetSurface } : {}), version: "fixture", coreApi: "fixture", skillIdPrefix: `${domain.id}.`, capabilities: ["intent-routing"] as const, artifacts: { intents: [], schemas: [], recipes: [], workflows: [], validators: [] }, ownership: [], routing: domain.routing, root: input.registry.root }))
-    : await loadBundledRouterPacks(domainsRoot);
-  const skills = input.registry.kind === "test-fixture"
-    ? []
-    : await loadLocalRegistry(input.registry.root);
-  const fixtureMetadata = (await Promise.all(fixturePacks.flatMap((pack) => pack.skills.map((skill) => buildRouterSkillMetadata({
-    source: { kind: "fixture", skill, installed: false },
-    projectRoot: input.projectRoot,
-    targetAgent,
-    inputs: input.skillInputs ?? {},
-    intent: parsed.normalizedIntent,
-  }))))).map((built) => built!.metadata);
-  const metadata = (await Promise.all(skills.map((skill) => skillMetadata(input.projectRoot, targetAgent, skill, input.skillInputs ?? {}, parsed.normalizedIntent))))
-    .filter((skill): skill is PreparedMetadata => skill !== undefined);
-  const allMetadata = [...metadata, ...fixtureMetadata] as RouterSkillMetadata[];
-  const canonicalSkills = allMetadata.map(canonicalSkillRoutingDocument);
-  let routingContext;
+  // Installed marking is an explicit Routing world loader input: task preparation
+  // passes lockfile-driven marking, so the loader never reads the lockfile itself
+  // and evaluation determinism never depends on the machine.
+  const installedMarking = (await readLockfile(input.projectRoot)).installed;
+  let world: RoutingWorld;
   try {
-    const routingPacks = input.registry.kind === "test-fixture"
-      ? adaptFixtureRoutingPacks(fixturePacks)
-      : await loadBundledRoutingPacks(packs as BundledRouterPack[]);
-    routingContext = buildRoutingContext({
-      packs: routingPacks,
-      skills: canonicalSkills,
-      coreVocabulary: coreRoutingVocabulary,
-      baseRegistryDigest: digest(allMetadata),
+    world = await loadRoutingWorld({
+      registry: input.registry,
+      domainsRoot,
+      projectRoot: input.projectRoot,
+      targetAgent,
+      skillInputs: input.skillInputs ?? {},
+      intent: parsed.normalizedIntent,
+      installed: installedMarking,
     });
   } catch (error) {
     if (error instanceof RoutingContextError || error instanceof RoutingVocabularyValidationError ||
@@ -287,7 +244,10 @@ export const prepareTask = async (
     }
     throw error;
   }
-  const domains = packs.map(domainMetadata);
+  const metadata = world.skills.filter((item): item is PreparedMetadata => item.skill !== undefined);
+  const allMetadata = world.skills as RouterSkillMetadata[];
+  const routingContext = world.routingContext;
+  const domains = world.domains;
   const limits: RouterLimits = {
     ...defaultRouterLimits,
     maxSelectedRisk: config.router.maxSelectedRisk,

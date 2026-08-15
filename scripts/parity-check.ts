@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { prepareTask } from "../src/router/prepare.ts";
 import { defaultRegistryRoot } from "../src/paths.ts";
-import { loadRouterGoldenCases } from "../src/router/fixtures.ts";
+import { loadRouterGoldenCases, routerEvalRoutingDate } from "../src/router/fixtures.ts";
 
 const root = process.cwd();
 const cases = await loadRouterGoldenCases(path.join(root, "tests", "fixtures", "router-paraphrase-cases.json"));
@@ -25,7 +25,7 @@ try {
       strict: input.strict,
       capabilities: input.capabilities.map((id) => ({ id, source: "server-observed" as const })),
       // The frozen corpus routing date shared with the router evaluation report.
-      routingDate: "2026-07-19",
+      routingDate: routerEvalRoutingDate,
     });
     const primary = result.status === "prepared" ? result.selections.primary.skillId : result.status;
     const evalExpected = input.expected.primarySkillId;

@@ -9,7 +9,9 @@ import {
   fallbackRecallGuidance,
   legacyCatalogGuidance,
   mandatoryReadGuidance,
+  mandatoryVerificationGuidance,
   managedGuidanceBoundary,
+  persistedStateNarrativeGuidance,
   proposalIntegrityGuidance,
   setupBoundaryGuidance,
   universalOutputContractGuidance,
@@ -50,6 +52,8 @@ export const renderSkillRangerAgentBlock = () => [
   "13. Do not claim `verified` unless SkillRanger runtime verification succeeds.",
   "13a. A `run-blocked` error from `finalize_skill_run` means no verified result exists. Report its `userMessage` and `blockedSkills` verbatim; never describe such a run as passed, processed, or complete.",
   `14. ${universalOutputContractGuidance}`,
+  `14a. ${mandatoryVerificationGuidance}`,
+  `14b. ${persistedStateNarrativeGuidance}`,
   endMarker,
 ].join("\n");
 

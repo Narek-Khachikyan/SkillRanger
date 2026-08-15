@@ -110,12 +110,12 @@ test("frontend lifecycle prepared/read/begin/complete/verify, unread gate, MCP e
   await readAllThroughMcp(result);
   let runtime = content<SkillRun>(await callMcpTool("begin_skill_run_execution", { projectRoot: mcpRoot, runId: result.run.runtimeRunId }));
   assert.equal(runtime.state, "running");
-  runtime = content<SkillRun>(await callMcpTool("complete_skill_run", {
+  runtime = content<{ run: SkillRun; notices: string[] }>(await callMcpTool("complete_skill_run", {
     projectRoot: mcpRoot,
     runId: runtime.runId,
     status: "implemented",
     artifacts: [{ kind: "result", path: "artifacts/result.json", description: "Implemented accessibility fixes" }],
-  }));
+  })).run;
   const coreContracts = (runtime.policy.artifacts as { coreOutputContracts?: Record<string, string[]> } | undefined)?.coreOutputContracts ?? {};
   const universalContracts: Record<string, Record<string, string[]>> = {};
   for (const [skillId, fields] of Object.entries(coreContracts)) {

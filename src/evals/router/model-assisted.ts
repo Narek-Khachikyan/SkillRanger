@@ -20,13 +20,16 @@ import { loadBundledRoutingPacks } from "../../router/vocabulary/load.ts";
 import { assertValidCatalogReceipt } from "../../router/catalog.ts";
 import { routerRecordDigest } from "../../router/store.ts";
 import {
+  publicOutcomeStatus,
   RoutingPipelineError,
   runRoutingPipeline,
+  skillIndexById,
   type RoutingPipelineDecision,
   type RoutingPipelineErrorCode,
 } from "../../router/pipeline.ts";
 import { semanticRecallLimitedWarning, type RoutingMode } from "../../router/types.ts";
 import { canonicalizeJson } from "../../router/store.ts";
+import { routerEvalRoutingDate } from "../../router/fixtures.ts";
 import type { RoutingProposalInput } from "../../router/routing-proposal.ts";
 import type { ProjectFingerprint } from "../../types.ts";
 import type { RoutingContext } from "../../router/context.ts";
@@ -556,7 +559,7 @@ const buildEvalMetadata = async (root: string, intent: string, loaded: LoadedEva
     domains,
     fingerprint: emptyFingerprint(root),
     routingContext,
-    skillById: new Map(skills.map((skill) => [skill.id, skill])),
+    skillById: skillIndexById(skills),
   };
 };
 
@@ -574,7 +577,7 @@ const canariesFor = (prompt: string) => [...new Set([
 ])];
 
 const statusFor = (status: RoutingPipelineDecision["outcome"]["status"]): EvaluatedStatus =>
-  status === "strict-requirements-unmet" ? "strict_requirements_unmet" : status as EvaluatedStatus;
+  publicOutcomeStatus(status) as EvaluatedStatus;
 
 // Mirrors the production adapter's capability shaping: filesystem is always
 // server-observed, remaining capabilities are deduplicated and canonicalized.
@@ -651,7 +654,7 @@ const runDecision = async (root: string, input: {
       targetAgent: "codex",
       strict: input.strict ?? false,
       capabilities: capabilitiesFor(input.capabilities),
-      routingDate: "2026-07-19",
+      routingDate: routerEvalRoutingDate,
       limits: defaultRouterLimits,
       ...(proposal === undefined ? {} : { catalog: loaded.catalog, routingProposal: proposal }),
     });
@@ -750,7 +753,7 @@ const runProposalGrounding = async (root: string, prompt: string, capabilities: 
     targetAgent: "codex",
     strict: false,
     capabilities: capabilitiesFor(capabilities),
-    routingDate: "2026-07-19",
+    routingDate: routerEvalRoutingDate,
     limits: defaultRouterLimits,
     catalog: loaded.catalog,
     routingProposal: materializeProposal(proposal, loaded.binding),

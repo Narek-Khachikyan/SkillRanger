@@ -40,6 +40,7 @@ export const validateVerificationReportForRun = (
       `Always-on guidance skill output contracts are unsatisfied: ${missingContracts
         .map(({ skillId, fields }) => `${skillId} requires non-empty report fields in universalContracts: ${fields.join(", ")}`)
         .join(" ")}`,
+      { requiredContractFields: missingContracts },
     );
   }
   return report;

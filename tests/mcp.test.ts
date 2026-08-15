@@ -255,7 +255,7 @@ const designBrief = () => ({
 
 const runCli = async (args: string[]) => {
   const result = await execFileAsync(process.execPath, ["src/cli/index.ts", ...args]);
-  return JSON.parse(result.stdout) as { run: SkillRun };
+  return JSON.parse(result.stdout) as { run: SkillRun; notices?: string[] };
 };
 
 test("MCP and CLI produce equivalent run states", async () => {
@@ -350,7 +350,7 @@ test("MCP and CLI preserve parity through the complete skill run lifecycle", asy
   }));
   assert.deepEqual(pickRunContract(mcpRun), pickRunContract(cliRun));
 
-  cliRun = (await runCli([
+  const cliCompleted = await runCli([
     "run:complete",
     cliProjectRoot,
     "--run",
@@ -360,14 +360,30 @@ test("MCP and CLI preserve parity through the complete skill run lifecycle", asy
     "--artifacts",
     "result=artifacts/result.json",
     "--json",
-  ])).run;
-  mcpRun = parseStructuredContent<SkillRun>(await callMcpTool("complete_skill_run", {
+  ]);
+  cliRun = cliCompleted.run;
+  const mcpCompleted = parseStructuredContent<{ run: SkillRun; notices: string[] }>(await callMcpTool("complete_skill_run", {
     projectRoot: mcpProjectRoot,
     runId: mcpRun.runId,
     status: "implemented",
     artifacts: [{ kind: "result", path: "artifacts/result.json", description: "result" }],
   }));
+  mcpRun = mcpCompleted.run;
   assert.deepEqual(pickRunContract(mcpRun), pickRunContract(cliRun));
+  // ADR 0009: a verification-required run closed without recorded verification carries the same
+  // deterministic notice on both surfaces.
+  assert.deepEqual(mcpCompleted.notices, mcpRun.policy.verificationRequired ? ["verification-required-unrecorded"] : []);
+  assert.deepEqual(cliCompleted.notices, mcpCompleted.notices);
+  // The same gap surfaces on inspect until verification is recorded, while the MCP structured
+  // content stays exactly the persisted run.
+  const unrecordedInspect = await callMcpTool("inspect_skill_run", { projectRoot: mcpProjectRoot, runId: mcpRun.runId });
+  assert.deepEqual(parseStructuredContent<SkillRun>(unrecordedInspect), mcpRun);
+  assert.equal(
+    unrecordedInspect.content.some((block) => block.text.includes("VERIFICATION-REQUIRED-UNRECORDED")),
+    mcpRun.policy.verificationRequired,
+  );
+  const cliUnrecordedInspect = await runCli(["run:inspect", cliProjectRoot, "--run", cliRun.runId, "--json"]);
+  assert.deepEqual(cliUnrecordedInspect.notices ?? [], mcpCompleted.notices);
 
   const report: VerificationReport = {
     schemaVersion: "1.0",
@@ -401,6 +417,7 @@ test("MCP and CLI preserve parity through the complete skill run lifecycle", asy
 
   assert.deepEqual(pickRunContract(mcpRun), pickRunContract(cliRun));
   assert.deepEqual(parseStructuredContent<SkillRun>(inspected), mcpRun);
+  assert.equal(inspected.content.some((block) => block.text.includes("VERIFICATION-REQUIRED-UNRECORDED")), false);
   assert.equal(mcpRun.state, "implemented-unverified");
 });
 

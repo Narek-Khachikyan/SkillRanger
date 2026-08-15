@@ -171,6 +171,7 @@
     "registry": "bundled",
     "strict": false,
     "capabilities": ["filesystem", "terminal"],
+    "reviewNote": "router/2.1 pipeline migration corpus delta",
     "expected": { "status": "no_matching_skills", "domainIds": ["frontend"], "reasonCode": "production-pack-unavailable" }
   },
   {

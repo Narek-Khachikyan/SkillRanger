@@ -4,7 +4,7 @@
   "displayName": "Core",
   "description": "Always-on, domain-agnostic behavioral guidance skills applied to every SkillRanger-prepared run.",
   "version": "1.0.0",
-  "releaseVersion": "0.5.0",
+  "releaseVersion": "0.5.1",
   "coreApi": "1.0",
   "skillIdPrefix": "core.",
   "capabilities": [

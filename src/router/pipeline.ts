@@ -57,8 +57,9 @@ export const routerAlgorithmVersion = "router/2.1" as const;
 
 export type RoutingPipelineInput = {
   // Trigger info: the parsed trigger result. The adapter parses the trigger (it
-  // owns the raw prompt and the config intent budget) and asserts an activated
-  // result here; the pipeline never sees an unactivated trigger.
+  // owns the raw prompt and the config intent budget) and rejects unactivated
+  // triggers before the call; the Extract below keeps that invariant at the type
+  // level, so the pipeline never sees an unactivated trigger.
   trigger: Extract<TriggerParseResult, { activated: true }>;
   activation: { mode: "explicit" | "direct" };
   // Preloaded router skill metadata, built through the canonical factory. All
@@ -162,6 +163,18 @@ export class RoutingPipelineError extends Error {
 }
 
 const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
+
+// The canonical skill-index lookup shared by the pipeline and the router
+// evaluations: ids are matched canonically, so proposal-supplied ids that vary
+// in case still resolve to the same metadata entry.
+export const skillIndexById = (skills: RouterSkillMetadata[]) =>
+  new Map(skills.map((skill) => [canonical(skill.id), skill]));
+
+// The public outcome-status vocabulary: the pipeline's internal hyphenated
+// strict-requirements-unmet spelling becomes the underscore form the adapters
+// expose, exactly as the adapters map it today.
+export const publicOutcomeStatus = (status: RoutingPipelineOutcome["status"]): string =>
+  status === "strict-requirements-unmet" ? "strict_requirements_unmet" : status;
 
 const noMatchSuggestedAction = "Proceed without a SkillRanger workflow or add an audited domain pack.";
 
@@ -271,6 +284,7 @@ export const runRoutingPipeline = (input: RoutingPipelineInput): RoutingPipeline
     ...(routingProposal?.rejections.map(({ skillId, reasonCode }) =>
       `routing-proposal-rejected:${skillId ?? "unknown"}:${reasonCode}`) ?? []),
   ];
+  const installedSkillIds = input.skills.filter(({ installed }) => installed).map(({ id }) => id);
 
   const catalogSkill = (skillId: string) => input.catalog?.skills.find(({ skillId: id }) => id === skillId);
   const explicitSkillId = routingProposal
@@ -304,7 +318,7 @@ export const runRoutingPipeline = (input: RoutingPipelineInput): RoutingPipeline
   // A continuation answer only permutes the primary nomination order (the selected
   // nomination moves to the front), so the domain union below is permutation-invariant
   // across clarification calls and matches the historical composition input.
-  const skillById = new Map(input.skills.map((skill) => [canonical(skill.id), skill]));
+  const skillById = skillIndexById(input.skills);
   const nominatedPrimaryDomains: string[] = [];
   const visitedNominatedSkills = new Set<string>();
   const pendingNominatedSkills = [...primaryNominationOrder];
@@ -342,7 +356,7 @@ export const runRoutingPipeline = (input: RoutingPipelineInput): RoutingPipeline
     targetAgent: input.targetAgent,
     capabilities: input.capabilities,
     strict,
-    installedSkillIds: input.skills.filter(({ installed }) => installed).map(({ id }) => id),
+    installedSkillIds,
     selectedDomainIds: routingCandidates.map(({ id }) => id),
     primaryDomainId,
     fingerprint: input.fingerprint,
@@ -492,7 +506,7 @@ export const runRoutingPipeline = (input: RoutingPipelineInput): RoutingPipeline
     primaryDomainId: selectedPrimary,
     capabilities: input.capabilities,
     strict: input.strict,
-    installedSkillIds: input.skills.filter(({ installed }) => installed).map(({ id }) => id),
+    installedSkillIds,
     fingerprint: input.fingerprint,
     routingContext: input.routingContext,
     resolvedNomination,
@@ -508,12 +522,17 @@ export const runRoutingPipeline = (input: RoutingPipelineInput): RoutingPipeline
         .map(({ skillId, reason }) => `routing-proposal-rejected:${skillId}:${reason}`),
     ])];
   }
-  const composedPrimaryDomain = composed.status === "prepared"
-    ? composed.composed.primary.skill.domains.find((domainId) => canonical(domainId) === canonical(selectedPrimary)) ??
-      composed.composed.primary.skill.domains.find((domainId) => routingCandidateIds.has(canonical(domainId))) ??
-      composed.composed.primary.skill.domains[0] ??
-      selectedPrimary
-    : selectedPrimary;
+  // The routed primary domain is the composed primary skill's own domain: the
+  // skill's domain matching the selected primary, else its domain among the
+  // routed candidates, else its first domain, else the selected primary itself.
+  let composedPrimaryDomain = selectedPrimary;
+  if (composed.status === "prepared") {
+    const primarySkillDomains = composed.composed.primary.skill.domains;
+    composedPrimaryDomain = primarySkillDomains.find((domainId) => canonical(domainId) === canonical(selectedPrimary))
+      ?? primarySkillDomains.find((domainId) => routingCandidateIds.has(canonical(domainId)))
+      ?? primarySkillDomains[0]
+      ?? selectedPrimary;
+  }
   const resultDomains = applyClarification(composedPrimaryDomain, routingCandidates);
   const continuation = { ambiguousDomainIds: resolution.ambiguousDomainIds, nominationOrder, skillAmbiguityIds };
   const base = {

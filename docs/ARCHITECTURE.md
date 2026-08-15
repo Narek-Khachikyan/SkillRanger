@@ -126,7 +126,7 @@ graph TD
 | `audit/index.ts` | `auditSkill` — static pattern scan over a package |
 | `lockfile/index.ts` | `skillranger.lock.json` read/validate/write |
 | `config/` | `skillranger.config.json` defaults, exact-key validation, canonical digest |
-| `release/` | Frontend 0.5.0 artifact validation and retained evidence certification |
+| `release/` | Frontend 0.5.1 artifact validation and retained evidence certification |
 | `domains/` | `types.ts` (pack contract), `registry.ts` (validation + in-memory registry), `bundled.ts` (side-effect registration), `frontend/` |
 | `evals/` | `frontend.ts`, `router/index.ts`, `visual/`, plus the generic `runner.ts` |
 | `paths.ts`, `types.ts`, `version.ts` | Leaf modules; `paths.ts` resolves package-relative roots only |
