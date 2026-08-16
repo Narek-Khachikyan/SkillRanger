@@ -5,11 +5,12 @@ import { scanProject } from "../../scanner/index.ts";
 import { defaultRouterLimits } from "../../router/composer.ts";
 import { parseTrigger } from "../../router/trigger.ts";
 import { loadRouterGoldenCases, routerEvalRoutingDate, type RouterGoldenCase } from "../../router/fixtures.ts";
-import { publicOutcomeStatus, runRoutingPipeline, skillIndexById, type RoutingPipelineDecision } from "../../router/pipeline.ts";
+import { runRoutingPipeline, type RoutingPipelineDecision } from "../../router/pipeline.ts";
 import { canonicalizeJson } from "../../router/store.ts";
 import { loadRoutingWorld, type RoutingWorldRegistry } from "../../router/world.ts";
 import type { InstalledSkill } from "../../types.ts";
 import { evaluateModelAssistedRouter } from "./model-assisted.ts";
+import { emptyFingerprint, publicOutcomeStatus, skillIndexById } from "./helpers.ts";
 
 export const routerEvalThresholds = {
   statusAccuracy: 1,
@@ -33,16 +34,6 @@ export const routerEvalThresholds = {
   privacyLeakageCount: 0,
   deterministic: true,
 } as const;
-
-const emptyFingerprint = (root: string) => ({
-  schemaVersion: "1.0" as const,
-  root,
-  projectTypes: [], languages: [], frameworks: [], styling: [], testing: [], infrastructure: [], dependencies: [],
-  agentContext: {
-    agentsMd: { present: false, paths: [] }, codexSkills: { present: false, paths: [] }, claudeSkills: { present: false, paths: [] },
-  },
-  signals: [], tags: [], warnings: [],
-});
 
 // The whole pipeline input core (router packs, router skill metadata, canonical
 // routing documents, domain metadata, routing packs, routing context with the

@@ -1,9 +1,5 @@
 import path from "node:path";
 import { readFile } from "node:fs/promises";
-import { loadBundledRouterPacks } from "../../domains/registry.ts";
-import "../../domains/bundled.ts";
-import { defaultDomainsRoot } from "../../paths.ts";
-import { loadLocalRegistry } from "../../registry/index.ts";
 import {
   buildSkillCatalog,
   inspectSkillCatalog,
@@ -12,27 +8,22 @@ import {
 } from "../../router/catalog.ts";
 import { parseTrigger } from "../../router/trigger.ts";
 import { defaultRouterLimits, type RouterSkillMetadata } from "../../router/composer.ts";
-import { buildRoutingContext } from "../../router/context.ts";
-import { canonicalSkillRoutingDocument } from "../../router/metadata.ts";
-import { buildRouterSkillMetadata } from "../../router/skill-metadata.ts";
-import { coreRoutingVocabulary } from "../../router/vocabulary/core.ts";
-import { loadBundledRoutingPacks } from "../../router/vocabulary/load.ts";
 import { assertValidCatalogReceipt } from "../../router/catalog.ts";
-import { routerRecordDigest } from "../../router/store.ts";
 import {
-  publicOutcomeStatus,
   RoutingPipelineError,
   runRoutingPipeline,
-  skillIndexById,
   type RoutingPipelineDecision,
   type RoutingPipelineErrorCode,
 } from "../../router/pipeline.ts";
 import { semanticRecallLimitedWarning, type RoutingMode } from "../../router/types.ts";
 import { canonicalizeJson } from "../../router/store.ts";
 import { routerEvalRoutingDate } from "../../router/fixtures.ts";
+import { loadRoutingWorld } from "../../router/world.ts";
 import type { RoutingProposalInput } from "../../router/routing-proposal.ts";
+import type { TaskAnalyzerDomainMetadata } from "../../router/analyzer.ts";
 import type { ProjectFingerprint } from "../../types.ts";
 import type { RoutingContext } from "../../router/context.ts";
+import { emptyFingerprint, publicOutcomeStatus, skillIndexById } from "./helpers.ts";
 
 const contractSchemaVersion = "router-eval-contracts/1.0" as const;
 const benchmarkSchemaVersion = "router-model-assisted/1.0" as const;
@@ -469,32 +460,20 @@ const sourceOptions = (root: string) => ({
   domainsRoot: path.join(root, "domains"),
 });
 
-const emptyFingerprint = (root: string): ProjectFingerprint => ({
-  schemaVersion: "1.0",
-  root,
-  projectTypes: [], languages: [], frameworks: [], styling: [], testing: [], infrastructure: [], dependencies: [],
-  agentContext: {
-    agentsMd: { present: false, paths: [] }, codexSkills: { present: false, paths: [] }, claudeSkills: { present: false, paths: [] },
-  },
-  signals: [], tags: [], warnings: [],
-});
-
-// The preloaded-metadata input contract is shared with production: registry
-// packs and the catalog snapshot load once per evaluation; per-case metadata is
-// built through the canonical factory with the case's normalized intent, exactly
-// like prepare_task builds it. Evaluations then consume the routing decision
-// directly — the second adapter over the pipeline — with no disk persistence.
+// The preloaded-metadata input contract is shared with production: the Routing
+// world loader builds router packs, skill metadata, routing packs, and the
+// routing context once per evaluation; the catalog snapshot loads once per
+// evaluation run (catalog snapshots stay adapter-owned). Evaluations then
+// consume the routing decision directly — the second adapter over the
+// pipeline — with no disk persistence.
 type LoadedEvalInput = {
   binding: CatalogBinding;
   catalog: SkillCatalogSnapshot;
-  bundledPacks: Awaited<ReturnType<typeof loadBundledRouterPacks>>;
-  bundledRoutingPacks: Awaited<ReturnType<typeof loadBundledRoutingPacks>>;
-  registrySkills: Awaited<ReturnType<typeof loadLocalRegistry>>;
 };
 
 type BuiltEvalMetadata = {
   skills: RouterSkillMetadata[];
-  domains: Array<{ id: string; targetSurface?: string; routing: { aliases: string[]; intentTags: string[]; artifactTypes: string[]; technologyTags: string[]; projectTags: string[] } }>;
+  domains: TaskAnalyzerDomainMetadata[];
   fingerprint: ProjectFingerprint;
   routingContext: RoutingContext;
   skillById: Map<string, RouterSkillMetadata>;
@@ -524,42 +503,30 @@ const currentCatalogBinding = async (root: string): Promise<CatalogBinding> => {
   return { catalogDigest: page.catalogDigest, catalogReceipt: receipt };
 };
 
-const loadEvalInput = async (root: string): Promise<LoadedEvalInput> => {
-  const bundledPacks = await loadBundledRouterPacks(defaultDomainsRoot);
-  return {
-    binding: await currentCatalogBinding(root),
-    catalog: await buildSkillCatalog(sourceOptions(root)),
-    bundledPacks,
-    bundledRoutingPacks: await loadBundledRoutingPacks(bundledPacks),
-    registrySkills: await loadLocalRegistry(sourceOptions(root).registryRoot),
-  };
-};
+const loadEvalInput = async (root: string): Promise<LoadedEvalInput> => ({
+  binding: await currentCatalogBinding(root),
+  catalog: await buildSkillCatalog(sourceOptions(root)),
+});
 
-const buildEvalMetadata = async (root: string, intent: string, loaded: LoadedEvalInput): Promise<BuiltEvalMetadata> => {
-  const skills = (await Promise.all(loaded.registrySkills.map((skill) => buildRouterSkillMetadata({
-    source: { kind: "registry", skill },
+const buildEvalMetadata = async (root: string, intent: string): Promise<BuiltEvalMetadata> => {
+  // Model-assisted evals enter through the same Routing world loader as task
+  // preparation and the golden evaluations, with the case's normalized intent;
+  // installed marking stays an explicit empty input so determinism never
+  // depends on the machine's lockfile.
+  const world = await loadRoutingWorld({
+    registry: { kind: "bundled", root: sourceOptions(root).registryRoot },
     projectRoot: root,
     targetAgent: "codex",
-    inputs: {},
+    skillInputs: {},
     intent,
-  })))).filter((built): built is NonNullable<typeof built> => built !== undefined).map((built) => built.metadata);
-  const domains = loaded.bundledPacks.map((pack: { id: string; targetSurface?: string; routing: (typeof loaded.bundledPacks)[number]["routing"] }) => ({
-    id: pack.id,
-    ...(pack.targetSurface ? { targetSurface: pack.targetSurface } : {}),
-    routing: pack.routing,
-  }));
-  const routingContext = buildRoutingContext({
-    packs: loaded.bundledRoutingPacks,
-    skills: skills.map(canonicalSkillRoutingDocument),
-    coreVocabulary: coreRoutingVocabulary,
-    baseRegistryDigest: routerRecordDigest(skills),
+    installed: [],
   });
   return {
-    skills,
-    domains,
+    skills: world.skills,
+    domains: world.domains,
     fingerprint: emptyFingerprint(root),
-    routingContext,
-    skillById: skillIndexById(skills),
+    routingContext: world.routingContext,
+    skillById: skillIndexById(world.skills),
   };
 };
 
@@ -643,7 +610,7 @@ const runDecision = async (root: string, input: {
     const parsed = parseTrigger({ prompt: input.prompt, mode: "explicit" });
     if (!parsed.activated) throw new Error(`evaluation prompt is not explicitly activated: ${parsed.reason}`);
     const proposal = input.proposal === undefined ? undefined : materializeProposal(input.proposal, loaded.binding);
-    const metadata = await buildEvalMetadata(root, parsed.normalizedIntent, loaded);
+    const metadata = await buildEvalMetadata(root, parsed.normalizedIntent);
     const decision = runRoutingPipeline({
       trigger: parsed,
       activation: { mode: "explicit" },
@@ -742,7 +709,7 @@ const contractExpected = (kind: RoutingProposalContractKind, expected: Record<st
 const runProposalGrounding = async (root: string, prompt: string, capabilities: string[] | undefined, proposal: CapturedRoutingProposal, loaded: LoadedEvalInput) => {
   const parsed = parseTrigger({ prompt, mode: "explicit" });
   if (!parsed.activated) throw new Error(`evaluation prompt is not explicitly activated: ${parsed.reason}`);
-  const metadata = await buildEvalMetadata(root, parsed.normalizedIntent, loaded);
+  const metadata = await buildEvalMetadata(root, parsed.normalizedIntent);
   const decision = runRoutingPipeline({
     trigger: parsed,
     activation: { mode: "explicit" },

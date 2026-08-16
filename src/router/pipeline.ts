@@ -164,17 +164,12 @@ export class RoutingPipelineError extends Error {
 
 const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
 
-// The canonical skill-index lookup shared by the pipeline and the router
-// evaluations: ids are matched canonically, so proposal-supplied ids that vary
-// in case still resolve to the same metadata entry.
-export const skillIndexById = (skills: RouterSkillMetadata[]) =>
+// The canonical skill-index lookup is pipeline-internal: ids are matched
+// canonically, so proposal-supplied ids that vary in case still resolve to the
+// same metadata entry. Evaluations build their own one-line index over the
+// same metadata.
+const skillIndexById = (skills: RouterSkillMetadata[]) =>
   new Map(skills.map((skill) => [canonical(skill.id), skill]));
-
-// The public outcome-status vocabulary: the pipeline's internal hyphenated
-// strict-requirements-unmet spelling becomes the underscore form the adapters
-// expose, exactly as the adapters map it today.
-export const publicOutcomeStatus = (status: RoutingPipelineOutcome["status"]): string =>
-  status === "strict-requirements-unmet" ? "strict_requirements_unmet" : status;
 
 const noMatchSuggestedAction = "Proceed without a SkillRanger workflow or add an audited domain pack.";
 
