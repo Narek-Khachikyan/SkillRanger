@@ -42,7 +42,7 @@ import type {
   TaskSubtask,
   TriggerParseResult,
 } from "./types.ts";
-import { limitedDeterministicFallbackMode, modelAssistedMode } from "./types.ts";
+import { limitedDeterministicFallbackMode, modelAssistedMode, semanticRecallLimitedWarning } from "./types.ts";
 
 // The routing algorithm version. It identifies the deterministic routing decision
 // (trigger handling, proposal validation, analysis, nomination resolution, domain
@@ -110,8 +110,9 @@ export type RoutingPipelineDecision = {
   mode: RoutingMode;
   outcome: RoutingPipelineOutcome;
   // The canonical deduplicated warning collection. The stable
-  // semantic-recall-limited warning is added by the adapter during result
-  // shaping, since it derives from the routing mode.
+  // semantic-recall-limited warning is produced by the decision itself for every
+  // limited-deterministic-fallback outcome: it is a fact about the routing mode,
+  // not adapter shaping, so no adapter can forget or reshape it.
   warnings: string[];
   // The analysis signal projection: the matched vocabulary signals and the
   // canonical routing intent tags that produced the task profile. Adapters
@@ -196,7 +197,9 @@ const decisionFor = (input: {
   schemaVersion: "routing-decision/1.0",
   mode: input.mode,
   outcome: input.outcome,
-  warnings: input.warnings,
+  warnings: input.mode === limitedDeterministicFallbackMode
+    ? [...new Set([...input.warnings, semanticRecallLimitedWarning])]
+    : input.warnings,
   ...(input.profile ? { taskProfile: input.profile } : {}),
   domains: input.domains,
   digests: input.digests,

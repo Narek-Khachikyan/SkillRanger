@@ -1,11 +1,12 @@
 # Universal Router Evaluations
 
 `npm run eval:router` executes the checked-in deterministic corpus and the captured-proposal
-benchmark as a second adapter over the routing pipeline: every case builds the same
-preloaded-metadata input contract as production (`prepare_task`) and consumes the routing
-decision returned by `runRoutingPipeline` directly, with no disk persistence. The harness never
+benchmark through the same Routing entry as production (`runRoutingEntry` in
+`src/router/entry.ts`): every case builds the preloaded Routing world contract shared with
+`prepare_task` and consumes the routing decision, with no disk persistence. The harness never
 re-implements trigger parsing, analysis, resolution, retrieval, or composition, and it never
-persists runs. Deterministic replay re-runs the whole decision and compares it canonically.
+persists runs. Deterministic replay re-runs the whole decision through the entry and compares it
+canonically.
 SkillRanger never calls a model or the network while evaluating: model-assisted cases contain
 host-captured proposals as frozen JSON.
 

@@ -7,23 +7,21 @@ import {
   type SkillCatalogSnapshot,
 } from "../../router/catalog.ts";
 import { parseTrigger } from "../../router/trigger.ts";
-import { defaultRouterLimits, type RouterSkillMetadata } from "../../router/composer.ts";
+import { type RouterSkillMetadata } from "../../router/composer.ts";
 import { assertValidCatalogReceipt } from "../../router/catalog.ts";
 import {
   RoutingPipelineError,
-  runRoutingPipeline,
   type RoutingPipelineDecision,
   type RoutingPipelineErrorCode,
 } from "../../router/pipeline.ts";
+import { runRoutingEntry } from "../../router/entry.ts";
 import { semanticRecallLimitedWarning, type RoutingMode } from "../../router/types.ts";
 import { canonicalizeJson } from "../../router/store.ts";
 import { routerEvalRoutingDate } from "../../router/fixtures.ts";
 import { loadRoutingWorld } from "../../router/world.ts";
 import type { RoutingProposalInput } from "../../router/routing-proposal.ts";
-import type { TaskAnalyzerDomainMetadata } from "../../router/analyzer.ts";
 import type { ProjectFingerprint } from "../../types.ts";
-import type { RoutingContext } from "../../router/context.ts";
-import { canonicalSkillId, emptyFingerprint, publicOutcomeStatus, skillIndexById } from "./helpers.ts";
+import { canonicalSkillId, emptyFingerprint, privacyLeakageCountFor, publicOutcomeStatus, skillIndexById } from "./helpers.ts";
 
 const contractSchemaVersion = "router-eval-contracts/1.0" as const;
 const benchmarkSchemaVersion = "router-model-assisted/1.0" as const;
@@ -463,19 +461,17 @@ const sourceOptions = (root: string) => ({
 // The preloaded-metadata input contract is shared with production: the Routing
 // world loader builds router packs, skill metadata, routing packs, and the
 // routing context once per evaluation; the catalog snapshot loads once per
-// evaluation run (catalog snapshots stay adapter-owned). Evaluations then
-// consume the routing decision directly — the second adapter over the
-// pipeline — with no disk persistence.
+// evaluation run (catalog snapshots stay adapter-owned). Evaluations then route
+// through the Routing entry — the same deep entry as task preparation — and
+// consume the routing decision with no disk persistence.
 type LoadedEvalInput = {
   binding: CatalogBinding;
   catalog: SkillCatalogSnapshot;
 };
 
 type BuiltEvalMetadata = {
-  skills: RouterSkillMetadata[];
-  domains: TaskAnalyzerDomainMetadata[];
+  world: Awaited<ReturnType<typeof loadRoutingWorld>>;
   fingerprint: ProjectFingerprint;
-  routingContext: RoutingContext;
   skillById: Map<string, RouterSkillMetadata>;
 };
 
@@ -522,10 +518,8 @@ const buildEvalMetadata = async (root: string, intent: string): Promise<BuiltEva
     installed: [],
   });
   return {
-    skills: world.skills,
-    domains: world.domains,
+    world,
     fingerprint: emptyFingerprint(root),
-    routingContext: world.routingContext,
     skillById: skillIndexById(world.skills),
   };
 };
@@ -538,18 +532,8 @@ const materializeProposal = (captured: CapturedRoutingProposal, binding: Catalog
   return value as unknown as RoutingProposalInput;
 };
 
-const canariesFor = (prompt: string) => [...new Set([
-  ...(prompt.match(/SECRET_[A-Z0-9_]+/g) ?? []),
-  ...(prompt.match(/https?:\/\/[^\s]+/g) ?? []).map((value) => value.replace(/[.,;!?]+$/, "")),
-])];
-
 const statusFor = (status: RoutingPipelineDecision["outcome"]["status"]): EvaluatedStatus =>
   publicOutcomeStatus(status) as EvaluatedStatus;
-
-// Mirrors the production adapter's capability shaping: filesystem is always
-// server-observed, remaining capabilities are deduplicated and canonicalized.
-const capabilitiesFor = (capabilities: string[] = []) =>
-  [...new Set(["filesystem", ...capabilities.filter((id) => id !== "filesystem")])].sort();
 
 const roleAwareRoles: readonly RoleAwareRole[] = ["primary", "companion", "verification"];
 
@@ -575,18 +559,16 @@ const summarizeDecision = (prompt: string, decision: RoutingPipelineDecision, sk
     selectedSkillIdsByRole,
     selectedSkillCount: selectedSkillIds.length,
     instructionBytes: selectedSkillIds.reduce((sum, skillId) => sum + (skillById.get(canonicalSkillId(skillId))?.instructionBytes ?? 0), 0),
-    // The eval adapter shapes warnings like the production adapter: the stable
-    // semantic-recall-limited warning is added only for limited-deterministic
-    // outcomes, and refresh outcomes carry no routing shape at all.
-    warnings: refresh ? [] : [...new Set([
-      ...decision.warnings,
-      ...(decision.mode === "limited-deterministic-fallback" ? [semanticRecallLimitedWarning] : []),
-    ])],
+    // The routing decision itself produces the canonical deduplicated warning
+    // collection, including the stable semantic-recall-limited warning for
+    // limited-deterministic outcomes; refresh outcomes carry no routing shape
+    // at all.
+    warnings: refresh ? [] : [...decision.warnings],
     ...(outcome.status === "no_matching_skills" || refresh ? { reasonCode: outcome.reasonCode } : {}),
     // Evaluations never touch disk: the no-persistence property holds by
     // construction, and the run file count is always zero.
     runFileCount: 0,
-    privacyLeakageCount: canariesFor(prompt).filter((canary) => serialized.includes(canary)).length,
+    privacyLeakageCount: privacyLeakageCountFor(prompt, serialized),
     ...(refresh ? {} : { routingMode: decision.mode }),
     questionIds: outcome.status === "clarification_required" ? outcome.clarification.questions.map(({ id }) => id) : [],
   };
@@ -611,18 +593,17 @@ const runDecision = async (root: string, input: {
     if (!parsed.activated) throw new Error(`evaluation prompt is not explicitly activated: ${parsed.reason}`);
     const proposal = input.proposal === undefined ? undefined : materializeProposal(input.proposal, loaded.binding);
     const metadata = await buildEvalMetadata(root, parsed.normalizedIntent);
-    const decision = runRoutingPipeline({
+    // The entry owns capability normalization and pipeline input assembly with
+    // production semantics; the eval passes the raw fixture capability list.
+    const decision = runRoutingEntry({
+      world: metadata.world,
+      fingerprint: metadata.fingerprint,
       trigger: parsed,
       activation: { mode: "explicit" },
-      skills: metadata.skills,
-      domains: metadata.domains,
-      fingerprint: metadata.fingerprint,
-      routingContext: metadata.routingContext,
       targetAgent: "codex",
       strict: input.strict ?? false,
-      capabilities: capabilitiesFor(input.capabilities),
+      capabilities: input.capabilities ?? [],
       routingDate: routerEvalRoutingDate,
-      limits: defaultRouterLimits,
       ...(proposal === undefined ? {} : { catalog: loaded.catalog, routingProposal: proposal }),
     });
     return summarizeDecision(input.prompt, decision, metadata.skillById);
@@ -636,7 +617,7 @@ const runDecision = async (root: string, input: {
       warnings: [],
       errorCode: errorCodeFor(error),
       runFileCount: 0,
-      privacyLeakageCount: canariesFor(input.prompt).filter((canary) => JSON.stringify(String(error)).includes(canary)).length,
+      privacyLeakageCount: privacyLeakageCountFor(input.prompt, JSON.stringify(String(error))),
       questionIds: [],
     };
   }
@@ -705,23 +686,21 @@ const contractExpected = (kind: RoutingProposalContractKind, expected: Record<st
 // Grounding and item-rejection contracts observe the pipeline's own proposal
 // validation output: the validated projection rides inside the routing decision
 // (accepted nominations and rejection reasons), so the harness never calls the
-// proposal validators directly.
+// proposal validators directly. This pass is the hardcoded always-with-catalog
+// shape of the entry: non-strict and proposal-backed by construction.
 const runProposalGrounding = async (root: string, prompt: string, capabilities: string[] | undefined, proposal: CapturedRoutingProposal, loaded: LoadedEvalInput) => {
   const parsed = parseTrigger({ prompt, mode: "explicit" });
   if (!parsed.activated) throw new Error(`evaluation prompt is not explicitly activated: ${parsed.reason}`);
   const metadata = await buildEvalMetadata(root, parsed.normalizedIntent);
-  const decision = runRoutingPipeline({
+  const decision = runRoutingEntry({
+    world: metadata.world,
+    fingerprint: metadata.fingerprint,
     trigger: parsed,
     activation: { mode: "explicit" },
-    skills: metadata.skills,
-    domains: metadata.domains,
-    fingerprint: metadata.fingerprint,
-    routingContext: metadata.routingContext,
     targetAgent: "codex",
     strict: false,
-    capabilities: capabilitiesFor(capabilities),
+    capabilities: capabilities ?? [],
     routingDate: routerEvalRoutingDate,
-    limits: defaultRouterLimits,
     catalog: loaded.catalog,
     routingProposal: materializeProposal(proposal, loaded.binding),
   });

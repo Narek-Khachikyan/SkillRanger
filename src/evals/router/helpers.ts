@@ -33,3 +33,16 @@ export const canonicalSkillId = (value: string) => value.normalize("NFKC").trim(
 // same way in both modules.
 export const skillIndexById = (skills: RouterSkillMetadata[]) =>
   new Map(skills.map((skill) => [canonicalSkillId(skill.id), skill]));
+
+// The one privacy-canary extraction shared by both evaluation suites: secret
+// markers and URLs are captured with trailing punctuation stripped, and the
+// collection is deduplicated so the leakage metric means the same thing in both
+// suites. Both suites keep the "any leak fails" gate, so the metric outcome is
+// unchanged by the deduplication.
+export const privacyCanariesFor = (prompt: string) => [...new Set([
+  ...(prompt.match(/SECRET_[A-Z0-9_]+/g) ?? []),
+  ...(prompt.match(/https?:\/\/[^\s]+/g) ?? []).map((value) => value.replace(/[.,;!?]+$/, "")),
+])];
+
+export const privacyLeakageCountFor = (prompt: string, serialized: string): number =>
+  privacyCanariesFor(prompt).filter((canary) => serialized.includes(canary)).length;
