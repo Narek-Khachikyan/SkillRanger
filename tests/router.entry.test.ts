@@ -5,6 +5,7 @@ import { parseTrigger } from "../src/router/trigger.ts";
 import { defaultRegistryRoot } from "../src/paths.ts";
 import { buildSkillCatalog, inspectSkillCatalog } from "../src/router/catalog.ts";
 import { RouterPrepareError } from "../src/router/errors.ts";
+import { RoutingPipelineError } from "../src/router/pipeline.ts";
 import { normalizeCapabilities, runRoutingEntry } from "../src/router/entry.ts";
 import { loadRoutingWorld } from "../src/router/world.ts";
 import { emptyFingerprint } from "../src/evals/router/helpers.ts";
@@ -178,4 +179,66 @@ test("the entry is deterministic across repeated calls and omitting limits uses 
   const decision = runRoutingEntry({ ...input, limits: undefined });
   assert.equal(decision.outcome.status, "prepared");
   assert.equal(decision.mode, "limited-deterministic-fallback");
+});
+
+test("an ambiguous decision through the entry resolves with validated answers", async () => {
+  const input = await entryInput("Create a new application interface @skillranger");
+  // Without answers the entry returns the same clarification decision task
+  // preparation returns, with the ambiguous primary-domain question.
+  const clarification = runRoutingEntry(input);
+  assert.equal(clarification.outcome.status, "clarification_required");
+  assert.equal(clarification.outcome.clarification.questions[0].id, "primary-domain");
+  assert.deepEqual([...clarification.continuation.ambiguousDomainIds].sort(), ["frontend", "mobile"].sort());
+  // The continuation pass supplies the validated answers through the same
+  // entry face; the answer resolves into the prepared reference decision.
+  const resolved = runRoutingEntry({
+    ...input,
+    answers: [{ questionId: "primary-domain", value: "frontend" }],
+  });
+  assert.equal(resolved.outcome.status, "prepared");
+  assert.equal(resolved.outcome.primaryDomain, "frontend");
+  assert.equal(resolved.outcome.selections.primary.skillId, "frontend.synthetic-interface");
+  // An unsupported answer fails closed exactly like task preparation.
+  assert.throws(
+    () => runRoutingEntry({
+      ...input,
+      answers: [{ questionId: "primary-domain", value: "bogus-domain" }],
+    }),
+    (error: unknown) => error instanceof RoutingPipelineError && error.code === "clarification-answer-invalid",
+  );
+});
+
+test("answers without a clarification violate the entry's input invariant", async () => {
+  const input = await entryInput("Fix the refresh token flow in NestJS @skillranger");
+  assert.throws(
+    () => runRoutingEntry({
+      ...input,
+      answers: [{ questionId: "primary-domain", value: "frontend" }],
+    }),
+    (error: unknown) => error instanceof RoutingPipelineError && error.code === "continuation-invalid",
+  );
+});
+
+test("valid semantic hints flow through the entry into the decision signals", async () => {
+  const input = await entryInput("Please handle blue   horizon @skillranger");
+  const decision = runRoutingEntry({
+    ...input,
+    semanticHints: {
+      schemaVersion: "semantic-hints/1.0",
+      signals: [{ kind: "intent", id: "authentication", evidenceText: "Blue Horizon", confidence: 1 }],
+    },
+  });
+  assert.equal(decision.mode, "limited-deterministic-fallback");
+  assert.match(decision.digests.semanticHintsDigest, /^sha256:/);
+  assert.ok(decision.signals.matchedSignals.some(
+    (signal) => signal.source === "host-semantic" && signal.id === "authentication",
+  ));
+  // Invalid hints fail closed through the entry with the pipeline error family.
+  assert.throws(
+    () => runRoutingEntry({
+      ...input,
+      semanticHints: { schemaVersion: "semantic-hints/1.0", signals: [{ kind: "intent", id: "authentication", evidenceText: "not in prompt", confidence: 1 }] },
+    }),
+    (error: unknown) => error instanceof RoutingPipelineError && error.code === "semantic-hint-invalid",
+  );
 });
