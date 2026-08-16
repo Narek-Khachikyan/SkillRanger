@@ -53,8 +53,12 @@ The local vocabulary routing path used only when the host submits no routing pro
 _Avoid_: Invalid-proposal recovery, degraded strict mode, model-assisted routing
 
 **Routing world**:
-The one module that loads the routing-relevant world — router packs, router skill metadata, canonical routing documents, domain metadata, and the routing context — from a registry. Task preparation and router evaluations build their pipeline input through it; router config, triggers, fingerprints, routing dates, and limits stay with the adapters.
+The one module that loads the routing-relevant world — router packs, router skill metadata, canonical routing documents, domain metadata, and the routing context — from a registry. Task preparation and router evaluations reach it through the Routing entry; router config, triggers, fingerprints, routing dates, and limits stay with the adapters.
 _Avoid_: input loader, metadata cache, pipeline preparation, registry snapshot
+
+**Routing entry**:
+The one deep, in-memory entry that adapters call with a preloaded Routing world and adapter-owned handles (trigger, activation, capabilities, routing date, limits, catalog, proposal or hints, answers); it owns pipeline input assembly and the decision-shaping rules shared by all adapters, and routing replay in evaluations passes through it.
+_Avoid_: routing service, router orchestration, input factory, task preparation
 
 **Routing pipeline**:
 The one deep, deterministic, in-memory module that turns a preloaded input object (router skill metadata, a skill catalog snapshot, config limits, a routing proposal or semantic hints, trigger info, activation) into a routing decision. Task preparation and router evaluations are adapters over it; continuation tokens, persistence, and strict feasibility live outside it.
