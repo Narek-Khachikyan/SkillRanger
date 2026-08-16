@@ -120,3 +120,74 @@ test("bundled mode honors the explicit installed marking for registry skills", a
   assert.equal(marked.installed, true);
   assert.equal(marked.entry?.installedPath, installedPath);
 });
+
+test("merge mode keeps the bundled world loaded and composes fixture domains and skills", async () => {
+  const fixturePacks = await loadRouterFixturePacks(fixtureRoot);
+  const bundledPacks = await import("../src/domains/registry.ts").then(({ loadBundledRouterPacks }) => loadBundledRouterPacks(defaultDomainsRoot));
+  const world = await loadRoutingWorld(await worldInput({
+    registry: { kind: "merge", root: registryRoot, fixtureRoot },
+  }));
+  // The bundled world stays loaded: registry skills carry the registry skill and
+  // bundled domains not overridden by a fixture remain.
+  const registrySkill = world.skills.find((skill) => skill.skill !== undefined);
+  assert.ok(registrySkill, "merge mode must load bundled registry skills");
+  assert.equal(registrySkill.skill?.manifest.id, registrySkill.id);
+  // Fixture domains and skills compose with the bundled world.
+  const fixtureDomainIds = new Set(fixturePacks.map((pack) => pack.domain.id));
+  const fixtureSkillIds = new Set(fixturePacks.flatMap((pack) => pack.skills.map((skill) => skill.id)));
+  assert.ok([...fixtureDomainIds].every((id) => world.domains.some((domain) => domain.id === id)));
+  assert.ok([...fixtureSkillIds].every((id) => world.skills.some((skill) => skill.id === id)));
+  // Bundled domains without a fixture override stay present.
+  const overriddenBundled = bundledPacks.filter((pack) => !fixtureDomainIds.has(pack.id)).map((pack) => pack.id);
+  assert.deepEqual(new Set(world.domains.map((domain) => domain.id)), new Set([...overriddenBundled, ...fixtureDomainIds]));
+  // Routing packs compose from bundled plus fixture packs.
+  assert.deepEqual(new Set(world.routingPacks.map((pack) => pack.domainId)), new Set(world.domains.map((domain) => domain.id)));
+  assert.match(world.routingContext.routingRegistryDigest, sha256);
+});
+
+test("merge mode override-by-id: a fixture domain and skill with the same id win over the bundled entry", async () => {
+  const bundledPacks = await import("../src/domains/registry.ts").then(({ loadBundledRouterPacks }) => loadBundledRouterPacks(defaultDomainsRoot));
+  const bundledFrontend = bundledPacks.find((pack) => pack.id === "frontend");
+  assert.ok(bundledFrontend, "bundled world must contain the frontend domain");
+  const world = await loadRoutingWorld(await worldInput({
+    registry: { kind: "merge", root: registryRoot, fixtureRoot },
+  }));
+  // The fixture frontend pack carries the extended routing tags (application-interface)
+  // and overrides the bundled frontend domain by id.
+  const frontend = world.domains.find((domain) => domain.id === "frontend");
+  assert.ok(frontend, "frontend domain must be present in merge mode");
+  assert.ok(frontend.routing.artifactTypes.includes("application-interface"), "fixture routing tags must win over bundled ones");
+  assert.ok(frontend.routing.intentTags.includes("application-interface"));
+  assert.notDeepEqual(frontend.routing, bundledFrontend.routing, "frontend routing must differ from the bundled default");
+  // No bundled skill of the overridden frontend domain survives: only the fixture
+  // frontend skills remain for the frontend domain.
+  const frontendDomainSkills = world.skills.filter((skill) => skill.domains?.includes("frontend"));
+  assert.ok(frontendDomainSkills.length > 0, "fixture frontend skills must be loaded");
+  const fixtureFrontendSkillIds = new Set((await loadRouterFixturePacks(fixtureRoot)).find((pack) => pack.domain.id === "frontend")!.skills.map((skill) => skill.id));
+  assert.deepEqual(new Set(frontendDomainSkills.map((skill) => skill.id)), fixtureFrontendSkillIds);
+});
+
+test("merge mode keeps the bundled routing context a real digest and honors installed marking", async () => {
+  const fixturePacks = await loadRouterFixturePacks(fixtureRoot);
+  const installedSkillId = fixturePacks[0].skills[0].id;
+  const installed = [{
+    skillId: installedSkillId,
+    version: "1.0.0",
+    checksum: `sha256:${"a".repeat(64)}`,
+    targetAgent: "codex",
+    scope: "repo" as const,
+    installedPath: `.agents/skills/${installedSkillId}`,
+    source: { type: "curated" as const, registry: "local" as const, path: "skills/frontend" },
+    audit: { riskLevel: "low" as const, securityScore: 1, findings: [] },
+  }];
+  const world = await loadRoutingWorld(await worldInput({
+    registry: { kind: "merge", root: registryRoot, fixtureRoot },
+    installed,
+  }));
+  const marked = world.skills.find((skill) => skill.id === installedSkillId);
+  assert.ok(marked, `expected ${installedSkillId} in loaded skills`);
+  assert.equal(marked.source, "installed");
+  assert.equal(marked.installed, true);
+  assert.match(world.routingContext.routingRegistryDigest, sha256);
+  assert.match(world.routingContext.vocabularyDigest, sha256);
+});
