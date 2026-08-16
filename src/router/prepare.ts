@@ -17,12 +17,11 @@ import { loadRoutingWorld, type RoutingWorld } from "./world.ts";
 import {
   routerAlgorithmVersion,
   RoutingPipelineError,
-  runRoutingPipeline,
   type RoutingPipelineDecision,
-  type RoutingPipelineInput,
 } from "./pipeline.ts";
 import { createRouterRuntimeBridge } from "./runtime-bridge.ts";
 import { RouterPrepareError } from "./errors.ts";
+import { normalizeCapabilities, runRoutingEntry, type RoutingEntryInput } from "./entry.ts";
 import type {
   DeterministicRoutingOutcome,
   DeterministicRoutingProjection,
@@ -50,14 +49,6 @@ export const deterministicRoutingKey = (projection: DeterministicRoutingProjecti
 const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
 const digest = (value: unknown) => routerRecordDigest(value);
 const targetPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
-
-const capabilityIds = (capabilities: PrepareTaskCoreInput["capabilities"] = []) => {
-  const values = (capabilities ?? []).map(({ id }) => canonical(id));
-  if (values.some((value) => !targetPattern.test(value)) || new Set(values).size !== values.length) {
-    throw new RouterPrepareError("capability-invalid", "Capabilities must be unique canonical IDs.");
-  }
-  return values.sort();
-};
 
 type PreparedMetadata = RouterSkillMetadata & { skill: RegistrySkill; installedRoot?: string; entry?: InstalledSkill };
 
@@ -182,10 +173,11 @@ export const prepareTask = async (
     );
   }
   const strict = input.strict ?? config.router.strictByDefault;
-  const capabilities = capabilityIds([
-    { id: "filesystem", source: "server-observed" as const },
-    ...(input.capabilities ?? []).filter(({ id }) => canonical(id) !== "filesystem"),
-  ]);
+  // The Routing entry owns capability normalization (canonical form, deduplication,
+  // filesystem always present and first); this adapter maps the host-reported
+  // capabilities into the canonical id list the entry accepts. Validating through
+  // the entry's definition keeps the same early capability-invalid contract.
+  const capabilities = normalizeCapabilities((input.capabilities ?? []).map(({ id }) => id));
   const parsed = parseTrigger({ prompt: input.prompt, mode: input.activation.mode, maxIntentBytes: Math.min(config.router.maxIntentBytes, 64_000) });
   if (!parsed.activated) throw new RouterPrepareError(
     parsed.reason,
@@ -241,9 +233,6 @@ export const prepareTask = async (
     throw error;
   }
   const metadata = world.skills.filter((item): item is PreparedMetadata => item.skill !== undefined);
-  const allMetadata = world.skills as RouterSkillMetadata[];
-  const routingContext = world.routingContext;
-  const domains = world.domains;
   const limits: RouterLimits = {
     ...defaultRouterLimits,
     maxSelectedRisk: config.router.maxSelectedRisk,
@@ -257,15 +246,15 @@ export const prepareTask = async (
     maxAdditionalReadBytes: config.router.maxAdditionalReadBytes,
     maxSingleFileBytes: config.router.maxSingleFileBytes,
   };
-  // The whole routing decision is delegated to the pipeline; this adapter only
-  // shapes its decision onto the public preparation result.
-  const pipelineInput: RoutingPipelineInput = {
+  // The whole routing decision is delegated to the Routing entry: the entry
+  // assembles the pipeline input from the preloaded world and these adapter-owned
+  // handles, and owns the shared decision-shaping rules. This adapter only shapes
+  // the decision onto the public preparation result.
+  const entryInput: RoutingEntryInput = {
+    world,
+    fingerprint,
     trigger: parsed,
     activation: input.activation,
-    skills: allMetadata,
-    domains,
-    fingerprint,
-    routingContext,
     targetAgent,
     strict,
     capabilities,
@@ -275,9 +264,9 @@ export const prepareTask = async (
     ...(input.routingProposal !== undefined ? { routingProposal: input.routingProposal } : {}),
     ...(input.semanticHints !== undefined ? { semanticHints: input.semanticHints } : {}),
   };
-  const pipelineCall = async (answers?: RoutingPipelineInput["answers"]) => {
+  const pipelineCall = async (answers?: RoutingEntryInput["answers"]) => {
     try {
-      return runRoutingPipeline(answers === undefined ? pipelineInput : { ...pipelineInput, answers });
+      return runRoutingEntry(answers === undefined ? entryInput : { ...entryInput, answers });
     } catch (error) {
       if (error instanceof RoutingPipelineError) throw new RouterPrepareError(error.code as RouterPrepareError["code"], error.message);
       throw error;

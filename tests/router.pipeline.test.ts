@@ -149,6 +149,8 @@ test("a stale proposal catalog digest yields a catalog_refresh_required decision
   assert.equal(decision.mode, "limited-deterministic-fallback");
   assert.equal(decision.taskProfile, undefined);
   assert.deepEqual(decision.domains, []);
+  // Refresh outcomes short-circuit before any routed decision and keep no
+  // warnings; the stable recall warning belongs to routed fallback outcomes.
   assert.deepEqual(decision.warnings, []);
   assert.deepEqual(decision.continuation.ambiguousDomainIds, []);
 });

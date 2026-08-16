@@ -2,15 +2,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultRegistryRoot } from "../../paths.ts";
 import { scanProject } from "../../scanner/index.ts";
-import { defaultRouterLimits } from "../../router/composer.ts";
 import { parseTrigger } from "../../router/trigger.ts";
 import { loadRouterGoldenCases, routerEvalRoutingDate, type RouterGoldenCase } from "../../router/fixtures.ts";
-import { runRoutingPipeline, type RoutingPipelineDecision } from "../../router/pipeline.ts";
+import { runRoutingEntry, type RoutingPipelineDecision } from "../../router/entry.ts";
 import { canonicalizeJson } from "../../router/store.ts";
 import { loadRoutingWorld, type RoutingWorldRegistry } from "../../router/world.ts";
 import type { InstalledSkill } from "../../types.ts";
 import { evaluateModelAssistedRouter } from "./model-assisted.ts";
-import { canonicalSkillId, emptyFingerprint, publicOutcomeStatus, skillIndexById } from "./helpers.ts";
+import { canonicalSkillId, emptyFingerprint, privacyLeakageCountFor, publicOutcomeStatus, skillIndexById } from "./helpers.ts";
 
 export const routerEvalThresholds = {
   statusAccuracy: 1,
@@ -71,38 +70,32 @@ const buildCaseInput = async (root: string, input: RouterGoldenCase, normalizedI
   const fingerprint = input.registry === "bundled" && input.fixture === "frontend"
     ? await scanProject(path.join(root, "fixtures", "next-react-ts"))
     : emptyFingerprint(root);
-  return {
-    skills: world.skills,
-    domains: world.domains,
-    fingerprint,
-    routingContext: world.routingContext,
-  };
+  return { world, fingerprint };
 };
 
 const evaluateCase = async (root: string, input: RouterGoldenCase) => {
   const parsed = parseTrigger({ prompt: input.prompt, mode: "explicit" });
   if (!parsed.activated) return { status: parsed.reason, domainIds: [], primaryDomainId: undefined, selectedSkillCount: 0, selectedCompanionCount: 0, usefulCompanionCount: 0, instructionBytes: 0, privacyLeakageCount: 0, deterministic: true };
   const metadata = await buildCaseInput(root, input, parsed.normalizedIntent);
-  // Router evals enter through the same preloaded-metadata input contract as
-  // production: the pipeline decides and the eval is a second adapter over the
-  // routing decision, with no disk persistence. Replaying the whole decision
-  // (signals, outcome, warnings, selections, digests) replaces the per-stage
-  // replay checks of the hand-rolled orchestration.
-  const pipelineInput = {
+  // Router evals enter through the same deep Routing entry as production: the
+  // entry assembles the pipeline input (including production capability
+  // normalization) and the eval consumes the routing decision, with no disk
+  // persistence. Replaying the whole decision (signals, outcome, warnings,
+  // selections, digests) through the entry replaces the per-stage replay checks
+  // of the hand-rolled orchestration and proves determinism on the same surface
+  // production uses.
+  const entryInput = {
+    world: metadata.world,
+    fingerprint: metadata.fingerprint,
     trigger: parsed,
     activation: { mode: "explicit" as const },
-    skills: metadata.skills,
-    domains: metadata.domains,
-    fingerprint: metadata.fingerprint,
-    routingContext: metadata.routingContext,
     targetAgent: "codex",
     strict: input.strict,
     capabilities: input.capabilities,
     routingDate: routerEvalRoutingDate,
-    limits: defaultRouterLimits,
   };
-  const decision = runRoutingPipeline(pipelineInput);
-  const replay = runRoutingPipeline(pipelineInput);
+  const decision = runRoutingEntry(entryInput);
+  const replay = runRoutingEntry(entryInput);
   const deterministic = canonicalizeJson(decision) === canonicalizeJson(replay);
   const outcome = decision.outcome;
   const status = publicOutcomeStatus(outcome.status);
@@ -130,13 +123,11 @@ const evaluateCase = async (root: string, input: RouterGoldenCase) => {
   const primaryDomainId = outcome.status === "prepared"
     ? outcome.primaryDomain
     : decision.domains.find(({ role }) => role === "primary")?.id;
-  const skillById = skillIndexById(metadata.skills);
-  const privacyCanaries = [
-    ...(input.prompt.match(/SECRET_[A-Z0-9_]+/g) ?? []),
-    ...(input.prompt.match(/https?:\/\/[^\s]+/g) ?? []).map((value) => value.replace(/[.,;!?]+$/, "")),
-  ];
+  const skillById = skillIndexById(metadata.world.skills);
   const serialized = JSON.stringify(decision);
-  const privacyLeakageCount = privacyCanaries.filter((canary) => serialized.includes(canary)).length;
+  // The shared privacy-canary helper (with deduplication) keeps the leakage
+  // metric identical across both evaluation suites.
+  const privacyLeakageCount = privacyLeakageCountFor(input.prompt, serialized);
   const primaryExclusionReasons = Object.fromEntries([...new Set(decision.rejections.map(({ skillId }) => skillId))].map((skillId) => [
     skillId,
     decision.rejections.filter((rejection) => rejection.skillId === skillId).map(({ reason }) => reason),
