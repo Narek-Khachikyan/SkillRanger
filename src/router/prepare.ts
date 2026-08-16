@@ -36,7 +36,6 @@ import type {
   RuntimeClarificationSummary,
   SkillSourceSnapshot,
 } from "./types.ts";
-import { semanticRecallLimitedWarning } from "./types.ts";
 import type { SkillRun } from "../runtime/skill-run/index.ts";
 import { createPreparedStrictSkillRun } from "../runtime/strict/service.ts";
 import { StrictSkillRunError, type SkillRunV2 } from "../runtime/strict/index.ts";
@@ -112,14 +111,11 @@ const common = (input: {
   outcome: DeterministicRoutingOutcome;
 }): PrepareTaskCommon => {
   // A routed outcome is model-assisted only when a validated routing proposal actually
-  // participates. Every other routed outcome is limited deterministic fallback and must
-  // carry the stable recall warning in the canonical deduplicated warning collection.
-  // The mode itself is part of the pipeline decision; this adapter only shapes it.
+  // participates. Every other routed outcome is limited deterministic fallback, and the
+  // pipeline decision already carries the stable recall warning as a fact about the
+  // decision; this adapter only shapes the decision onto the public result.
   const mode = input.mode;
-  const warnings = [...new Set([
-    ...input.warnings,
-    ...(mode === "limited-deterministic-fallback" ? [semanticRecallLimitedWarning] : []),
-  ])];
+  const warnings = [...new Set(input.warnings)];
   return {
     ok: true,
     schemaVersion: "router-result/1.1",

@@ -42,7 +42,7 @@ import type {
   TaskSubtask,
   TriggerParseResult,
 } from "./types.ts";
-import { limitedDeterministicFallbackMode, modelAssistedMode } from "./types.ts";
+import { limitedDeterministicFallbackMode, modelAssistedMode, semanticRecallLimitedWarning } from "./types.ts";
 
 // The routing algorithm version. It identifies the deterministic routing decision
 // (trigger handling, proposal validation, analysis, nomination resolution, domain
@@ -109,9 +109,11 @@ export type RoutingPipelineDecision = {
   // validated routing proposal participated.
   mode: RoutingMode;
   outcome: RoutingPipelineOutcome;
-  // The canonical deduplicated warning collection. The stable
-  // semantic-recall-limited warning is added by the adapter during result
-  // shaping, since it derives from the routing mode.
+  // The canonical deduplicated warning collection. Every routed decision in
+  // limited-deterministic fallback mode carries the stable
+  // semantic-recall-limited warning as a fact about the decision itself,
+  // produced here in the pipeline; adapters never add it by hand. Refresh
+  // outcomes short-circuit before any routed decision and keep no warnings.
   warnings: string[];
   // The analysis signal projection: the matched vocabulary signals and the
   // canonical routing intent tags that produced the task profile. Adapters
@@ -274,10 +276,15 @@ export const runRoutingPipeline = (input: RoutingPipelineInput): RoutingPipeline
     matchedSignals: analysis.matchedSignals,
     routingIntentTags: analysis.routingIntentTags,
   };
+  // A fallback-mode routed decision carries the stable semantic-recall-limited
+  // warning as a fact about the decision: the mode says the decision is
+  // fallback, and the warning says its semantic recall is limited. Refresh
+  // outcomes short-circuit before this point, so they never carry the warning.
   let routingWarnings = [
     ...analysis.warnings,
     ...(routingProposal?.rejections.map(({ skillId, reasonCode }) =>
       `routing-proposal-rejected:${skillId ?? "unknown"}:${reasonCode}`) ?? []),
+    ...(mode === limitedDeterministicFallbackMode ? [semanticRecallLimitedWarning] : []),
   ];
   const installedSkillIds = input.skills.filter(({ installed }) => installed).map(({ id }) => id);
 

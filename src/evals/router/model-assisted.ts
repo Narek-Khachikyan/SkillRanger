@@ -575,13 +575,10 @@ const summarizeDecision = (prompt: string, decision: RoutingPipelineDecision, sk
     selectedSkillIdsByRole,
     selectedSkillCount: selectedSkillIds.length,
     instructionBytes: selectedSkillIds.reduce((sum, skillId) => sum + (skillById.get(canonicalSkillId(skillId))?.instructionBytes ?? 0), 0),
-    // The eval adapter shapes warnings like the production adapter: the stable
-    // semantic-recall-limited warning is added only for limited-deterministic
-    // outcomes, and refresh outcomes carry no routing shape at all.
-    warnings: refresh ? [] : [...new Set([
-      ...decision.warnings,
-      ...(decision.mode === "limited-deterministic-fallback" ? [semanticRecallLimitedWarning] : []),
-    ])],
+    // Warnings come from the decision as produced by the pipeline, which owns
+    // the stable semantic-recall-limited warning for fallback routed outcomes;
+    // refresh outcomes carry no routing shape at all.
+    warnings: refresh ? [] : [...new Set(decision.warnings)],
     ...(outcome.status === "no_matching_skills" || refresh ? { reasonCode: outcome.reasonCode } : {}),
     // Evaluations never touch disk: the no-persistence property holds by
     // construction, and the run file count is always zero.
