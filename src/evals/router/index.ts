@@ -1,22 +1,14 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadBundledRouterPacks } from "../../domains/registry.ts";
-import "../../domains/bundled.ts";
-import { defaultDomainsRoot, defaultRegistryRoot } from "../../paths.ts";
-import { loadLocalRegistry } from "../../registry/index.ts";
+import { defaultRegistryRoot } from "../../paths.ts";
 import { scanProject } from "../../scanner/index.ts";
-import { defaultRouterLimits, type RouterSkillMetadata } from "../../router/composer.ts";
-import type { TaskAnalyzerDomainMetadata } from "../../router/analyzer.ts";
+import { defaultRouterLimits } from "../../router/composer.ts";
 import { parseTrigger } from "../../router/trigger.ts";
-import { loadRouterFixturePacks, loadRouterGoldenCases, routerEvalRoutingDate, type RouterFixturePack, type RouterGoldenCase } from "../../router/fixtures.ts";
-import { buildRoutingContext } from "../../router/context.ts";
-import { canonicalSkillRoutingDocument } from "../../router/metadata.ts";
-import { buildRouterSkillMetadata } from "../../router/skill-metadata.ts";
-import { coreRoutingVocabulary } from "../../router/vocabulary/core.ts";
-import { adaptFixtureRoutingPacks, loadBundledRoutingPacks } from "../../router/vocabulary/load.ts";
+import { loadRouterGoldenCases, routerEvalRoutingDate, type RouterGoldenCase } from "../../router/fixtures.ts";
 import { publicOutcomeStatus, runRoutingPipeline, skillIndexById, type RoutingPipelineDecision } from "../../router/pipeline.ts";
 import { canonicalizeJson } from "../../router/store.ts";
-import type { RegistrySkill } from "../../types.ts";
+import { loadRoutingWorld, type RoutingWorldRegistry } from "../../router/world.ts";
+import type { InstalledSkill } from "../../types.ts";
 import { evaluateModelAssistedRouter } from "./model-assisted.ts";
 
 export const routerEvalThresholds = {
@@ -52,85 +44,54 @@ const emptyFingerprint = (root: string) => ({
   signals: [], tags: [], warnings: [],
 });
 
-const domainMetadata = (domain: RouterFixturePack["domain"] | { id: string; routing: NonNullable<Awaited<ReturnType<typeof loadBundledRouterPacks>>[number]["routing"]> }): TaskAnalyzerDomainMetadata => ({
-  id: domain.id,
-  targetSurface: domain.id === "frontend" ? "web" : domain.id === "mobile" ? "mobile" : undefined,
-  routing: domain.routing,
-});
-
-const registrySkillMetadata = async (skill: RegistrySkill, intent: string, projectRoot: string): Promise<RouterSkillMetadata | undefined> => {
-  const built = await buildRouterSkillMetadata({
-    source: { kind: "registry", skill },
-    projectRoot,
-    targetAgent: "codex",
-    inputs: {},
-    intent,
-  });
-  return built?.metadata;
-};
-
-const buildCaseInput = async (root: string, input: RouterGoldenCase, fixturePacks: RouterFixturePack[], normalizedIntent: string) => {
-  const bundledPacks = await loadBundledRouterPacks(defaultDomainsRoot);
-  const loadedBundledPacks = await loadBundledRoutingPacks(bundledPacks);
-  const bundledSkills = (await Promise.all((await loadLocalRegistry(defaultRegistryRoot)).map((skill) => registrySkillMetadata(skill, normalizedIntent, root))))
-    .filter((skill): skill is RouterSkillMetadata => skill !== undefined);
-  const synthetic = (await Promise.all(fixturePacks.flatMap((pack) => pack.skills.map((skill) => buildRouterSkillMetadata({
-    source: { kind: "fixture", skill, installed: input.id === "strict-installed" && skill.id === "backend.auth-implementation" },
+// The whole pipeline input core (router packs, router skill metadata, canonical
+// routing documents, domain metadata, routing packs, routing context with the
+// real base registry digest) is built by the Routing world loader; this adapter
+// only adds the fingerprint, which is adapter-owned.
+const buildCaseInput = async (root: string, input: RouterGoldenCase, normalizedIntent: string) => {
+  // "test-fixture" golden cases compose the bundled world with the fixture packs
+  // (override-by-id), which is exactly the loader's merge mode.
+  const registry: RoutingWorldRegistry = input.registry === "bundled"
+    ? { kind: "bundled", root: defaultRegistryRoot }
+    : { kind: "merge", root: defaultRegistryRoot, fixtureRoot: path.join(root, "tests", "fixtures", "router-packs") };
+  // Installed marking is an explicit loader input: the strict-installed case
+  // passes its controlled installed-skill list, every other case stays empty so
+  // evaluation determinism never depends on the machine's lockfile.
+  const installed: InstalledSkill[] = input.id === "strict-installed"
+    ? [{
+        skillId: "backend.auth-implementation",
+        version: "1.0.0",
+        checksum: `sha256:${"a".repeat(64)}`,
+        targetAgent: "codex",
+        scope: "repo",
+        installedPath: ".agents/skills/backend.auth-implementation",
+        source: { type: "curated", registry: "local", path: "skills/frontend" },
+        audit: { riskLevel: "low", securityScore: 1, findings: [] },
+      }]
+    : [];
+  const world = await loadRoutingWorld({
+    registry,
     projectRoot: root,
     targetAgent: "codex",
-    inputs: {},
+    skillInputs: {},
     intent: normalizedIntent,
-  }))))).map((built) => built!.metadata);
-  const syntheticDomains = fixturePacks.map(({ domain }) => domainMetadata(domain));
-  const finalize = (domains: TaskAnalyzerDomainMetadata[], skills: RouterSkillMetadata[], fingerprint: Awaited<ReturnType<typeof scanProject>> | ReturnType<typeof emptyFingerprint>, useFixturePacks: boolean) => {
-    const fixtureRoutingPacks = adaptFixtureRoutingPacks(fixturePacks);
-    const packs = domains.map((domain) => {
-      const loaded = (useFixturePacks ? fixtureRoutingPacks.find(({ domainId }) => domainId === domain.id) : undefined) ??
-        loadedBundledPacks.find(({ domainId }) => domainId === domain.id);
-      return {
-        domainId: domain.id,
-        routing: domain.routing,
-        ownership: loaded?.ownership ?? [],
-        ...(loaded?.vocabulary ? { vocabulary: loaded.vocabulary } : {}),
-        ...(loaded?.vocabularyBytes === undefined ? {} : { vocabularyBytes: loaded.vocabularyBytes }),
-      };
-    });
-    return {
-      domains,
-      skills,
-      fingerprint,
-      routingContext: buildRoutingContext({
-        packs,
-        skills: skills.map(canonicalSkillRoutingDocument),
-        coreVocabulary: coreRoutingVocabulary,
-        baseRegistryDigest: "eval-registry",
-      }),
-    };
+    installed,
+  });
+  const fingerprint = input.registry === "bundled" && input.fixture === "frontend"
+    ? await scanProject(path.join(root, "fixtures", "next-react-ts"))
+    : emptyFingerprint(root);
+  return {
+    skills: world.skills,
+    domains: world.domains,
+    fingerprint,
+    routingContext: world.routingContext,
   };
-  if (input.registry === "test-fixture") {
-    const syntheticDomainIds = new Set(syntheticDomains.map(({ id }) => id));
-    // The frontend fixture pack already carries the extended routing tags
-    // ("application-interface"), so the bundled frontend domain is simply
-    // overridden by id — no in-memory domain mutation. The edge case lives in
-    // data, not code.
-    const domains = [
-        ...bundledPacks.filter(({ id }) => !syntheticDomainIds.has(id)).map(domainMetadata),
-        ...syntheticDomains,
-      ];
-    const skills = [
-        ...bundledSkills.filter((skill) => !skill.domains?.some((domain) => syntheticDomainIds.has(domain))),
-        ...synthetic,
-      ];
-    return finalize(domains, skills, emptyFingerprint(root), true);
-  }
-  const project = input.fixture === "frontend" ? await scanProject(path.join(root, "fixtures", "next-react-ts")) : emptyFingerprint(root);
-  return finalize(bundledPacks.map(domainMetadata), bundledSkills, project, false);
 };
 
-const evaluateCase = async (root: string, input: RouterGoldenCase, fixturePacks: RouterFixturePack[]) => {
+const evaluateCase = async (root: string, input: RouterGoldenCase) => {
   const parsed = parseTrigger({ prompt: input.prompt, mode: "explicit" });
   if (!parsed.activated) return { status: parsed.reason, domainIds: [], primaryDomainId: undefined, selectedSkillCount: 0, selectedCompanionCount: 0, usefulCompanionCount: 0, instructionBytes: 0, privacyLeakageCount: 0, deterministic: true };
-  const metadata = await buildCaseInput(root, input, fixturePacks, parsed.normalizedIntent);
+  const metadata = await buildCaseInput(root, input, parsed.normalizedIntent);
   // Router evals enter through the same preloaded-metadata input contract as
   // production: the pipeline decides and the eval is a second adapter over the
   // routing decision, with no disk persistence. Replaying the whole decision
@@ -363,11 +324,20 @@ export const evaluateRouterFixtures = async (
   options: { includeQuarantine?: boolean } = {},
 ) => {
   const cases = await loadRouterGoldenCases(path.join(root, "tests", "fixtures", "router-cases.json"));
-  const packs = await loadRouterFixturePacks(path.join(root, "tests", "fixtures", "router-packs"));
-  const results = await Promise.all(cases.map((input) => evaluateCase(root, input, packs)));
+  // Corpus metadata facts (synthetic pack and skill counts, fixture domain ids)
+  // also come from the loader: a replace-mode world over the fixture packs. The
+  // eval never loads packs, metadata, or routing context on its own.
+  const syntheticWorld = await loadRoutingWorld({
+    registry: { kind: "test-fixture", root: path.join(root, "tests", "fixtures", "router-packs") },
+    projectRoot: root,
+    targetAgent: "codex",
+    skillInputs: {},
+    installed: [],
+  });
+  const results = await Promise.all(cases.map((input) => evaluateCase(root, input)));
   void options.includeQuarantine;
   const quarantineCases = await loadRouterGoldenCases(path.join(root, "tests", "fixtures", "router-paraphrase-cases.json"));
-  const quarantineResults = await Promise.all(quarantineCases.map((input) => evaluateCase(root, input, packs)));
+  const quarantineResults = await Promise.all(quarantineCases.map((input) => evaluateCase(root, input)));
   const naturalLanguageMetrics = summarizeNaturalLanguage(quarantineCases, quarantineResults);
   const metrics = summarize([...cases, ...quarantineCases], [...results, ...quarantineResults]);
   const shippedIndexes = cases.flatMap((input, index) => input.registry === "bundled" ? [index] : []);
@@ -378,10 +348,10 @@ export const evaluateRouterFixtures = async (
   return {
     schemaVersion: "router-eval/1.0" as const,
     caseCount: cases.length + quarantineCases.length,
-    syntheticPackCount: packs.length,
-    syntheticSkillCount: packs.reduce((total, pack) => total + pack.skills.length, 0),
+    syntheticPackCount: syntheticWorld.domains.length,
+    syntheticSkillCount: syntheticWorld.skills.length,
     caseIds: [...cases, ...quarantineCases].map(({ id }) => id),
-    domainIds: packs.map(({ domain }) => domain.id),
+    domainIds: syntheticWorld.domains.map(({ id }) => id),
     routingDate: routerEvalRoutingDate,
     thresholds: routerEvalThresholds,
     metrics,

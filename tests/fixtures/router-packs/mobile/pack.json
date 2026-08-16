@@ -3,6 +3,7 @@
   "domain": {
     "id": "mobile",
     "displayName": "Synthetic Mobile",
+    "targetSurface": "mobile",
     "routing": {
       "aliases": ["mobile-app", "native-app"],
       "intentTags": ["mobile-interface", "offline-feature"],
