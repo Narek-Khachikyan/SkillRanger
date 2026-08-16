@@ -23,7 +23,12 @@ import { adaptFixtureRoutingPacks, loadBundledRoutingPacks, type LoadedRouterPac
 
 export type RoutingWorldRegistry =
   | { kind: "bundled"; root: string }
-  | { kind: "test-fixture"; root: string };
+  | { kind: "test-fixture"; root: string }
+  // Merge mode keeps the bundled world loaded and composes fixture domains and
+  // skills with it: a fixture entry with the same id overrides the bundled one
+  // (override-by-id), everything else stays. root is the bundled registry root,
+  // fixtureRoot is the fixture packs root.
+  | { kind: "merge"; root: string; fixtureRoot: string };
 
 export type RoutingWorldInput = {
   registry: RoutingWorldRegistry;
@@ -67,15 +72,25 @@ const fixturePackToWorldPack = (pack: RouterFixturePack): WorldPack => ({
 
 export const loadRoutingWorld = async (input: RoutingWorldInput): Promise<RoutingWorld> => {
   const domainsRoot = input.domainsRoot ?? defaultDomainsRoot;
-  const replace = input.registry.kind === "test-fixture";
-  const fixturePacks = replace ? await loadRouterFixturePacks(input.registry.root) : [];
+  const kind = input.registry.kind;
+  const replace = kind === "test-fixture";
+  const merge = kind === "merge";
+  const fixtureRoot = kind === "merge" ? input.registry.fixtureRoot : input.registry.root;
+  const fixturePacks = (replace || merge) ? await loadRouterFixturePacks(fixtureRoot) : [];
   const bundledPacks = replace ? [] : await loadBundledRouterPacks(domainsRoot);
+  const fixtureDomainIds = new Set(fixturePacks.map((pack) => pack.domain.id));
+  const fixtureSkillIds = new Set(fixturePacks.flatMap((pack) => pack.skills.map((skill) => skill.id)));
   const packs: WorldPack[] = replace
     ? fixturePacks.map(fixturePackToWorldPack)
-    : bundledPacks;
+    : merge
+      ? [
+          ...bundledPacks.filter((pack) => !fixtureDomainIds.has(pack.id)),
+          ...fixturePacks.map(fixturePackToWorldPack),
+        ]
+      : bundledPacks;
   const registrySkills = replace ? [] : await loadLocalRegistry(input.registry.root);
   const installedSkillIds = new Set(input.installed.map((entry) => entry.skillId));
-  const fixtureMetadata = replace
+  const fixtureMetadata = (replace || merge)
     ? (await Promise.all(fixturePacks.flatMap((pack) => pack.skills.map((skill) => buildRouterSkillMetadata({
       source: { kind: "fixture", skill, installed: installedSkillIds.has(skill.id) },
       projectRoot: input.projectRoot,
@@ -102,10 +117,23 @@ export const loadRoutingWorld = async (input: RoutingWorldInput): Promise<Routin
       ...(built.entry !== undefined ? { entry: built.entry } : {}),
     }];
   });
-  const skills = [...registryMetadata, ...fixtureMetadata];
+  // Override-by-id: in merge mode a fixture skill wins over a bundled skill with
+  // the same id, and bundled skills of a fixture-overridden domain are dropped so
+  // the fixture pack owns that domain.
+  const skills = merge
+    ? [
+        ...registryMetadata.filter((skill) => !fixtureSkillIds.has(skill.id) && !skill.domains?.some((domain) => fixtureDomainIds.has(domain))),
+        ...fixtureMetadata,
+      ]
+    : [...registryMetadata, ...fixtureMetadata];
   const routingPacks = replace
     ? adaptFixtureRoutingPacks(fixturePacks)
-    : await loadBundledRoutingPacks(bundledPacks);
+    : merge
+      ? [
+          ...(await loadBundledRoutingPacks(bundledPacks)).filter((pack) => !fixtureDomainIds.has(pack.domainId)),
+          ...adaptFixtureRoutingPacks(fixturePacks),
+        ]
+      : await loadBundledRoutingPacks(bundledPacks);
   const routingContext = buildRoutingContext({
     packs: routingPacks,
     skills: skills.map(canonicalSkillRoutingDocument),

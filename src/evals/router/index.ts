@@ -109,10 +109,12 @@ const buildCaseInput = async (root: string, input: RouterGoldenCase, fixturePack
   };
   if (input.registry === "test-fixture") {
     const syntheticDomainIds = new Set(syntheticDomains.map(({ id }) => id));
+    // The frontend fixture pack already carries the extended routing tags
+    // ("application-interface"), so the bundled frontend domain is simply
+    // overridden by id — no in-memory domain mutation. The edge case lives in
+    // data, not code.
     const domains = [
-        ...bundledPacks.filter(({ id }) => !syntheticDomainIds.has(id)).map((domain) => input.id === "ambiguous-web-mobile" && domain.id === "frontend"
-          ? { ...domainMetadata(domain), routing: { ...domain.routing, artifactTypes: [...domain.routing.artifactTypes, "application-interface"], intentTags: [...domain.routing.intentTags, "application-interface"] } }
-          : domainMetadata(domain)),
+        ...bundledPacks.filter(({ id }) => !syntheticDomainIds.has(id)).map(domainMetadata),
         ...syntheticDomains,
       ];
     const skills = [
