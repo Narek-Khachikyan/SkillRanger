@@ -42,7 +42,7 @@ test("replace mode substitutes fixture packs for the bundled world and loads no 
   assert.match(world.routingContext.vocabularyDigest, sha256);
 });
 
-test("replace mode with an explicit installed marking marks the matching fixture skill installed", async () => {
+test("replace mode ignores the explicit installed marking: fixture skills stay uninstalled", async () => {
   const fixturePacks = await loadRouterFixturePacks(fixtureRoot);
   const installedSkillId = fixturePacks[0].skills[0].id;
   const installed = [{
@@ -58,11 +58,10 @@ test("replace mode with an explicit installed marking marks the matching fixture
   const world = await loadRoutingWorld(await worldInput({ installed }));
   const marked = world.skills.find((skill) => skill.id === installedSkillId);
   assert.ok(marked, `expected ${installedSkillId} in loaded skills`);
-  assert.equal(marked.source, "installed");
-  assert.equal(marked.installed, true);
-  const unmarked = world.skills.find((skill) => skill.id !== installedSkillId)!;
-  assert.equal(unmarked.source, "test-fixture-registry");
-  assert.equal(unmarked.installed, false);
+  // Replace mode is a fully synthetic world: a lockfile entry colliding with a
+  // fixture id must never flip the marking (pre-migration semantics: false).
+  assert.equal(marked.source, "test-fixture-registry");
+  assert.equal(marked.installed, false);
 });
 
 test("bundled mode returns registry skills with the registry skill and installed-entry fields", async () => {

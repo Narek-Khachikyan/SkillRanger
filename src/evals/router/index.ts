@@ -10,7 +10,7 @@ import { canonicalizeJson } from "../../router/store.ts";
 import { loadRoutingWorld, type RoutingWorldRegistry } from "../../router/world.ts";
 import type { InstalledSkill } from "../../types.ts";
 import { evaluateModelAssistedRouter } from "./model-assisted.ts";
-import { emptyFingerprint, publicOutcomeStatus, skillIndexById } from "./helpers.ts";
+import { canonicalSkillId, emptyFingerprint, publicOutcomeStatus, skillIndexById } from "./helpers.ts";
 
 export const routerEvalThresholds = {
   statusAccuracy: 1,
@@ -170,7 +170,7 @@ const evaluateCase = async (root: string, input: RouterGoldenCase) => {
     selectedSkillCount: outcome.selectedSkillIds.length,
     selectedCompanionCount: selectedCompanions.length,
     usefulCompanionCount: usefulCompanions.length,
-    instructionBytes: outcome.selectedSkillIds.reduce((sum, skillId) => sum + (skillById.get(skillId)?.instructionBytes ?? 0), 0),
+    instructionBytes: outcome.selectedSkillIds.reduce((sum, skillId) => sum + (skillById.get(canonicalSkillId(skillId))?.instructionBytes ?? 0), 0),
     privacyLeakageCount,
     deterministic,
     signalIds,

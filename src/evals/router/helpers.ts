@@ -23,7 +23,13 @@ export const emptyFingerprint = (root: string): ProjectFingerprint => ({
 export const publicOutcomeStatus = (status: RoutingPipelineOutcome["status"]): string =>
   status === "strict-requirements-unmet" ? "strict_requirements_unmet" : status;
 
-// The evaluations' own one-line skill index: ids are the metadata's own
-// canonical ids, so plain lookup matches every id the pipeline selected.
+// The canonical skill-id normalization the evaluations' index shares with the
+// pipeline's internal canonical lookup, so a non-canonical id can never silently
+// miss the index.
+export const canonicalSkillId = (value: string) => value.normalize("NFKC").trim().toLowerCase();
+
+// The evaluations' own one-line skill index: keys are canonicalized exactly like
+// the pipeline's canonical index, so any id the pipeline selected resolves the
+// same way in both modules.
 export const skillIndexById = (skills: RouterSkillMetadata[]) =>
-  new Map(skills.map((skill) => [skill.id, skill]));
+  new Map(skills.map((skill) => [canonicalSkillId(skill.id), skill]));

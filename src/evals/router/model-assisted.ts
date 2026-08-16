@@ -23,7 +23,7 @@ import type { RoutingProposalInput } from "../../router/routing-proposal.ts";
 import type { TaskAnalyzerDomainMetadata } from "../../router/analyzer.ts";
 import type { ProjectFingerprint } from "../../types.ts";
 import type { RoutingContext } from "../../router/context.ts";
-import { emptyFingerprint, publicOutcomeStatus, skillIndexById } from "./helpers.ts";
+import { canonicalSkillId, emptyFingerprint, publicOutcomeStatus, skillIndexById } from "./helpers.ts";
 
 const contractSchemaVersion = "router-eval-contracts/1.0" as const;
 const benchmarkSchemaVersion = "router-model-assisted/1.0" as const;
@@ -574,7 +574,7 @@ const summarizeDecision = (prompt: string, decision: RoutingPipelineDecision, sk
     selectedSkillIds,
     selectedSkillIdsByRole,
     selectedSkillCount: selectedSkillIds.length,
-    instructionBytes: selectedSkillIds.reduce((sum, skillId) => sum + (skillById.get(skillId)?.instructionBytes ?? 0), 0),
+    instructionBytes: selectedSkillIds.reduce((sum, skillId) => sum + (skillById.get(canonicalSkillId(skillId))?.instructionBytes ?? 0), 0),
     // The eval adapter shapes warnings like the production adapter: the stable
     // semantic-recall-limited warning is added only for limited-deterministic
     // outcomes, and refresh outcomes carry no routing shape at all.

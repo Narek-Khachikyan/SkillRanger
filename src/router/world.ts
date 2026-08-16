@@ -92,7 +92,12 @@ export const loadRoutingWorld = async (input: RoutingWorldInput): Promise<Routin
   const installedSkillIds = new Set(input.installed.map((entry) => entry.skillId));
   const fixtureMetadata = (replace || merge)
     ? (await Promise.all(fixturePacks.flatMap((pack) => pack.skills.map((skill) => buildRouterSkillMetadata({
-      source: { kind: "fixture", skill, installed: installedSkillIds.has(skill.id) },
+      // Replace mode is a fully synthetic world: lockfile entries describe real
+      // installed skills, so a fixture id colliding with one must never flip the
+      // marking (pre-migration preparation hardcoded fixture skills to installed:
+      // false). Merge mode keeps the explicit marking as the strict-installed
+      // simulation contract: the eval passes its controlled installed list.
+      source: { kind: "fixture", skill, installed: merge && installedSkillIds.has(skill.id) },
       projectRoot: input.projectRoot,
       targetAgent: input.targetAgent,
       inputs: input.skillInputs,
@@ -138,8 +143,12 @@ export const loadRoutingWorld = async (input: RoutingWorldInput): Promise<Routin
     packs: routingPacks,
     skills: skills.map(canonicalSkillRoutingDocument),
     coreVocabulary: coreRoutingVocabulary,
-    // The base registry digest is always the real digest over the loaded metadata;
-    // no call site can substitute a fake digest.
+    // The base registry digest is always the real digest over the loaded records
+    // (router metadata plus the registry-skill objects and installed-entry fields
+    // they carry), computed here exactly once; no call site can substitute a fake
+    // digest. Because it covers the full loaded records, digest values are only
+    // comparable across runs built by this loader — evaluation registryDigests
+    // never match pre-migration hand-rolled digests over metadata only.
     baseRegistryDigest: routerRecordDigest(skills),
   });
   return { skills, domains: packs.map(domainMetadata), routingPacks, routingContext };
