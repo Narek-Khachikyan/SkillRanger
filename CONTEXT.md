@@ -57,7 +57,7 @@ The one module that loads the routing-relevant world — router packs, router sk
 _Avoid_: input loader, metadata cache, pipeline preparation, registry snapshot
 
 **Routing entry**:
-The one deep, in-memory entry that every adapter calls with a preloaded Routing world and adapter-owned handles. It assembles the Routing pipeline input and owns the shared decision-shaping rules (capability normalization, fallback warning placement), so task preparation and both router evaluation suites route through the same surface. The Routing pipeline stays the exported pure core; the entry wraps it, never changes it.
+The one deep, in-memory entry that every adapter calls with a preloaded Routing world and adapter-owned handles. It assembles the Routing pipeline input and owns the shared decision-shaping rules (capability normalization; the fallback warning lives inside the pipeline decision itself), so task preparation and both router evaluation suites route through the same surface. The Routing pipeline stays the exported pure core; the entry wraps it, never changes it.
 _Avoid_: routing service, router orchestration, input factory, task preparation
 
 **Routing pipeline**:
