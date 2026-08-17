@@ -26,7 +26,7 @@ const capabilities = new Set<DomainCapability>([
   "repair",
   "evaluation",
 ]);
-const domainFields = new Set(["schemaVersion", "id", "displayName", "description", "version", "releaseVersion", "coreApi", "skillIdPrefix", "capabilities", "artifacts", "ownership", "routing"]);
+const domainFields = new Set(["schemaVersion", "id", "displayName", "description", "version", "releaseVersion", "coreApi", "skillIdPrefix", "capabilities", "artifacts", "ownership", "routing", "targetSurface"]);
 const artifactFields = new Set(["intents", "schemas", "recipes", "rules", "examples", "workflows", "validators", "evalSuite", "capabilityRecords"]);
 const artifactFieldsV11 = new Set([...artifactFields, "routingVocabulary"]);
 const artifactFieldsV12 = new Set([...artifactFieldsV11, "releaseManifest"]);
@@ -63,6 +63,9 @@ export const validateDomainPackManifest = (input: unknown): string[] => {
   }
   if (input.description !== undefined && (typeof input.description !== "string" || !input.description.trim())) {
     issues.push("description must be a non-empty string when provided");
+  }
+  if (input.targetSurface !== undefined && (typeof input.targetSurface !== "string" || !idPattern.test(input.targetSurface))) {
+    issues.push("targetSurface must be a safe slug when provided");
   }
   if (schemaVersion === "1.2") {
     if (typeof input.releaseVersion !== "string" || !input.releaseVersion.trim()) issues.push("releaseVersion is required for schemaVersion 1.2");

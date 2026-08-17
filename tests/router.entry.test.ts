@@ -22,7 +22,7 @@ const entryInput = async (prompt: string): Promise<RoutingEntryInput> => {
   const parsed = parseTrigger({ prompt, mode: "explicit" });
   assert.ok(parsed.activated, `prompt must activate: ${prompt}`);
   const world = await loadRoutingWorld({
-    registry: { kind: "test-fixture", root: fixtureRoot },
+    registry: { kind: "replace", root: fixtureRoot },
     projectRoot: "/entry-test",
     targetAgent: "codex",
     skillInputs: {},

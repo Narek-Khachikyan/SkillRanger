@@ -17,7 +17,7 @@ try {
     const result = await prepareTask({
       projectRoot: input.fixture === "frontend" ? nextFixture : tmp,
       registry: input.registry === "test-fixture"
-        ? { kind: "test-fixture", root: fixtureRoot }
+        ? { kind: "replace", root: fixtureRoot }
         : { kind: "bundled", root: defaultRegistryRoot },
       prompt: input.prompt,
       activation: { mode: "explicit" },

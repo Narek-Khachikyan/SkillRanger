@@ -395,7 +395,7 @@ test("strict not installed and missing capabilities return normal outcomes witho
   const capabilityRoot = await temporaryProject();
   const capabilityResult = await prepareTask({
     projectRoot: capabilityRoot,
-    registry: { kind: "test-fixture", root: fixtureRegistry },
+    registry: { kind: "replace", root: fixtureRegistry },
     prompt: "Implement authentication without terminal access. @skillranger",
     activation: { mode: "explicit" },
     strict: true,
@@ -443,7 +443,7 @@ test("clarification continuation creates both records only after a valid answer"
   await writeFile(mobilePackPath, `${JSON.stringify(mobilePack, null, 2)}\n`);
   const input = {
     projectRoot: root,
-    registry: { kind: "test-fixture" as const, root: ambiguousRegistry },
+    registry: { kind: "replace" as const, root: ambiguousRegistry },
     prompt: "Create a new application interface. @skillranger",
     activation: { mode: "explicit" as const },
     routingDate: "2026-07-19",
@@ -469,7 +469,7 @@ test("decomposition and production no-match create no partial router or runtime 
   const decompositionRoot = await temporaryProject();
   const decomposition = await prepareTask({
     projectRoot: decompositionRoot,
-    registry: { kind: "test-fixture", root: fixtureRegistry },
+    registry: { kind: "replace", root: fixtureRegistry },
     prompt: "Migrate PostgreSQL and redesign the mobile application. @skillranger",
     activation: { mode: "explicit" },
   });
@@ -491,7 +491,7 @@ test("synthetic multi-domain routing decomposes exact primary domains without pa
   const root = await temporaryProject();
   const result = await prepareTask({
     projectRoot: root,
-    registry: { kind: "test-fixture", root: fixtureRegistry },
+    registry: { kind: "replace", root: fixtureRegistry },
     prompt: "Fix the authentication API and add its integration tests. @skillranger",
     activation: { mode: "explicit" },
     capabilities: [{ id: "terminal", source: "host-reported" }],

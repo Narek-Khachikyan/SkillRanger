@@ -9,6 +9,7 @@ import { collectAvailableEvidence, evaluateRequiredEvidence, requiredEvidenceFor
 import type { NominatedPrimaryEligibilityFacts } from "./nomination-resolution.ts";
 import type { CanonicalRequirement } from "./requirements.ts";
 import type { MatchedRoutingSignal } from "./vocabulary/match.ts";
+import { canonical } from "./canonical.ts";
 
 export type RouterSkillMetadata = TaskAnalyzerSkillMetadata & {
   id: string;
@@ -123,7 +124,6 @@ export const buildNominatedPrimaryEligibilityFacts = (input: {
   return facts;
 };
 
-const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
 const unique = (values: Iterable<string>) => new Set([...values].map(canonical));
 const intersectionSize = (left: Iterable<string>, right: Iterable<string>) => {
   const rightSet = unique(right);

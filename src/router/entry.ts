@@ -10,6 +10,7 @@ import {
 import type { RoutingProposalInput } from "./routing-proposal.ts";
 import type { SemanticHintsInput, TriggerParseResult } from "./types.ts";
 import type { RoutingWorld } from "./world.ts";
+import { canonical } from "./canonical.ts";
 
 // The Routing entry: the one deep, in-memory entry every adapter calls with a
 // preloaded Routing world and adapter-owned handles. It assembles the Routing
@@ -22,7 +23,6 @@ import type { RoutingWorld } from "./world.ts";
 // router config, fingerprints, routing dates, and limits stay with the
 // adapters, per the Routing world boundary.
 
-const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
 const targetPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 
 // The single definition of a valid capability list: canonical form, deduplicated

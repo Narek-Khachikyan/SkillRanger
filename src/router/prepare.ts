@@ -7,6 +7,7 @@ import type { InstalledSkill, ProjectFingerprint, RegistrySkill } from "../types
 import { scanProject } from "../scanner/index.ts";
 import { RoutingContextError } from "./context.ts";
 import { RoutingVocabularyValidationError } from "./vocabulary/validate.ts";
+import { canonical } from "./canonical.ts";
 import { createContinuationToken, validateContinuation, type ContinuationBinding } from "./continuation.ts";
 import { parseTrigger } from "./trigger.ts";
 import { buildSkillCatalog, SkillCatalogError } from "./catalog.ts";
@@ -46,7 +47,6 @@ export { routerAlgorithmVersion } from "./pipeline.ts";
 export { RouterPrepareError } from "./errors.ts";
 export const deterministicRoutingKey = (projection: DeterministicRoutingProjection) => routerRecordDigest(projection);
 
-const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
 const digest = (value: unknown) => routerRecordDigest(value);
 const targetPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 

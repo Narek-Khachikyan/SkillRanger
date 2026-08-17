@@ -5,6 +5,7 @@ import type {
 } from "./retrieval.ts";
 import { buildNominatedPrimaryEligibilityFacts, retrieveSkillCandidates } from "./retrieval.ts";
 import type { NominatedPrimaryEligibilityFacts } from "./nomination-resolution.ts";
+import { canonical } from "./canonical.ts";
 
 // The retrieval boundary: one retrieval result plus the eligibility-fact
 // projection bound to it. Facts are a pure projection of the stored retrieval,
@@ -15,8 +16,6 @@ export type RetrievalBoundary = {
   retrieval: RetrieveSkillCandidatesResult;
   eligibilityFacts: (skillIds: Iterable<string>) => NominatedPrimaryEligibilityFacts[];
 };
-
-const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
 
 // The production factory: accepts one unified retrieval input, runs the
 // retrieval, and binds the fact projection to the result it actually stored.

@@ -136,7 +136,7 @@ test("prepare maps fixture vocabulary authoring failures to routing-integrity", 
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-routing-project-"));
   await assert.rejects(prepareTask({
     projectRoot,
-    registry: { kind: "test-fixture", root: registryRoot },
+    registry: { kind: "replace", root: registryRoot },
     prompt: "Create an authentication API @skillranger",
     activation: { mode: "explicit" },
   }), (error: unknown) => error instanceof RouterPrepareError && error.code === "routing-integrity");

@@ -164,7 +164,7 @@ test("Core maps invalid hints and persisted runs contain no raw semantic evidenc
   const invalidRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-semantic-invalid-"));
   await assert.rejects(() => prepareTask({
     projectRoot: invalidRoot,
-    registry: { kind: "test-fixture", root: packsPath },
+    registry: { kind: "replace", root: packsPath },
     prompt: "Create an authentication API @skillranger",
     activation: { mode: "explicit" },
     semanticHints: { schemaVersion: "semantic-hints/1.0", signals: [{ kind: "intent", id: "authentication", evidenceText: "not in prompt", confidence: 1 }] },
@@ -174,7 +174,7 @@ test("Core maps invalid hints and persisted runs contain no raw semantic evidenc
   const canary = "PRIVATE_SEMANTIC_CANARY_913";
   const result = await prepareTask({
     projectRoot: root,
-    registry: { kind: "test-fixture", root: packsPath },
+    registry: { kind: "replace", root: packsPath },
     prompt: `Implement an authentication API for ${canary} @skillranger`,
     activation: { mode: "explicit" },
     capabilities: [{ id: "terminal", source: "host-reported" }],

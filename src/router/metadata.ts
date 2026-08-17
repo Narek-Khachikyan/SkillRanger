@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { TaskAction } from "./types.ts";
+import { canonical } from "./canonical.ts";
 
 export type CanonicalSkillRoutingDocument = {
   skillId: string;
@@ -36,10 +37,8 @@ export const canonicalSkillRoutingDocument = (skill: {
 // The always-on core (universal) skills domain. The owner id "core" is excluded
 // from domain resolution everywhere (host owner sets, direct signal segments,
 // strict-run flattening), so the core domain can never interfere with routing.
-export const isCoreDomainSkill = (domains: Iterable<string>) => {
-  const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
-  return [...domains].some((domain) => canonical(domain) === "core");
-};
+export const isCoreDomainSkill = (domains: Iterable<string>) =>
+  [...domains].some((domain) => canonical(domain) === "core");
 
 export const routerMetadataLimits = {
   maxArrayItems: 64,

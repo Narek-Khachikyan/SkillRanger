@@ -3,6 +3,7 @@ import type { TaskAnalyzerSkillMetadata } from "./analyzer.ts";
 import type { RoutingContext } from "./context.ts";
 import type { CanonicalRequirement } from "./requirements.ts";
 import type { TaskAction } from "./types.ts";
+import { canonical } from "./canonical.ts";
 
 export const actionRequirementCovered = (requested: TaskAction, skillActions: TaskAction[]) =>
   skillActions.some((supported) => supported === requested || actionCompatibilityScore(requested, supported) >= 0.85);
@@ -16,7 +17,6 @@ export type RequirementCoverage = {
   reasonCodes: string[];
 };
 
-const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
 export const requirementKey = (requirement: Pick<CanonicalRequirement, "kind" | "id">) => `${requirement.kind}:${canonical(requirement.id)}`;
 export const effectiveRequirementWeight = (requirement: CanonicalRequirement) => {
   if (!Number.isFinite(requirement.baseWeight) || !Number.isFinite(requirement.confidence) || requirement.baseWeight < 0 || requirement.confidence < 0) {

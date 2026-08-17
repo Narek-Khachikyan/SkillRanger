@@ -13,7 +13,7 @@ const registryRoot = path.resolve("registry");
 const sha256 = /^sha256:[a-f0-9]{64}$/;
 
 const worldInput = async (overrides: Partial<RoutingWorldInput> = {}): Promise<RoutingWorldInput> => ({
-  registry: { kind: "test-fixture", root: fixtureRoot },
+  registry: { kind: "replace", root: fixtureRoot },
   projectRoot: await project(),
   targetAgent: "codex",
   skillInputs: {},
@@ -73,6 +73,11 @@ test("bundled mode returns registry skills with the registry skill and installed
   assert.ok(registrySkill, "bundled mode must load registry skills");
   assert.equal(registrySkill.skill?.manifest.id, registrySkill.id);
   assert.match(world.routingContext.routingRegistryDigest, sha256);
+  // Bundled domain metadata carries the manifest-declared target surface: the
+  // resolver uses it to detect cross-surface domain ambiguity, so a bundled
+  // frontend world must expose "web" exactly like the fixture packs do.
+  const frontend = world.domains.find((domain) => domain.id === "frontend");
+  assert.equal(frontend?.targetSurface, "web");
   // Domains come from the bundled domain packs, not the fixture packs.
   const bundledPacks = await import("../src/domains/registry.ts").then(({ loadBundledRouterPacks }) => loadBundledRouterPacks(defaultDomainsRoot));
   assert.deepEqual(world.domains.map((domain) => domain.id), bundledPacks.map((pack) => pack.id));

@@ -1,7 +1,6 @@
 import type { RouterClarificationQuestion } from "./continuation.ts";
 import type { RouterSkillRole } from "./types.ts";
-
-const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
+import { canonical } from "./canonical.ts";
 
 // Proposal-declared roles; environment and agent-context placement is a composer decision.
 export type NominationRole = Exclude<RouterSkillRole, "environment" | "agent-context">;

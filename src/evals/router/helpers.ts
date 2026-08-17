@@ -1,11 +1,12 @@
-import type { RouterSkillMetadata } from "../../router/composer.ts";
 import type { RoutingPipelineOutcome } from "../../router/pipeline.ts";
 import type { ProjectFingerprint } from "../../types.ts";
+import { canonical as canonicalSkillId, skillIndexById } from "../../router/canonical.ts";
 
 // Shared helpers for the router evaluation adapters (golden and model-assisted).
-// These left the Routing pipeline's interface because they are evaluation-only:
-// the pipeline keeps its own canonical skill-index lookup and its internal
-// hyphenated outcome spelling.
+// These left the Routing pipeline's interface because they are evaluation-only;
+// the canonical normalization and the skill-index lookup are shared with the
+// pipeline through the canonical module, so a non-canonical id can never silently
+// miss either index.
 
 export const emptyFingerprint = (root: string): ProjectFingerprint => ({
   schemaVersion: "1.0",
@@ -23,16 +24,7 @@ export const emptyFingerprint = (root: string): ProjectFingerprint => ({
 export const publicOutcomeStatus = (status: RoutingPipelineOutcome["status"]): string =>
   status === "strict-requirements-unmet" ? "strict_requirements_unmet" : status;
 
-// The canonical skill-id normalization the evaluations' index shares with the
-// pipeline's internal canonical lookup, so a non-canonical id can never silently
-// miss the index.
-export const canonicalSkillId = (value: string) => value.normalize("NFKC").trim().toLowerCase();
-
-// The evaluations' own one-line skill index: keys are canonicalized exactly like
-// the pipeline's canonical index, so any id the pipeline selected resolves the
-// same way in both modules.
-export const skillIndexById = (skills: RouterSkillMetadata[]) =>
-  new Map(skills.map((skill) => [canonicalSkillId(skill.id), skill]));
+export { canonicalSkillId, skillIndexById };
 
 // The one privacy-canary extraction shared by both evaluation suites: secret
 // markers and URLs are captured with trailing punctuation stripped, and the

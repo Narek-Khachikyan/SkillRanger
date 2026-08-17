@@ -460,10 +460,12 @@ const sourceOptions = (root: string) => ({
 
 // The preloaded-metadata input contract is shared with production: the Routing
 // world loader builds router packs, skill metadata, routing packs, and the
-// routing context once per evaluation; the catalog snapshot loads once per
-// evaluation run (catalog snapshots stay adapter-owned). Evaluations then route
-// through the Routing entry — the same deep entry as task preparation — and
-// consume the routing decision with no disk persistence.
+// routing context once per distinct case intent (deduplicated below, so the
+// fallback/assisted/replay decisions of one case share a single world build);
+// the catalog snapshot loads once per evaluation run (catalog snapshots stay
+// adapter-owned). Evaluations then route through the Routing entry — the same
+// deep entry as task preparation — and consume the routing decision with no
+// disk persistence.
 type LoadedEvalInput = {
   binding: CatalogBinding;
   catalog: SkillCatalogSnapshot;
@@ -473,6 +475,38 @@ type BuiltEvalMetadata = {
   world: Awaited<ReturnType<typeof loadRoutingWorld>>;
   fingerprint: ProjectFingerprint;
   skillById: Map<string, RouterSkillMetadata>;
+};
+
+// The world is intent-dependent (domain routing policies apply per-case intent
+// adjustments to each skill's metadata), so it can never be hoisted to a single
+// run-wide load; it is instead built once per distinct intent within the run.
+// Every decision call of one case shares the same normalized intent, so without
+// this dedup the full registry/pack/metadata/context rebuild would repeat once
+// per decision call — a real regression against the once-per-case contract.
+const evalMetadataCache = new Map<string, Promise<BuiltEvalMetadata>>();
+
+const buildEvalMetadata = (root: string, intent: string): Promise<BuiltEvalMetadata> => {
+  const key = `${root}\0${intent}`;
+  const cached = evalMetadataCache.get(key);
+  if (cached !== undefined) return cached;
+  // Model-assisted evals enter through the same Routing world loader as task
+  // preparation and the golden evaluations, with the case's normalized intent;
+  // installed marking stays an explicit empty input so determinism never
+  // depends on the machine's lockfile.
+  const built = loadRoutingWorld({
+    registry: { kind: "bundled", root: sourceOptions(root).registryRoot },
+    projectRoot: root,
+    targetAgent: "codex",
+    skillInputs: {},
+    intent,
+    installed: [],
+  }).then((world) => ({
+    world,
+    fingerprint: emptyFingerprint(root),
+    skillById: skillIndexById(world.skills),
+  }));
+  evalMetadataCache.set(key, built);
+  return built;
 };
 
 const collectCatalog = async (root: string, maxItems: number, now: number) => {
@@ -503,26 +537,6 @@ const loadEvalInput = async (root: string): Promise<LoadedEvalInput> => ({
   binding: await currentCatalogBinding(root),
   catalog: await buildSkillCatalog(sourceOptions(root)),
 });
-
-const buildEvalMetadata = async (root: string, intent: string): Promise<BuiltEvalMetadata> => {
-  // Model-assisted evals enter through the same Routing world loader as task
-  // preparation and the golden evaluations, with the case's normalized intent;
-  // installed marking stays an explicit empty input so determinism never
-  // depends on the machine's lockfile.
-  const world = await loadRoutingWorld({
-    registry: { kind: "bundled", root: sourceOptions(root).registryRoot },
-    projectRoot: root,
-    targetAgent: "codex",
-    skillInputs: {},
-    intent,
-    installed: [],
-  });
-  return {
-    world,
-    fingerprint: emptyFingerprint(root),
-    skillById: skillIndexById(world.skills),
-  };
-};
 
 const materializeProposal = (captured: CapturedRoutingProposal, binding: CatalogBinding): RoutingProposalInput => {
   const value = structuredClone(captured) as unknown as Record<string, unknown>;

@@ -3,6 +3,7 @@ import type { RoutingContext } from "./context.ts";
 import type { SemanticHint } from "./types.ts";
 import type { MatchedRoutingSignal } from "./vocabulary/match.ts";
 import { taskSegmentId, type InternalTaskSegment } from "./segmentation.ts";
+import { canonical } from "./canonical.ts";
 import type {
   DomainCandidate,
   TaskProfile,
@@ -93,8 +94,6 @@ export const combineDomainSemanticScore = (raw: DomainSemanticScoreInput) => {
   if (!input.hasDirectDomainEvidence && !input.hasFingerprintEvidence && hostKindCount < 2) semanticScore = Math.min(semanticScore, 0.44);
   return semanticScore;
 };
-
-const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
 
 const unique = (values: Iterable<string>) => [...new Set([...values].map(canonical))];
 

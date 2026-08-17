@@ -23,7 +23,11 @@ import { adaptFixtureRoutingPacks, loadBundledRoutingPacks, type LoadedRouterPac
 
 export type RoutingWorldRegistry =
   | { kind: "bundled"; root: string }
-  | { kind: "test-fixture"; root: string }
+  // Replace mode builds a fully synthetic world from the fixture packs only:
+  // no bundled packs, registry skills, or routing context content. The golden
+  // corpus calls it "replace"; the fixture-corpus registry label "test-fixture"
+  // is a case attribute, never this mode.
+  | { kind: "replace"; root: string }
   // Merge mode keeps the bundled world loaded and composes fixture domains and
   // skills with it: a fixture entry with the same id overrides the bundled one
   // (override-by-id), everything else stays. root is the bundled registry root,
@@ -64,6 +68,12 @@ const domainMetadata = (pack: WorldPack): TaskAnalyzerDomainMetadata => ({
   routing: pack.routing,
 });
 
+const bundledPackToWorldPack = (pack: BundledRouterPack): WorldPack => ({
+  id: pack.id,
+  ...(pack.targetSurface ? { targetSurface: pack.targetSurface } : {}),
+  routing: pack.routing,
+});
+
 const fixturePackToWorldPack = (pack: RouterFixturePack): WorldPack => ({
   id: pack.domain.id,
   ...(pack.domain.targetSurface ? { targetSurface: pack.domain.targetSurface } : {}),
@@ -73,21 +83,24 @@ const fixturePackToWorldPack = (pack: RouterFixturePack): WorldPack => ({
 export const loadRoutingWorld = async (input: RoutingWorldInput): Promise<RoutingWorld> => {
   const domainsRoot = input.domainsRoot ?? defaultDomainsRoot;
   const kind = input.registry.kind;
-  const replace = kind === "test-fixture";
+  const replace = kind === "replace";
   const merge = kind === "merge";
   const fixtureRoot = kind === "merge" ? input.registry.fixtureRoot : input.registry.root;
   const fixturePacks = (replace || merge) ? await loadRouterFixturePacks(fixtureRoot) : [];
   const bundledPacks = replace ? [] : await loadBundledRouterPacks(domainsRoot);
   const fixtureDomainIds = new Set(fixturePacks.map((pack) => pack.domain.id));
   const fixtureSkillIds = new Set(fixturePacks.flatMap((pack) => pack.skills.map((skill) => skill.id)));
-  const packs: WorldPack[] = replace
-    ? fixturePacks.map(fixturePackToWorldPack)
-    : merge
-      ? [
-          ...bundledPacks.filter((pack) => !fixtureDomainIds.has(pack.id)),
-          ...fixturePacks.map(fixturePackToWorldPack),
-        ]
-      : bundledPacks;
+  // The effective world selection is the same for both assemblies below:
+  // bundled packs stay unless a fixture domain overrides them (override-by-id),
+  // and fixture packs participate in replace and merge modes only. Sharing this
+  // one selection instead of repeating the mode cascade keeps the two shapes
+  // (domain metadata and routing packs) provably aligned.
+  const bundledSelection = merge ? bundledPacks.filter((pack) => !fixtureDomainIds.has(pack.id)) : bundledPacks;
+  const fixtureSelection = (replace || merge) ? fixturePacks : [];
+  const packs: WorldPack[] = [
+    ...bundledSelection.map(bundledPackToWorldPack),
+    ...fixtureSelection.map(fixturePackToWorldPack),
+  ];
   const registrySkills = replace ? [] : await loadLocalRegistry(input.registry.root);
   const installedSkillIds = new Set(input.installed.map((entry) => entry.skillId));
   const fixtureMetadata = (replace || merge)
@@ -131,14 +144,10 @@ export const loadRoutingWorld = async (input: RoutingWorldInput): Promise<Routin
         ...fixtureMetadata,
       ]
     : [...registryMetadata, ...fixtureMetadata];
-  const routingPacks = replace
-    ? adaptFixtureRoutingPacks(fixturePacks)
-    : merge
-      ? [
-          ...(await loadBundledRoutingPacks(bundledPacks)).filter((pack) => !fixtureDomainIds.has(pack.domainId)),
-          ...adaptFixtureRoutingPacks(fixturePacks),
-        ]
-      : await loadBundledRoutingPacks(bundledPacks);
+  const routingPacks: LoadedRouterPack[] = [
+    ...(await loadBundledRoutingPacks(bundledSelection)),
+    ...adaptFixtureRoutingPacks(fixtureSelection),
+  ];
   const routingContext = buildRoutingContext({
     packs: routingPacks,
     skills: skills.map(canonicalSkillRoutingDocument),

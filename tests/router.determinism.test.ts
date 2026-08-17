@@ -41,7 +41,7 @@ test("clarification replays exclude token identity and expiry from the determini
     await writeFile(path.join(destination, "pack.json"), JSON.stringify(pack));
   }
   const input = {
-    registry: { kind: "test-fixture" as const, root: ambiguousRegistry },
+    registry: { kind: "replace" as const, root: ambiguousRegistry },
     prompt: "Create a new application interface. @skillranger",
     activation: { mode: "explicit" as const },
     routingDate: "2026-07-21",

@@ -90,6 +90,10 @@ export type DomainPackManifestBase<TArtifacts extends DomainPackArtifactsBase> =
   capabilities: DomainCapability[];
   artifacts: TArtifacts;
   routing?: DomainRoutingMetadata;
+  // The delivery surface this domain targets (for example "web" or "mobile").
+  // The Routing world loader maps it into domain metadata, where the resolver
+  // uses it to detect cross-surface domain ambiguity.
+  targetSurface?: string;
 };
 
 export type DomainPackManifest =

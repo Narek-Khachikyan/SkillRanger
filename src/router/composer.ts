@@ -1,6 +1,7 @@
 import type { ProjectFingerprint } from "../types.ts";
 import type { RoutingContext } from "./context.ts";
 import { isCoreDomainSkill } from "./metadata.ts";
+import { canonical } from "./canonical.ts";
 import type { CanonicalRequirement } from "./requirements.ts";
 import type {
   DomainCandidate,
@@ -115,7 +116,6 @@ export type ComposeSkillSetResult =
   | { status: "strict_requirements_unmet"; missing: Array<{ skillId: string; requirement: "installed-skill" | "lockfile-match" | "strict-contract-v2" | "skill-input" | "capability" }>; rejections: CandidateRejection[] }
   | { status: "context_budget_exceeded"; requiredBytes: number; allowedBytes: number; blockingSkillIds: string[]; rejections: CandidateRejection[] };
 
-const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
 const unique = (values: Iterable<string>) => new Set([...values].map(canonical));
 
 const orderMap = (skillIds: Iterable<string>) => new Map([...new Set([...skillIds].map(canonical))].map((skillId, index) => [skillId, index]));

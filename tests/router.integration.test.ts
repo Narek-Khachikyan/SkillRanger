@@ -143,7 +143,7 @@ test("clarification returns no partial router or runtime files", async () => {
   const fixtureRoot = path.resolve("tests/fixtures/router-packs");
   const result = await prepareTask({
     projectRoot: root,
-    registry: { kind: "test-fixture", root: fixtureRoot },
+    registry: { kind: "replace", root: fixtureRoot },
     prompt: "Create a new application interface. @skillranger",
     activation: { mode: "explicit" },
   });

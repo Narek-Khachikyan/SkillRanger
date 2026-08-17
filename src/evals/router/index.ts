@@ -311,7 +311,7 @@ export const evaluateRouterFixtures = async (
   // also come from the loader: a replace-mode world over the fixture packs. The
   // eval never loads packs, metadata, or routing context on its own.
   const syntheticWorld = await loadRoutingWorld({
-    registry: { kind: "test-fixture", root: path.join(root, "tests", "fixtures", "router-packs") },
+    registry: { kind: "replace", root: path.join(root, "tests", "fixtures", "router-packs") },
     projectRoot: root,
     targetAgent: "codex",
     skillInputs: {},

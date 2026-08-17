@@ -134,7 +134,7 @@ test("every fallback routed outcome variant carries the mode and the recall warn
   }
   const clarification = await prepareTask({
     projectRoot: await temporaryProject(),
-    registry: { kind: "test-fixture", root: ambiguousRegistry },
+    registry: { kind: "replace", root: ambiguousRegistry },
     prompt: "Create a new application interface. @skillranger",
     activation: { mode: "explicit" },
   });
@@ -146,7 +146,7 @@ test("every fallback routed outcome variant carries the mode and the recall warn
   // decomposition_required
   const decomposition = await prepareTask({
     projectRoot: await temporaryProject(),
-    registry: { kind: "test-fixture", root: fixtureRegistry },
+    registry: { kind: "replace", root: fixtureRegistry },
     prompt: "Migrate PostgreSQL and redesign the mobile application. @skillranger",
     activation: { mode: "explicit" },
   });

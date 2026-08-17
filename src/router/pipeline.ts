@@ -1,6 +1,7 @@
 import type { ProjectFingerprint } from "../types.ts";
 import type { TaskAnalyzerDomainMetadata } from "./analyzer.ts";
 import { analyzeTask } from "./analyzer.ts";
+import { canonical, skillIndexById } from "./canonical.ts";
 import type { SkillCatalogSnapshot } from "./catalog.ts";
 import {
   composeSkillSet,
@@ -164,14 +165,10 @@ export class RoutingPipelineError extends Error {
   }
 }
 
-const canonical = (value: string) => value.normalize("NFKC").trim().toLowerCase();
-
-// The canonical skill-index lookup is pipeline-internal: ids are matched
+// The canonical skill-index lookup is pipeline-shared: ids are matched
 // canonically, so proposal-supplied ids that vary in case still resolve to the
 // same metadata entry. Evaluations build their own one-line index over the
 // same metadata.
-const skillIndexById = (skills: RouterSkillMetadata[]) =>
-  new Map(skills.map((skill) => [canonical(skill.id), skill]));
 
 const noMatchSuggestedAction = "Proceed without a SkillRanger workflow or add an audited domain pack.";
 
