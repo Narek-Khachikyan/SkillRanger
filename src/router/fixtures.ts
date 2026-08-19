@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { isCanonicalId } from "./canonical.ts";
 import { taskActionIds, type RiskLevel, type RouterSkillRole, type TaskAction } from "./types.ts";
 import type { RequiredEvidenceRef } from "../domains/types.ts";
 import type { RoutingVocabularyFile } from "./vocabulary/types.ts";
@@ -99,7 +100,6 @@ const riskLevels = new Set<RiskLevel>(["low", "medium", "high", "block"]);
 const routerRoles = new Set<RouterSkillRole>(["environment", "primary", "companion", "verification", "agent-context"]);
 const taskActions = new Set<TaskAction>(taskActionIds);
 const strictContracts = new Set(["valid", "missing", "input-required"]);
-const canonicalId = /^[a-z0-9][a-z0-9._-]{1,127}$/;
 
 const record = (value: unknown, at: string): Record<string, unknown> => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(`${at} must be an object`);
@@ -121,7 +121,7 @@ const string = (value: unknown, at: string) => {
 
 const id = (value: unknown, at: string) => {
   const result = string(value, at);
-  if (!canonicalId.test(result)) throw new Error(`${at} must be a canonical ID`);
+  if (!isCanonicalId(result)) throw new Error(`${at} must be a canonical ID`);
   return result;
 };
 
@@ -150,7 +150,12 @@ const parseJson = async (filePath: string) => {
 
 const signalId = (value: unknown, at: string) => {
   const result = string(value, at);
-  if (!/^(action|artifact|intent|technology|quality|domain|constraint|acceptance):[a-z0-9][a-z0-9._-]{0,127}$/.test(result)) {
+  const separator = result.indexOf(":");
+  if (separator < 0) throw new Error(`${at} must be a canonical signal id`);
+  const prefix = result.slice(0, separator);
+  const suffix = result.slice(separator + 1);
+  const allowedPrefixes = new Set(["action", "artifact", "intent", "technology", "quality", "domain", "constraint", "acceptance"]);
+  if (!allowedPrefixes.has(prefix) || !isCanonicalId(suffix)) {
     throw new Error(`${at} must be a canonical signal id`);
   }
   return result;
@@ -280,7 +285,7 @@ export const loadRouterFixturePacks = async (root: string): Promise<RouterFixtur
   const entries = await readdir(root, { withFileTypes: true });
   const packs: RouterFixturePack[] = [];
   for (const entry of entries.sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0)) {
-    if (!entry.isDirectory() || !canonicalId.test(entry.name)) throw new Error(`unsupported fixture entry ${entry.name}`);
+    if (!entry.isDirectory() || !isCanonicalId(entry.name)) throw new Error(`unsupported fixture entry ${entry.name}`);
     const packRoot = path.join(root, entry.name);
     const packEntries = await readdir(packRoot, { withFileTypes: true });
     for (const packEntry of packEntries) {

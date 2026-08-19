@@ -492,7 +492,8 @@ const buildEvalMetadata = (root: string, intent: string): Promise<BuiltEvalMetad
   // Model-assisted evals enter through the same Routing world loader as task
   // preparation and the golden evaluations, with the case's normalized intent;
   // installed marking stays an explicit empty input so determinism never
-  // depends on the machine's lockfile.
+  // depends on the machine's lockfile. A rejected load must not stay cached
+  // forever — evict it so a later retry can succeed.
   const built = loadRoutingWorld({
     registry: { kind: "bundled", root: sourceOptions(root).registryRoot },
     projectRoot: root,
@@ -505,6 +506,7 @@ const buildEvalMetadata = (root: string, intent: string): Promise<BuiltEvalMetad
     fingerprint: emptyFingerprint(root),
     skillById: skillIndexById(world.skills),
   }));
+  built.catch(() => evalMetadataCache.delete(key));
   evalMetadataCache.set(key, built);
   return built;
 };

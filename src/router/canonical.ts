@@ -20,9 +20,5 @@ export const isCanonicalId = (value: string): boolean => {
   return value === canonical(value);
 };
 
-// Alias kept for callers that prefer the predicate phrasing; identical to
-// isCanonicalId and covered by the same contract tests.
-export const isCanonical = isCanonicalId;
-
 export const skillIndexById = <TSkill extends { id: string }>(skills: TSkill[]) =>
   new Map(skills.map((skill) => [canonical(skill.id), skill]));

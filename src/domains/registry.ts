@@ -9,6 +9,7 @@ import {
   routerMetadataLimits,
   validateMetadataArray,
 } from "../router/metadata.ts";
+import { isCanonicalId } from "../router/canonical.ts";
 import type {
   DomainCapability,
   DomainOwnershipRule,
@@ -17,7 +18,6 @@ import type {
   DomainPackRegistration,
 } from "./types.ts";
 
-const idPattern = /^[a-z0-9][a-z0-9._-]*$/;
 const capabilities = new Set<DomainCapability>([
   "project-signals",
   "intent-routing",
@@ -64,7 +64,7 @@ export const validateDomainPackManifest = (input: unknown): string[] => {
   if (input.description !== undefined && (typeof input.description !== "string" || !input.description.trim())) {
     issues.push("description must be a non-empty string when provided");
   }
-  if (input.targetSurface !== undefined && (typeof input.targetSurface !== "string" || !idPattern.test(input.targetSurface))) {
+  if (input.targetSurface !== undefined && (typeof input.targetSurface !== "string" || !isCanonicalId(input.targetSurface))) {
     issues.push("targetSurface must be a safe slug when provided");
   }
   if (schemaVersion === "1.2") {
@@ -72,7 +72,7 @@ export const validateDomainPackManifest = (input: unknown): string[] => {
   } else if (input.releaseVersion !== undefined) {
     issues.push("releaseVersion is only supported by schemaVersion 1.2");
   }
-  if (typeof input.id === "string" && !idPattern.test(input.id)) issues.push("id must be a safe slug");
+  if (typeof input.id === "string" && !isCanonicalId(input.id)) issues.push("id must be a safe slug");
   if (typeof input.skillIdPrefix === "string" && !input.skillIdPrefix.endsWith(".")) {
     issues.push("skillIdPrefix must end with a dot");
   }
@@ -153,7 +153,7 @@ export const validateDomainPackManifest = (input: unknown): string[] => {
               if (!new Set(["kind", "id", "allowedSources"]).has(key)) issues.push(`${at}.${key} is an unknown property`);
             }
             if (!evidenceKinds.has(evidence.kind as string)) issues.push(`${at}.kind is invalid`);
-            if (typeof evidence.id !== "string" || !idPattern.test(evidence.id)) issues.push(`${at}.id must be a safe slug`);
+            if (typeof evidence.id !== "string" || !isCanonicalId(evidence.id)) issues.push(`${at}.id must be a safe slug`);
             if (!isStringArray(evidence.allowedSources) || evidence.allowedSources.length === 0 ||
               new Set(evidence.allowedSources).size !== evidence.allowedSources.length ||
               evidence.allowedSources.some((source) => !evidenceSources.has(source))) {
@@ -304,7 +304,7 @@ export const loadBundledRouterPacks = async (
   }
   const packs: BundledRouterPack[] = [];
   for (const entry of entries) {
-    if (!entry.isDirectory() || !idPattern.test(entry.name)) {
+    if (!entry.isDirectory() || !isCanonicalId(entry.name)) {
       throw new Error(`Unsupported domain registry entry: ${entry.name}`);
     }
     const manifest = await readDomainPackManifest(entry.name, domainsRoot);

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canonical, isCanonicalId, isCanonical, skillIndexById } from "../src/router/canonical.ts";
+import { canonical, isCanonicalId, skillIndexById } from "../src/router/canonical.ts";
 import { normalizeRoutingText } from "../src/router/vocabulary/normalize.ts";
 
 // Table-driven contract for the single canonical identity module:
@@ -70,7 +70,6 @@ test("isCanonicalId accepts valid canonical source forms (table-driven)", () => 
 
   for (const [label, id] of valid) {
     assert.equal(isCanonicalId(id), true, `${label}: ${id}`);
-    assert.equal(isCanonical(id), true, `alias: ${label}: ${id}`);
     // Valid ids must already be normalized: canonical(id) === id
     assert.equal(canonical(id), id, `valid id must be stable under canonical: ${label}`);
   }
@@ -126,7 +125,6 @@ test("isCanonicalId rejects invalid canonical source forms (table-driven)", () =
   ];
   for (const [label, id] of invalid) {
     assert.equal(isCanonicalId(id), false, `${label}: ${JSON.stringify(id)}`);
-    assert.equal(isCanonical(id), false, `alias invalid: ${label}`);
   }
 });
 
@@ -241,9 +239,4 @@ test("canonical and isCanonicalId are consistent: every valid id is stable under
   }
 });
 
-test("isCanonical is alias of isCanonicalId", () => {
-  const samples = ["abc", "ABC", "  abc ", "\uFF41", "a/b", "", "a".repeat(128), "a".repeat(129)];
-  for (const s of samples) {
-    assert.equal(isCanonical(s), isCanonicalId(s), `alias equal for ${JSON.stringify(s)}`);
-  }
-});
+

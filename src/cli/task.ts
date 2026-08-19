@@ -7,10 +7,10 @@ import { SkillInputsError, validateSkillInputs } from "../router/skill-inputs.ts
 import { limitedDeterministicFallbackMode, semanticRecallLimitedWarning } from "../router/types.ts";
 import type { PrepareTaskCoreInput, PrepareTaskResult, ReadRunSkillFileInput, RouterExplanation, RouterSkillRole } from "../router/types.ts";
 import { RouterReaderError } from "../router/reader.ts";
+import { isCanonicalId } from "../router/canonical.ts";
 
 type Flags = Record<string, string | boolean>;
 const maxJsonFileBytes = 256_000;
-const canonicalId = /^[a-z0-9][a-z0-9._-]{1,127}$/;
 
 class TaskCliError extends Error {
   readonly code = "invalid-arguments";
@@ -78,7 +78,7 @@ const parseAnswers = async (filePath: string) => {
   if (entries.length === 0 || entries.length > 8) invalid("clarification answers must contain between 1 and 8 entries.");
   return entries.map(([questionId, answer]) => {
     const answerText = typeof answer === "string" ? answer : invalid("clarification answers must map canonical question IDs to non-empty option values of at most 128 characters.");
-    if (!canonicalId.test(questionId)) {
+    if (!isCanonicalId(questionId)) {
       invalid("clarification answers must map canonical question IDs to non-empty option values of at most 128 characters.");
     }
     if (answerText.length < 1 || answerText.length > 128) invalid("clarification answers must map canonical question IDs to non-empty option values of at most 128 characters.");

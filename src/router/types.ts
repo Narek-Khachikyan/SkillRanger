@@ -236,7 +236,7 @@ export type RouterExplanation = {
 export type PrepareTaskCoreInput = {
   projectRoot: string;
   registry: {
-    kind: "bundled" | "replace";
+    kind: "bundled" | "replace" | "test-fixture";
     root: string;
   };
   prompt: string;

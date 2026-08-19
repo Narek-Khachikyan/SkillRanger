@@ -26,8 +26,11 @@ export type RoutingWorldRegistry =
   // Replace mode builds a fully synthetic world from the fixture packs only:
   // no bundled packs, registry skills, or routing context content. The golden
   // corpus calls it "replace"; the fixture-corpus registry label "test-fixture"
-  // is a case attribute, never this mode.
+  // is a case attribute, never this mode. "test-fixture" is kept as an alias
+  // for backward compatibility with callers that still submit the pre-rename
+  // value.
   | { kind: "replace"; root: string }
+  | { kind: "test-fixture"; root: string }
   // Merge mode keeps the bundled world loaded and composes fixture domains and
   // skills with it: a fixture entry with the same id overrides the bundled one
   // (override-by-id), everything else stays. root is the bundled registry root,
@@ -82,10 +85,16 @@ const fixturePackToWorldPack = (pack: RouterFixturePack): WorldPack => ({
 
 export const loadRoutingWorld = async (input: RoutingWorldInput): Promise<RoutingWorld> => {
   const domainsRoot = input.domainsRoot ?? defaultDomainsRoot;
-  const kind = input.registry.kind;
-  const replace = kind === "replace";
-  const merge = kind === "merge";
-  const fixtureRoot = kind === "merge" ? input.registry.fixtureRoot : input.registry.root;
+  const rawKind = input.registry.kind;
+  // Backward compatibility: pre-rename callers submit "test-fixture" for the
+  // synthetic replace world. Normalize it so the world loader never branches
+  // on the legacy literal and old callers do not silently fall into the
+  // bundled path.
+  const replace = rawKind === "replace" || rawKind === "test-fixture";
+  const merge = rawKind === "merge";
+  const fixtureRoot = merge
+    ? (input.registry as Extract<RoutingWorldRegistry, { kind: "merge" }>).fixtureRoot
+    : input.registry.root;
   const fixturePacks = (replace || merge) ? await loadRouterFixturePacks(fixtureRoot) : [];
   const bundledPacks = replace ? [] : await loadBundledRouterPacks(domainsRoot);
   const fixtureDomainIds = new Set(fixturePacks.map((pack) => pack.domain.id));

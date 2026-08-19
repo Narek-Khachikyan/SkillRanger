@@ -1,8 +1,7 @@
 import { loadLocalRegistry } from "../registry/index.ts";
+import { isCanonicalId } from "./canonical.ts";
 
 export const maxSkillInputEntries = 32;
-
-const canonicalId = /^[a-z0-9][a-z0-9._-]{1,127}$/;
 
 export class SkillInputsError extends Error {}
 
@@ -18,7 +17,7 @@ export const validateSkillInputs = async (
   if (entries.length > maxSkillInputEntries) fail("skill inputs contain too many skill IDs.");
   const registryIds = new Set((await loadLocalRegistry(registryRoot)).map(({ manifest }) => manifest.id));
   for (const [skillId, skillInput] of entries) {
-    if (!canonicalId.test(skillId) || !registryIds.has(skillId)) fail(`skill inputs contain an unknown bundled skill ID: ${skillId}.`);
+    if (!isCanonicalId(skillId) || !registryIds.has(skillId)) fail(`skill inputs contain an unknown bundled skill ID: ${skillId}.`);
     if (typeof skillInput !== "object" || skillInput === null || Array.isArray(skillInput)) fail(`skill input for ${skillId} must be a JSON object.`);
   }
   return value as Record<string, Record<string, unknown>>;
