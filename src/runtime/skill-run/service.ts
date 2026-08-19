@@ -6,7 +6,8 @@ import { createSkillRun, reduceSkillRun } from "./reducer.ts";
 import { ContainedFileReadError, readContainedFile } from "../strict/contained-file.ts";
 import { SkillRunError, type CreateSkillRunInput, type SkillRun, type SkillRunArtifact, type SkillRunPolicyDecision, type SkillRunSkill, type SkillRunLocale, type VerifiedEvidenceSnapshot } from "./types.ts";
 import type { SkillRunStore } from "./store.ts";
-import { canonicalizeVerificationReport, validateVerificationReportForRun } from "./verification.ts";
+import { validateVerificationReportForRun } from "./verification.ts";
+import { deriveVerificationReportFile } from "./validation.ts";
 
 export type StartSkillRunInput = {
   runId: string;
@@ -187,11 +188,11 @@ export const verifySkillRun = (
         throw error;
       }
     }
-    const canonical = canonicalizeVerificationReport(report);
-    const reportSha256 = `sha256:${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
-    // ADR 0008: the server writes the canonical report file before recording verification, so the
-    // file at reportPath is always server-authored and its digest matches the persisted reportSha256.
-    await writeAtomicFile(reportTarget, `${canonical}\n`);
+    const { content: reportFileContent, digest: reportSha256 } = deriveVerificationReportFile(report);
+    // ADR 0008: the server writes the canonical report file (canonical JSON plus trailing newline)
+    // before recording verification, so the bytes at reportPath are exactly reportFileContent and
+    // their SHA-256 equals the persisted reportSha256, verifiable with `shasum -a 256 reportPath`.
+    await writeAtomicFile(reportTarget, reportFileContent);
     return reduceSkillRun(run, { type: "record-verification", reportPath: input.reportPath, reportSha256, report, evidenceSnapshots });
   } catch (error) {
     if (error instanceof SkillRunError && error.code === "verification-blocked") {

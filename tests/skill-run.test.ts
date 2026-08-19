@@ -494,7 +494,7 @@ test("store-backed lifecycle hashes intent and canonical verification before per
   run = completed.run;
   run = await verifySkillRun(store, run.runId, { reportPath: "report.json", report: fixtureReport });
   assert.equal(run.state, "verified");
-  assert.equal(run.verification?.reportSha256, `sha256:${createHash("sha256").update(canonicalizeVerificationReport(fixtureReport), "utf8").digest("hex")}`);
+  assert.equal(run.verification?.reportSha256, `sha256:${createHash("sha256").update(`${canonicalizeVerificationReport(fixtureReport)}\n`, "utf8").digest("hex")}`);
   assert.deepEqual(run.verification?.evidenceSnapshots, [{
     ...fixtureReport.evidence[0],
     byteLength: 1,
@@ -1066,7 +1066,7 @@ test("verify_skill_run writes the canonical server-authored report file on succe
   const canonical = canonicalizeVerificationReport(report);
   const fileContent = await readFile(path.join(projectRoot, "qa/verification-report.json"), "utf8");
   assert.equal(fileContent, `${canonical}\n`);
-  assert.equal(run.verification?.reportSha256, `sha256:${createHash("sha256").update(canonical, "utf8").digest("hex")}`);
+  assert.equal(run.verification?.reportSha256, `sha256:${createHash("sha256").update(`${canonical}\n`, "utf8").digest("hex")}`);
 });
 
 test("verify_skill_run rejects report paths outside the project root", async () => {

@@ -193,7 +193,7 @@ test("CLI completes and verifies a run while storing raw intent only by opt-in",
   assert.equal(current.state, "implemented-unverified");
   assert.equal(
     current.verification?.reportSha256,
-    `sha256:${createHash("sha256").update(canonicalizeVerificationReport(report), "utf8").digest("hex")}`,
+    `sha256:${createHash("sha256").update(`${canonicalizeVerificationReport(report)}\n`, "utf8").digest("hex")}`,
   );
   const inspected = await runCli("run:inspect", projectRoot, "--run", current.runId, "--json");
   assert.deepEqual(inspected.run, current);
