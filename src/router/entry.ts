@@ -10,7 +10,7 @@ import {
 import type { RoutingProposalInput } from "./routing-proposal.ts";
 import type { SemanticHintsInput, TriggerParseResult } from "./types.ts";
 import type { RoutingWorld } from "./world.ts";
-import { canonical } from "./canonical.ts";
+import { canonical, isCanonicalId } from "./canonical.ts";
 
 // The Routing entry: the one deep, in-memory entry every adapter calls with a
 // preloaded Routing world and adapter-owned handles. It assembles the Routing
@@ -23,8 +23,6 @@ import { canonical } from "./canonical.ts";
 // router config, fingerprints, routing dates, and limits stay with the
 // adapters, per the Routing world boundary.
 
-const targetPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
-
 // The single definition of a valid capability list: canonical form, deduplicated
 // against the always-present filesystem capability, and sorted. Every adapter
 // (task preparation and both evaluation suites) normalizes through this
@@ -35,7 +33,7 @@ export const normalizeCapabilities = (capabilities: string[] = []): string[] => 
     canonical("filesystem"),
     ...capabilities.map((id) => canonical(id)).filter((id) => id !== "filesystem"),
   ];
-  if (values.some((value) => !targetPattern.test(value)) || new Set(values).size !== values.length) {
+  if (values.some((value) => !isCanonicalId(value)) || new Set(values).size !== values.length) {
     throw new RouterPrepareError("capability-invalid", "Capabilities must be unique canonical IDs.");
   }
   return values.sort();

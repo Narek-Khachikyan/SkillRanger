@@ -5,6 +5,7 @@ import {
   type SkillCatalogSnapshot,
 } from "./catalog.ts";
 import type { RoutingContext } from "./context.ts";
+import { isCanonicalId } from "./canonical.ts";
 import { canonicalizeJson, routerRecordDigest } from "./store.ts";
 import type { MatchedRoutingSignal } from "./vocabulary/match.ts";
 import type { OwnerCanonicalAllowlists, RoutingSignalKind } from "./vocabulary/types.ts";
@@ -24,7 +25,6 @@ export const routingProposalLimits = {
 } as const;
 
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
-const canonicalIdPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const nominationRoles = new Set(["primary", "companion", "verification"] as const);
 const interpretationFields = [
   ["domains", "domain"],
@@ -151,7 +151,7 @@ const stringValue = (value: unknown, at: string, maxBytes = 128) => {
 };
 
 const canonicalId = (value: string, at: string) => {
-  if (!canonicalIdPattern.test(value) || value.normalize("NFKC").toLowerCase() !== value) {
+  if (!isCanonicalId(value)) {
     invalid(`${at} must be a canonical ID.`, { field: at });
   }
   return value;
@@ -343,7 +343,7 @@ export const validateRoutingProposal = (input: {
 
   for (const nomination of proposal.nominations) {
     const rawSkillId = nomination.skillId;
-    const canonicalSkillId = canonicalIdPattern.test(rawSkillId) && rawSkillId.normalize("NFKC").toLowerCase() === rawSkillId ? rawSkillId : undefined;
+    const canonicalSkillId = isCanonicalId(rawSkillId) ? rawSkillId : undefined;
     const reject = (reasonCode: string, skillId = canonicalSkillId) => rejections.push({ ...(skillId ? { skillId } : {}), reasonCode });
     if (!canonicalSkillId) { reject("non-canonical-skill-id"); continue; }
     if (seenSkills.has(canonicalSkillId)) { reject("duplicate-skill"); continue; }
@@ -474,7 +474,7 @@ export const detectExplicitSkillChoice = (prompt: string, skillIds: Iterable<str
   const ranges = codeRanges(source);
   const occurrences: Array<{ skillId: string; start: number }> = [];
   for (const skillId of [...new Set(skillIds)]
-    .filter((value) => canonicalIdPattern.test(value) && value.normalize("NFKC").toLowerCase() === value)
+    .filter((value) => isCanonicalId(value))
     .sort((left, right) => left.length - right.length || left.localeCompare(right))) {
     const expression = new RegExp(`(^|[^\\p{L}\\p{N}_.-])(${escapedRegExp(skillId)})(?=$|[^\\p{L}\\p{N}_.-])`, "gu");
     for (const match of source.matchAll(expression)) {
