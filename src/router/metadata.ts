@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { TaskAction } from "./types.ts";
-import { canonical } from "./canonical.ts";
+import { canonical, isCanonicalId } from "./canonical.ts";
 
 export type CanonicalSkillRoutingDocument = {
   skillId: string;
@@ -54,7 +54,6 @@ export type MetadataValidationIssue = {
   message: string;
 };
 
-const canonicalTokenPattern = /^[a-z0-9][a-z0-9._-]*$/;
 const environmentOperators = new Set([
   "tag",
   "framework",
@@ -89,7 +88,7 @@ export const validateMetadataArray = (
     if (Buffer.byteLength(entry, "utf8") > routerMetadataLimits.maxTokenBytes) {
       issues.push({ path: `${at}.${index}`, message: `Token must be at most ${routerMetadataLimits.maxTokenBytes} UTF-8 bytes.` });
     }
-    if (!entry || (options.canonicalTokens !== false && !canonicalTokenPattern.test(entry))) {
+    if (!entry || (options.canonicalTokens !== false && !isCanonicalId(entry))) {
       issues.push({ path: `${at}.${index}`, message: "Must be a canonical metadata token." });
     }
     if (options.allowed && !options.allowed.has(entry)) {

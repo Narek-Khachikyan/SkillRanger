@@ -4,6 +4,7 @@ import { lstat, mkdir, open, opendir, readFile, realpath, rename, unlink, writeF
 import path from "node:path";
 import { RunFileLock, type RunFileLockHooks } from "../runtime/run-lock.ts";
 import { routingModeValues, type RouterJournalEntry, type RouterRun, type RoutingMode } from "./types.ts";
+import { isCanonicalId } from "./canonical.ts";
 
 const routeIdPattern = /^route_[a-z0-9_-]{7,127}$/;
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
@@ -89,8 +90,6 @@ const digestValue = (value: unknown, at: string) => {
   return result;
 };
 
-const canonicalIdPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
-
 const dateTime = (value: unknown, at: string) => {
   const result = string(value, at);
   if (!dateTimePattern.test(result) || Number.isNaN(Date.parse(result))) return fail(`${at} must be a valid date-time.`);
@@ -135,13 +134,13 @@ const validateRoutingProposalProjection = (value: unknown, at: string) => {
   const interpretation = keys(record.interpretation, ["domains", "actions", "artifactTypes", "intentTags", "technologyTags", "qualityGoals"], [], `${at}.interpretation`);
   for (const field of ["domains", "actions", "artifactTypes", "intentTags", "technologyTags", "qualityGoals"]) {
     const values = uniqueStringArray(interpretation[field], `${at}.interpretation.${field}`);
-    if (values.length > 32 || values.some((id) => !canonicalIdPattern.test(id))) fail(`${at}.interpretation.${field} contains an invalid canonical ID.`);
+    if (values.length > 32 || values.some((id) => !isCanonicalId(id))) fail(`${at}.interpretation.${field} contains an invalid canonical ID.`);
   }
   if (!Array.isArray(record.nominations) || record.nominations.length > 16) fail(`${at}.nominations must contain at most 16 items.`);
   (record.nominations as unknown[]).forEach((item, index) => {
     const nomination = keys(item, ["skillId", "role", "confidence", "evidenceDigest"], [], `${at}.nominations[${index}]`);
     const skillId = string(nomination.skillId, `${at}.nominations[${index}].skillId`, true);
-    if (!canonicalIdPattern.test(skillId)) fail(`${at}.nominations[${index}].skillId is not canonical.`);
+    if (!isCanonicalId(skillId)) fail(`${at}.nominations[${index}].skillId is not canonical.`);
     enumeration(nomination.role, new Set(["primary", "companion", "verification"]), `${at}.nominations[${index}].role`);
     if (typeof nomination.confidence !== "number" || !Number.isFinite(nomination.confidence) || nomination.confidence < 0 || nomination.confidence > 1) fail(`${at}.nominations[${index}].confidence is invalid.`);
     digestValue(nomination.evidenceDigest, `${at}.nominations[${index}].evidenceDigest`);
@@ -152,13 +151,13 @@ const validateRoutingProposalProjection = (value: unknown, at: string) => {
     string(rejection.reasonCode, `${at}.rejections[${index}].reasonCode`, true);
     if (rejection.skillId !== undefined) {
       const skillId = string(rejection.skillId, `${at}.rejections[${index}].skillId`, true);
-      if (!canonicalIdPattern.test(skillId)) fail(`${at}.rejections[${index}].skillId is not canonical.`);
+      if (!isCanonicalId(skillId)) fail(`${at}.rejections[${index}].skillId is not canonical.`);
     }
   });
   if (record.ambiguity !== undefined) {
     const ambiguity = keys(record.ambiguity, ["primarySkillIds"], [], `${at}.ambiguity`);
     const ids = uniqueStringArray(ambiguity.primarySkillIds, `${at}.ambiguity.primarySkillIds`);
-    if (ids.length < 2 || ids.length > 3 || ids.some((id) => !canonicalIdPattern.test(id))) fail(`${at}.ambiguity.primarySkillIds is invalid.`);
+    if (ids.length < 2 || ids.length > 3 || ids.some((id) => !isCanonicalId(id))) fail(`${at}.ambiguity.primarySkillIds is invalid.`);
   }
 };
 
