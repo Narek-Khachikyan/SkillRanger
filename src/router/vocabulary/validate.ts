@@ -8,6 +8,7 @@ import type {
   RoutingVocabularyLocale,
 } from "./types.ts";
 import { normalizeRoutingText } from "./normalize.ts";
+import { isCanonicalId } from "../canonical.ts";
 
 export const routingVocabularyLimits = {
   maxFileBytes: 524_288,
@@ -58,9 +59,9 @@ export type ValidatedRoutingVocabulary = {
 const kindOrder: RoutingSignalKind[] = [
   "domain", "action", "artifact", "intent", "technology", "quality", "constraint", "acceptance",
 ];
+
 const kinds = new Set<RoutingSignalKind>(kindOrder);
 const locales = new Set<RoutingVocabularyLocale>(["en", "ru", "mixed"]);
-const canonicalId = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const exactKeys = (value: Record<string, unknown>, allowed: readonly string[], at: string) => {
   const unknown = Object.keys(value).find((key) => !allowed.includes(key));
   if (unknown) invalid(`${at}.${unknown} is an unknown property`);
@@ -81,7 +82,7 @@ const strings = (value: unknown, at: string, options: { min: number; max: number
   const result = items.map((item, index) => {
     const text = typeof item === "string" ? item : invalid(`${at}[${index}] must be a string`);
     if (text.trim() === "") invalid(`${at}[${index}] must be a non-empty string`);
-    if (options.canonical && !canonicalId.test(text)) invalid(`${at}[${index}] must be a canonical id`);
+    if (options.canonical && !isCanonicalId(text)) invalid(`${at}[${index}] must be a canonical id`);
     return text;
   });
   if (new Set(result).size !== result.length) invalid(`${at} must contain unique values`);
@@ -115,7 +116,7 @@ export const validateRoutingVocabulary = (input: {
   if (value.schemaVersion !== "routing-vocabulary/1.0") invalid("routing vocabulary schemaVersion is invalid");
   const owner = record(value.owner, "routing vocabulary.owner");
   exactKeys(owner, ["kind", "id"], "routing vocabulary.owner");
-  if ((owner.kind !== "core" && owner.kind !== "domain") || typeof owner.id !== "string" || !canonicalId.test(owner.id)) {
+  if ((owner.kind !== "core" && owner.kind !== "domain") || typeof owner.id !== "string" || !isCanonicalId(owner.id)) {
     invalid("routing vocabulary.owner is invalid");
   }
   const actualOwnerKey = ownerKeyFor(owner as { kind: "core" | "domain"; id: string });
@@ -137,7 +138,7 @@ export const validateRoutingVocabulary = (input: {
     exactKeys(entry, ["kind", "id", "locale", "phrases", "negativePhrases", "weight", "priority"], at);
     if (!kinds.has(entry.kind as RoutingSignalKind)) invalid(`${at}.kind is invalid`);
     const kind = entry.kind as RoutingSignalKind;
-    if (typeof entry.id !== "string" || !canonicalId.test(entry.id)) invalid(`${at}.id is invalid`);
+    if (typeof entry.id !== "string" || !isCanonicalId(entry.id)) invalid(`${at}.id is invalid`);
     const entryId = typeof entry.id === "string" ? entry.id : invalid(`${at}.id is invalid`);
     if (!allowlistFor(input.allowlists, kind).has(entryId)) invalid(`${at}.id is not allowed for ${input.ownerKey}`);
     if (!locales.has(entry.locale as RoutingVocabularyLocale)) invalid(`${at}.locale is invalid`);

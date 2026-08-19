@@ -4,6 +4,7 @@ import { canonicalizeJson, routerRecordDigest } from "./store.ts";
 import type { SemanticHint, SemanticHintsInput } from "./types.ts";
 import type { MatchedRoutingSignal } from "./vocabulary/match.ts";
 import { normalizeRoutingText, type NormalizedText } from "./vocabulary/normalize.ts";
+import { isCanonicalId } from "./canonical.ts";
 import type { RoutingSignalKind } from "./vocabulary/types.ts";
 
 export type SemanticHintProjection = {
@@ -20,7 +21,6 @@ export type SemanticHintValidationResult = {
 };
 
 const kinds = new Set<SemanticHint["kind"]>(["domain", "action", "artifact", "intent", "technology", "quality"]);
-const canonicalId = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const round = (value: number) => Math.round(value * 1_000) / 1_000;
 const evidenceDigest = (value: string) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -85,11 +85,11 @@ export const validateSemanticHints = (input: {
     if (!isRecord(raw)) { issues.push(`${at} must be an object`); continue; }
     for (const key of Object.keys(raw)) if (!new Set(["kind", "id", "evidenceText", "confidence"]).has(key)) issues.push(`${at}.${key} is an unknown property`);
     if (!kinds.has(raw.kind as SemanticHint["kind"])) issues.push(`${at}.kind is invalid`);
-    if (typeof raw.id !== "string" || !canonicalId.test(raw.id)) issues.push(`${at}.id is invalid`);
+    if (typeof raw.id !== "string" || !isCanonicalId(raw.id)) issues.push(`${at}.id is invalid`);
     if (typeof raw.evidenceText !== "string" || raw.evidenceText.trim() === "") issues.push(`${at}.evidenceText must be non-empty`);
     else if (Buffer.byteLength(raw.evidenceText, "utf8") > 256) issues.push(`${at}.evidenceText exceeds 256 UTF-8 bytes`);
     if (typeof raw.confidence !== "number" || !Number.isFinite(raw.confidence) || raw.confidence < 0.5 || raw.confidence > 1) issues.push(`${at}.confidence must be between 0.5 and 1.0`);
-    if (!kinds.has(raw.kind as SemanticHint["kind"]) || typeof raw.id !== "string" || !canonicalId.test(raw.id) ||
+    if (!kinds.has(raw.kind as SemanticHint["kind"]) || typeof raw.id !== "string" || !isCanonicalId(raw.id) ||
       typeof raw.evidenceText !== "string" || raw.evidenceText.trim() === "" || typeof raw.confidence !== "number" || !Number.isFinite(raw.confidence)) continue;
     const kind = raw.kind as SemanticHint["kind"];
     const ownerIds = ownersFor(input.context, kind, raw.id);

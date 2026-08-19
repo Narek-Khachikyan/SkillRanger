@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isCanonicalId } from "../router/canonical.ts";
 import type { RouterConfig } from "./types.ts";
 
 export class RouterConfigError extends Error {
@@ -59,7 +60,7 @@ export const validateRouterConfig = (input: unknown): RouterConfig => {
   if (value.schemaVersion !== "router-config/1.0") {
     throw new RouterConfigError("router config.schemaVersion must be router-config/1.0.");
   }
-  if (typeof value.defaultTargetAgent !== "string" || !/^[a-z0-9][a-z0-9._-]{0,127}$/.test(value.defaultTargetAgent)) {
+  if (typeof value.defaultTargetAgent !== "string" || !isCanonicalId(value.defaultTargetAgent)) {
     throw new RouterConfigError("router config.defaultTargetAgent must be a canonical agent ID.");
   }
 

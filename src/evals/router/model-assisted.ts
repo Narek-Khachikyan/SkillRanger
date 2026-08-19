@@ -22,10 +22,10 @@ import { loadRoutingWorld } from "../../router/world.ts";
 import type { RoutingProposalInput } from "../../router/routing-proposal.ts";
 import type { ProjectFingerprint } from "../../types.ts";
 import { canonicalSkillId, emptyFingerprint, privacyLeakageCountFor, publicOutcomeStatus, skillIndexById } from "./helpers.ts";
+import { isCanonicalId } from "../../router/canonical.ts";
 
 const contractSchemaVersion = "router-eval-contracts/1.0" as const;
 const benchmarkSchemaVersion = "router-model-assisted/1.0" as const;
-const canonicalIdPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 const contractKinds = new Set([
   "catalog",
   "proposal-grounding",
@@ -325,7 +325,7 @@ const stringValue = (value: unknown, at: string, nonEmpty = true): string => {
 
 const canonicalId = (value: unknown, at: string) => {
   const result = stringValue(value, at);
-  if (!canonicalIdPattern.test(result)) fail(`${at} must be a canonical ID.`);
+  if (!isCanonicalId(result)) fail(`${at} must be a canonical ID.`);
   return result;
 };
 
