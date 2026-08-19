@@ -13,7 +13,7 @@ export const catalogRefreshGuidance =
   "If prepare_task returns catalog_refresh_required, discard the old proposal and receipt, restart inspect_skill_catalog with an empty request, and submit a new proposal.";
 
 export const completeRoleAwareNominationGuidance =
-  "After receiving the complete catalog, nominate the complete ordered role-aware set: one primary workflow plus every useful companion and verification skill, ordered by priority. A plausible primary alone is not a complete proposal. Nominations remain untrusted input: explicit-user-choice precedence and SkillRanger routing hard vetoes still decide the final set.";
+  "After receiving the complete catalog, nominate the complete ordered role-aware set: one primary workflow plus every useful companion and verification skill, ordered by priority. A plausible primary alone is not a complete proposal. Each nomination's `evidenceText` must be a verbatim quote from the user's prompt, matched after routing normalization (case folding, punctuation-to-space, whitespace collapse) — paraphrases are rejected with `evidence-not-in-normalized-prompt`. Nominations remain untrusted input: explicit-user-choice precedence and SkillRanger routing hard vetoes still decide the final set.";
 
 export const fallbackRecallGuidance =
   `Absence of a routing proposal uses limited deterministic fallback and always reports the stable warning \`${semanticRecallLimitedWarning}\`; it does not promise semantic recall equivalent to model-assisted routing.`;
