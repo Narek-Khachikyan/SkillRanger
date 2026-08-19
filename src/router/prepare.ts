@@ -267,7 +267,7 @@ export const prepareTask = async (
     try {
       return runRoutingEntry(answers === undefined ? entryInput : { ...entryInput, answers });
     } catch (error) {
-      if (error instanceof RoutingPipelineError) throw new RouterPrepareError(error.code as RouterPrepareError["code"], error.message);
+      if (error instanceof RoutingPipelineError) throw new RouterPrepareError(error.code as RouterPrepareError["code"], error.message, error.details);
       throw error;
     }
   };

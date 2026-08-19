@@ -3,10 +3,12 @@
 
 export class RouterPrepareError extends Error {
   readonly code: "trigger-required" | "empty-intent" | "intent-too-large" | "router-disabled" | "target-agent-unresolved" | "project-root-unauthorized" | "continuation-invalid" | "continuation-expired" | "clarification-answer-invalid" | "capability-invalid" | "router-config-invalid" | "routing-integrity" | "semantic-hint-invalid" | "routing-proposal-invalid" | "raw-intent-confirmation-required";
+  readonly details?: Record<string, unknown>;
 
-  constructor(code: RouterPrepareError["code"], message: string) {
+  constructor(code: RouterPrepareError["code"], message: string, details?: Record<string, unknown>) {
     super(message);
     this.name = "RouterPrepareError";
     this.code = code;
+    this.details = details;
   }
 }
