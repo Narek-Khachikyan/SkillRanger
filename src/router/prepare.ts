@@ -7,7 +7,7 @@ import type { InstalledSkill, ProjectFingerprint, RegistrySkill } from "../types
 import { scanProject } from "../scanner/index.ts";
 import { RoutingContextError } from "./context.ts";
 import { RoutingVocabularyValidationError } from "./vocabulary/validate.ts";
-import { canonical } from "./canonical.ts";
+import { canonical, isCanonicalId } from "./canonical.ts";
 import { createContinuationToken, validateContinuation, type ContinuationBinding } from "./continuation.ts";
 import { parseTrigger } from "./trigger.ts";
 import { buildSkillCatalog, SkillCatalogError } from "./catalog.ts";
@@ -48,7 +48,6 @@ export { RouterPrepareError } from "./errors.ts";
 export const deterministicRoutingKey = (projection: DeterministicRoutingProjection) => routerRecordDigest(projection);
 
 const digest = (value: unknown) => routerRecordDigest(value);
-const targetPattern = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 
 type PreparedMetadata = RouterSkillMetadata & { skill: RegistrySkill; installedRoot?: string; entry?: InstalledSkill };
 
@@ -166,7 +165,7 @@ export const prepareTask = async (
   const targetAgent = canonical(input.targetAgent?.trim() || config.defaultTargetAgent);
   // Naming the accepted IDs here is the difference between a caller correcting itself and a caller
   // guessing again: "gemini" and "claude" are the obvious wrong guesses for gemini-cli and claude-code.
-  if (!targetPattern.test(targetAgent) || !Object.hasOwn(agents, targetAgent)) {
+  if (!isCanonicalId(targetAgent) || !Object.hasOwn(agents, targetAgent)) {
     throw new RouterPrepareError(
       "target-agent-unresolved",
       `Target agent is not a supported canonical ID. Supported IDs: ${Object.keys(agents).sort().join(", ")}.`,
