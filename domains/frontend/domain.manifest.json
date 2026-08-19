@@ -5,7 +5,7 @@
   "description": "Design, implementation, review, and verification workflows for web interfaces.",
   "targetSurface": "web",
   "version": "1.0.0",
-  "releaseVersion": "0.5.1",
+  "releaseVersion": "0.6.0",
   "coreApi": "1.0",
   "skillIdPrefix": "frontend.",
   "capabilities": [

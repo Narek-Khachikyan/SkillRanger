@@ -23,7 +23,7 @@ test("release:certify writes a non-promotable handoff when retained evidence is 
     blockingReasons: string[];
     evidenceBundle: { missingRoles: string[] };
   };
-  assert.equal(report.releaseVersion, "0.5.1");
+  assert.equal(report.releaseVersion, "0.6.0");
   assert.equal(report.verdict, "not-promotable");
   assert.ok(report.blockingReasons.some((reason) => reason.includes("visual benchmark gate")));
   assert.ok(report.evidenceBundle.missingRoles.includes("visual-candidates"));

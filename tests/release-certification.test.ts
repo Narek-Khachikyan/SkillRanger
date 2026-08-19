@@ -6,13 +6,13 @@ import {
   frontendReleaseVersion,
 } from "../src/release/certification.ts";
 
-test("validates the 0.5.1 frontend release artifact contract", async () => {
+test("validates the 0.6.0 frontend release artifact contract", async () => {
   const report = await validateFrontendReleaseArtifacts();
 
-  assert.equal(frontendReleaseVersion, "0.5.1");
+  assert.equal(frontendReleaseVersion, "0.6.0");
   assert.equal(report.ok, true, report.issues.join("; "));
-  assert.equal(report.releaseVersion, "0.5.1");
-  assert.equal(report.packageVersion, "0.5.1");
+  assert.equal(report.releaseVersion, "0.6.0");
+  assert.equal(report.packageVersion, "0.6.0");
   assert.deepEqual(report.ruleContract.families, [
     "typography", "layout", "responsive", "color", "state", "signature-move",
   ]);

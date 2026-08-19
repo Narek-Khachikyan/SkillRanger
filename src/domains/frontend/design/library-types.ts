@@ -4,7 +4,7 @@ export const designRuleFamilies = [
 
 export type DesignRuleFamily = (typeof designRuleFamilies)[number];
 
-// These identifiers are the compatibility boundary for the bundled 0.5.1 corpus.
+// These identifiers are the compatibility boundary for the bundled 0.6.0 corpus.
 // A new identifier is an explicit corpus change, not an incidental loader extension.
 export const designRuleIds = [
   "typography.role-contrast",

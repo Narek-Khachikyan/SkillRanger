@@ -2,6 +2,10 @@
 
 This checklist covers the current public beta. It verifies the npx/npm UX, compiled npm binaries, source-run CLI, MCP server, Universal Prompt Router, bundled registry, audit gates, frontend and router eval suites, and package hygiene before handing the beta to another user or publishing a tarball.
 
+0.6.0 is the routing world loader and canonical identity release. Task preparation, the golden router evaluations, and the model-assisted evaluations now load every Routing world through one loader (`src/router/world.ts`): `replace` mode builds a fully synthetic world from fixture packs, and `merge` mode composes fixture domains and skills over the bundled world with override-by-id. The Routing entry (`src/router/entry.ts`) fronts the routing pipeline and the pipeline owns the `semantic-recall-limited` fallback warning, while one canonical identity module (`src/router/canonical.ts`) owns canonical ID normalization (NFKC, trim, lowercase), source-form validation (1–128 ASCII characters), and skill indexing; the Routing entry, routing proposals, Router store, metadata validation, fixtures, skill inputs, the CLI task surface, domain-pack validation, and the evaluation adapters all consume it instead of private patterns. The pre-rename `test-fixture` registry kind stays accepted as an alias of `replace`.
+
+Lifecycle-v1 verification reports are now a published contract (ADR 0010): the `verify_skill_run` report schema is exposed on the tool surface and validation is collect-all — every violation is reported in one call instead of one per call — while strict-v2 remains the migration target. Domain-pack manifests may declare an optional `targetSurface` (the frontend domain declares `web`) and the resolver applies cross-surface ambiguity resolution.
+
 0.5.1 is a patch release. The router's runtime adapters are consolidated into one bridge module (`src/router/runtime-bridge.ts`): lifecycle payload construction, the runtime-store dispatch between the lifecycle-v1 and strict-v2 stores, and the mandatory-read bridge now live in a single place. The routing pipeline itself is extracted into `src/router/pipeline.ts`, router skill metadata unifies behind one canonical factory, and the router evaluations migrate onto the same pipeline consumed by production routing. CLI `task:read` now records completed mandatory reads into the runtime run through the shared bridged reader with the same journaled semantics as MCP `read_run_skill_file`, so a lifecycle-v1 run gains a content-delivered read record and a strict-v2 run syncs its chunk receipts.
 
 Always-on core (universal) skills now carry enforced output contracts (ADR 0008): a skill manifest may declare `outputContract.requiredReportFields`, and lifecycle `verify_skill_run` blocks until the verification report's `universalContracts` section satisfies every required field declared by the run's selected core skills. The server is the sole author of the verification report file: `reportPath` must stay inside the project root (symlink-escape rejected), and the report (or a verification-blocked status record) is written atomically. For a lifecycle-v1 run whose policy has `verificationRequired`, verification is mandatory (ADR 0009): a run closed as implemented without recorded verification carries the `verification-required-unrecorded` notice on both `complete_skill_run` and `inspect_skill_run`, and the derived signal surfaces as an extra content block while the structured run payload stays exactly the persisted record.
@@ -226,10 +230,10 @@ Create the tag and GitHub release first, then publish to npm. The tag must point
 From the release commit (after `release:check` passes):
 
 ```bash
-git tag -a v0.5.1 -m "SkillRanger v0.5.1"
-git push origin v0.5.1
-gh release create v0.5.1 \
-  --title "SkillRanger v0.5.1" \
+git tag -a v0.6.0 -m "SkillRanger v0.6.0"
+git push origin v0.6.0
+gh release create v0.6.0 \
+  --title "SkillRanger v0.6.0" \
   --notes-file /path/to/release-notes.md
 ```
 

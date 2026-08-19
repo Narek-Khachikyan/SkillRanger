@@ -44,7 +44,7 @@ import type {
 } from "../evals/visual/types.ts";
 import { defaultDomainsRoot, defaultFrontendEvalSuitePath, packageRoot } from "../paths.ts";
 
-export const frontendReleaseVersion = "0.5.1" as const;
+export const frontendReleaseVersion = "0.6.0" as const;
 
 const packageRootResolved = path.resolve(packageRoot);
 const frontendRoot = path.join(defaultDomainsRoot, "frontend");
@@ -319,7 +319,7 @@ export const validateFrontendReleaseArtifacts = async (): Promise<FrontendReleas
       : "";
     const manifestIssues = validateDomainPackManifest(domainManifest);
     issues.push(...manifestIssues.map((issue) => `frontend domain manifest: ${issue}`));
-    if (loaded.schemaVersion !== "1.2") issues.push("frontend domain manifest must use schemaVersion 1.2 for the 0.5.1 release identity");
+    if (loaded.schemaVersion !== "1.2") issues.push("frontend domain manifest must use schemaVersion 1.2 for the 0.6.0 release identity");
     if (domainReleaseVersion !== frontendReleaseVersion) {
       issues.push(`frontend domain releaseVersion must be ${frontendReleaseVersion}; received ${domainReleaseVersion || "missing"}`);
     }
@@ -336,7 +336,7 @@ export const validateFrontendReleaseArtifacts = async (): Promise<FrontendReleas
       issues.push("frontend release manifest has an invalid contract");
     } else {
       releaseManifest = raw;
-      if (releaseManifest.releaseVersion !== frontendReleaseVersion) issues.push("frontend release manifest version does not match 0.5.1");
+      if (releaseManifest.releaseVersion !== frontendReleaseVersion) issues.push("frontend release manifest version does not match 0.6.0");
       if (releaseManifest.domainId !== "frontend") issues.push("frontend release manifest domainId must be frontend");
       if (releaseManifest.domainApiVersion !== domainVersion) issues.push("frontend release manifest domain API version does not match the domain manifest");
       if (!sameArray(releaseManifest.ruleContract.families, expectedRuleContract.families)) issues.push("frontend release manifest family order is not the six-family contract");
