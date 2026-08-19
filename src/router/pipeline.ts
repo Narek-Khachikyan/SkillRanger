@@ -157,11 +157,13 @@ export type RoutingPipelineErrorCode =
 
 export class RoutingPipelineError extends Error {
   readonly code: RoutingPipelineErrorCode;
+  readonly details?: Record<string, unknown>;
 
-  constructor(code: RoutingPipelineErrorCode, message: string) {
+  constructor(code: RoutingPipelineErrorCode, message: string, details?: Record<string, unknown>) {
     super(message);
     this.name = "RoutingPipelineError";
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -227,14 +229,14 @@ export const runRoutingPipeline = (input: RoutingPipelineInput): RoutingPipeline
     try {
       shapedProposal = validateRoutingProposalShape(input.routingProposal);
     } catch (error) {
-      if (error instanceof RoutingProposalError) throw new RoutingPipelineError(error.code, error.message);
+      if (error instanceof RoutingProposalError) throw new RoutingPipelineError(error.code, error.message, error.details);
       throw error;
     }
     try {
       const refresh = validateRoutingProposalCatalogBinding({ proposal: shapedProposal, catalog: input.catalog! });
       if (refresh) return refreshDecision(refresh);
     } catch (error) {
-      if (error instanceof RoutingProposalError) throw new RoutingPipelineError(error.code, error.message);
+      if (error instanceof RoutingProposalError) throw new RoutingPipelineError(error.code, error.message, error.details);
       throw error;
     }
     try {
@@ -247,7 +249,7 @@ export const runRoutingPipeline = (input: RoutingPipelineInput): RoutingPipeline
       if ("status" in ownerChecked) return refreshDecision(ownerChecked);
       routingProposal = ownerChecked;
     } catch (error) {
-      if (error instanceof RoutingProposalError) throw new RoutingPipelineError(error.code, error.message);
+      if (error instanceof RoutingProposalError) throw new RoutingPipelineError(error.code, error.message, error.details);
       throw error;
     }
   }

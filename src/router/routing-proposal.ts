@@ -377,7 +377,13 @@ export const validateRoutingProposal = (input: {
   if (proposal.ambiguity) {
     const uniquePrimaryIds = [...new Set(proposal.ambiguity.primarySkillIds)];
     if (uniquePrimaryIds.some((skillId) => !primaryIds.includes(skillId))) {
-      invalid("routingProposal.ambiguity.primarySkillIds must identify valid primary nominations.", { field: "routingProposal.ambiguity.primarySkillIds" });
+      const sortedRejections = [...rejections]
+        .sort((left, right) => `${left.skillId ?? ""}:${left.reasonCode}`.localeCompare(`${right.skillId ?? ""}:${right.reasonCode}`))
+        .slice(0, routingProposalLimits.maxNominations);
+      invalid(
+        "routingProposal.ambiguity.primarySkillIds must identify valid primary nominations. The referenced primary nominations were rejected; see details.rejections and details.acceptedCount.",
+        { field: "routingProposal.ambiguity.primarySkillIds", rejections: sortedRejections, acceptedCount: accepted.length },
+      );
     }
     ambiguity = { primarySkillIds: uniquePrimaryIds };
   }

@@ -149,7 +149,11 @@ const withRouterErrors = (handler: McpToolHandler): McpToolHandler => async (arg
   try { return await handler(args); }
   catch (error) {
     if (error instanceof McpToolError) throw error;
-    if (error instanceof RouterPrepareError || error instanceof RouterReaderError) throw new McpToolError(routerErrorCode(error.code), error.message, { reasonCode: error.code });
+    if (error instanceof RouterPrepareError || error instanceof RouterReaderError) {
+      const threaded = (error as RouterPrepareError).details;
+      const details: Record<string, unknown> = { reasonCode: error.code, ...(threaded && typeof threaded === "object" ? threaded : {}) };
+      throw new McpToolError(routerErrorCode(error.code), error.message, details);
+    }
     if (error instanceof RouterStoreError) {
       const code = error.code === "run-not-found" ? "run-not-found" : "run-integrity";
       throw new McpToolError(code, error.message, { reasonCode: error.code });
