@@ -1,7 +1,8 @@
 import type { VerificationReport } from "../types.ts";
 import { SkillRunError, type SkillRun } from "./types.ts";
-import { assertValidVerificationReport, canonicalizeJson, missingUniversalContractFields } from "./validation.ts";
+import { assertValidVerificationReport, canonicalizeJson, deriveVerificationReportFile, missingUniversalContractFields } from "./validation.ts";
 
+export { deriveVerificationReportFile } from "./validation.ts";
 export const validateVerificationReportForRun = (
   run: Pick<SkillRun, "domain" | "policy">,
   input: unknown,

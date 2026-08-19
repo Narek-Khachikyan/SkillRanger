@@ -63,6 +63,20 @@ export const canonicalizeJson = (value: unknown): string => {
   return JSON.stringify(order(value));
 };
 
+// Single shared derivation for the on-disk verification report file and its digest (ADR 0008):
+// the file content is the canonical JSON plus a trailing newline, and the digest is the
+// SHA-256 of those exact bytes. Both the writer and the persisted-run validator use this
+// helper so the two can never drift apart.
+export const deriveVerificationReportFile = (report: VerificationReport): { content: string; digest: string } => {
+  const content = `${canonicalizeJson(report)}\n`;
+  const digest = `sha256:${createHash("sha256").update(content, "utf8").digest("hex")}`;
+  return { content, digest };
+};
+
+export const verificationReportFileDigest = (report: VerificationReport): string => deriveVerificationReportFile(report).digest;
+
+export const verificationReportFileContent = (report: VerificationReport): string => deriveVerificationReportFile(report).content;
+
 const fail: (message: string) => never = (message) => {
   throw new SkillRunError("run-integrity", message);
 };
@@ -514,8 +528,10 @@ export const assertValidSkillRun: (input: unknown) => asserts input is SkillRun 
     if (missingContracts.length > 0) {
       fail(`Persisted verification report is missing required universal output contract fields: ${missingContracts.map(({ skillId, fields }) => `${skillId}:${fields.join(",")}`).join("; ")}.`);
     }
-    const expectedDigest = `sha256:${createHash("sha256").update(canonicalizeJson(verification.report), "utf8").digest("hex")}`;
-    if (reportSha256 !== expectedDigest) fail("Verification report digest does not match its canonical content.");
+    const reportForDigest = verification.report as VerificationReport;
+    const legacyDigest = `sha256:${createHash("sha256").update(canonicalizeJson(reportForDigest), "utf8").digest("hex")}`;
+    const fileDigest = deriveVerificationReportFile(reportForDigest).digest;
+    if (reportSha256 !== legacyDigest && reportSha256 !== fileDigest) fail("Verification report digest does not match its canonical content.");
     if (state !== verification.report.outcome) fail("Skill run state must match its verification outcome.");
     if (verification.report.outcome === "verified" && (verification.report.verificationStatus !== "passed" || !verification.report.gates.hardPassed || verification.report.findings.some((finding) => finding.gate === "hard") || verification.report.evidence.length === 0)) {
       fail("Persisted verified report has an inconsistent verified claim.");
