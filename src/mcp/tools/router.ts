@@ -99,7 +99,7 @@ const inputSchema = {
               skillId: { type: "string", pattern: "^[a-z0-9][a-z0-9._-]{0,127}$" },
               role: { enum: ["primary", "companion", "verification"] },
               confidence: { type: "number", minimum: 0, maximum: 1 },
-              evidenceText: { type: "string", minLength: 1, maxLength: routingProposalLimits.maxEvidenceBytes },
+              evidenceText: { type: "string", minLength: 1, maxLength: routingProposalLimits.maxEvidenceBytes, description: "Verbatim quote from the user's prompt that grounds this nomination, matched after routing normalization (case folding, punctuation-to-space, whitespace collapse); paraphrases are rejected with `evidence-not-in-normalized-prompt`." },
             },
             additionalProperties: false,
           },

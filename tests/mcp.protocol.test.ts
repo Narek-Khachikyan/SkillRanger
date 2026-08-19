@@ -41,6 +41,13 @@ test("MCP protocol initializes with tool capability", async () => {
     "complete ordered role-aware set",
     "primary workflow plus every useful companion and verification skill",
     "A plausible primary alone is not a complete proposal",
+    "verbatim quote from the user's prompt",
+    "routing normalization",
+    "case folding",
+    "punctuation-to-space",
+    "whitespace collapse",
+    "paraphrases are rejected",
+    "evidence-not-in-normalized-prompt",
     "explicit-user-choice precedence and SkillRanger routing hard vetoes still decide the final set",
     "limited deterministic fallback",
     "`semantic-recall-limited`",
@@ -188,6 +195,13 @@ test("prepare_task tool guidance requires complete role-aware proposals and stat
     "complete ordered role-aware set",
     "primary workflow plus every useful companion and verification skill",
     "A plausible primary alone is not a complete proposal",
+    "verbatim quote from the user's prompt",
+    "routing normalization",
+    "case folding",
+    "punctuation-to-space",
+    "whitespace collapse",
+    "paraphrases are rejected",
+    "evidence-not-in-normalized-prompt",
     "explicit-user-choice precedence and SkillRanger routing hard vetoes still decide the final set",
     "limited deterministic fallback",
     "`semantic-recall-limited`",
@@ -196,6 +210,30 @@ test("prepare_task tool guidance requires complete role-aware proposals and stat
     "legacy SkillRanger server",
   ]) {
     assert.ok(description.includes(requiredPhrase), requiredPhrase);
+  }
+});
+
+test("prepare_task evidenceText schema description states verbatim-quote rule and paraphrase rejection", async () => {
+  const listed = await handleJsonRpcRequest({ jsonrpc: "2.0", id: "evidenceText-schema", method: "tools/list", params: {} });
+  const tools = (listed?.result as { tools: Array<{ name: string; inputSchema: Record<string, unknown> }> }).tools;
+  const schema = tools.find(({ name }) => name === "prepare_task")?.inputSchema as Record<string, unknown> | undefined;
+  const routingProposal = (schema?.properties as Record<string, unknown> | undefined)?.routingProposal as Record<string, unknown> | undefined;
+  const nominations = (routingProposal?.properties as Record<string, unknown> | undefined)?.nominations as Record<string, unknown> | undefined;
+  const items = nominations?.items as Record<string, unknown> | undefined;
+  const properties = items?.properties as Record<string, Record<string, unknown>> | undefined;
+  const evidenceText = properties?.evidenceText as Record<string, unknown> | undefined;
+  const description = (evidenceText?.description as string | undefined) ?? "";
+  for (const requiredPhrase of [
+    "Verbatim quote",
+    "user's prompt",
+    "routing normalization",
+    "case folding",
+    "punctuation-to-space",
+    "whitespace collapse",
+    "paraphrases are rejected",
+    "evidence-not-in-normalized-prompt",
+  ]) {
+    assert.ok(description.includes(requiredPhrase), `evidenceText description: ${requiredPhrase}`);
   }
 });
 
