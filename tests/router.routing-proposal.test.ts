@@ -216,3 +216,116 @@ test("explicit skill choice ignores negation, code spans, and URLs", () => {
   assert.equal(detectExplicitSkillChoice(`Read \`${skillId}\` in the docs`, [skillId]), undefined);
   assert.equal(detectExplicitSkillChoice(`Read https://example.com/${skillId}`, [skillId]), undefined);
 });
+
+test("ambiguity referencing rejected primary nominations fails with bounded rejections and accepted count", async () => {
+  const catalog = await buildSkillCatalog();
+  const receipt = await completeCatalogReceipt();
+  const baseProposal = {
+    schemaVersion: "routing-proposal/1.0" as const,
+    catalogDigest: catalog.digest,
+    catalogReceipt: receipt,
+    interpretation: {
+      domains: ["frontend"],
+      actions: ["implement"],
+      artifactTypes: ["component"],
+      intentTags: ["component-design"],
+      technologyTags: ["react"],
+      qualityGoals: ["accessibility"],
+    },
+    nominations: [
+      { skillId: "frontend.unknown-alpha", role: "primary" as const, confidence: 0.9, evidenceText: "build a component" },
+      { skillId: "frontend.unknown-beta", role: "primary" as const, confidence: 0.9, evidenceText: "build a component" },
+    ],
+    ambiguity: { primarySkillIds: ["frontend.unknown-alpha", "frontend.unknown-beta"] },
+  };
+  let error: RoutingProposalError | undefined;
+  try {
+    validateRoutingProposal({ proposal: baseProposal, prompt: "Please build a component with React", catalog });
+  } catch (caught) {
+    if (caught instanceof RoutingProposalError) error = caught;
+    else throw caught;
+  }
+  assert.ok(error, "expected RoutingProposalError for ambiguity referencing rejected nominations");
+  assert.equal(error.code, "routing-proposal-invalid");
+  assert.match(error.message, /see details\.rejections and details\.acceptedCount/);
+  assert.equal(error.details?.field, "routingProposal.ambiguity.primarySkillIds");
+  const rejections = error.details?.rejections as Array<{ skillId?: string; reasonCode: string }>;
+  assert.ok(Array.isArray(rejections));
+  assert.equal(rejections.length, 2);
+  // rejections are sorted by skillId:reasonCode and bounded to 16
+  assert.deepEqual(rejections, [...rejections].sort((a, b) => `${a.skillId ?? ""}:${a.reasonCode}`.localeCompare(`${b.skillId ?? ""}:${b.reasonCode}`)));
+  assert.equal(error.details?.acceptedCount, 0);
+  // every rejection is enumerated with reasonCode
+  assert.ok(rejections.every((r) => typeof r.reasonCode === "string" && r.reasonCode.length > 0));
+  assert.ok(rejections.some((r) => r.reasonCode === "skill-not-in-catalog"));
+});
+
+test("structurally invalid proposal fails without rejections list", () => {
+  const invalid: unknown = {
+    schemaVersion: "routing-proposal/1.0",
+    catalogDigest: `sha256:${"a".repeat(64)}`,
+    catalogReceipt: "receipt",
+    interpretation: {
+      domains: ["frontend"],
+      actions: ["implement"],
+      artifactTypes: ["component"],
+      intentTags: ["component-design"],
+      technologyTags: ["react"],
+      qualityGoals: ["accessibility"],
+    },
+    // missing nominations entirely — structural shape error
+  };
+  let error: RoutingProposalError | undefined;
+  try {
+    validateRoutingProposalShape(invalid);
+  } catch (caught) {
+    if (caught instanceof RoutingProposalError) error = caught;
+    else throw caught;
+  }
+  assert.ok(error);
+  assert.equal(error.code, "routing-proposal-invalid");
+  // structural failures carry only field, no bounded rejection list
+  assert.equal(typeof error.details?.field, "string");
+  assert.equal(error.details?.rejections, undefined);
+  assert.equal(error.details?.acceptedCount, undefined);
+});
+
+test("rejection list in ambiguity error is sorted and bounded to 16 items", async () => {
+  const catalog = await buildSkillCatalog();
+  const receipt = await completeCatalogReceipt();
+  const nominations = Array.from({ length: 16 }, (_, i) => ({
+    skillId: `frontend.unknown-${String(i).padStart(2, "0")}`,
+    role: "primary" as const,
+    confidence: 0.9,
+    evidenceText: "build a component",
+  }));
+  const proposal = {
+    schemaVersion: "routing-proposal/1.0" as const,
+    catalogDigest: catalog.digest,
+    catalogReceipt: receipt,
+    interpretation: {
+      domains: ["frontend"],
+      actions: ["implement"],
+      artifactTypes: ["component"],
+      intentTags: ["component-design"],
+      technologyTags: ["react"],
+      qualityGoals: ["accessibility"],
+    },
+    nominations,
+    ambiguity: { primarySkillIds: ["frontend.unknown-00", "frontend.unknown-01"] },
+  };
+  let error: RoutingProposalError | undefined;
+  try {
+    validateRoutingProposal({ proposal, prompt: "Please build a component with React", catalog });
+  } catch (caught) {
+    if (caught instanceof RoutingProposalError) error = caught;
+    else throw caught;
+  }
+  assert.ok(error);
+  const rejections = error.details?.rejections as unknown[];
+  assert.ok(Array.isArray(rejections));
+  assert.equal(rejections.length, 16);
+  assert.equal(error.details?.acceptedCount, 0);
+  const sorted = [...(rejections as Array<{ skillId?: string; reasonCode: string }>)].sort((a, b) => `${a.skillId ?? ""}:${a.reasonCode}`.localeCompare(`${b.skillId ?? ""}:${b.reasonCode}`));
+  assert.deepEqual(rejections, sorted);
+});

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { VerificationReport } from "../types.ts";
 import { SkillRunError, type SkillRun, type SkillRunArtifact, type SkillRunSkill } from "./types.ts";
+import { canonicalizeJson } from "../../canonical-json.ts";
 
 const sha256Pattern = /^sha256:[a-f0-9]{64}$/;
 const runIdPattern = /^[a-z0-9][a-z0-9_-]{7,127}$/;
@@ -50,18 +51,7 @@ const executionStatuses = new Set<string>(verificationReportEnums.executionStatu
 const verificationStatuses = new Set<string>(verificationReportEnums.verificationStatus);
 const outcomes = new Set<string>(verificationReportEnums.outcome);
 
-export const canonicalizeJson = (value: unknown): string => {
-  const order = (nested: unknown): unknown => {
-    if (Array.isArray(nested)) return nested.map(order);
-    if (typeof nested !== "object" || nested === null) return nested;
-    return Object.fromEntries(
-      Object.entries(nested as Record<string, unknown>)
-        .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
-        .map(([key, child]) => [key, order(child)]),
-    );
-  };
-  return JSON.stringify(order(value));
-};
+export { canonicalizeJson };
 
 // Single shared derivation for the on-disk verification report file and its digest (ADR 0008):
 // the file content is the canonical JSON plus a trailing newline, and the digest is the
@@ -529,8 +519,10 @@ export const assertValidSkillRun: (input: unknown) => asserts input is SkillRun 
       fail(`Persisted verification report is missing required universal output contract fields: ${missingContracts.map(({ skillId, fields }) => `${skillId}:${fields.join(",")}`).join("; ")}.`);
     }
     const reportForDigest = verification.report as VerificationReport;
-    const legacyDigest = `sha256:${createHash("sha256").update(canonicalizeJson(reportForDigest), "utf8").digest("hex")}`;
-    const fileDigest = deriveVerificationReportFile(reportForDigest).digest;
+    // Both digests derive from the single shared helper so writer and validator cannot drift:
+    // fileContent is canonical JSON plus trailing newline; legacy is the same bytes without it.
+    const { content: fileContent, digest: fileDigest } = deriveVerificationReportFile(reportForDigest);
+    const legacyDigest = `sha256:${createHash("sha256").update(fileContent.slice(0, -1), "utf8").digest("hex")}`;
     if (reportSha256 !== legacyDigest && reportSha256 !== fileDigest) fail("Verification report digest does not match its canonical content.");
     if (state !== verification.report.outcome) fail("Skill run state must match its verification outcome.");
     if (verification.report.outcome === "verified" && (verification.report.verificationStatus !== "passed" || !verification.report.gates.hardPassed || verification.report.findings.some((finding) => finding.gate === "hard") || verification.report.evidence.length === 0)) {

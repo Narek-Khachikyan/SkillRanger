@@ -1,10 +1,11 @@
-import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, opendir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { RunFileLock, type RunFileLockHooks } from "../runtime/run-lock.ts";
 import { routingModeValues, type RouterJournalEntry, type RouterRun, type RoutingMode } from "./types.ts";
 import { isCanonicalId } from "./canonical.ts";
+import { canonicalizeJson, routerRecordDigest as sharedRouterRecordDigest } from "../canonical-json.ts";
 
 const routeIdPattern = /^route_[a-z0-9_-]{7,127}$/;
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
@@ -18,20 +19,7 @@ const isErrno = (error: unknown, code: string): error is NodeJS.ErrnoException =
   error instanceof Error && "code" in error && error.code === code
 );
 
-const canonicalizeJson = (value: unknown): string => {
-  const order = (nested: unknown): unknown => {
-    if (Array.isArray(nested)) return nested.map(order);
-    if (typeof nested !== "object" || nested === null) return nested;
-    return Object.fromEntries(
-      Object.entries(nested as Record<string, unknown>)
-        .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
-        .map(([key, child]) => [key, order(child)]),
-    );
-  };
-  return JSON.stringify(order(value));
-};
-
-const digest = (value: unknown) => `sha256:${createHash("sha256").update(canonicalizeJson(value), "utf8").digest("hex")}`;
+const digest = sharedRouterRecordDigest;
 
 const safeRelativePath = (value: string) => {
   const normalized = value.replace(/\\/g, "/");

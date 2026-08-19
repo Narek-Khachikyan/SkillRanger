@@ -1242,3 +1242,61 @@ test("verify_skill_run publishes the full report shape and error details reach t
     requiredContractFields: [{ skillId: "core.universal-safety", fields: ["safetyNotes"] }],
   });
 });
+
+test("persisted verification accepts legacy digest form for read-compatibility", () => {
+  // Legacy writers hashed canonical JSON without trailing newline; the validator must still accept it.
+  const implemented = contractedImplemented();
+  const report: VerificationReport = { ...fixtureReport, universalContracts: satisfiedUniversalContracts };
+  const canonical = canonicalizeVerificationReport(report);
+  const legacyDigest = `sha256:${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
+  const fileDigest = `sha256:${createHash("sha256").update(`${canonical}\n`, "utf8").digest("hex")}`;
+  assert.notEqual(legacyDigest, fileDigest);
+  for (const digest of [legacyDigest, fileDigest]) {
+    const persisted = reduceSkillRun(implemented, {
+      type: "record-verification",
+      reportPath: "report.json",
+      reportSha256: digest,
+      report,
+      evidenceSnapshots: [fixtureEvidenceSnapshot],
+    });
+    assert.doesNotThrow(() => assertValidSkillRun(persisted), `digest ${digest.slice(0, 16)} should validate`);
+  }
+});
+
+test("persisted verification rejects digest matching neither legacy nor file form", () => {
+  const implemented = contractedImplemented();
+  const report: VerificationReport = { ...fixtureReport, universalContracts: satisfiedUniversalContracts };
+  const badDigest = `sha256:${"f".repeat(64)}`;
+  const canonical = canonicalizeVerificationReport(report);
+  const legacyDigest = `sha256:${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
+  const fileDigest = `sha256:${createHash("sha256").update(`${canonical}\n`, "utf8").digest("hex")}`;
+  assert.notEqual(badDigest, legacyDigest);
+  assert.notEqual(badDigest, fileDigest);
+  const persisted = reduceSkillRun(implemented, {
+    type: "record-verification",
+    reportPath: "report.json",
+    reportSha256: badDigest,
+    report,
+    evidenceSnapshots: [fixtureEvidenceSnapshot],
+  });
+  assert.throws(() => assertValidSkillRun(persisted), (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity");
+});
+
+test("new writes via verifySkillRun never emit legacy digest form", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "skillranger-run-"));
+  const store = new SkillRunStore(projectRoot);
+  await mkdir(path.join(projectRoot, "artifacts"), { recursive: true });
+  await writeFile(path.join(projectRoot, "artifacts/desktop.png"), "x");
+  const implemented = contractedImplemented();
+  await store.create(implemented);
+  const report: VerificationReport = { ...fixtureReport, universalContracts: satisfiedUniversalContracts };
+  const canonical = canonicalizeVerificationReport(report);
+  const legacyDigest = `sha256:${createHash("sha256").update(canonical, "utf8").digest("hex")}`;
+  const run = await verifySkillRun(store, implemented.runId, { reportPath: "qa/report.json", report });
+  assert.notEqual(run.verification?.reportSha256, legacyDigest, "writer must not emit legacy digest");
+  const expectedFileDigest = `sha256:${createHash("sha256").update(`${canonical}\n`, "utf8").digest("hex")}`;
+  assert.equal(run.verification?.reportSha256, expectedFileDigest);
+  const fileContent = await readFile(path.join(projectRoot, "qa/report.json"), "utf8");
+  assert.equal(fileContent, `${canonical}\n`);
+  assert.equal(`sha256:${createHash("sha256").update(fileContent, "utf8").digest("hex")}`, expectedFileDigest);
+});

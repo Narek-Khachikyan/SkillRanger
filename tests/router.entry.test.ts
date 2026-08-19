@@ -242,3 +242,140 @@ test("valid semantic hints flow through the entry into the decision signals", as
     (error: unknown) => error instanceof RoutingPipelineError && error.code === "semantic-hint-invalid",
   );
 });
+
+test("ambiguity referencing rejected nominations surfaces bounded rejections and acceptedCount through the entry", async () => {
+  const catalog = await buildSkillCatalog();
+  let page = await inspectSkillCatalog({ maxItems: 2, maxBytes: 256_000 });
+  while (!page.complete) {
+    page = await inspectSkillCatalog({ cursor: page.nextCursor!, expectedCatalogDigest: page.catalogDigest });
+  }
+  assert.ok(page.catalogReceipt);
+  const parsed = parseTrigger({ prompt: "Please build a component with React @skillranger", mode: "explicit" });
+  assert.ok(parsed.activated);
+  const world = await loadRoutingWorld({
+    registry: { kind: "bundled", root: defaultRegistryRoot },
+    projectRoot: "/entry-test",
+    targetAgent: "codex",
+    skillInputs: {},
+    intent: parsed.normalizedIntent,
+    installed: [],
+  });
+  const input: RoutingEntryInput = {
+    world,
+    fingerprint: emptyFingerprint("/entry-test"),
+    trigger: parsed,
+    activation: { mode: "explicit" },
+    targetAgent: "codex",
+    strict: false,
+    capabilities: ["terminal"],
+    routingDate: routerEvalRoutingDate,
+  };
+  const badProposal = {
+    schemaVersion: "routing-proposal/1.0" as const,
+    catalogDigest: catalog.digest,
+    catalogReceipt: page.catalogReceipt,
+    interpretation: {
+      domains: ["frontend"],
+      actions: ["implement"],
+      artifactTypes: ["component"],
+      intentTags: ["component-design"],
+      technologyTags: ["react"],
+      qualityGoals: ["accessibility"],
+    },
+    nominations: [
+      { skillId: "frontend.unknown-alpha", role: "primary" as const, confidence: 0.9, evidenceText: "build a component" },
+      { skillId: "frontend.unknown-beta", role: "primary" as const, confidence: 0.9, evidenceText: "build a component" },
+    ],
+    ambiguity: { primarySkillIds: ["frontend.unknown-alpha", "frontend.unknown-beta"] },
+  };
+  let error: RoutingPipelineError | undefined;
+  try {
+    runRoutingEntry({ ...input, catalog, routingProposal: badProposal });
+  } catch (caught) {
+    if (caught instanceof RoutingPipelineError) error = caught;
+    else throw caught;
+  }
+  assert.ok(error);
+  assert.equal(error.code, "routing-proposal-invalid");
+  assert.match(error.message, /see details\.rejections and details\.acceptedCount/);
+  assert.equal((error.details as Record<string, unknown>)?.field, "routingProposal.ambiguity.primarySkillIds");
+  const rejections = (error.details as Record<string, unknown>)?.rejections as unknown[];
+  assert.ok(Array.isArray(rejections) && rejections.length === 2);
+  assert.equal((error.details as Record<string, unknown>)?.acceptedCount, 0);
+  // structural shape error carries no bounded list
+  let shapeError: RoutingPipelineError | undefined;
+  try {
+    runRoutingEntry({
+      ...input,
+      catalog,
+      routingProposal: {
+        schemaVersion: "routing-proposal/1.0",
+        catalogDigest: catalog.digest,
+        catalogReceipt: page.catalogReceipt,
+        interpretation: {
+          domains: ["frontend"],
+          actions: ["implement"],
+          artifactTypes: ["component"],
+          intentTags: ["component-design"],
+          technologyTags: ["react"],
+          qualityGoals: ["accessibility"],
+        },
+        // missing nominations — shape error
+        nominations: [] as unknown as typeof badProposal.nominations,
+      },
+    });
+  } catch (caught) {
+    if (caught instanceof RoutingPipelineError) shapeError = caught;
+    else throw caught;
+  }
+  assert.ok(shapeError);
+  assert.equal((shapeError.details as Record<string, unknown>)?.rejections, undefined);
+  assert.equal((shapeError.details as Record<string, unknown>)?.acceptedCount, undefined);
+});
+
+test("entry rejection list is sorted and bounded to 16", async () => {
+  const catalog = await buildSkillCatalog();
+  let page = await inspectSkillCatalog({ maxItems: 2, maxBytes: 256_000 });
+  while (!page.complete) page = await inspectSkillCatalog({ cursor: page.nextCursor!, expectedCatalogDigest: page.catalogDigest });
+  assert.ok(page.catalogReceipt);
+  const parsed = parseTrigger({ prompt: "Please build a component with React @skillranger", mode: "explicit" });
+  assert.ok(parsed.activated);
+  const world = await loadRoutingWorld({
+    registry: { kind: "bundled", root: defaultRegistryRoot },
+    projectRoot: "/entry-test",
+    targetAgent: "codex",
+    skillInputs: {},
+    intent: parsed.normalizedIntent,
+    installed: [],
+  });
+  const input: RoutingEntryInput = {
+    world,
+    fingerprint: emptyFingerprint("/entry-test"),
+    trigger: parsed,
+    activation: { mode: "explicit" },
+    targetAgent: "codex",
+    strict: false,
+    capabilities: ["terminal"],
+    routingDate: routerEvalRoutingDate,
+  };
+  const nominations = Array.from({ length: 16 }, (_, i) => ({
+    skillId: `frontend.unknown-${String(i).padStart(2, "0")}`,
+    role: "primary" as const,
+    confidence: 0.9,
+    evidenceText: "build a component",
+  }));
+  const bad = {
+    schemaVersion: "routing-proposal/1.0" as const,
+    catalogDigest: catalog.digest,
+    catalogReceipt: page.catalogReceipt,
+    interpretation: { domains: ["frontend"], actions: ["implement"], artifactTypes: ["component"], intentTags: ["component-design"], technologyTags: ["react"], qualityGoals: ["accessibility"] },
+    nominations,
+    ambiguity: { primarySkillIds: ["frontend.unknown-00", "frontend.unknown-01"] },
+  };
+  let error: RoutingPipelineError | undefined;
+  try { runRoutingEntry({ ...input, catalog, routingProposal: bad }); } catch (caught) { if (caught instanceof RoutingPipelineError) error = caught; else throw caught; }
+  assert.ok(error);
+  const rejections = (error.details as Record<string, unknown>)?.rejections as Array<{ skillId?: string; reasonCode: string }>;
+  assert.equal(rejections.length, 16);
+  assert.deepEqual(rejections, [...rejections].sort((a, b) => `${a.skillId ?? ""}:${a.reasonCode}`.localeCompare(`${b.skillId ?? ""}:${b.reasonCode}`)));
+});

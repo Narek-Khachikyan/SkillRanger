@@ -99,7 +99,7 @@ const inputSchema = {
               skillId: { type: "string", pattern: "^[a-z0-9][a-z0-9._-]{0,127}$" },
               role: { enum: ["primary", "companion", "verification"] },
               confidence: { type: "number", minimum: 0, maximum: 1 },
-              evidenceText: { type: "string", minLength: 1, maxLength: routingProposalLimits.maxEvidenceBytes, description: "Verbatim quote from the user's prompt that grounds this nomination, matched after routing normalization (case folding, punctuation-to-space, whitespace collapse); paraphrases are rejected with `evidence-not-in-normalized-prompt`." },
+              evidenceText: { type: "string", minLength: 1, maxLength: routingProposalLimits.maxEvidenceBytes, description: "Verbatim quote from the user's prompt that grounds this nomination, matched after routing normalization — NFKC case folding (including `ё` → `е`), every punctuation and symbol that is not a word character is mapped to a space (with `+`, `#`, `.` and `/` preserved only inside technology tokens), whitespace collapsed to single spaces and trimmed (summarized as case folding, punctuation-to-space, whitespace collapse); paraphrases are rejected with `evidence-not-in-normalized-prompt`." },
             },
             additionalProperties: false,
           },

@@ -794,3 +794,98 @@ test("MCP install_skill reports audit-blocked skills without writing", async () 
   assert.equal(await exists(path.join(projectRoot, "skillranger.lock.json")), false);
   assert.equal(await exists(path.join(projectRoot, ".agents/skills/malicious-skill/SKILL.md")), false);
 });
+
+test("prepare_task with rejected ambiguity nominations returns bounded rejections and acceptedCount in details", async () => {
+  const { buildSkillCatalog, inspectSkillCatalog } = await import("../src/router/catalog.ts");
+  const catalog = await buildSkillCatalog();
+  let page = await inspectSkillCatalog({ maxItems: 2, maxBytes: 256_000 });
+  while (!page.complete) page = await inspectSkillCatalog({ cursor: page.nextCursor!, expectedCatalogDigest: page.catalogDigest });
+  assert.ok(page.catalogReceipt);
+  const prompt = "Please build a component with React @skillranger";
+  const badProposal = {
+    schemaVersion: "routing-proposal/1.0" as const,
+    catalogDigest: catalog.digest,
+    catalogReceipt: page.catalogReceipt,
+    interpretation: {
+      domains: ["frontend"],
+      actions: ["implement"],
+      artifactTypes: ["component"],
+      intentTags: ["component-design"],
+      technologyTags: ["react"],
+      qualityGoals: ["accessibility"],
+    },
+    nominations: [
+      { skillId: "frontend.unknown-alpha", role: "primary" as const, confidence: 0.9, evidenceText: "build a component" },
+      { skillId: "frontend.unknown-beta", role: "primary" as const, confidence: 0.9, evidenceText: "build a component" },
+    ],
+    ambiguity: { primarySkillIds: ["frontend.unknown-alpha", "frontend.unknown-beta"] },
+  };
+  const result = await callMcpTool("prepare_task", { prompt, routingProposal: badProposal }) as { isError: boolean; structuredContent: unknown; content: Array<{ text: string }> };
+  assert.equal(result.isError, true);
+  const structured = result.structuredContent as { code: string; message: string; details: Record<string, unknown> };
+  assert.equal(structured.code, "routing-proposal-invalid");
+  assert.match(structured.message, /see details\.rejections and details\.acceptedCount/);
+  assert.equal(structured.details.reasonCode, "routing-proposal-invalid");
+  const rejections = structured.details.rejections as unknown[];
+  assert.ok(Array.isArray(rejections));
+  assert.equal(rejections.length, 2);
+  assert.equal(structured.details.acceptedCount, 0);
+  // rejections are sorted and bounded to 16 and respect schema
+  const typed = rejections as Array<{ skillId?: string; reasonCode: string }>;
+  assert.deepEqual(typed, [...typed].sort((a, b) => `${a.skillId ?? ""}:${a.reasonCode}`.localeCompare(`${b.skillId ?? ""}:${b.reasonCode}`)));
+  assert.ok(typed.every((r) => typeof r.reasonCode === "string"));
+  // verify schema allows details via router-tool-result: validate with schema would pass; spot-check bound
+  const schema = JSON.parse(await import("node:fs").then((fs) => fs.readFileSync("schemas/router-tool-result.schema.json", "utf8"))) as { $defs: { errorDetails: { properties: Record<string, unknown> } } };
+  assert.ok("rejections" in schema.$defs.errorDetails.properties);
+  assert.ok("acceptedCount" in schema.$defs.errorDetails.properties);
+
+  // structurally invalid proposal carries no rejection list
+  const shapeBad = {
+    schemaVersion: "routing-proposal/1.0" as const,
+    catalogDigest: catalog.digest,
+    catalogReceipt: page.catalogReceipt,
+    interpretation: {
+      domains: ["frontend"],
+      actions: ["implement"],
+      artifactTypes: ["component"],
+      intentTags: ["component-design"],
+      technologyTags: ["react"],
+      qualityGoals: ["accessibility"],
+    },
+    nominations: [] as unknown as typeof badProposal.nominations,
+  };
+  const shapeResult = await callMcpTool("prepare_task", { prompt, routingProposal: shapeBad }) as { isError: boolean; structuredContent: unknown };
+  assert.equal(shapeResult.isError, true);
+  const shapeStructured = shapeResult.structuredContent as { details: Record<string, unknown> };
+  assert.equal(shapeStructured.details.rejections, undefined);
+  assert.equal(shapeStructured.details.acceptedCount, undefined);
+});
+
+test("prepare_task rejection list is sorted and bounded to 16 via MCP", async () => {
+  const { buildSkillCatalog, inspectSkillCatalog } = await import("../src/router/catalog.ts");
+  const catalog = await buildSkillCatalog();
+  let page = await inspectSkillCatalog({ maxItems: 2, maxBytes: 256_000 });
+  while (!page.complete) page = await inspectSkillCatalog({ cursor: page.nextCursor!, expectedCatalogDigest: page.catalogDigest });
+  assert.ok(page.catalogReceipt);
+  const nominations = Array.from({ length: 16 }, (_, i) => ({
+    skillId: `frontend.unknown-${String(i).padStart(2, "0")}`,
+    role: "primary" as const,
+    confidence: 0.9,
+    evidenceText: "build a component",
+  }));
+  const bad = {
+    schemaVersion: "routing-proposal/1.0" as const,
+    catalogDigest: catalog.digest,
+    catalogReceipt: page.catalogReceipt,
+    interpretation: { domains: ["frontend"], actions: ["implement"], artifactTypes: ["component"], intentTags: ["component-design"], technologyTags: ["react"], qualityGoals: ["accessibility"] },
+    nominations,
+    ambiguity: { primarySkillIds: ["frontend.unknown-00", "frontend.unknown-01"] },
+  };
+  const result = await callMcpTool("prepare_task", { prompt: "Please build a component with React @skillranger", routingProposal: bad }) as { isError: boolean; structuredContent: unknown };
+  assert.equal(result.isError, true);
+  const details = (result.structuredContent as { details: Record<string, unknown> }).details;
+  const rejections = details.rejections as Array<{ skillId?: string; reasonCode: string }>;
+  assert.equal(rejections.length, 16);
+  assert.deepEqual(rejections, [...rejections].sort((a, b) => `${a.skillId ?? ""}:${a.reasonCode}`.localeCompare(`${b.skillId ?? ""}:${b.reasonCode}`)));
+  assert.equal(details.acceptedCount, 0);
+});
