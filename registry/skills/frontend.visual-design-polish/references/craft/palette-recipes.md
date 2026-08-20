@@ -60,6 +60,34 @@ All values are `oklch(l c h)` where `h` is the chosen base hue unless noted.
 - Accent: deep forest or oxblood, `h'` ~140–150 or ~20–30; price and savings use the data colors, never the accent.
 - Bans: no confetti multi-accent carts, no glowing sale badges, no gradient price tags.
 
+### 6. Arctic And Indigo (enterprise / minimal SaaS)
+
+- Base: arctic white, hue ~240–260 at even lower chroma (`c 0.003–0.004`) — the lightest canvas in this set.
+- Canvas nearly white (`l 0.985`) so surface is only a hint lighter; ink is the only strongly dark token and carries a cool cast.
+- Accent: deep indigo, `h'` ~270–285 — darker than cyan, used only for primary action, focus, and selected state; never for backgrounds or data.
+- Bans: no warm paper tint on arctic canvas; no gradient headers; no glowing orbs; no accent on row icons; no mid-gray wash that dulls the white.
+
+### 7. Archival Stone And Ochre (archive / system-of-record)
+
+- Base: archival stone, hue ~75–85 at `c 0.010–0.011` — warm greige, visibly tinted compared with arctic or graphite.
+- Canvas is the most chromatic warm neutral in this set; surface lifts toward near-white but keeps the warm hairline.
+- Accent: ochre, `h'` ~80–90 — mid-lightness filed-tab marker, not high-chroma candy; ink on ochre is dark for contrast.
+- Bans: no cool-blue canvas on warm stone ink; no neon accents; no gradient washes; no decorative grids; no glass or blur panels.
+
+### 8. Midnight Navy And Violet (dark immersive)
+
+- Base: deep navy, hue ~260–270 — a dark recipe: canvas is near-black navy (`l 0.13–0.15`), surface is lighter navy, ink is near-white.
+- Chroma is higher than graphite (`c 0.02`) so navy reads as blue, not graphite black; hairline is dark navy, not mid-gray.
+- Accent: electric violet, `h'` ~295–310 — cool electric on navy, one hot hue only; glow on one hero element max.
+- Bans: no warm-paper inversion; no amber accent on navy (belongs to near-black stage); no glow flood; no full-rainbow accents; no low-contrast muted ink on navy.
+
+### 9. Sunbaked Clay And Plum (lifestyle / warm consumer)
+
+- Base: sunbaked clay, hue ~40–50 at `c 0.016–0.018` — the most saturated warm canvas in this set, more chromatic than muted earth sand.
+- Canvas carries visible warmth; surface lifts to near-white warm so product imagery stays dominant.
+- Accent: plum / dusty magenta, `h'` ~310–330 — complements clay without leaving the warm family; price and data use the data colors, never the accent.
+- Bans: no cool-gray canvas with warm clay ink; no gradient clay washes; no glowing sale badges; no confetti multi-accent surfaces; no cold-blue accent on clay.
+
 ## Palette Grammar
 
 - **Scarce accent:** one accent token at a time. It belongs on the primary CTA, focus, links, and the selected state — not on section backgrounds, icons, or decoration.
@@ -74,11 +102,13 @@ All values are `oklch(l c h)` where `h` is the chosen base hue unless noted.
 
 - The maintainer has built and shipped interfaces following each recipe and has used the token formulas (canvas/surface/ink/accent/status separation) in the author's own frontend practice.
 - The example plates in `domains/frontend/examples/` exercise the accent-scarcity and status-separation behaviors the recipes formalize.
+- The four added recipes (arctic/indigo, archival stone/ochre, midnight navy/violet, sunbaked clay/plum) were curated to give the direction step a diverse palette anchor for each new theme: arctic white needs a lighter-than-graphite cool neutral, archival stone needs a visibly tinted greige, midnight navy needs a dark navy distinct from near-black graphite, and sunbaked clay needs a saturated warm clay — each with an accent hue spaced to maximize fingerprint distance.
 
 ### Inferred
 
 - Expressing recipes as OKLCH relationship formulas rather than fixed hues follows from the product-identity requirement: two briefs must produce visually distinct palettes without the corpus prescribing one color identity.
 - The temperature-discipline and scarce-accent grammar derive from the color role contracts already enforced by the rule library.
+- Adding the four new recipes follows from the theme diversification: a direction that varies `paperBand` and `accentHue` needs a reusable relationship formula for each band, otherwise the model drifts toward the default warm-paper or cool-graphite attractor.
 
 ### Assumed
 

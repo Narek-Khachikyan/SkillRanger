@@ -19,6 +19,10 @@
       {
         "statement": "The working example assets in domains/frontend/examples/ demonstrate the macrostructure anatomies (hero placement, divider treatment, button voice, image treatment) as rendered plates.",
         "source": "domains/frontend/examples"
+      },
+      {
+        "statement": "The ten-theme set (including Arctic White, Stone Archive, Midnight Navy, Sunbaked Clay) was curated for diversification: each added theme introduces a distinct paperBand/displayStyle/accentHue triple not present in the original six, with genre affinities that balance coverage across the eight recipe ids.",
+        "source": "maintainer curation for diversification"
       }
     ],
     "inferred": [
@@ -33,6 +37,10 @@
       {
         "statement": "Each theme fixes one complete identity and maps onto the three declared theme axes (paperBand, displayStyle, accentHue), so a theme pick slots into the direction's declared identity without a parallel vocabulary.",
         "source": "theme axes analysis"
+      },
+      {
+        "statement": "Extending macrostructures from 6 to 10 (dashboard canvas, timeline stream, centered task, gallery masonry) and pairings from 5 to 8 gives the direction step independent axes for macrostructure vs themeAxes choice, directly reducing AI-slop repetition detected by the diversification gate.",
+        "source": "ADR 0007/0011 diversification analysis"
       }
     ],
     "assumed": [

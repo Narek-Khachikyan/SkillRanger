@@ -344,10 +344,10 @@ const parseThemeSections = (markdown: string): ThemeSection[] => {
   return sections;
 };
 
-test("theme catalog ships 5-7 themes with OKLCH tokens, genre affinities, and per-theme bans", async () => {
+test("theme catalog ships at least 10 themes with OKLCH tokens, genre affinities, and per-theme bans", async () => {
   const markdown = await readFile(path.join(craftRoot, "themes.md"), "utf8");
   const sections = parseThemeSections(markdown);
-  assert.ok(sections.length >= 5 && sections.length <= 7, `expected 5-7 themes, found ${sections.length}`);
+  assert.ok(sections.length >= 10, `expected at least 10 themes, found ${sections.length}`);
   assert.deepEqual(
     sections.map(({ index }) => index),
     [...Array(sections.length).keys()].map((i) => i + 1),

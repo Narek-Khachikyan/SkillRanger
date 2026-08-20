@@ -51,6 +51,30 @@ Parametric type-pairing knowledge for the frontend craft layer. Each pairing nam
 - **Works best when:** physical, operational, or industrial products — field work, logistics, hardware software.
 - **Avoid:** pairing slab display with a second slab; one slab family per page.
 
+### 6. Soft Humanist Display + Swiss Grotesque Body
+
+- **Display voice:** a soft humanist sans with open counters and gentle terminals — warm without being casual, the "lifestyle" register.
+- **Body voice:** a Swiss grotesque (neutral, even color) that stays precise under the warmer display.
+- **Roles:** display for headlines and hero statements; body for paragraphs and product descriptions; meta in the grotesque with widened tracking.
+- **Works best when:** habit-forming consumer surfaces and lifestyle e-commerce — sunbaked clay, warm humanist themes where the product must feel friendly, not technical.
+- **Avoid:** using the soft humanist for dense data tables; it loses crispness at small tabular sizes.
+
+### 7. Archival Serif Display + Technical Sans Body
+
+- **Display voice:** a sturdy transitional serif with restrained contrast — the "archive" register, drier than editorial serif, built for long reading on stone paper.
+- **Body voice:** a technical sans with narrow apertures and tabular figures, quiet enough to let the serif lead but precise for timestamps and identifiers.
+- **Roles:** serif for headlines, section titles, and pull evidence; sans for body, captions, and data; mono optional only for literal code or ids.
+- **Works best when:** editorial archives, report libraries, and system-of-record consoles — stone archive paper, where the product is a record rather than a pitch.
+- **Avoid:** high-contrast display serif italics as decoration; reserve italics for sourced quotes or defined terms.
+
+### 8. Neo-Grotesque Display + Mono Body
+
+- **Display voice:** a neo-grotesque with tight spacing and sharp punctuation — the "enterprise precision" register for dashboards that must feel accurate, not friendly.
+- **Body voice:** a mono face at body sizes for the readable-but-machine-precise register; it carries timestamps, identifiers, and data labels without shouting.
+- **Roles:** display for metric headlines and primary actions; mono for body, meta, and data; sans appears only where mono would fatigue (long paragraphs).
+- **Works best when:** metric-dense canvases and arctic white enterprise surfaces — dashboard canvas, operational dashboards where numbers are the product.
+- **Avoid:** mono for long narrative paragraphs; switch to a neutral sans when the page turns editorial.
+
 ## Pairing Grammar
 
 - **Scale:** keep at least a 1.25 ratio between adjacent display steps; the body step sets the baseline rhythm everything else derives from.
@@ -63,13 +87,15 @@ Parametric type-pairing knowledge for the frontend craft layer. Each pairing nam
 
 ### Observed
 
-- The maintainer has shipped interfaces using each of the five pairings and has seen the pairing grammar (scale ratio, measure, numerals, weight budget) hold up across product types in the author's own frontend practice.
+- The maintainer has shipped interfaces using each of the eight pairings and has seen the pairing grammar (scale ratio, measure, numerals, weight budget) hold up across product types in the author's own frontend practice.
 - The example plates in `domains/frontend/examples/` render the display/body/meta role distinction that these pairings formalize.
+- The three added pairings (soft humanist, archival serif, neo-grotesque) were introduced to diversify `typographyRoles` alongside the new themes and macrostructures: sunbaked clay needs a soft humanist voice, archival stone needs a sturdy archival serif, and arctic white dashboards need a precise neo-grotesque + mono voice distinct from the original five.
 
 ### Inferred
 
 - The "one leading voice, one supporting voice" rule is derived from the role-contrast direction contract: semantic roles are created by distinct voices, not by size alone.
 - The register mapping (tool → grotesque, narrative → serif, data → mono) is derived from the product recipe domain signals, not from any external style guide.
+- Adding a warm humanist, an archival serif, and a precise neo-grotesque pairing follows from the theme/macrostructure diversification: the direction must be able to vary `displayStyle` and `typographyRoles` without reusing the same two serif families, and each new macrostructure (dashboard canvas, timeline stream, gallery masonry) implies a different reading distance and data density that the original five did not cover.
 
 ### Assumed
 

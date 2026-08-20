@@ -71,6 +71,46 @@ Named page-level composition shapes. A macrostructure fixes the page's top-level
 - **Suits:** mobile consumer apps, social surfaces, daily-use flows.
 - **Interacts with:** composition `structured-list`, hierarchy `action-first`, material `flat`/`tactile`.
 
+### 7. Dashboard Canvas
+
+- **Hero placement:** a compact metric hero — 2–4 key numbers with trend and status, not a marketing headline; the hero answers "how are we doing?" before any table.
+- **Body:** a canvas of metric cards, charts, and status strips that each answer one operational question; the primary list or table is one region among several, not the whole page.
+- **Divider:** card gaps and hairlines separate concerns; whitespace between canvas regions is larger than inside a card.
+- **Button voice:** header-level primary action (create, triage, export) plus per-widget secondary actions; the hero never carries a loud marketing CTA.
+- **Image treatment:** data viz and status visuals per widget; one product-real chart per claim, never decorative illustration.
+- **Suits:** operational consoles, developer dashboards, SaaS workspace overviews, observability surfaces.
+- **Interacts with:** composition `grid`/`structured-list`, hierarchy `data-first`, density `compact`/`balanced`, material `bordered`/`layered`, `paperBand` arctic white or deep navy, `accentHue` indigo/violet.
+
+### 8. Timeline Stream
+
+- **Hero placement:** a slim contextual header with time scope and filters (range, status), not a hero block; the stream's first event is the top of the page.
+- **Body:** a single vertical stream with time markers; each entry carries timestamp, actor, state change, and the recovery or detail action; grouping is by time, not by category.
+- **Divider:** a structural timeline spine or repeated time-rule; internal hairlines separate entries; the spine never competes with content.
+- **Button voice:** per-entry secondary actions plus a stream-level primary action (load more, filter, jump to now); no full-width loud CTAs that break the chronological read.
+- **Image treatment:** inline metadata visuals (avatars, status dots, mini-previews) inside entries; no decorative bands between time groups.
+- **Suits:** editorial archives, activity feeds, changelogs, audit trails, incident timelines.
+- **Interacts with:** composition `timeline`/`structured-list`, hierarchy `narrative-first`/`data-first`, density `balanced`/`editorial`, `paperBand` archival stone or warm newsprint, `displayStyle` archival serif.
+
+### 9. Centered Task
+
+- **Hero placement:** none — the page is the task. A centered card or focused panel holds the single decision; surrounding whitespace signals that nothing else competes.
+- **Body:** one form, confirmation, or empty/error recovery block at a readable measure; supporting help or explanation sits beside or below, never as a second column of equal weight.
+- **Divider:** the card's own border and whitespace carry the structure; internal hairlines only for multi-field forms.
+- **Button voice:** one primary action centered with the form (continue, confirm, retry); secondary is a quiet link below the primary, not a competing button side-by-side.
+- **Image treatment:** no imagery except functional illustration for empty/error recovery (what is missing, why, how to recover); never stock decoration.
+- **Suits:** auth, onboarding, checkout steps, empty states, error recovery, single-purpose tools.
+- **Interacts with:** composition `editorial-grid`/`structured-list`, hierarchy `action-first`/`exception-first`, density `spacious`/`balanced`, material `bordered`/`flat`, `accentHue` scarce within the centered card.
+
+### 10. Gallery Masonry
+
+- **Hero placement:** a compact filter and sort bar (category, view toggle), not a full hero; the first row of items is the hero.
+- **Body:** a masonry or uniform-grid gallery where each tile is one visual decision unit; tiles vary by aspect ratio but share one spacing, one radius, and one information density.
+- **Divider:** grid gaps carry the rhythm; hairlines only inside tile metadata, never between tiles as heavy rules.
+- **Button voice:** per-tile primary affordance (open, add, select) revealed on hover with a keyboard-visible equivalent; one persistent global action (cart, select all) stays outside the grid.
+- **Image treatment:** uniform image treatment across tiles — one background, one aspect handling, one placeholder style; never mixed stock and product treatments.
+- **Suits:** consumer-discovery galleries, media libraries, storefront collections, portfolio surfaces.
+- **Interacts with:** composition `grid`, hierarchy `action-first`/`data-first`, material `flat`/`bordered`, `paperBand` sunbaked clay or ivory, `accentHue` plum/terracotta.
+
 ## Macrostructure Grammar
 
 - **One anatomy per page:** choose one macrostructure; nested secondary surfaces inherit it. Two macrostructures on one page reads as indecision.
@@ -83,13 +123,15 @@ Named page-level composition shapes. A macrostructure fixes the page's top-level
 
 ### Observed
 
-- The maintainer has applied each macrostructure in shipped interfaces: hero-forward landing builds, evidence-first consoles, split triage tools, editorial report pages, commerce grids, and mobile feeds in the author's own practice.
+- The maintainer has applied each macrostructure in shipped interfaces: hero-forward landing builds, evidence-first consoles, split triage tools, editorial report pages, commerce grids, mobile feeds, dashboard canvases, timeline streams, centered tasks, and gallery masonries in the author's own practice.
 - The recipe example plates in `domains/frontend/examples/` render anatomies matching these shapes (for example the operational-console plates show evidence-first list anatomy).
+- The ten-shape set was chosen so the direction step can vary `macrostructure` independently of `themeAxes`: dashboard canvas, timeline stream, centered task, and gallery masonry each fix a distinct hero/body/divider combination not covered by the original six, with explicit `themeAxes` interactions (arctic white/indigo for dashboards, archival stone/ochre for timelines, sunbaked clay/plum for galleries).
 
 ### Inferred
 
 - Recording a named macrostructure alongside the treatment axes follows from the identity-fingerprint design: a deterministic gate needs a named, comparable field to detect repetition across verified runs.
 - The "one anatomy per page" grammar derives from the composition material of the direction contract, which admits exactly one composition per direction.
+- Adding dashboard canvas, timeline stream, centered task, and gallery masonry follows from the product-task mapping in the recipe catalog: operational consoles need a canvas overview, archival/editorial surfaces need a vertical timeline, single-purpose flows need a centered task, and discovery surfaces need a masonry gallery — the original six left those tasks to drift into the default hero-forward attractor.
 
 ### Assumed
 
