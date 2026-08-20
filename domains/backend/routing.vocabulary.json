@@ -1,0 +1,154 @@
+{
+  "schemaVersion": "routing-vocabulary/1.0",
+  "owner": {
+    "kind": "domain",
+    "id": "backend"
+  },
+  "creatableArtifactIds": [
+    "api",
+    "route-handler",
+    "server-action"
+  ],
+  "entries": [
+    {
+      "kind": "artifact",
+      "id": "api",
+      "locale": "mixed",
+      "phrases": [
+        "api",
+        "rest api",
+        "rest endpoint",
+        "api endpoint",
+        "api route",
+        "апи",
+        "апи эндпоинт",
+        "апи роут"
+      ]
+    },
+    {
+      "kind": "artifact",
+      "id": "route-handler",
+      "locale": "mixed",
+      "phrases": [
+        "route handler",
+        "route handlers",
+        "next route handler",
+        "роут хэндлер",
+        "роут хендлер",
+        "обработчик маршрута",
+        "обработчик роутов"
+      ]
+    },
+    {
+      "kind": "artifact",
+      "id": "server-action",
+      "locale": "mixed",
+      "phrases": [
+        "server action",
+        "server actions",
+        "next server action",
+        "серверный экшен",
+        "серверные экшены",
+        "серверное действие"
+      ]
+    },
+    {
+      "kind": "intent",
+      "id": "api-design",
+      "locale": "mixed",
+      "phrases": [
+        "api design",
+        "api contract",
+        "openapi",
+        "open api",
+        "json schema",
+        "design api",
+        "rest contract",
+        "design the api",
+        "contract design",
+        "дизайн апи",
+        "проектирование апи",
+        "контракт апи",
+        "openapi схема",
+        "спека апи",
+        "спроектировать апи"
+      ]
+    },
+    {
+      "kind": "intent",
+      "id": "persistence",
+      "locale": "mixed",
+      "phrases": [
+        "persistence",
+        "database",
+        "data model",
+        "prisma schema",
+        "drizzle schema",
+        "migration",
+        "database design",
+        "data modeling",
+        "персистентность",
+        "база данных",
+        "модель данных",
+        "схема базы",
+        "миграция",
+        "миграции",
+        "хранение данных",
+        "дизайн базы данных"
+      ]
+    },
+    {
+      "kind": "intent",
+      "id": "auth",
+      "locale": "mixed",
+      "phrases": [
+        "auth",
+        "next-auth",
+        "session",
+        "аутентификация",
+        "авторизация",
+        "сессия",
+        "авторизацию",
+        "аутентификацию",
+        "auth session"
+      ]
+    },
+    {
+      "kind": "technology",
+      "id": "prisma",
+      "locale": "mixed",
+      "phrases": [
+        "prisma",
+        "@prisma/client",
+        "prisma schema",
+        "prisma/schema.prisma",
+        "призма"
+      ]
+    },
+    {
+      "kind": "technology",
+      "id": "drizzle",
+      "locale": "mixed",
+      "phrases": [
+        "drizzle",
+        "drizzle-orm",
+        "drizzle config",
+        "drizzle-kit",
+        "drizzle.config.ts",
+        "дриззл"
+      ]
+    },
+    {
+      "kind": "technology",
+      "id": "next-auth",
+      "locale": "mixed",
+      "phrases": [
+        "next-auth",
+        "@auth/core",
+        "auth.js",
+        "nextauth",
+        "authjs"
+      ]
+    }
+  ]
+}

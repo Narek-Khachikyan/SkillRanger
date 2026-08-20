@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "1.0",
+  "rules": [
+    { "intent": "api-design", "primarySkill": "backend.api-design", "supportingSkills": [] },
+    { "intent": "persistence", "primarySkill": "backend.persistence", "supportingSkills": [] },
+    { "intent": "auth", "primarySkill": "backend.auth", "supportingSkills": [] }
+  ]
+}

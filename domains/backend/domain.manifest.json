@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "1.2",
+  "id": "backend",
+  "displayName": "Backend",
+  "description": "API design, persistence, and authentication workflows for server applications.",
+  "targetSurface": "server",
+  "version": "0.1.0",
+  "releaseVersion": "0.1.0",
+  "coreApi": "1.0",
+  "skillIdPrefix": "backend.",
+  "capabilities": [
+    "project-signals",
+    "intent-routing",
+    "structured-artifacts",
+    "verification",
+    "repair",
+    "evaluation"
+  ],
+  "artifacts": {
+    "intents": [
+      "intents/ownership.json",
+      "intents/phases.json"
+    ],
+    "schemas": [],
+    "recipes": [],
+    "workflows": [],
+    "validators": [],
+    "routingVocabulary": "routing.vocabulary.json"
+  },
+  "ownership": [
+    {
+      "intent": "api-design",
+      "primarySkill": "backend.api-design",
+      "supportingSkills": []
+    },
+    {
+      "intent": "persistence",
+      "primarySkill": "backend.persistence",
+      "supportingSkills": []
+    },
+    {
+      "intent": "auth",
+      "primarySkill": "backend.auth",
+      "supportingSkills": []
+    }
+  ],
+  "routing": {
+    "aliases": [
+      "backend-server",
+      "server-backend"
+    ],
+    "intentTags": [
+      "api-design",
+      "auth",
+      "persistence"
+    ],
+    "artifactTypes": [
+      "api",
+      "route-handler",
+      "server-action"
+    ],
+    "technologyTags": [
+      "drizzle",
+      "express",
+      "nestjs",
+      "next-auth",
+      "nodejs",
+      "postgresql",
+      "prisma"
+    ],
+    "projectTags": [
+      "api",
+      "backend",
+      "nodejs",
+      "server"
+    ]
+  }
+}
