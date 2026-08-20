@@ -73,7 +73,7 @@ test("MCP exposes an explicitly activated, read-only skill catalog", async () =>
   const first = await page({ maxItems: 2, maxBytes: 100_000 });
   assert.equal(first.schemaVersion, "skill-catalog/1.0");
   assert.match(first.catalogDigest, /^sha256:[a-f0-9]{64}$/);
-  assert.deepEqual(first.domains.map(({ domainId }) => domainId), ["core", "frontend"]);
+  assert.deepEqual(first.domains.map(({ domainId }) => domainId), ["backend", "core", "frontend"]);
   assert.equal(first.complete, false);
   assert.equal(first.skills.length, 2);
   assert.equal(first.catalogReceipt, undefined);

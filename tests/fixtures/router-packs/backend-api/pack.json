@@ -4,7 +4,7 @@
     "id": "backend-api",
     "displayName": "Synthetic Backend API",
     "routing": {
-      "aliases": ["backend", "server-api"],
+      "aliases": ["backend-svc", "server-api"],
       "intentTags": ["authentication", "api"],
       "artifactTypes": ["api", "authentication-flow"],
       "technologyTags": ["nestjs", "nodejs"],

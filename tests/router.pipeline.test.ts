@@ -262,7 +262,7 @@ test("installed strict skills route to a prepared strict decision", async () => 
 });
 
 test("instruction budget overflow surfaces the blocking budget outcome", async () => {
-  const input = await fixtureInput({ prompt: "Use the oversized backend workflow @skillranger" });
+  const input = await fixtureInput({ prompt: "Use the oversized backend service api workflow @skillranger" });
   const decision = runRoutingPipeline(input);
   assert.equal(decision.outcome.status, "context_budget_exceeded");
   assert.ok(decision.outcome.requiredBytes > decision.outcome.allowedBytes);

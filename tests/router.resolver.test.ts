@@ -102,7 +102,7 @@ test("resolver uses intent first when repository has no project signals", async 
 test("resolver normalizes aliases to canonical domain ids", async () => {
   const packs = await loadRouterFixturePacks(packsPath);
   const input = metadata(packs);
-  assert.equal(normalizeDomainAlias(" BACKEND ", input.domains), "backend-api");
+  assert.equal(normalizeDomainAlias(" backend-svc ", input.domains), "backend-api");
   assert.equal(normalizeDomainAlias("frontend-web", [{
     id: "frontend",
     routing: { aliases: ["frontend-web"], intentTags: [], artifactTypes: [], technologyTags: [], projectTags: [] },
