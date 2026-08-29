@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.0",
+  "name": "backend-persistence-v1",
+  "targetCounts": { "triggerPrompts": 0, "taskEvals": 2 },
+  "triggerPrompts": [],
+  "taskBands": [
+    {
+      "id": "persistence",
+      "targetCount": 2,
+      "seedTasks": [
+        {
+          "id": "migration-additive",
+          "prompt": "Create additive migration with ALTER TABLE ADD COLUMN and dryRun true",
+          "assertions": [{ "text": "Migration is additive and dryRun true", "graderType": "schema" }]
+        },
+        {
+          "id": "migration-safety",
+          "prompt": "Validate migration safety with no DROP without safeguard",
+          "assertions": [{ "text": "No destructive DROP without safeguard", "graderType": "test" }]
+        }
+      ]
+    }
+  ],
+  "scoring": { "utilityWeights": { "functionalCorrectness": 1 }, "promotionGates": {} }
+}

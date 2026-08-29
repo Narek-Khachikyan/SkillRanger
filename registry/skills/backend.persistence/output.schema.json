@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["migration", "safety", "changes", "residualRisks"],
+  "properties": {
+    "migration": { "type": "object", "properties": { "sql": { "type": "string" }, "statements": { "type": "array", "items": { "type": "string" } } } },
+    "safety": { "type": "object", "properties": { "dryRun": { "type": "boolean" }, "destructive": { "type": "boolean" } }, "required": ["dryRun"] },
+    "changes": { "type": "array", "items": { "type": "string" } },
+    "residualRisks": { "type": "array", "items": { "type": "string" } }
+  }
+}

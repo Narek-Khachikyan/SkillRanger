@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/domains/backend/migration-plan.schema.json",
+  "title": "Backend Migration Plan",
+  "description": "Safe additive migration plan for backend.persistence — SQL statements with dryRun and safeguard markers, no destructive drops without guard.",
+  "type": "object",
+  "required": ["statements"],
+  "properties": {
+    "sql": { "type": "string" },
+    "statements": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "migrations": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "plan": { "type": "string" },
+    "migration": { "type": "string" },
+    "dryRun": { "type": "boolean" },
+    "safeguard": {
+      "anyOf": [{ "type": "boolean" }, { "type": "string" }]
+    },
+    "allowDestructive": { "type": "boolean" },
+    "safety": {
+      "type": "object",
+      "properties": {
+        "dryRun": { "type": "boolean" },
+        "destructive": { "type": "boolean" },
+        "safeguard": { "type": "boolean" },
+        "allowDestructive": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

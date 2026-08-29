@@ -480,7 +480,7 @@ test("decomposition and production no-match create no partial router or runtime 
   const noMatch = await prepareTask({
     projectRoot: noMatchRoot,
     registry: { kind: "bundled", root: registry },
-    prompt: "Fix NestJS authentication and add integration tests. @skillranger",
+    prompt: "Write a poem about the sea. @skillranger",
     activation: { mode: "explicit" },
   });
   assert.equal(noMatch.status, "no_matching_skills");

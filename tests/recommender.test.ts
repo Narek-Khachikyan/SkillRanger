@@ -178,7 +178,8 @@ test("recommender suppresses backend architecture design requests", async () => 
     "Сделай дизайн схемы базы данных для сервиса оплаты.",
   ]) {
     const recommendations = await nextFixtureRecommendations({ userIntent });
-    assert.deepEqual(recommendations, [], userIntent);
+    assert.ok(recommendations.every(({ skillId }) => !skillId.startsWith("frontend.")), userIntent);
+    assert.ok(recommendations.some(({ skillId }) => skillId.startsWith("backend.")), userIntent);
   }
 });
 
@@ -320,8 +321,9 @@ test("recommender composes a visual task around one primary and compatible compa
 
 test("recommender includes the full curated frontend MVP pack for Next.js fixture", async () => {
   const recommendations = await nextFixtureRecommendations();
+  const frontend = recommendations.filter((item) => item.skillId.startsWith("frontend."));
   assert.deepEqual(
-    recommendations.map((item) => item.skillId),
+    frontend.map((item) => item.skillId),
     [
       "frontend.next-app-router-review",
       "frontend.playwright-debug",
@@ -340,7 +342,7 @@ test("recommender includes the full curated frontend MVP pack for Next.js fixtur
     ],
   );
   assert.deepEqual(
-    recommendations.map((item) => [item.skillId, item.lane, item.category]),
+    frontend.map((item) => [item.skillId, item.lane, item.category]),
     [
       ["frontend.next-app-router-review", "framework", "next-app-router"],
       ["frontend.playwright-debug", "qa", "playwright-debug"],
@@ -359,7 +361,7 @@ test("recommender includes the full curated frontend MVP pack for Next.js fixtur
     ],
   );
   assert.deepEqual(
-    groupRecommendationsByLane(recommendations).map((group) => [
+    groupRecommendationsByLane(frontend).map((group) => [
       group.lane,
       group.recommendations.map((item) => item.skillId),
     ]),
@@ -570,24 +572,14 @@ test("recommender handles frontend routing regression prompts", async () => {
 });
 
 test("recommender suppresses non-frontend routing regression prompts", async () => {
-  assert.deepEqual(
-    await nextFixtureRecommendations({
-      userIntent: "Write unit tests for this pure date formatting helper.",
-    }),
-    [],
-  );
-  assert.deepEqual(
-    await nextFixtureRecommendations({
-      userIntent: "Add a CSV export endpoint for monthly order reports.",
-    }),
-    [],
-  );
-  assert.deepEqual(
-    await nextFixtureRecommendations({
-      userIntent: "Analyze a slow PostgreSQL query plan and add the right covering index.",
-    }),
-    [],
-  );
+  for (const userIntent of [
+    "Write unit tests for this pure date formatting helper.",
+    "Add a CSV export endpoint for monthly order reports.",
+    "Analyze a slow PostgreSQL query plan and add the right covering index.",
+  ]) {
+    const recommendations = await nextFixtureRecommendations({ userIntent });
+    assert.ok(recommendations.every(({ skillId }) => !skillId.startsWith("frontend.")), userIntent);
+  }
 });
 
 test("recommender returns no frontend skills for backend-only intent", async () => {
@@ -596,7 +588,8 @@ test("recommender returns no frontend skills for backend-only intent", async () 
     "Review the backend release process and database migrations before release.",
   ]) {
     const recommendations = await nextFixtureRecommendations({ userIntent });
-    assert.deepEqual(recommendations, []);
+    assert.ok(recommendations.every(({ skillId }) => !skillId.startsWith("frontend.")), userIntent);
+    assert.ok(recommendations.some(({ skillId }) => skillId.startsWith("backend.")), userIntent);
   }
 });
 
@@ -619,7 +612,7 @@ test("recommender avoids Next-specific skills for Vite React fixture", async () 
 
 test("recommender does not return frontend pack for backend Node fixture", async () => {
   const recommendations = await fixtureRecommendations("fixtures/backend-node");
-  assert.deepEqual(recommendations, []);
+  assert.ok(recommendations.every(({ skillId }) => !skillId.startsWith("frontend.")));
 });
 
 test("recommender routes UX critique for information architecture and cognitive load", async () => {

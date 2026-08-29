@@ -87,7 +87,7 @@ const writeSkillPackage = async (
 test("local registry validation accepts curated skills", async () => {
   const report = await validateLocalRegistry("registry");
   assert.equal(report.ok, true);
-  assert.equal(report.skills.length, 20);
+  assert.equal(report.skills.length, 23);
 });
 
 test("curated skills carry derived quality rubric metadata", async () => {
@@ -190,7 +190,7 @@ test("curated skills carry explicit universal router metadata", async () => {
     const routing = skill.manifest.routing;
     assert.ok(routing, skill.manifest.id);
     assert.ok(routing.roles?.length, skill.manifest.id);
-    assert.ok(routing.domains.some((domain) => ["frontend", "core"].includes(domain)), skill.manifest.id);
+    assert.ok(routing.domains.some((domain) => ["frontend", "core", "backend"].includes(domain)), skill.manifest.id);
     assert.ok(routing.actions?.length, skill.manifest.id);
     assert.ok(routing.artifactTypes?.length, skill.manifest.id);
     assert.ok(routing.intentTags?.length, skill.manifest.id);

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "validation", "changes", "residualRisks"],
+  "properties": {
+    "contract": { "type": "object", "description": "Validated OpenAPI 3.x contract payload" },
+    "validation": { "type": "object", "properties": { "passed": { "type": "boolean" }, "errors": { "type": "array", "items": { "type": "string" } } }, "required": ["passed"] },
+    "changes": { "type": "array", "items": { "type": "string" } },
+    "residualRisks": { "type": "array", "items": { "type": "string" } }
+  }
+}

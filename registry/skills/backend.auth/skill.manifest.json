@@ -1,0 +1,178 @@
+{
+  "id": "backend.auth",
+  "name": "auth",
+  "displayName": "Backend Auth",
+  "description": "Scaffold auth and session logic with secret handling checked by audit so credentials are not leaked.",
+  "stackTags": [],
+  "taskTags": [
+    "auth",
+    "authentication",
+    "authorization",
+    "backend"
+  ],
+  "supportedAgents": [
+    "codex",
+    "generic-agent-skills"
+  ],
+  "source": {
+    "type": "curated",
+    "registry": "local",
+    "path": "./registry/skills/backend.auth"
+  },
+  "version": "0.1.0",
+  "riskLevel": "low",
+  "permissions": {
+    "filesystem": [
+      "read-project"
+    ],
+    "network": false,
+    "shell": false,
+    "writes": []
+  },
+  "scripts": [],
+  "dependencies": [],
+  "qualityScore": 0.83,
+  "securityScore": 0.96,
+  "quality": {
+    "rubricVersion": "1.0",
+    "scores": {
+      "usefulness": 0.86,
+      "triggerSpecificity": 0.84,
+      "progressiveDisclosure": 0.82,
+      "safety": 0.96,
+      "verifiability": 0.84,
+      "maintainability": 0.82,
+      "portability": 0.8
+    }
+  },
+  "freshness": {
+    "lastReviewedAt": "2026-08-19"
+  },
+  "installTargets": [
+    "repo",
+    "user"
+  ],
+  "compatibility": {
+    "codex": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "codex"
+    },
+    "generic-agent-skills": {
+      "level": "native",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "generic-agent-skills"
+    },
+    "claude-code": {
+      "level": "convertible",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "claude-code",
+      "requiresAdapter": true
+    },
+    "opencode": {
+      "level": "convertible",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "opencode",
+      "requiresAdapter": true
+    },
+    "cursor": {
+      "level": "convertible",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "cursor",
+      "requiresAdapter": true
+    },
+    "gemini-cli": {
+      "level": "convertible",
+      "scopes": [
+        "repo"
+      ],
+      "adapter": "gemini-cli",
+      "requiresAdapter": true
+    }
+  },
+  "conflictsWith": [],
+  "supersedes": [],
+  "verification": {
+    "requiredCapabilities": [
+      "filesystem"
+    ],
+    "fallback": "unverified"
+  },
+  "execution": {
+    "contractVersion": "2.0",
+    "contract": "execution.contract.json",
+    "inputSchema": "input.schema.json",
+    "outputSchema": "output.schema.json",
+    "modelProfiles": [
+      "constrained",
+      "standard",
+      "advanced"
+    ],
+    "evals": "evals.json"
+  },
+  "maintainer": {
+    "name": "local-curated",
+    "trustTier": "curated"
+  },
+  "license": "MIT",
+  "routing": {
+    "lane": "implementation",
+    "category": "auth",
+    "roles": [
+      "primary"
+    ],
+    "domains": [
+      "backend"
+    ],
+    "actions": [
+      "create",
+      "implement"
+    ],
+    "artifactTypes": [
+      "api",
+      "route-handler",
+      "server-action"
+    ],
+    "intentTags": [
+      "auth",
+      "authentication",
+      "session"
+    ],
+    "technologyTags": [
+      "next-auth",
+      "nodejs",
+      "postgresql"
+    ],
+    "environmentSignals": [
+      "tag:backend",
+      "tag:auth"
+    ],
+    "qualityGoals": [
+      "security",
+      "correctness",
+      "maintainability"
+    ],
+    "requiredCapabilities": [
+      "filesystem"
+    ],
+    "optionalCapabilities": [
+      "terminal"
+    ],
+    "complements": []
+  },
+  "evaluation": {
+    "status": "none",
+    "benchmarkVersion": "backend-skill-quality-v1",
+    "evidenceUri": "evals/backend/suite.json"
+  }
+}

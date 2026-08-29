@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0",
+  "releaseVersion": "0.1.0",
+  "domainId": "backend",
+  "domainApiVersion": "0.1.0",
+  "ruleContract": {
+    "families": ["api", "persistence", "auth"],
+    "ruleIds": [
+      "backend.api-design/rule/contract-present",
+      "backend.api-design/rule/contract-valid",
+      "backend.api-design/rule/output-schema-valid",
+      "backend.persistence/rule/migration-present",
+      "backend.persistence/rule/migration-safe",
+      "backend.persistence/rule/output-schema-valid",
+      "backend.auth/rule/secret-handling",
+      "backend.auth/rule/no-leaked-secrets",
+      "backend.auth/rule/output-schema-valid"
+    ],
+    "ruleCount": 9,
+    "recipeIds": [],
+    "recipeCount": 0,
+    "examplePackCount": 0,
+    "exampleSceneCount": 0,
+    "assetCount": 0
+  }
+}

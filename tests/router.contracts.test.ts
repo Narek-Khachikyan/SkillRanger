@@ -208,6 +208,10 @@ test("router golden fixture covers every Task 1 scenario", async () => {
     "budget-overflow",
     "prompt-injection",
     "privacy-canary",
+    "backend-frontend-combo-page-api",
+    "backend-frontend-combo-page-api-ru",
+    "backend-frontend-combo-landing-auth-db-ru",
+    "backend-frontend-combo-landing-auth-db",
   ]);
   assert.equal(new Set(cases.map(({ id }) => id)).size, cases.length);
   assert.deepEqual(cases.filter(({ reviewNote }) => reviewNote !== undefined).map(({ id, reviewNote }) => ({ id, reviewNote })), [

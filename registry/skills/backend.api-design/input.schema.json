@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractPath"],
+  "properties": {
+    "contractPath": { "type": "string", "minLength": 1 },
+    "format": { "enum": ["openapi", "json-schema"] }
+  }
+}

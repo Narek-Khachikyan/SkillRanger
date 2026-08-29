@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "1.0",
+  "name": "backend-skill-quality-v1",
+  "targetCounts": {
+    "triggerPrompts": 12,
+    "taskEvals": 3
+  },
+  "triggerPrompts": [
+    {
+      "id": "trigger-api-design",
+      "kind": "should-trigger",
+      "expectedSkill": "backend.api-design",
+      "text": "Design the OpenAPI contract for a REST API with Route Handlers and Server Actions, include paths and response schemas.",
+      "routingExpected": { "expectedSkill": "backend.api-design" }
+    },
+    {
+      "id": "trigger-api-design-ru",
+      "kind": "should-trigger",
+      "expectedSkill": "backend.api-design",
+      "text": "Спроектируй апи контракт OpenAPI для эндпоинта с роут хэндлером и серверными экшенами.",
+      "routingExpected": { "expectedSkill": "backend.api-design" }
+    },
+    {
+      "id": "trigger-persistence-prisma",
+      "kind": "should-trigger",
+      "expectedSkill": "backend.persistence",
+      "text": "Create a Prisma schema migration for a new data model and ensure the migration plan is additive with dry-run safety.",
+      "routingExpected": { "expectedSkill": "backend.persistence" }
+    },
+    {
+      "id": "trigger-persistence-ru",
+      "kind": "should-trigger",
+      "expectedSkill": "backend.persistence",
+      "text": "Сделай миграцию базы данных для призма схемы, без DROP, с dry-run проверкой.",
+      "routingExpected": { "expectedSkill": "backend.persistence" }
+    },
+    {
+      "id": "trigger-auth-nextauth",
+      "kind": "should-trigger",
+      "expectedSkill": "backend.auth",
+      "text": "Scaffold NextAuth session handling with JWT and ensure secrets are read via process.env with no hardcoded credentials.",
+      "routingExpected": { "expectedSkill": "backend.auth" }
+    },
+    {
+      "id": "trigger-auth-ru",
+      "kind": "should-trigger",
+      "expectedSkill": "backend.auth",
+      "text": "Сделай аутентификацию через next-auth с JWT и сессиями",
+      "routingExpected": { "expectedSkill": "backend.auth" }
+    },
+    {
+      "id": "nontrigger-frontend-visual",
+      "kind": "should-not-trigger",
+      "text": "Make the landing page more beautiful with polished visual hierarchy and responsive design.",
+      "routingExpected": { "expectedSkill": null }
+    },
+    {
+      "id": "nontrigger-frontend-tailwind",
+      "kind": "should-not-trigger",
+      "text": "Fix Tailwind class conflicts and responsive breakpoints on the marketing page.",
+      "routingExpected": { "expectedSkill": null }
+    },
+    {
+      "id": "nontrigger-generic-cli",
+      "kind": "should-not-trigger",
+      "text": "Add a CLI flag to export JSON from this Node command-line script.",
+      "routingExpected": { "expectedSkill": null }
+    },
+    {
+      "id": "nontrigger-backend-mixed-no-frontend",
+      "kind": "should-trigger",
+      "expectedSkill": "backend.persistence",
+      "text": "Review the backend release process and database migrations before release.",
+      "routingExpected": { "expectedSkill": "backend.persistence" }
+    },
+    {
+      "id": "trigger-api-contract-validation",
+      "kind": "should-trigger",
+      "expectedSkill": "backend.api-design",
+      "text": "Validate the OpenAPI 3.x contract for /users endpoint and ensure $ref resolves and every endpoint declares schemas.",
+      "routingExpected": { "expectedSkill": "backend.api-design" }
+    },
+    {
+      "id": "trigger-migration-safety",
+      "kind": "should-trigger",
+      "expectedSkill": "backend.persistence",
+      "text": "Write a safe additive SQL migration with ALTER TABLE ADD COLUMN and dryRun true, no destructive DROP.",
+      "routingExpected": { "expectedSkill": "backend.persistence" }
+    }
+  ],
+  "taskEvals": [
+    {
+      "id": "task-api-design",
+      "kind": "task",
+      "expectedSkill": "backend.api-design",
+      "text": "Implement OpenAPI contract for /orders with JSON Schema validation and contract tests.",
+      "capabilities": ["filesystem"]
+    },
+    {
+      "id": "task-persistence",
+      "kind": "task",
+      "expectedSkill": "backend.persistence",
+      "text": "Generate Prisma migration adding a new model with dry-run safety and no DROP.",
+      "capabilities": ["filesystem"]
+    },
+    {
+      "id": "task-auth",
+      "kind": "task",
+      "expectedSkill": "backend.auth",
+      "text": "Scaffold NextAuth with env-based secret handling and audit for leaked credentials.",
+      "capabilities": ["filesystem"]
+    }
+  ]
+}

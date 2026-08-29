@@ -93,11 +93,14 @@ test("MCP exposes an explicitly activated, read-only skill catalog", async () =>
   const skills = pages.flatMap(({ skills: entries }) => entries);
   assert.equal(pages.at(-1)?.complete, true);
   assert.match(pages.at(-1)?.catalogReceipt ?? "", /^catalog-receipt\./);
-  assert.equal(skills[0]?.skillId, "core.proportional-engineering");
-  assert.equal(skills[1]?.skillId, "core.universal-safety");
+  assert.equal(skills[0]?.skillId, "backend.api-design");
+  assert.equal(skills[1]?.skillId, "backend.auth");
+  assert.equal(skills[2]?.skillId, "backend.persistence");
+  assert.equal(skills[3]?.skillId, "core.proportional-engineering");
+  assert.equal(skills[4]?.skillId, "core.universal-safety");
   assert.equal(skills.at(-1)?.skillId, "frontend.visual-design-polish");
   assert.equal(new Set(skills.map(({ skillId }) => skillId)).size, skills.length);
-  assert.equal(skills.length, 20);
+  assert.equal(skills.length, 23);
   assert.ok(skills.every(({ domains, roles, actions, requiredCapabilities }) =>
     domains.length > 0 && roles.length > 0 && actions.length > 0 && requiredCapabilities.length > 0));
   assert.ok(skills.filter(({ domains }) => domains.includes("core")).map(({ skillId }) => skillId).every((skillId) =>

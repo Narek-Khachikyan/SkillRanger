@@ -189,11 +189,29 @@ const collectHandoffEvidence = async (input: {
   return { ...collected, issues: [...new Set([...sourceIssues, ...collected.issues])] };
 };
 
+const validateBackendReleaseArtifacts = async () => {
+  try {
+    const backendRelease = await readJson<{ releaseVersion: string; domainId: string }>(path.join(packageRoot, "domains/backend/release.json"));
+    if (backendRelease.domainId !== "backend") throw new Error("backend release domainId must be backend");
+    if (!backendRelease.releaseVersion) throw new Error("backend releaseVersion missing");
+    return { ok: true, releaseVersion: backendRelease.releaseVersion, issues: [] as string[] };
+  } catch (error) {
+    return { ok: false, releaseVersion: "unknown", issues: [(error as Error).message] };
+  }
+};
+
 export const handleReleaseCommand = async (input: { command: string; flags: Flags }): Promise<boolean> => {
   if (input.command === "release:validate") {
-    const report = await validateFrontendReleaseArtifacts();
-    printArtifactValidation(report, Boolean(input.flags.json));
-    if (!report.ok) process.exitCode = 1;
+    const [frontendReport, backendReport] = await Promise.all([validateFrontendReleaseArtifacts(), validateBackendReleaseArtifacts()]);
+    printArtifactValidation(frontendReport, Boolean(input.flags.json));
+    if (!frontendReport.ok) process.exitCode = 1;
+    if (Boolean(input.flags.json)) {
+      console.log(JSON.stringify({ backend: backendReport }, null, 2));
+    } else {
+      console.log(`Backend release artifacts: ${backendReport.ok ? "valid" : "blocked"} (${backendReport.releaseVersion})`);
+      for (const issue of backendReport.issues) console.log(`- ${issue}`);
+    }
+    if (!backendReport.ok) process.exitCode = 1;
     return true;
   }
   if (input.command !== "release:certify") return false;

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.0",
+  "name": "backend-api-design-v1",
+  "targetCounts": { "triggerPrompts": 0, "taskEvals": 2 },
+  "triggerPrompts": [],
+  "taskBands": [
+    {
+      "id": "api-design",
+      "targetCount": 2,
+      "seedTasks": [
+        {
+          "id": "api-openapi-valid",
+          "prompt": "Design OpenAPI 3.x contract for /orders with $ref resolution and endpoint schemas",
+          "assertions": [{ "text": "OpenAPI contract validates with $ref and endpoint schemas", "graderType": "schema" }]
+        },
+        {
+          "id": "api-contract-test",
+          "prompt": "Validate OpenAPI contract for /users with contract tests",
+          "assertions": [{ "text": "Contract tests pass", "graderType": "test" }]
+        }
+      ]
+    }
+  ],
+  "scoring": { "utilityWeights": { "functionalCorrectness": 1 }, "promotionGates": {} }
+}
