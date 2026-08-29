@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "2.0",
+  "skillId": "backend.auth",
+  "contractVersion": "2.0.0",
+  "inputSchema": "input.schema.json",
+  "outputSchema": "output.schema.json",
+  "mustRead": [
+    "SKILL.md"
+  ],
+  "applicability": {
+    "op": "input",
+    "path": "provider",
+    "present": true
+  },
+  "prerequisites": [
+    {
+      "id": "provider",
+      "kind": "input",
+      "path": "provider"
+    }
+  ],
+  "steps": [
+    {
+      "id": "backend.auth/step/collect-auth-design",
+      "type": "collect",
+      "requiredEvidenceKinds": [
+        "implementation-diff"
+      ],
+      "ruleIds": [
+        "backend.auth/rule/secret-handling"
+      ]
+    },
+    {
+      "id": "backend.auth/step/audit-secrets",
+      "type": "validate",
+      "requiredEvidenceKinds": [
+        "verification-input"
+      ],
+      "ruleIds": [
+        "backend.auth/rule/no-leaked-secrets"
+      ]
+    },
+    {
+      "id": "backend.auth/step/final-report",
+      "type": "report",
+      "requiredEvidenceKinds": [
+        "skill-output"
+      ],
+      "ruleIds": [
+        "backend.auth/rule/output-schema-valid"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "backend.auth/rule/secret-handling",
+      "description": "Auth must handle secrets via env indirection."
+    },
+    {
+      "id": "backend.auth/rule/no-leaked-secrets",
+      "description": "No hardcoded credentials or dotenv exposure in evidence."
+    },
+    {
+      "id": "backend.auth/rule/output-schema-valid",
+      "description": "Return structured auth output."
+    }
+  ],
+  "gates": [
+    {
+      "id": "backend.auth/gate/secret-handling",
+      "level": "hard",
+      "evaluator": {
+        "type": "evidence-present",
+        "evidenceKind": "implementation-diff"
+      },
+      "ruleIds": [
+        "backend.auth/rule/secret-handling"
+      ]
+    },
+    {
+      "id": "backend.auth/gate/secret-audit",
+      "level": "hard",
+      "evaluator": {
+        "type": "validator",
+        "validatorId": "backend/secret-audit"
+      },
+      "ruleIds": [
+        "backend.auth/rule/no-leaked-secrets"
+      ]
+    },
+    {
+      "id": "backend.auth/gate/output-schema-valid",
+      "level": "hard",
+      "evaluator": {
+        "type": "schema-valid",
+        "schema": "output"
+      },
+      "ruleIds": [
+        "backend.auth/rule/output-schema-valid"
+      ]
+    }
+  ],
+  "maxRepairIterations": 2
+}

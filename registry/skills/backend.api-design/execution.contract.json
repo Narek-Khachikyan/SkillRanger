@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "2.0",
+  "skillId": "backend.api-design",
+  "contractVersion": "2.0.0",
+  "inputSchema": "input.schema.json",
+  "outputSchema": "output.schema.json",
+  "mustRead": [
+    "SKILL.md"
+  ],
+  "applicability": {
+    "op": "input",
+    "path": "contractPath",
+    "present": true
+  },
+  "prerequisites": [
+    {
+      "id": "contract-path",
+      "kind": "input",
+      "path": "contractPath"
+    }
+  ],
+  "steps": [
+    {
+      "id": "backend.api-design/step/collect-contract",
+      "type": "collect",
+      "requiredEvidenceKinds": [
+        "api-contract"
+      ],
+      "ruleIds": [
+        "backend.api-design/rule/contract-present"
+      ]
+    },
+    {
+      "id": "backend.api-design/step/validate-contract",
+      "type": "validate",
+      "requiredEvidenceKinds": [
+        "verification-input"
+      ],
+      "ruleIds": [
+        "backend.api-design/rule/contract-valid"
+      ]
+    },
+    {
+      "id": "backend.api-design/step/final-report",
+      "type": "report",
+      "requiredEvidenceKinds": [
+        "skill-output"
+      ],
+      "ruleIds": [
+        "backend.api-design/rule/output-schema-valid"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "backend.api-design/rule/contract-present",
+      "description": "Provide an OpenAPI/JSON Schema contract artifact."
+    },
+    {
+      "id": "backend.api-design/rule/contract-valid",
+      "description": "Contract must be valid OpenAPI 3.x with paths and responses."
+    },
+    {
+      "id": "backend.api-design/rule/output-schema-valid",
+      "description": "Return structured contract output."
+    }
+  ],
+  "gates": [
+    {
+      "id": "backend.api-design/gate/contract-present",
+      "level": "hard",
+      "evaluator": {
+        "type": "evidence-present",
+        "evidenceKind": "api-contract"
+      },
+      "ruleIds": [
+        "backend.api-design/rule/contract-present"
+      ]
+    },
+    {
+      "id": "backend.api-design/gate/contract-test",
+      "level": "hard",
+      "evaluator": {
+        "type": "validator",
+        "validatorId": "backend/contract-test"
+      },
+      "ruleIds": [
+        "backend.api-design/rule/contract-valid"
+      ]
+    },
+    {
+      "id": "backend.api-design/gate/output-schema-valid",
+      "level": "hard",
+      "evaluator": {
+        "type": "schema-valid",
+        "schema": "output"
+      },
+      "ruleIds": [
+        "backend.api-design/rule/output-schema-valid"
+      ]
+    }
+  ],
+  "maxRepairIterations": 2
+}

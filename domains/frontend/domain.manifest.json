@@ -160,7 +160,8 @@
       "web-interface",
       "landing-page",
       "component",
-      "responsive-design"
+      "responsive-design",
+      "next-app-router-review"
     ],
     "artifactTypes": [
       "web-interface",
@@ -172,7 +173,8 @@
       "nextjs",
       "vue",
       "svelte",
-      "tailwind"
+      "tailwind",
+      "rsc"
     ],
     "projectTags": [
       "frontend",

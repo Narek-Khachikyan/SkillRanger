@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1.0",
+  "suite": "backend-auth-v1",
+  "slice": "auth",
+  "baselines": ["without-skill", "current-skill"],
+  "minimumRepetitions": 3
+}

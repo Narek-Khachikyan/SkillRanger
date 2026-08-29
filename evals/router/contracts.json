@@ -3,6 +3,9 @@
   "catalog": {
     "expectedDomainIds": ["backend", "core", "frontend"],
     "expectedSkillIds": [
+      "backend.api-design",
+      "backend.auth",
+      "backend.persistence",
       "core.proportional-engineering",
       "core.universal-safety",
       "frontend.accessibility-review",

@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "2.0",
+  "skillId": "backend.persistence",
+  "contractVersion": "2.0.0",
+  "inputSchema": "input.schema.json",
+  "outputSchema": "output.schema.json",
+  "mustRead": [
+    "SKILL.md"
+  ],
+  "applicability": {
+    "op": "input",
+    "path": "modelPath",
+    "present": true
+  },
+  "prerequisites": [
+    {
+      "id": "model-path",
+      "kind": "input",
+      "path": "modelPath"
+    }
+  ],
+  "steps": [
+    {
+      "id": "backend.persistence/step/collect-model",
+      "type": "collect",
+      "requiredEvidenceKinds": [
+        "migration-plan"
+      ],
+      "ruleIds": [
+        "backend.persistence/rule/migration-present"
+      ]
+    },
+    {
+      "id": "backend.persistence/step/validate-safety",
+      "type": "validate",
+      "requiredEvidenceKinds": [
+        "verification-input"
+      ],
+      "ruleIds": [
+        "backend.persistence/rule/migration-safe"
+      ]
+    },
+    {
+      "id": "backend.persistence/step/final-report",
+      "type": "report",
+      "requiredEvidenceKinds": [
+        "skill-output"
+      ],
+      "ruleIds": [
+        "backend.persistence/rule/output-schema-valid"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "backend.persistence/rule/migration-present",
+      "description": "Provide a migration plan artifact."
+    },
+    {
+      "id": "backend.persistence/rule/migration-safe",
+      "description": "Migration must be safe with no destructive DROP."
+    },
+    {
+      "id": "backend.persistence/rule/output-schema-valid",
+      "description": "Return structured persistence output."
+    }
+  ],
+  "gates": [
+    {
+      "id": "backend.persistence/gate/migration-present",
+      "level": "hard",
+      "evaluator": {
+        "type": "evidence-present",
+        "evidenceKind": "migration-plan"
+      },
+      "ruleIds": [
+        "backend.persistence/rule/migration-present"
+      ]
+    },
+    {
+      "id": "backend.persistence/gate/migration-safety",
+      "level": "hard",
+      "evaluator": {
+        "type": "validator",
+        "validatorId": "backend/migration-safety"
+      },
+      "ruleIds": [
+        "backend.persistence/rule/migration-safe"
+      ]
+    },
+    {
+      "id": "backend.persistence/gate/output-schema-valid",
+      "level": "hard",
+      "evaluator": {
+        "type": "schema-valid",
+        "schema": "output"
+      },
+      "ruleIds": [
+        "backend.persistence/rule/output-schema-valid"
+      ]
+    }
+  ],
+  "maxRepairIterations": 2
+}

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1.0",
+  "suite": "backend-api-design-v1",
+  "slice": "api-design",
+  "baselines": ["without-skill", "current-skill"],
+  "minimumRepetitions": 3
+}

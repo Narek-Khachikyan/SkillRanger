@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["modelPath"],
+  "properties": {
+    "modelPath": { "type": "string", "minLength": 1 },
+    "orm": { "enum": ["prisma", "drizzle"] }
+  }
+}

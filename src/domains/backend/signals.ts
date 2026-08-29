@@ -125,12 +125,6 @@ const backendProjectSignals: ProjectSignalProvider = {
       }
     }
 
-    // If generic backend files present but no specific ORM/auth, still tag backend
-    const backendFolderHits = await context.hasAnyFile(["server", "api", "prisma"]);
-    if (backendFolderHits.length > 0 && !tags.has("backend")) {
-      // Do not auto-tag unless evidence strong; keep neutral
-    }
-
     return {
       projectTypes,
       frameworks,

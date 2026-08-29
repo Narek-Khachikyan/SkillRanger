@@ -6,19 +6,7 @@ import type { DomainRoutingPolicy } from "../types.ts";
 import { analyzeFrontendIntent, type CanonicalFrontendIntent } from "./intents/index.ts";
 import { evaluateFrontendRunPolicy } from "./run-policy.ts";
 import { frontendValidatorEvaluators } from "./validators.ts";
-
-const tokenize = (input: string) =>
-  new Set(
-    input
-      .toLowerCase()
-      .split(/[^\p{L}\p{N}+.#-]+/u)
-      .map((part) => part.trim())
-      .map((part) => part.replace(/^[.,:;!?()[\]{}"']+|[.,:;!?()[\]{}"']+$/g, ""))
-      .filter(Boolean),
-  );
-
-const hasAnyToken = (tokens: Set<string>, expected: Set<string>) =>
-  [...tokens].some((token) => expected.has(token));
+import { hasAnyToken, tokenize } from "../routing-helpers.ts";
 
 const nonDomainOnlyTokens = new Set([
   "api", "архитектура", "база", "бэкенд", "backend", "cache", "данных", "database",

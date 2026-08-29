@@ -159,7 +159,7 @@ test("every fallback routed outcome variant carries the mode and the recall warn
   const noMatch = await prepareTask({
     projectRoot: await temporaryProject("next-react-ts"),
     registry: { kind: "bundled", root: registry },
-    prompt: "Fix NestJS authentication and add integration tests. @skillranger",
+    prompt: "Write a poem about the sea. @skillranger",
     activation: { mode: "explicit" },
   });
   assert.equal(noMatch.status, "no_matching_skills");

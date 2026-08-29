@@ -29,7 +29,7 @@
     "evaluator": { "oneOf": [
       { "type": "object", "additionalProperties": false, "required": ["type", "evidenceKind"], "properties": { "type": { "const": "evidence-present" }, "evidenceKind": { "type": "string" } } },
       { "type": "object", "additionalProperties": false, "required": ["type", "schema"], "properties": { "type": { "const": "schema-valid" }, "schema": { "enum": ["input", "output", "critic-report"] } } },
-      { "type": "object", "additionalProperties": false, "required": ["type", "validatorId"], "properties": { "type": { "const": "validator" }, "validatorId": { "enum": ["core/artifact-integrity", "core/critic-independence", "frontend/tailwind-source", "frontend/browser-hard-gates", "frontend/performance-claims"] } } }
+      { "type": "object", "additionalProperties": false, "required": ["type", "validatorId"], "properties": { "type": { "const": "validator" }, "validatorId": { "enum": ["core/artifact-integrity", "core/critic-independence", "frontend/tailwind-source", "frontend/browser-hard-gates", "frontend/performance-claims", "frontend/identity-diversification", "backend/contract-test", "backend/migration-safety", "backend/secret-audit"] } } }
     ] },
     "predicate": {
       "oneOf": [

@@ -46,20 +46,62 @@
       ]
     },
     {
-      "kind": "artifact",
-      "id": "page",
-      "locale": "mixed",
-      "phrases": [
-        "landing",
-        "landing page",
-        "лендинг"
-      ]
+    "kind": "artifact",
+    "id": "page",
+    "locale": "mixed",
+    "phrases": [
+      "landing",
+      "landing page",
+      "лендинг",
+      "page",
+      "pages",
+      "страницу",
+      "страницы",
+      "страницей",
+      "страниц"
+    ]
     },
     {
       "kind": "technology",
       "id": "tailwind",
       "locale": "mixed",
       "phrases": ["tailwind", "tailwind css"]
+    },
+    {
+      "kind": "technology",
+      "id": "nextjs",
+      "locale": "mixed",
+      "phrases": ["next.js", "nextjs", "app router"]
+    },
+    {
+      "kind": "technology",
+      "id": "rsc",
+      "locale": "mixed",
+      "phrases": ["rsc", "react server components", "server components"]
+    },
+    {
+      "kind": "intent",
+      "id": "next-app-router-review",
+      "locale": "mixed",
+      "phrases": [
+        "route handler",
+        "route handlers",
+        "server action",
+        "server actions",
+        "роут хэндлер",
+        "роут хендлер",
+        "серверный экшен",
+        "серверные экшены",
+        "rsc",
+        "app router"
+      ],
+      "negativePhrases": [
+        "create",
+        "design",
+        "сделай",
+        "создай",
+        "спроектируй"
+      ]
     },
     {
       "kind": "quality",

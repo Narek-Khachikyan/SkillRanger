@@ -21,11 +21,16 @@
       "intents/ownership.json",
       "intents/phases.json"
     ],
-    "schemas": [],
+    "schemas": [
+      "schemas/backend-contract.schema.json",
+      "schemas/migration-plan.schema.json"
+    ],
     "recipes": [],
     "workflows": [],
     "validators": [],
-    "routingVocabulary": "routing.vocabulary.json"
+    "routingVocabulary": "routing.vocabulary.json",
+    "evalSuite": "evals/backend/suite.json",
+    "releaseManifest": "release.json"
   },
   "ownership": [
     {

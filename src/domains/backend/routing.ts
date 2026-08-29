@@ -2,19 +2,8 @@ import { defaultDomainsRoot } from "../../paths.ts";
 import type { ProjectFingerprint, Recommendation, RegistrySkill, SkillLane } from "../../types.ts";
 import { loadBundledDomainManifestSync, registerDomainPack } from "../registry.ts";
 import type { DomainRoutingPolicy } from "../types.ts";
-
-const tokenize = (input: string) =>
-  new Set(
-    input
-      .toLowerCase()
-      .split(/[^\p{L}\p{N}+.#-]+/u)
-      .map((part) => part.trim())
-      .map((part) => part.replace(/^[.,:;!?()[\]{}"']+|[.,:;!?()[\]{}"']+$/g, ""))
-      .filter(Boolean),
-  );
-
-const hasAnyToken = (tokens: Set<string>, expected: Set<string>) =>
-  [...tokens].some((token) => expected.has(token));
+import { hasAnyToken, tokenize } from "../routing-helpers.ts";
+import { backendValidatorEvaluators } from "./validators.ts";
 
 const backendTokens = new Set([
   "api",
@@ -62,21 +51,40 @@ const backendTokens = new Set([
   "призма",
   "дриззл",
   "аутентификация",
+  "аутентификацию",
+  "аутентификации",
+  "аутентификацией",
   "авторизация",
+  "авторизацию",
+  "авторизации",
+  "авторизацией",
   "персистентность",
   "база",
+  "базы",
+  "базу",
+  "базой",
   "бд",
   "данных",
   "миграция",
   "миграции",
+  "миграцию",
+  "миграцией",
+  "миграций",
   "схема",
+  "схемы",
+  "схему",
+  "схемой",
   "сервис",
   "служба",
   "сессия",
+  "сессию",
+  "сессии",
+  "сессией",
   "токен",
   "jwt",
 ]);
 
+/** Tokens that are exclusive to frontend presentation – backend routing defers when they appear without backend signals. */
 const frontendOnlyTokens = new Set([
   "accessibility",
   "browser",
@@ -137,6 +145,7 @@ const frontendOnlyPhrases = [
   "адаптивный дизайн",
 ];
 
+/** Tokens that indicate a generic non-domain task (docs, release, python etc) – never trigger backend routing. */
 const genericNonDomainTokens = new Set([
   "changelog",
   "cli",
@@ -165,7 +174,8 @@ const genericNonDomainTokens = new Set([
   "terminal",
 ]);
 
-const hardNonBackendTokens = new Set(["native", "swift"]);
+/** Hard-exclude tokens that unambiguously map to native/mobile stacks and must never route to backend. */
+const hardNonBackendTokens = new Set(["native", "swift", "cli"]);
 
 const requiredStackTags = new Set([
   "prisma",
@@ -204,9 +214,17 @@ const specializedIntentHints: Record<string, string[]> = {
     "призма",
     "дриззл",
     "база данных",
+    "базы данных",
+    "базу данных",
     "модель данных",
+    "модели данных",
     "схема базы",
+    "схемы базы",
+    "схему базы",
     "миграция",
+    "миграцию",
+    "миграции",
+    "миграцией",
   ],
   "backend.auth": [
     "auth",
@@ -217,8 +235,12 @@ const specializedIntentHints: Record<string, string[]> = {
     "session",
     "jwt",
     "аутентификация",
+    "аутентификацию",
     "авторизация",
+    "авторизацию",
     "сессия",
+    "сессию",
+    "сессии",
   ],
 };
 
@@ -259,9 +281,26 @@ const routing: DomainRoutingPolicy = {
   rejectIntent(intent) {
     if (!intent) return false;
     const normalizedIntent = intent.toLowerCase();
+    // Synthetic test markers must be handled by the synthetic fixture packs, not the real backend pack
+    if (
+      normalizedIntent.includes("synthetic") ||
+      normalizedIntent.includes("cyclic") ||
+      normalizedIntent.includes("conflicting") ||
+      normalizedIntent.includes("oversized") ||
+      normalizedIntent.includes("contractless") ||
+      normalizedIntent.includes("input-required")
+    ) return true;
     if (frontendOnlyPhrases.some((phrase) => normalizedIntent.includes(phrase))) {
       const tokens = tokenize(intent);
       if (!hasAnyToken(tokens, backendTokens)) return true;
+    }
+    // Defer Server Actions / Route Handlers review with UI/caching concerns to frontend presentation
+    if (
+      normalizedIntent.includes("server action") &&
+      normalizedIntent.includes("review") &&
+      ["pending", "cached route", "stale", "rsc", "hydration", "client component"].some((phrase) => normalizedIntent.includes(phrase))
+    ) {
+      return true;
     }
     const tokens = tokenize(intent);
     if (hasAnyToken(tokens, hardNonBackendTokens)) return true;
@@ -307,4 +346,10 @@ export const registerBackendDomainPack = () =>
     manifest: backendDomainManifest,
     routing,
     root: `${defaultDomainsRoot}/backend`,
+    validators: [
+      "backend/contract-test",
+      "backend/migration-safety",
+      "backend/secret-audit",
+    ],
+    validatorEvaluators: backendValidatorEvaluators,
   });

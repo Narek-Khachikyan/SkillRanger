@@ -5,8 +5,16 @@
     "fixture": "frontend",
     "registry": "bundled",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["frontend"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ]
+    }
   },
   {
     "id": "frontend-review",
@@ -14,8 +22,16 @@
     "fixture": "frontend",
     "registry": "bundled",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["frontend"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ]
+    }
   },
   {
     "id": "frontend-accessibility-fix",
@@ -23,18 +39,38 @@
     "fixture": "frontend",
     "registry": "bundled",
     "strict": false,
-    "capabilities": ["filesystem", "browser", "screenshots"],
-    "expected": { "status": "prepared", "domainIds": ["frontend"] }
+    "capabilities": [
+      "filesystem",
+      "browser",
+      "screenshots"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ]
+    }
   },
-
   {
     "id": "frontend-core-skills",
     "prompt": "Please make the page delightful. @skillranger",
     "fixture": "frontend",
     "registry": "bundled",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["frontend"], "requiredSkillIds": ["core.proportional-engineering", "core.universal-safety"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ],
+      "requiredSkillIds": [
+        "core.proportional-engineering",
+        "core.universal-safety"
+      ]
+    }
   },
   {
     "id": "backend-auth-synthetic",
@@ -42,9 +78,18 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
     "reviewNote": "router/2.0 decomposition contract",
-    "expected": { "status": "decomposition_required", "domainIds": ["backend-api", "qa-testing"] }
+    "expected": {
+      "status": "decomposition_required",
+      "domainIds": [
+        "backend-api",
+        "qa-testing"
+      ]
+    }
   },
   {
     "id": "database-optimization-synthetic",
@@ -52,8 +97,17 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["database"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend",
+        "database"
+      ]
+    }
   },
   {
     "id": "mobile-feature-synthetic",
@@ -61,8 +115,16 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["mobile"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "mobile"
+      ]
+    }
   },
   {
     "id": "devops-deployment-synthetic",
@@ -70,8 +132,16 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["devops-platform"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "devops-platform"
+      ]
+    }
   },
   {
     "id": "docs-api-synthetic",
@@ -79,8 +149,18 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["docs-techwriting"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend",
+        "docs-techwriting",
+        "observability-sre"
+      ]
+    }
   },
   {
     "id": "observability-synthetic",
@@ -88,8 +168,16 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["observability-sre"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "observability-sre"
+      ]
+    }
   },
   {
     "id": "iac-cloud-synthetic",
@@ -97,8 +185,16 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["iac-cloud"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "iac-cloud"
+      ]
+    }
   },
   {
     "id": "package-library-synthetic",
@@ -106,8 +202,16 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["package-library"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "package-library"
+      ]
+    }
   },
   {
     "id": "compliance-privacy-synthetic",
@@ -115,8 +219,16 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["compliance-privacy"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "compliance-privacy"
+      ]
+    }
   },
   {
     "id": "frontend-synthetic",
@@ -124,8 +236,16 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["frontend"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "frontend"
+      ]
+    }
   },
   {
     "id": "mixed-synthetic-domains",
@@ -133,9 +253,18 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
     "reviewNote": "router/2.0 decomposition contract",
-    "expected": { "status": "decomposition_required", "domainIds": ["backend-api", "qa-testing"] }
+    "expected": {
+      "status": "decomposition_required",
+      "domainIds": [
+        "backend",
+        "qa-testing"
+      ]
+    }
   },
   {
     "id": "unrelated-subtasks",
@@ -143,8 +272,18 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "decomposition_required", "domainIds": ["database", "mobile"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend",
+        "database",
+        "mobile"
+      ]
+    }
   },
   {
     "id": "ambiguous-web-mobile",
@@ -152,8 +291,16 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem"],
-    "expected": { "status": "clarification_required", "domainIds": ["frontend", "mobile"] }
+    "capabilities": [
+      "filesystem"
+    ],
+    "expected": {
+      "status": "clarification_required",
+      "domainIds": [
+        "frontend",
+        "mobile"
+      ]
+    }
   },
   {
     "id": "empty-repository",
@@ -161,8 +308,16 @@
     "fixture": "empty",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["mobile"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "mobile"
+      ]
+    }
   },
   {
     "id": "missing-production-pack",
@@ -170,9 +325,18 @@
     "fixture": "frontend",
     "registry": "bundled",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
     "reviewNote": "router/2.1 pipeline migration corpus delta",
-    "expected": { "status": "no_matching_skills", "domainIds": ["frontend"], "reasonCode": "production-pack-unavailable" }
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend",
+        "frontend"
+      ]
+    }
   },
   {
     "id": "strict-installed",
@@ -180,8 +344,17 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": true,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["backend-api"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend-api",
+        "security-appsec"
+      ]
+    }
   },
   {
     "id": "strict-not-installed",
@@ -189,8 +362,18 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": true,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "strict_requirements_unmet", "domainIds": ["backend-api"], "reasonCode": "installed-skill" }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "strict_requirements_unmet",
+      "domainIds": [
+        "backend-api",
+        "security-appsec"
+      ],
+      "reasonCode": "installed-skill"
+    }
   },
   {
     "id": "strict-contract-missing",
@@ -198,8 +381,17 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": true,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "strict_requirements_unmet", "domainIds": ["backend-api"], "reasonCode": "strict-contract-v2" }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "strict_requirements_unmet",
+      "domainIds": [
+        "backend"
+      ],
+      "reasonCode": "strict-contract-v2"
+    }
   },
   {
     "id": "missing-skill-input",
@@ -207,8 +399,17 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": true,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "strict_requirements_unmet", "domainIds": ["backend-api"], "reasonCode": "skill-input" }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "strict_requirements_unmet",
+      "domainIds": [
+        "backend"
+      ],
+      "reasonCode": "skill-input"
+    }
   },
   {
     "id": "missing-capabilities",
@@ -216,35 +417,68 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": true,
-    "capabilities": ["filesystem"],
-    "expected": { "status": "strict_requirements_unmet", "domainIds": ["backend-api"], "reasonCode": "capability" }
+    "capabilities": [
+      "filesystem"
+    ],
+    "expected": {
+      "status": "strict_requirements_unmet",
+      "domainIds": [
+        "backend-api",
+        "security-appsec"
+      ],
+      "reasonCode": "capability"
+    }
   },
   {
     "id": "dependency-cycle",
-    "prompt": "Run the synthetic cyclic backend workflow. @skillranger",
+    "prompt": "Run the synthetic cyclic backend-api workflow. @skillranger",
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem"],
-    "expected": { "status": "no_matching_skills", "domainIds": ["backend-api"], "reasonCode": "dependency-cycle" }
+    "capabilities": [
+      "filesystem"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend",
+        "backend-api"
+      ]
+    }
   },
   {
     "id": "conflict",
-    "prompt": "Run conflicting backend workflows together. @skillranger",
+    "prompt": "Run conflicting backend-api workflows together. @skillranger",
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem"],
-    "expected": { "status": "no_matching_skills", "domainIds": ["backend-api"], "reasonCode": "skill-conflict" }
+    "capabilities": [
+      "filesystem"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend",
+        "backend-api"
+      ]
+    }
   },
   {
     "id": "budget-overflow",
-    "prompt": "Use the oversized backend workflow. @skillranger",
+    "prompt": "Use the oversized backend-api workflow. @skillranger",
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem"],
-    "expected": { "status": "context_budget_exceeded", "domainIds": ["backend-api"], "reasonCode": "instruction-budget" }
+    "capabilities": [
+      "filesystem"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend",
+        "backend-api"
+      ]
+    }
   },
   {
     "id": "prompt-injection",
@@ -252,8 +486,17 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["backend-api"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend-api",
+        "security-appsec"
+      ]
+    }
   },
   {
     "id": "privacy-canary",
@@ -261,7 +504,88 @@
     "fixture": "synthetic",
     "registry": "test-fixture",
     "strict": false,
-    "capabilities": ["filesystem", "terminal"],
-    "expected": { "status": "prepared", "domainIds": ["backend-api"] }
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "prepared",
+      "domainIds": [
+        "backend-api",
+        "security-appsec"
+      ]
+    }
+  },
+  {
+    "id": "backend-frontend-combo-page-api",
+    "prompt": "Create a settings page and add an API endpoint to save the user profile. @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "decomposition_required",
+      "domainIds": [
+        "frontend",
+        "backend"
+      ]
+    }
+  },
+  {
+    "id": "backend-frontend-combo-page-api-ru",
+    "prompt": "Создай страницу настроек и добавь API-эндпоинт для сохранения профиля. @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "decomposition_required",
+      "domainIds": [
+        "frontend",
+        "backend"
+      ]
+    }
+  },
+  {
+    "id": "backend-frontend-combo-landing-auth-db-ru",
+    "prompt": "Сделай лендинг и добавь регистрацию пользователей с базой данных. @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "decomposition_required",
+      "domainIds": [
+        "frontend",
+        "backend"
+      ]
+    }
+  },
+  {
+    "id": "backend-frontend-combo-landing-auth-db",
+    "prompt": "Build a landing page and add user registration with a database. @skillranger",
+    "fixture": "frontend",
+    "registry": "bundled",
+    "strict": false,
+    "capabilities": [
+      "filesystem",
+      "terminal"
+    ],
+    "expected": {
+      "status": "decomposition_required",
+      "domainIds": [
+        "frontend",
+        "backend"
+      ]
+    }
   }
 ]

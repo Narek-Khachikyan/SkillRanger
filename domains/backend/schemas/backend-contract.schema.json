@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillranger.local/domains/backend/backend-contract.schema.json",
+  "title": "Backend API Contract",
+  "description": "Validated OpenAPI 3.x contract payload for backend.api-design — paths, operations, schemas and $ref resolution.",
+  "type": "object",
+  "required": ["openapi", "info", "paths"],
+  "properties": {
+    "openapi": { "type": "string", "pattern": "^3\\.\\d+\\.\\d+$" },
+    "info": {
+      "type": "object",
+      "required": ["title", "version"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "paths": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^/": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "components": {
+      "type": "object",
+      "properties": {
+        "schemas": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
