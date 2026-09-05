@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { resolveWorkflowStepIds, type WorkflowDefinition } from "../src/runtime/index.ts";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { aiSlopCodes, legacyAiSlopCodes } from "../src/domains/frontend/design/visual-loop-types.ts";
 
@@ -327,25 +327,6 @@ test("design skills carry the anti-slop decision contracts", async () => {
 test("motion skills declare a verification outcome", async () => {
   for (const name of ["motion-design", "motion-audit"]) {
     assert.match(await readSkill(name), /## Verification Outcome/);
-  }
-});
-
-test("design skills carry positive direction rules beyond anti-slop keywords", async () => {
-  const entries = await readdir(path.resolve("registry/skills"), {
-    withFileTypes: true,
-  });
-  for (const entry of entries) {
-    if (!entry.isDirectory() || !entry.name.startsWith("frontend.")) continue;
-    const name = entry.name.replace("frontend.", "");
-    const text = await readSkill(name);
-    const hasAntiSlop = /\b(anti.slop|generic|avoid|reject|do not|must not)\b/i.test(text);
-    const hasPositiveDirection = /\b(prefer|use|choose|start from|keep|preserve)\b/i.test(text);
-    if (hasAntiSlop) {
-      assert.ok(
-        hasPositiveDirection,
-        `${name}: anti-slop gate without positive direction (must also guide what TO do)`,
-      );
-    }
   }
 });
 

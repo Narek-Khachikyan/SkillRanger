@@ -76,18 +76,6 @@ export type StrictValidatorObservation = {
   result: Readonly<Result>;
 };
 export type StrictValidatorObserver = (observation: StrictValidatorObservation) => void | Promise<void>;
-const repairedAfterFindings = (ledger: SkillLedger, artifactId: string) => ledger.repairRequests.some((request) => {
-  if (!request.gateIds.includes(criticSystemGateId)) return false;
-  const sourceReport = ledger.verificationReports[request.sourceReportIndex];
-  if (!sourceReport?.evidenceIds.includes(artifactId)
-    || !sourceReport.gateResults.some(({ gateId, passed, level }) =>
-      gateId === criticSystemGateId && level === "hard" && !passed)) return false;
-  return ledger.steps.some(({ type, attempts }) => type === "repair" && attempts.some((attempt) =>
-    attempt.attempt === request.iteration
-    && attempt.completedAt !== undefined
-    && atOrAfter(attempt.startedAt, sourceReport.generatedAt)
-    && atOrAfter(attempt.completedAt, attempt.startedAt)));
-});
 const getExpectedScreenshotsForCritic = (
   ledger: SkillLedger,
   artifacts: EvidenceArtifact[],

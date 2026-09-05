@@ -69,11 +69,8 @@ export const planFrontendPhases = (input: {
   recommendedSkillIds: string[];
   primarySkillId?: string;
   repairFindingCodes?: string[];
-  motionDirection?: "none" | string;
-  material?: boolean;
 }): FrontendPhasePlan => {
   const recommended = new Set(input.recommendedSkillIds);
-  const normalized = input.intent.toLowerCase();
   const implementation = implementationOwner(input.intent, recommended, input.primarySkillId);
   const phaseOwners: Record<FrontendExecutionPhase, string> = { ...owners, implementation };
   const required = new Set<FrontendExecutionPhase>();
@@ -88,9 +85,6 @@ export const planFrontendPhases = (input: {
   const repairEntryPhase = repairPhases.length > 0
     ? [...repairPhases].sort((a, b) => order.indexOf(a) - order.indexOf(b))[0]
     : undefined;
-  if (repairEntryPhase && recommended.has(phaseOwners[repairEntryPhase])) {
-    required.add(repairEntryPhase);
-  }
 
   return {
     schemaVersion: "1.0",

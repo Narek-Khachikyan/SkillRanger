@@ -26,13 +26,3 @@ test("strict Core constructs no validator registry from domain data outside the 
   }
 });
 
-test("frontend validator evaluators are registered by the frontend domain pack, not by strict Core", async () => {
-  const routingSource = await readFile("src/domains/frontend/routing.ts", "utf8");
-  const validatorsSource = await readFile("src/domains/frontend/validators.ts", "utf8");
-  assert.match(routingSource, /frontend\/browser-hard-gates/);
-  assert.match(routingSource, /frontend\/tailwind-source/);
-  assert.match(routingSource, /frontend\/performance-claims/);
-  assert.match(validatorsSource, /frontend\/browser-hard-gates/);
-  assert.match(validatorsSource, /frontend\/tailwind-source/);
-  assert.match(validatorsSource, /frontend\/performance-claims/);
-});

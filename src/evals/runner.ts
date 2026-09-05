@@ -1,7 +1,7 @@
-import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { FRONTEND_COMPARISON_BASELINES, sameEvalIdentityValue } from "./identity.ts";
+import { parseCommandTemplate, runProcess, substituteCommandPlaceholders } from "./process.ts";
 import type {
   FrontendEvalSuite,
   FrontendTaskAssertion,
@@ -63,37 +63,6 @@ export type ExecuteRunPlanOptions = {
   quiet?: boolean;
 };
 
-const parseCommandTemplate = (template: string): string[] => {
-  const args: string[] = [];
-  let current = "";
-  let inQuote: string | null = null;
-
-  for (let i = 0; i < template.length; i++) {
-    const c = template[i];
-    if (inQuote) {
-      if (c === inQuote) {
-        inQuote = null;
-      } else {
-        current += c;
-      }
-    } else if (c === '"' || c === "'") {
-      inQuote = c;
-    } else if (c === " ") {
-      if (current) {
-        args.push(current);
-        current = "";
-      }
-    } else {
-      current += c;
-    }
-  }
-  if (inQuote) {
-    throw new Error("Command template contains an unterminated quote.");
-  }
-  if (current) args.push(current);
-  return args;
-};
-
 const safePathSegment = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 const assertSafePathSegment = (value: string, label: string) => {
@@ -145,59 +114,13 @@ const substitutePlaceholders = (
   entry: RunPlanEntry,
   runDir: string,
 ): string[] =>
-  args.map((arg) =>
-    arg.replace(/\{\{taskId\}\}/g, entry.taskId)
-      .replace(/\{\{baseline\}\}/g, entry.baselineKind)
-      .replace(/\{\{prompt\}\}/g, entry.prompt)
-      .replace(/\{\{bandId\}\}/g, entry.bandId)
-      .replace(/\{\{repetition\}\}/g, String(entry.repetition ?? 1))
-      .replace(/\{\{outputDir\}\}/g, runDir),
-  );
-
-const runCommand = (
-  cmd: string,
-  args: string[],
-  cwd?: string,
-  timeoutMs?: number,
-): Promise<{
-  exitCode: number | null;
-  signal: string | null;
-  stdout: string;
-  stderr: string;
-  durationMs: number;
-}> =>
-  new Promise((resolve) => {
-    const startTime = Date.now();
-    const child = spawn(cmd, args, {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      shell: false,
-      timeout: timeoutMs,
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout?.on("data", (data: Buffer) => {
-      stdout += data.toString();
-    });
-    child.stderr?.on("data", (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    child.on("close", (exitCode, signal) => {
-      resolve({ exitCode, signal, stdout, stderr, durationMs: Date.now() - startTime });
-    });
-
-    child.on("error", (err) => {
-      resolve({
-        exitCode: null,
-        signal: null,
-        stdout,
-        stderr: err.message,
-        durationMs: Date.now() - startTime,
-      });
-    });
+  substituteCommandPlaceholders(args, {
+    taskId: entry.taskId,
+    baseline: entry.baselineKind,
+    prompt: entry.prompt,
+    bandId: entry.bandId,
+    repetition: String(entry.repetition ?? 1),
+    outputDir: runDir,
   });
 
 export const generateRunPlan = (
@@ -418,7 +341,7 @@ export const executeRunPlan = async (
     const substituted = substitutePlaceholders(templateArgs, entry, runDir);
     const [cmd, ...args] = substituted;
 
-    const result = await runCommand(cmd, args, projectRoot, identity.timeoutMs > 0 ? identity.timeoutMs : undefined);
+    const result = await runProcess(cmd, args, { cwd: projectRoot, timeoutMs: identity.timeoutMs > 0 ? identity.timeoutMs : undefined });
 
     await writeFile(stdoutPath, result.stdout);
     await writeFile(stderrPath, result.stderr);

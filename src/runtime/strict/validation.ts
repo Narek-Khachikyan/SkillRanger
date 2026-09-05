@@ -23,7 +23,6 @@ const exactKeys = (value: Record<string, unknown>, required: string[], optional:
   if (missing) fail(`${label} is missing ${missing}.`);
 };
 
-const same = (left: unknown, right: unknown) => isDeepStrictEqual(left, right);
 const expectedStepSnapshot = (step: Record<string, unknown>) => {
   const { status: _status, attempts: _attempts, ...snapshot } = step;
   return snapshot;
@@ -83,7 +82,7 @@ const assertVerificationReports = (
       reportIndex,
     );
     if (new Set(rawReport.evidenceIds).size !== rawReport.evidenceIds.length
-      || !same(rawReport.evidenceIds, expectedEvidenceIds)) {
+      || !isDeepStrictEqual(rawReport.evidenceIds, expectedEvidenceIds)) {
       fail(`Verification report ${reportIndex} for ${skillId} has a forged evidence snapshot.`);
     }
     const contractGateById = new Map(contract.gates.map((gate) => [gate.id, gate]));
@@ -93,7 +92,7 @@ const assertVerificationReports = (
       ledger as unknown as Pick<SkillLedger, "contract">,
       criticEvidenceRelevant ? [criticSystemGateId] : [],
     );
-    if (!same(rawReport.gateResults.map((gate) => record(gate) ? gate.gateId : undefined), expectedGateIds)) {
+    if (!isDeepStrictEqual(rawReport.gateResults.map((gate) => record(gate) ? gate.gateId : undefined), expectedGateIds)) {
       fail(`Verification report ${reportIndex} for ${skillId} has an inconsistent gate order or cardinality.`);
     }
     rawReport.gateResults.forEach((rawGate, gateIndex) => {
@@ -145,7 +144,7 @@ const assertRepairLifecycle = (skillId: string, ledger: Record<string, unknown>)
       || !record(sourceReport)
       || sourceReport.hardPassed !== false
       || !Array.isArray(rawRequest.gateIds)
-      || !same(rawRequest.gateIds, failedHardGateIds(sourceReport))) {
+      || !isDeepStrictEqual(rawRequest.gateIds, failedHardGateIds(sourceReport))) {
       fail(`Repair request ${index} is inconsistent for ${skillId}.`);
     }
   });
@@ -398,7 +397,7 @@ export const assertValidStrictSkillRun: (input: unknown) => asserts input is Ski
     const contractSteps = (rawLedger.contract as ExecutionContractV2).steps;
     if ((rawLedger.steps as unknown[]).length !== contractSteps.length) fail(`Step snapshot mismatch for ${skillId}.`);
     (rawLedger.steps as unknown[]).forEach((step, index) => {
-      if (!record(step) || !same(expectedStepSnapshot(step), contractSteps[index])) {
+      if (!record(step) || !isDeepStrictEqual(expectedStepSnapshot(step), contractSteps[index])) {
         fail(`Step snapshot mismatch for ${skillId} at index ${index}.`);
       }
       if (!["pending", "active", "satisfied", "skipped", "blocked"].includes(step.status as string) || !Array.isArray(step.attempts)) fail(`Invalid step for ${skillId}.`);

@@ -24,8 +24,6 @@ import {
   detectExplicitSkillChoice,
   RoutingProposalError,
   validateRoutingProposal,
-  validateRoutingProposalCatalogBinding,
-  validateRoutingProposalShape,
   type RoutingProposalInput,
   type RoutingProposalProjection,
   type RoutingProposalRefresh,
@@ -226,25 +224,14 @@ export const runRoutingPipeline = (input: RoutingPipelineInput): RoutingPipeline
     throw error as Error;
   };
 
-  // Proposal validation: shape, catalog binding, then semantics. Each step can
-  // short-circuit with a catalog-refresh decision or fail the routing.
+  // Proposal validation: a single full check covers shape, catalog binding,
+  // and semantics. It short-circuits with a catalog-refresh decision or fails
+  // the routing.
   let routingProposal: ValidatedRoutingProposal | undefined;
   if (input.routingProposal !== undefined) {
-    let shapedProposal!: ReturnType<typeof validateRoutingProposalShape>;
-    try {
-      shapedProposal = validateRoutingProposalShape(input.routingProposal);
-    } catch (error) {
-      rethrowAsPipeline(error);
-    }
-    try {
-      const refresh = validateRoutingProposalCatalogBinding({ proposal: shapedProposal, catalog: input.catalog! });
-      if (refresh) return refreshDecision(refresh);
-    } catch (error) {
-      rethrowAsPipeline(error);
-    }
     try {
       const ownerChecked = validateRoutingProposal({
-        proposal: shapedProposal,
+        proposal: input.routingProposal,
         prompt: input.trigger.normalizedIntent,
         catalog: input.catalog!,
         routingContext: input.routingContext,

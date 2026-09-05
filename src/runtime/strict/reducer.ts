@@ -17,7 +17,6 @@ const fail: (code: ConstructorParameters<typeof StrictSkillRunError>[0], message
 const digest = (value: string) => `sha256:${createHash("sha256").update(value, "utf8").digest("hex")}`;
 const now = () => new Date().toISOString();
 const nextRevision = (run: SkillRunV2, state = run.state): SkillRunV2 => ({ ...run, state, revision: run.revision + 1, updatedAt: now() });
-const clone = <T>(value: T): T => structuredClone(value);
 const ledgerFor = (run: SkillRunV2, skillId: string) => run.skillLedgers.find((ledger) => ledger.skillId === skillId) ?? fail("run-integrity", `Unknown selected skill ${skillId}.`);
 const terminal = (ledger: SkillLedger) => ledger.outcome !== undefined;
 const allRead = (ledger: SkillLedger) => ledger.readReceipts.length === ledger.contentChunks.length;
@@ -80,13 +79,13 @@ export const createStrictSkillRun = (input: {
     const outcome = !selected.applicable ? "no-op" as const : selected.unmetPrerequisites.length > 0 ? "blocked" as const : undefined;
     return {
       skillId: selected.skillId, role: selected.role, mandatory: selected.mandatory, version: selected.version,
-      packageChecksum: selected.packageChecksum, contractChecksum: selected.contractChecksum, contract: clone(selected.contract),
-      schemaSnapshots: clone(selected.schemaSnapshots),
-      schemaChecksums: clone(selected.schemaChecksums),
-      input: clone(selected.input ?? {}),
+      packageChecksum: selected.packageChecksum, contractChecksum: selected.contractChecksum, contract: structuredClone(selected.contract),
+      schemaSnapshots: structuredClone(selected.schemaSnapshots),
+      schemaChecksums: structuredClone(selected.schemaChecksums),
+      input: structuredClone(selected.input ?? {}),
       state: outcome ?? "reading", applicability: { applicable: selected.applicable, unmetPrerequisites: [...selected.unmetPrerequisites] },
-      contentChunks: clone(selected.contentChunks), readReceipts: [],
-      steps: selected.contract.steps.map((step) => ({ ...clone(step), status: step.type === "repair" ? "skipped" : "pending", attempts: [] })),
+      contentChunks: structuredClone(selected.contentChunks), readReceipts: [],
+      steps: selected.contract.steps.map((step) => ({ ...structuredClone(step), status: step.type === "repair" ? "skipped" : "pending", attempts: [] })),
       repairIterations: 0, verificationReports: [], repairRequests: [], ...(outcome === undefined ? {} : { outcome }),
     };
   });
@@ -94,15 +93,15 @@ export const createStrictSkillRun = (input: {
   return {
     schemaVersion: "2.0", certification: "strict", runId: input.runId, domain: input.domain,
     targetAgent: input.targetAgent, locale: input.locale, state: skillLedgers.some((ledger) => !terminal(ledger)) ? "reading" : "planned",
-    revision: 0, createdAt: timestamp, updatedAt: timestamp, intent: clone(input.intent),
-    recommendations: clone(input.recommendations ?? input.selectedSkills.map(({ skillId, role }) => ({ skillId, role, strictCompatible: true }))),
-    excludedRecommendations: clone(input.excludedRecommendations ?? []), skillLedgers, artifacts: [],
-    sourceControl: clone(input.sourceControl ?? { mode: "non-git" }),
+    revision: 0, createdAt: timestamp, updatedAt: timestamp, intent: structuredClone(input.intent),
+    recommendations: structuredClone(input.recommendations ?? input.selectedSkills.map(({ skillId, role }) => ({ skillId, role, strictCompatible: true }))),
+    excludedRecommendations: structuredClone(input.excludedRecommendations ?? []), skillLedgers, artifacts: [],
+    sourceControl: structuredClone(input.sourceControl ?? { mode: "non-git" }),
   };
 };
 
 export const readNextStrictChunk = (source: SkillRunV2, skillId: string, deliveredAt = now()) => {
-  const run = clone(source);
+  const run = structuredClone(source);
   const ledger = ledgerFor(run, skillId);
   if (terminal(ledger)) fail("skill-content-unread", `Skill ${skillId} is already terminal.`);
   const chunk = ledger.contentChunks[ledger.readReceipts.length];
@@ -110,11 +109,11 @@ export const readNextStrictChunk = (source: SkillRunV2, skillId: string, deliver
   ledger.readReceipts.push({ path: chunk.path, ordinal: chunk.ordinal, total: chunk.total, sha256: chunk.sha256, deliveredAt });
   if (allRead(ledger)) ledger.state = "ready";
   const pendingRead = run.skillLedgers.some((candidate) => !terminal(candidate) && !allRead(candidate));
-  return { run: nextRevision(run, pendingRead ? "reading" : "ready"), chunk: clone(chunk) };
+  return { run: nextRevision(run, pendingRead ? "reading" : "ready"), chunk: structuredClone(chunk) };
 };
 
 export const beginStrictStep = (source: SkillRunV2, skillId: string, stepId: string): SkillRunV2 => {
-  const run = clone(source);
+  const run = structuredClone(source);
   const ledger = ledgerFor(run, skillId);
   if (!allRead(ledger)) fail("skill-content-unread", `Every mandatory content chunk for ${skillId} must be read.`);
   if (run.skillLedgers.some((candidate) => candidate.steps.some((step) => step.status === "active"))) fail("step-out-of-order", "Only one strict step may be active.");
@@ -127,7 +126,7 @@ export const beginStrictStep = (source: SkillRunV2, skillId: string, stepId: str
 };
 
 export const addStrictEvidence = (source: SkillRunV2, artifact: EvidenceArtifact): SkillRunV2 => {
-  const run = clone(source);
+  const run = structuredClone(source);
   if (run.artifacts.some(({ artifactId }) => artifactId === artifact.artifactId) || !shaPattern.test(artifact.sha256) || !safeRelative(artifact.path) || !Number.isInteger(artifact.size) || artifact.size < 0 || (artifact.sourceControl.mode !== "git" && artifact.sourceControl.mode !== "non-git")) {
     fail("artifact-integrity", `Invalid or duplicate evidence artifact ${artifact.artifactId}.`);
   }
@@ -142,7 +141,7 @@ export const addStrictEvidence = (source: SkillRunV2, artifact: EvidenceArtifact
     const unknown = attribution.ruleIds.find((id) => !knownRules.has(id));
     if (unknown) fail("unknown-rule-id", `Unknown canonical rule id ${unknown}.`);
   }
-  run.artifacts.push(clone(artifact));
+  run.artifacts.push(structuredClone(artifact));
   const producer = produced[0];
   const step = ledgerFor(run, producer.skillId).steps.find(({ id }) => id === producer.stepId)!;
   step.attempts.at(-1)!.evidenceIds.push(artifact.artifactId);
@@ -150,7 +149,7 @@ export const addStrictEvidence = (source: SkillRunV2, artifact: EvidenceArtifact
 };
 
 export const completeStrictStep = (source: SkillRunV2, skillId: string, stepId: string): SkillRunV2 => {
-  const run = clone(source);
+  const run = structuredClone(source);
   const ledger = ledgerFor(run, skillId);
   const step = ledger.steps.find(({ id }) => id === stepId) ?? fail("step-out-of-order", `Unknown step ${stepId}.`);
   const attempt = step.attempts.at(-1);
@@ -169,7 +168,7 @@ export const verifyStrictSkill = (source: SkillRunV2, skillId: string, input: St
   if (!input.artifactIntegrity.passed) {
     fail("artifact-integrity", input.artifactIntegrity.message ?? "Strict evidence integrity failed.");
   }
-  const run = clone(source);
+  const run = structuredClone(source);
   const ledger = ledgerFor(run, skillId);
   if (ledger.steps.some((step) => step.status === "active" || step.status === "pending")) fail("step-out-of-order", `Skill ${skillId} has incomplete workflow steps.`);
   const projection = deriveStrictCertificationProjection(run, ledger, input);

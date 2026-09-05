@@ -85,8 +85,6 @@ const strictRunResult = (run: SkillRunV2, extra: Record<string, unknown> = {}) =
   isError: false,
 });
 
-const asProjectRoot = (value: unknown) => resolveProjectRoot(value);
-
 const asStoreIntent = (value: unknown): boolean => {
   if (value === undefined) return false;
   if (typeof value === "boolean") return value;
@@ -132,7 +130,7 @@ const asArtifacts = (value: unknown): SkillRunArtifact[] => {
 };
 
 const startRun: McpToolHandler = async (args) => {
-  const projectRoot = asProjectRoot(args.projectRoot);
+  const projectRoot = resolveProjectRoot(args.projectRoot);
   const registryRoot = resolveRegistryRoot(args.registryRoot);
   const targetAgent = requireString(args.targetAgent, "targetAgent");
   const domainId = requireString(args.domain, "domain");
@@ -158,7 +156,7 @@ const startRun: McpToolHandler = async (args) => {
 };
 
 const readNextChunk: McpToolHandler = async (args) => {
-  const store = new StrictSkillRunStore(asProjectRoot(args.projectRoot));
+  const store = new StrictSkillRunStore(resolveProjectRoot(args.projectRoot));
   let delivered: ReturnType<typeof readNextStrictChunk> | undefined;
   const run = await store.update(requireString(args.runId, "runId"), (current) => {
     delivered = readNextStrictChunk(current, requireString(args.skillId, "skillId"));
@@ -168,7 +166,7 @@ const readNextChunk: McpToolHandler = async (args) => {
 };
 
 const beginStep: McpToolHandler = async (args) => {
-  const store = new StrictSkillRunStore(asProjectRoot(args.projectRoot));
+  const store = new StrictSkillRunStore(resolveProjectRoot(args.projectRoot));
   const run = await store.update(requireString(args.runId, "runId"), (current) => beginStrictStep(
     current, requireString(args.skillId, "skillId"), requireString(args.stepId, "stepId"),
   ));
@@ -176,7 +174,7 @@ const beginStep: McpToolHandler = async (args) => {
 };
 
 const addEvidence: McpToolHandler = async (args) => {
-  const store = new StrictSkillRunStore(asProjectRoot(args.projectRoot));
+  const store = new StrictSkillRunStore(resolveProjectRoot(args.projectRoot));
   const runId = requireString(args.runId, "runId");
   const skillId = requireString(args.skillId, "skillId");
   const stepId = requireString(args.stepId, "stepId");
@@ -198,7 +196,7 @@ const addEvidence: McpToolHandler = async (args) => {
 };
 
 const completeStep: McpToolHandler = async (args) => {
-  const store = new StrictSkillRunStore(asProjectRoot(args.projectRoot));
+  const store = new StrictSkillRunStore(resolveProjectRoot(args.projectRoot));
   const run = await store.update(requireString(args.runId, "runId"), (current) => completeStrictStep(
     current, requireString(args.skillId, "skillId"), requireString(args.stepId, "stepId"),
   ));
@@ -206,7 +204,7 @@ const completeStep: McpToolHandler = async (args) => {
 };
 
 const verifyStrict: McpToolHandler = async (args) => {
-  const store = new StrictSkillRunStore(asProjectRoot(args.projectRoot));
+  const store = new StrictSkillRunStore(resolveProjectRoot(args.projectRoot));
   const run = await store.verifySkill(requireString(args.runId, "runId"), requireString(args.skillId, "skillId"));
   return strictRunResult(run);
 };
@@ -216,7 +214,7 @@ const verifyStrict: McpToolHandler = async (args) => {
 // finalizeStrictRunRefreshingDiversificationLog is shared with the CLI surface so the two cannot
 // disagree about either the blocked-run reply or the post-finalize diversification-log refresh.
 const finalizeStrict: McpToolHandler = async (args) => {
-  const projectRoot = asProjectRoot(args.projectRoot);
+  const projectRoot = resolveProjectRoot(args.projectRoot);
   const store = new StrictSkillRunStore(projectRoot);
   return strictRunResult(await finalizeStrictRunRefreshingDiversificationLog(
     projectRoot,
@@ -226,7 +224,7 @@ const finalizeStrict: McpToolHandler = async (args) => {
 };
 
 const recordRead: McpToolHandler = async (args) => runResult(await recordSkillRead(
-  new SkillRunStore(asProjectRoot(args.projectRoot)),
+  new SkillRunStore(resolveProjectRoot(args.projectRoot)),
   requireString(args.runId, "runId"),
   {
     skillId: requireString(args.skillId, "skillId"),
@@ -235,7 +233,7 @@ const recordRead: McpToolHandler = async (args) => runResult(await recordSkillRe
 ));
 
 const resolveClarifications: McpToolHandler = async (args) => runResult(await resolveSkillRunClarifications(
-  new SkillRunStore(asProjectRoot(args.projectRoot)),
+  new SkillRunStore(resolveProjectRoot(args.projectRoot)),
   requireString(args.runId, "runId"),
   {
     answers: asClarificationAnswers(args.answers),
@@ -245,7 +243,7 @@ const resolveClarifications: McpToolHandler = async (args) => runResult(await re
 ));
 
 const beginExecution: McpToolHandler = async (args) => runResult(await startSkillRunExecution(
-  new SkillRunStore(asProjectRoot(args.projectRoot)),
+  new SkillRunStore(resolveProjectRoot(args.projectRoot)),
   requireString(args.runId, "runId"),
 ));
 
@@ -257,7 +255,7 @@ const completeRun: McpToolHandler = async (args) => {
     });
   }
   const completed = await completeSkillRun(
-    new SkillRunStore(asProjectRoot(args.projectRoot)),
+    new SkillRunStore(resolveProjectRoot(args.projectRoot)),
     requireString(args.runId, "runId"),
     { status, artifacts: asArtifacts(args.artifacts) },
   );
@@ -275,7 +273,7 @@ const completeRun: McpToolHandler = async (args) => {
 };
 
 const verifyRun: McpToolHandler = async (args) => runResult(await verifySkillRun(
-  new SkillRunStore(asProjectRoot(args.projectRoot)),
+  new SkillRunStore(resolveProjectRoot(args.projectRoot)),
   requireString(args.runId, "runId"),
   {
     reportPath: requireString(args.reportPath, "reportPath"),
@@ -284,7 +282,7 @@ const verifyRun: McpToolHandler = async (args) => runResult(await verifySkillRun
 ));
 
 const inspectRun: McpToolHandler = async (args) => {
-  const projectRoot = asProjectRoot(args.projectRoot);
+  const projectRoot = resolveProjectRoot(args.projectRoot);
   const runId = requireString(args.runId, "runId");
   if (!/^run_[a-z0-9_-]{7,127}$/.test(runId)) throw new McpToolError("run-integrity", `Invalid run id ${runId}.`);
   let persisted: { schemaVersion?: unknown };

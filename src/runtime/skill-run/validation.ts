@@ -63,10 +63,6 @@ export const deriveVerificationReportFile = (report: VerificationReport): { cont
   return { content, digest };
 };
 
-export const verificationReportFileDigest = (report: VerificationReport): string => deriveVerificationReportFile(report).digest;
-
-export const verificationReportFileContent = (report: VerificationReport): string => deriveVerificationReportFile(report).content;
-
 const fail: (message: string) => never = (message) => {
   throw new SkillRunError("run-integrity", message);
 };
