@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { RunFileLock } from "../run-lock.ts";
+import { RunStore } from "../run-store.ts";
 import { addStrictEvidence, verifyStrictSkill } from "./reducer.ts";
 import { assertValidCriticReportV2, criticReportV2RequiredFields } from "./critic.ts";
 import { validateJsonSchema } from "./json-schema.ts";
@@ -48,7 +48,7 @@ const finalizeStrictRun = (source: SkillRunV2): SkillRunV2 => {
 
 export class StrictSkillRunStore {
   private readonly projectRoot: string;
-  private readonly lock: RunFileLock;
+  private readonly core: RunStore<SkillRunV2>;
   private readonly trustedValidatorRegistry: TrustedValidatorRegistryResolver;
 
   constructor(
@@ -57,52 +57,31 @@ export class StrictSkillRunStore {
   ) {
     this.projectRoot = projectRoot;
     this.trustedValidatorRegistry = trustedValidatorRegistry;
-    this.lock = new RunFileLock({
-      lockPath: (runId) => `${this.runPath(runId).slice(0, -5)}.lock`,
-      error: (message) => new StrictSkillRunError("run-integrity", message),
+    this.core = new RunStore(projectRoot, {
+      runIdPattern: /^run_[a-z0-9_-]{7,127}$/,
+      assertValidRun: assertValidStrictSkillRun,
+      error: {
+        invalidRunId: (runId) => new StrictSkillRunError("run-integrity", `Invalid run id ${runId}.`),
+        notFound: (runId) => new StrictSkillRunError("run-not-found", `Strict run not found: ${runId}.`),
+        invalidJson: (runId) => new StrictSkillRunError("run-integrity", `Strict run ${runId} is not valid JSON.`),
+        idMismatch: () => new StrictSkillRunError("run-integrity", "Persisted strict run id mismatch."),
+        lock: (message) => new StrictSkillRunError("run-integrity", message),
+      },
+      write: { unlinkCleanup: "ignore-all" },
     });
   }
 
-  private runPath(runId: string) {
-    if (!/^run_[a-z0-9_-]{7,127}$/.test(runId)) throw new StrictSkillRunError("run-integrity", `Invalid run id ${runId}.`);
-    return path.join(this.projectRoot, ".skillranger", "runs", `${runId}.json`);
-  }
-
-  private async readUnlocked(runId: string): Promise<SkillRunV2> {
-    let parsed: unknown;
-    try { parsed = JSON.parse(await readFile(this.runPath(runId), "utf8")); }
-    catch (error) {
-      if (errno(error, "ENOENT")) throw new StrictSkillRunError("run-not-found", `Strict run not found: ${runId}.`);
-      if (error instanceof SyntaxError) throw new StrictSkillRunError("run-integrity", `Strict run ${runId} is not valid JSON.`);
-      throw error;
-    }
-    assertValidStrictSkillRun(parsed);
-    if (parsed.runId !== runId) throw new StrictSkillRunError("run-integrity", "Persisted strict run id mismatch.");
-    return parsed;
-  }
-
-  private async writeUnlocked(run: SkillRunV2) {
-    assertValidStrictSkillRun(run);
-    const target = this.runPath(run.runId);
-    const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
-    await mkdir(path.dirname(target), { recursive: true });
-    try {
-      await writeFile(temporary, `${JSON.stringify(run, null, 2)}\n`, { flag: "wx" });
-      await rename(temporary, target);
-    } finally { await unlink(temporary).catch(() => undefined); }
-  }
-
   async create(run: SkillRunV2) {
-    const lock = await this.lock.acquire(run.runId);
+    const lock = await this.core.lock.acquire(run.runId);
     try {
-      try { await stat(this.runPath(run.runId)); throw new StrictSkillRunError("run-integrity", `Strict run already exists: ${run.runId}.`); }
+      try { await stat(this.core.runPath(run.runId)); throw new StrictSkillRunError("run-integrity", `Strict run already exists: ${run.runId}.`); }
       catch (error) { if (!errno(error, "ENOENT")) throw error; }
-      await this.writeUnlocked(run);
+      await this.core.writeUnlocked(run);
       return run;
-    } finally { await this.lock.release(lock); }
+    } finally { await this.core.lock.release(lock); }
   }
 
-  async read(runId: string) { return this.readUnlocked(runId); }
+  async read(runId: string) { return this.core.readUnlocked(runId); }
 
   /**
    * Read-only verified-runs enumeration: returns every persisted run in the terminal verified state
@@ -127,7 +106,7 @@ export class StrictSkillRunStore {
       if (!/^run_[a-z0-9_-]{7,127}$/.test(runId)) continue;
       let run: SkillRunV2;
       try {
-        run = await this.readUnlocked(runId);
+        run = await this.core.readUnlocked(runId);
       } catch {
         continue;
       }
@@ -159,27 +138,27 @@ export class StrictSkillRunStore {
 
   async replace(runId: string, run: SkillRunV2) {
     if (run.runId !== runId) throw new StrictSkillRunError("run-integrity", "A strict runtime replacement cannot change the run ID.");
-    const lock = await this.lock.acquire(runId);
+    const lock = await this.core.lock.acquire(runId);
     try {
-      const current = await this.readUnlocked(runId);
+      const current = await this.core.readUnlocked(runId);
       if (run.revision <= current.revision) throw new StrictSkillRunError("run-integrity", "A strict runtime replacement must advance the revision.");
-      await this.writeUnlocked(run);
+      await this.core.writeUnlocked(run);
       return run;
-    } finally { await this.lock.release(lock); }
+    } finally { await this.core.lock.release(lock); }
   }
 
   async update(runId: string, apply: (run: SkillRunV2) => SkillRunV2 | Promise<SkillRunV2>) {
-    const lock = await this.lock.acquire(runId);
+    const lock = await this.core.lock.acquire(runId);
     try {
-      const current = await this.readUnlocked(runId);
+      const current = await this.core.readUnlocked(runId);
       const next = await apply(structuredClone(current));
       if (next.runId !== runId || next.revision <= current.revision) throw new StrictSkillRunError("run-integrity", "Strict update must preserve id and advance revision.");
       if (current.state !== "verified" && next.state === "verified") {
         throw new StrictSkillRunError("run-integrity", "Strict certification must be finalized by the run store.");
       }
-      await this.writeUnlocked(next);
+      await this.core.writeUnlocked(next);
       return next;
-    } finally { await this.lock.release(lock); }
+    } finally { await this.core.lock.release(lock); }
   }
 
   async ingestEvidence(runId: string, input: {
@@ -274,9 +253,9 @@ export class StrictSkillRunStore {
   }
 
   async finalizeRun(runId: string) {
-    const lock = await this.lock.acquire(runId);
+    const lock = await this.core.lock.acquire(runId);
     try {
-      const current = await this.readUnlocked(runId);
+      const current = await this.core.readUnlocked(runId);
       // Only finalization itself produces "verified" (reducer transitions never do), so that state
       // alone proves the checks below already passed; repeating them could newly fail against
       // evidence legitimately pruned after success. A blocked state proves nothing: exhausting the
@@ -303,8 +282,8 @@ export class StrictSkillRunStore {
       // A repeat finalize of an already-blocked record changes nothing but revision and updatedAt;
       // skip the write so retried blocked finalizes cannot drift the terminal record.
       if (finalized.state === current.state) return current;
-      await this.writeUnlocked(finalized);
+      await this.core.writeUnlocked(finalized);
       return finalized;
-    } finally { await this.lock.release(lock); }
+    } finally { await this.core.lock.release(lock); }
   }
 }
