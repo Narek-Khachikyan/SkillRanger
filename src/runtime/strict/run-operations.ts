@@ -9,7 +9,7 @@ import { deriveStrictValidatorResults } from "./verification.ts";
 import { deriveStrictCertificationProjection, strictCertificationMatches } from "./certification.ts";
 import { captureSourceControl } from "./git.ts";
 import { ContainedFileReadError, readContainedFile } from "./contained-file.ts";
-import { resolveTrustedValidatorRegistry, type TrustedValidatorRegistryResolver } from "./validator-registry.ts";
+import type { TrustedValidatorRegistryResolver } from "./validator-registry.ts";
 import type { StrictSkillRunStore } from "./store.ts";
 
 const errno = (error: unknown, code: string) => typeof error === "object" && error !== null && (error as { code?: unknown }).code === code;
@@ -189,13 +189,12 @@ export async function verifySkill(
   store: StrictSkillRunStore,
   runId: string,
   skillId: string,
-  trustedValidatorRegistry: TrustedValidatorRegistryResolver = resolveTrustedValidatorRegistry,
+  trustedValidatorRegistry: TrustedValidatorRegistryResolver,
 ): Promise<SkillRunV2> {
-  const registryResolver = (store as unknown as { trustedValidatorRegistry?: TrustedValidatorRegistryResolver }).trustedValidatorRegistry ?? trustedValidatorRegistry;
   return store.update(runId, async (run) => {
     const ledger = run.skillLedgers.find((candidate) => candidate.skillId === skillId);
     if (!ledger) throw new StrictSkillRunError("run-integrity", `Unknown selected skill ${skillId}.`);
-    const registry = registryResolver(run);
+    const registry = trustedValidatorRegistry(run);
     const verifiedRuns = await store.listVerifiedRuns();
     const derivation = await deriveStrictValidatorResults(store.projectRoot, run, ledger, undefined, registry, { verifiedRuns });
     return verifyStrictSkill(run, skillId, derivation);
@@ -205,9 +204,8 @@ export async function verifySkill(
 export async function finalizeRun(
   store: StrictSkillRunStore,
   runId: string,
-  trustedValidatorRegistry: TrustedValidatorRegistryResolver = resolveTrustedValidatorRegistry,
+  trustedValidatorRegistry: TrustedValidatorRegistryResolver,
 ): Promise<SkillRunV2> {
-  const registryResolver = (store as unknown as { trustedValidatorRegistry?: TrustedValidatorRegistryResolver }).trustedValidatorRegistry ?? trustedValidatorRegistry;
   const lock = await store.lock.acquire(runId);
   try {
     const current = await store.readUnlocked(runId);
@@ -217,7 +215,7 @@ export async function finalizeRun(
     // last skill's repair budget yields blocked with every outcome terminal before any
     // finalization ran, so blocked runs must always re-run the used-ledger integrity checks.
     if (current.state === "verified") return current;
-    const registry = registryResolver(current);
+    const registry = trustedValidatorRegistry(current);
     const verifiedRuns = await store.listVerifiedRuns();
     for (const ledger of current.skillLedgers) {
       if (ledger.outcome !== "used") continue;

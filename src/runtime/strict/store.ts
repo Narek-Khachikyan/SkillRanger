@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { RunStore } from "../run-store.ts";
 import { assertValidStrictSkillRun } from "./validation.ts";
@@ -53,13 +53,9 @@ export class StrictSkillRunStore {
   }
 
   async create(run: SkillRunV2) {
-    const lock = await this.core.lock.acquire(run.runId);
-    try {
-      try { await stat(this.core.runPath(run.runId)); throw new StrictSkillRunError("run-integrity", `Strict run already exists: ${run.runId}.`); }
-      catch (error) { if (!errno(error, "ENOENT")) throw error; }
-      await this.core.writeUnlocked(run);
-      return run;
-    } finally { await this.core.lock.release(lock); }
+    return this.core.create(run, {
+      alreadyExists: (runId) => new StrictSkillRunError("run-integrity", `Strict run already exists: ${runId}.`),
+    });
   }
 
   async read(runId: string) { return this.core.readUnlocked(runId); }
@@ -118,28 +114,20 @@ export class StrictSkillRunStore {
   }
 
   async replace(runId: string, run: SkillRunV2) {
-    if (run.runId !== runId) throw new StrictSkillRunError("run-integrity", "A strict runtime replacement cannot change the run ID.");
-    const lock = await this.core.lock.acquire(runId);
-    try {
-      const current = await this.core.readUnlocked(runId);
-      if (run.revision <= current.revision) throw new StrictSkillRunError("run-integrity", "A strict runtime replacement must advance the revision.");
-      await this.core.writeUnlocked(run);
-      return run;
-    } finally { await this.core.lock.release(lock); }
+    return this.core.replace(runId, run, {
+      idMismatch: () => new StrictSkillRunError("run-integrity", "A strict runtime replacement cannot change the run ID."),
+      notAdvanced: () => new StrictSkillRunError("run-integrity", "A strict runtime replacement must advance the revision."),
+    });
   }
 
   async update(runId: string, apply: (run: SkillRunV2) => SkillRunV2 | Promise<SkillRunV2>) {
-    const lock = await this.core.lock.acquire(runId);
-    try {
-      const current = await this.core.readUnlocked(runId);
-      const next = await apply(structuredClone(current));
-      if (next.runId !== runId || next.revision <= current.revision) throw new StrictSkillRunError("run-integrity", "Strict update must preserve id and advance revision.");
-      if (current.state !== "verified" && next.state === "verified") {
-        throw new StrictSkillRunError("run-integrity", "Strict certification must be finalized by the run store.");
-      }
-      await this.core.writeUnlocked(next);
-      return next;
-    } finally { await this.core.lock.release(lock); }
+    return this.core.update(runId, apply, {
+      prepareNext: (current, next) => {
+        if (next.runId !== runId || next.revision <= current.revision) throw new StrictSkillRunError("run-integrity", "Strict update must preserve id and advance revision.");
+        if (current.state !== "verified" && next.state === "verified") throw new StrictSkillRunError("run-integrity", "Strict certification must be finalized by the run store.");
+        return next;
+      },
+    });
   }
 
   async ingestEvidence(runId: string, input: {

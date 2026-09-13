@@ -1,7 +1,5 @@
 import { getDomainPack } from "../domains/registry.ts";
-import { persistedRunRuntime, readPersistedRun } from "../runtime/persisted-run.ts";
-import { SkillRunError } from "../runtime/skill-run/types.ts";
-import { StrictSkillRunError } from "../runtime/strict/types.ts";
+import { PersistedRunReadError, persistedRunRuntime, readPersistedRun } from "../runtime/persisted-run.ts";
 import type { Recommendation } from "../types.ts";
 import { isCoreDomainSkill } from "./metadata.ts";
 import { createSkillRun, reduceSkillRun } from "../runtime/skill-run/reducer.ts";
@@ -149,8 +147,7 @@ export const createRouterRuntimeBridge = (projectRoot: string, registryRoot: str
         const persisted = await readPersistedRun(projectRoot, runId);
         return persisted.run as unknown;
       } catch (error) {
-        if (error instanceof SkillRunError && error.code === "run-not-found") return undefined;
-        if (error instanceof StrictSkillRunError && error.code === "run-not-found") return undefined;
+        if (error instanceof PersistedRunReadError && error.code === "run-not-found") return undefined;
         throw error;
       }
     },
