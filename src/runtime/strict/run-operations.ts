@@ -1,15 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { addStrictEvidence, verifyStrictSkill } from "./reducer.ts";
+import { addStrictEvidence, beginStrictStep, completeStrictStep, readNextStrictChunk, verifyStrictSkill } from "./reducer.ts";
 import { assertValidCriticReportV2, criticReportV2RequiredFields } from "./critic.ts";
 import { validateJsonSchema } from "./json-schema.ts";
-import { StrictSkillRunError, type EvidenceArtifact, type SkillRunV2 } from "./types.ts";
+import { StrictSkillRunError, type EvidenceArtifact, type EvidenceAttribution, type SkillContentChunk, type SkillRunV2 } from "./types.ts";
 import { deriveStrictValidatorResults } from "./verification.ts";
 import { deriveStrictCertificationProjection, strictCertificationMatches } from "./certification.ts";
 import { captureSourceControl } from "./git.ts";
 import { ContainedFileReadError, readContainedFile } from "./contained-file.ts";
-import type { TrustedValidatorRegistryResolver } from "./validator-registry.ts";
+import { resolveTrustedValidatorRegistry, type TrustedValidatorRegistryResolver } from "./validator-registry.ts";
 import type { StrictSkillRunStore } from "./store.ts";
 
 const errno = (error: unknown, code: string) => typeof error === "object" && error !== null && (error as { code?: unknown }).code === code;
@@ -129,16 +129,73 @@ export async function ingestEvidence(
   }
 }
 
+export async function readNextChunk(
+  store: StrictSkillRunStore,
+  runId: string,
+  skillId: string,
+): Promise<{ run: SkillRunV2; chunk: SkillContentChunk }> {
+  let delivered: ReturnType<typeof readNextStrictChunk> | undefined;
+  const run = await store.update(runId, (current) => {
+    delivered = readNextStrictChunk(current, skillId);
+    return delivered.run;
+  });
+  return { run, chunk: delivered!.chunk };
+}
+
+export async function beginStep(
+  store: StrictSkillRunStore,
+  runId: string,
+  skillId: string,
+  stepId: string,
+): Promise<SkillRunV2> {
+  return store.update(runId, (current) => beginStrictStep(current, skillId, stepId));
+}
+
+export async function completeStep(
+  store: StrictSkillRunStore,
+  runId: string,
+  skillId: string,
+  stepId: string,
+): Promise<SkillRunV2> {
+  return store.update(runId, (current) => completeStrictStep(current, skillId, stepId));
+}
+
+export async function addStepEvidence(
+  store: StrictSkillRunStore,
+  runId: string,
+  skillId: string,
+  stepId: string,
+  input: {
+    sourcePath: string;
+    kind: string;
+    validatedAs?: EvidenceArtifact["validatedAs"];
+    relation: EvidenceAttribution["relation"];
+    ruleIds: string[];
+  },
+): Promise<SkillRunV2> {
+  const current = await store.read(runId);
+  const step = current.skillLedgers.find((ledger) => ledger.skillId === skillId)?.steps.find(({ id }) => id === stepId);
+  const attempt = step?.attempts.at(-1)?.attempt;
+  if (step?.status !== "active" || attempt === undefined) throw new StrictSkillRunError("step-out-of-order", `Step ${stepId} is not active.`);
+  return ingestEvidence(store, runId, {
+    sourcePath: input.sourcePath,
+    kind: input.kind,
+    ...(input.validatedAs === undefined ? {} : { validatedAs: input.validatedAs }),
+    attributions: [{ skillId, stepId, attempt, relation: input.relation, ruleIds: input.ruleIds }],
+  });
+}
+
 export async function verifySkill(
   store: StrictSkillRunStore,
   runId: string,
   skillId: string,
-  trustedValidatorRegistry: TrustedValidatorRegistryResolver,
+  trustedValidatorRegistry: TrustedValidatorRegistryResolver = resolveTrustedValidatorRegistry,
 ): Promise<SkillRunV2> {
+  const registryResolver = (store as unknown as { trustedValidatorRegistry?: TrustedValidatorRegistryResolver }).trustedValidatorRegistry ?? trustedValidatorRegistry;
   return store.update(runId, async (run) => {
     const ledger = run.skillLedgers.find((candidate) => candidate.skillId === skillId);
     if (!ledger) throw new StrictSkillRunError("run-integrity", `Unknown selected skill ${skillId}.`);
-    const registry = trustedValidatorRegistry(run);
+    const registry = registryResolver(run);
     const verifiedRuns = await store.listVerifiedRuns();
     const derivation = await deriveStrictValidatorResults(store.projectRoot, run, ledger, undefined, registry, { verifiedRuns });
     return verifyStrictSkill(run, skillId, derivation);
@@ -148,8 +205,9 @@ export async function verifySkill(
 export async function finalizeRun(
   store: StrictSkillRunStore,
   runId: string,
-  trustedValidatorRegistry: TrustedValidatorRegistryResolver,
+  trustedValidatorRegistry: TrustedValidatorRegistryResolver = resolveTrustedValidatorRegistry,
 ): Promise<SkillRunV2> {
+  const registryResolver = (store as unknown as { trustedValidatorRegistry?: TrustedValidatorRegistryResolver }).trustedValidatorRegistry ?? trustedValidatorRegistry;
   const lock = await store.lock.acquire(runId);
   try {
     const current = await store.readUnlocked(runId);
@@ -159,7 +217,7 @@ export async function finalizeRun(
     // last skill's repair budget yields blocked with every outcome terminal before any
     // finalization ran, so blocked runs must always re-run the used-ledger integrity checks.
     if (current.state === "verified") return current;
-    const registry = trustedValidatorRegistry(current);
+    const registry = registryResolver(current);
     const verifiedRuns = await store.listVerifiedRuns();
     for (const ledger of current.skillLedgers) {
       if (ledger.outcome !== "used") continue;
