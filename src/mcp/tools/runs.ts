@@ -1,6 +1,5 @@
-import path from "node:path";
-import { readFile } from "node:fs/promises";
 import "../../domains/bundled.ts";
+import { readPersistedRun } from "../../runtime/persisted-run.ts";
 import { startPreparedSkillRun } from "../../runs/start.ts";
 import {
   completeSkillRun,
@@ -285,16 +284,9 @@ const inspectRun: McpToolHandler = async (args) => {
   const projectRoot = resolveProjectRoot(args.projectRoot);
   const runId = requireString(args.runId, "runId");
   if (!/^run_[a-z0-9_-]{7,127}$/.test(runId)) throw new McpToolError("run-integrity", `Invalid run id ${runId}.`);
-  let persisted: { schemaVersion?: unknown };
-  try { persisted = JSON.parse(await readFile(path.join(projectRoot, ".skillranger", "runs", `${runId}.json`), "utf8")) as { schemaVersion?: unknown }; }
-  catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") throw new McpToolError("run-not-found", `Skill run not found: ${runId}.`);
-    throw new McpToolError("run-integrity", `Skill run ${runId} is not valid persisted JSON.`);
-  }
-  if (persisted.schemaVersion === "2.0") {
-    return strictRunResult(await new StrictSkillRunStore(projectRoot).read(runId));
-  }
-  const run = await new SkillRunStore(projectRoot).read(runId);
+  const persisted = await readPersistedRun(projectRoot, runId);
+  if (persisted.runtime === "strict-v2") return strictRunResult(persisted.run);
+  const run = persisted.run;
   const result = runResult(run);
   const notice = verificationNoticeFor(run);
   // The structured content stays exactly the persisted run: it is the source of truth outcome
