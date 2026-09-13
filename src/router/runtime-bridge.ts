@@ -1,6 +1,7 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { getDomainPack } from "../domains/registry.ts";
+import { persistedRunRuntime, readPersistedRun } from "../runtime/persisted-run.ts";
+import { SkillRunError } from "../runtime/skill-run/types.ts";
+import { StrictSkillRunError } from "../runtime/strict/types.ts";
 import type { Recommendation } from "../types.ts";
 import { isCoreDomainSkill } from "./metadata.ts";
 import { createSkillRun, reduceSkillRun } from "../runtime/skill-run/reducer.ts";
@@ -144,20 +145,22 @@ export const createRouterRuntimeBridge = (projectRoot: string, registryRoot: str
   createLifecyclePayload,
   createRuntimeStore: () => ({
     async read(runId: string) {
-      const file = path.join(projectRoot, ".skillranger", "runs", `${runId}.json`);
-      try { return JSON.parse(await readFile(file, "utf8")) as unknown; }
-      catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      try {
+        const persisted = await readPersistedRun(projectRoot, runId);
+        return persisted.run as unknown;
+      } catch (error) {
+        if (error instanceof SkillRunError && error.code === "run-not-found") return undefined;
+        if (error instanceof StrictSkillRunError && error.code === "run-not-found") return undefined;
         throw error;
       }
     },
     async create(runId: string, value: unknown) {
-      if ((value as { schemaVersion?: string }).schemaVersion === "2.0") await new StrictSkillRunStore(projectRoot).create(value as SkillRunV2);
+      if (persistedRunRuntime(value) === "strict-v2") await new StrictSkillRunStore(projectRoot).create(value as SkillRunV2);
       else await new SkillRunStore(projectRoot).create(value as SkillRun);
       if ((value as { runId?: string }).runId !== runId) throw new RouterPrepareError("routing-integrity", "Runtime ID does not match the preallocated journal ID.");
     },
     async replace(runId: string, value: unknown) {
-      if ((value as { schemaVersion?: string }).schemaVersion === "2.0") await new StrictSkillRunStore(projectRoot).replace(runId, value as SkillRunV2);
+      if (persistedRunRuntime(value) === "strict-v2") await new StrictSkillRunStore(projectRoot).replace(runId, value as SkillRunV2);
       else await new SkillRunStore(projectRoot).replace(runId, value as SkillRun);
     },
   }),
