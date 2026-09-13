@@ -1,6 +1,5 @@
-import path from "node:path";
-import { readFile } from "node:fs/promises";
 import "../../domains/bundled.ts";
+import { PersistedRunReadError, readPersistedRun } from "../../runtime/persisted-run.ts";
 import { startPreparedSkillRun } from "../../runs/start.ts";
 import {
   completeSkillRun,
@@ -19,15 +18,20 @@ import {
 import type { VerificationReport } from "../../runtime/types.ts";
 import { verificationReportInputSchema } from "../../runtime/skill-run/report-schema.ts";
 import {
-  beginStrictStep,
-  completeStrictStep,
-  readNextStrictChunk,
   startPreparedStrictSkillRun,
   StrictSkillRunError,
   StrictSkillRunStore,
   type SkillRunV2,
   type StrictSkillRunErrorCode,
 } from "../../runtime/strict/index.ts";
+import {
+  addStepEvidence,
+  beginStep as beginStrictStepService,
+  completeStep as completeStrictStepService,
+  readNextChunk as readNextChunkService,
+  verifySkill as verifyStrictSkillService,
+} from "../../runtime/strict/run-operations.ts";
+import { resolveTrustedValidatorRegistry } from "../../runtime/strict/validator-registry.ts";
 import { McpToolError, mcpToolEffects, type JsonObject, type McpToolDefinition, type McpToolErrorCode, type McpToolHandler } from "./types.ts";
 import {
   projectRootProperty,
@@ -157,55 +161,67 @@ const startRun: McpToolHandler = async (args) => {
 
 const readNextChunk: McpToolHandler = async (args) => {
   const store = new StrictSkillRunStore(resolveProjectRoot(args.projectRoot));
-  let delivered: ReturnType<typeof readNextStrictChunk> | undefined;
-  const run = await store.update(requireString(args.runId, "runId"), (current) => {
-    delivered = readNextStrictChunk(current, requireString(args.skillId, "skillId"));
-    return delivered.run;
-  });
-  return strictRunResult(run, { chunk: delivered!.chunk });
+  const { run, chunk } = await readNextChunkService(
+    store,
+    requireString(args.runId, "runId"),
+    requireString(args.skillId, "skillId"),
+  );
+  return strictRunResult(run, { chunk });
 };
 
 const beginStep: McpToolHandler = async (args) => {
   const store = new StrictSkillRunStore(resolveProjectRoot(args.projectRoot));
-  const run = await store.update(requireString(args.runId, "runId"), (current) => beginStrictStep(
-    current, requireString(args.skillId, "skillId"), requireString(args.stepId, "stepId"),
-  ));
+  const run = await beginStrictStepService(
+    store,
+    requireString(args.runId, "runId"),
+    requireString(args.skillId, "skillId"),
+    requireString(args.stepId, "stepId"),
+  );
   return strictRunResult(run);
 };
 
 const addEvidence: McpToolHandler = async (args) => {
   const store = new StrictSkillRunStore(resolveProjectRoot(args.projectRoot));
-  const runId = requireString(args.runId, "runId");
-  const skillId = requireString(args.skillId, "skillId");
-  const stepId = requireString(args.stepId, "stepId");
-  const current = await store.read(runId);
-  const step = current.skillLedgers.find((ledger) => ledger.skillId === skillId)?.steps.find(({ id }) => id === stepId);
-  const attempt = step?.attempts.at(-1)?.attempt;
-  if (step?.status !== "active" || attempt === undefined) throw new StrictSkillRunError("step-out-of-order", `Step ${stepId} is not active.`);
   const relation = args.relation === undefined ? "produced" : requireString(args.relation, "relation");
   if (relation !== "produced" && relation !== "informed" && relation !== "verified") throw new McpToolError("invalid-arguments", "relation must be produced, informed, or verified.");
   const validatedAs = args.validatedAs === undefined ? undefined : requireString(args.validatedAs, "validatedAs");
   if (validatedAs !== undefined && validatedAs !== "input" && validatedAs !== "output" && validatedAs !== "critic-report") {
     throw new McpToolError("invalid-arguments", "validatedAs must be input, output, or critic-report.");
   }
-  return strictRunResult(await store.ingestEvidence(runId, {
-    sourcePath: requireString(args.sourcePath, "sourcePath"), kind: requireString(args.kind, "kind"),
-    ...(validatedAs === undefined ? {} : { validatedAs }),
-    attributions: [{ skillId, stepId, attempt, relation, ruleIds: requireStringArray(args.ruleIds, "ruleIds") }],
-  }));
+  return strictRunResult(await addStepEvidence(
+    store,
+    requireString(args.runId, "runId"),
+    requireString(args.skillId, "skillId"),
+    requireString(args.stepId, "stepId"),
+    {
+      sourcePath: requireString(args.sourcePath, "sourcePath"),
+      kind: requireString(args.kind, "kind"),
+      ...(validatedAs === undefined ? {} : { validatedAs }),
+      relation: relation as "produced" | "informed" | "verified",
+      ruleIds: requireStringArray(args.ruleIds, "ruleIds"),
+    },
+  ));
 };
 
 const completeStep: McpToolHandler = async (args) => {
   const store = new StrictSkillRunStore(resolveProjectRoot(args.projectRoot));
-  const run = await store.update(requireString(args.runId, "runId"), (current) => completeStrictStep(
-    current, requireString(args.skillId, "skillId"), requireString(args.stepId, "stepId"),
-  ));
+  const run = await completeStrictStepService(
+    store,
+    requireString(args.runId, "runId"),
+    requireString(args.skillId, "skillId"),
+    requireString(args.stepId, "stepId"),
+  );
   return strictRunResult(run);
 };
 
 const verifyStrict: McpToolHandler = async (args) => {
   const store = new StrictSkillRunStore(resolveProjectRoot(args.projectRoot));
-  const run = await store.verifySkill(requireString(args.runId, "runId"), requireString(args.skillId, "skillId"));
+  const run = await verifyStrictSkillService(
+    store,
+    requireString(args.runId, "runId"),
+    requireString(args.skillId, "skillId"),
+    resolveTrustedValidatorRegistry,
+  );
   return strictRunResult(run);
 };
 
@@ -285,16 +301,18 @@ const inspectRun: McpToolHandler = async (args) => {
   const projectRoot = resolveProjectRoot(args.projectRoot);
   const runId = requireString(args.runId, "runId");
   if (!/^run_[a-z0-9_-]{7,127}$/.test(runId)) throw new McpToolError("run-integrity", `Invalid run id ${runId}.`);
-  let persisted: { schemaVersion?: unknown };
-  try { persisted = JSON.parse(await readFile(path.join(projectRoot, ".skillranger", "runs", `${runId}.json`), "utf8")) as { schemaVersion?: unknown }; }
-  catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") throw new McpToolError("run-not-found", `Skill run not found: ${runId}.`);
-    throw new McpToolError("run-integrity", `Skill run ${runId} is not valid persisted JSON.`);
+  let persisted: Awaited<ReturnType<typeof readPersistedRun>>;
+  try {
+    persisted = await readPersistedRun(projectRoot, runId);
+  } catch (error) {
+    if (error instanceof PersistedRunReadError) {
+      if (error.code === "run-not-found") throw new McpToolError("run-not-found", error.message);
+      throw new McpToolError("run-integrity", error.message);
+    }
+    throw error;
   }
-  if (persisted.schemaVersion === "2.0") {
-    return strictRunResult(await new StrictSkillRunStore(projectRoot).read(runId));
-  }
-  const run = await new SkillRunStore(projectRoot).read(runId);
+  if (persisted.runtime === "strict-v2") return strictRunResult(persisted.run);
+  const run = persisted.run;
   const result = runResult(run);
   const notice = verificationNoticeFor(run);
   // The structured content stays exactly the persisted run: it is the source of truth outcome
