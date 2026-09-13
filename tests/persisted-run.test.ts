@@ -15,7 +15,7 @@ import {
 } from "../src/runtime/strict/index.ts";
 import { StrictSkillRunError } from "../src/runtime/strict/types.ts";
 import type { ExecutionContractV2 } from "../src/runtime/strict/types.ts";
-import { readPersistedRun } from "../src/runtime/persisted-run.ts";
+import { PersistedRunReadError, readPersistedRun } from "../src/runtime/persisted-run.ts";
 
 const sha = (value: string) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
 
@@ -102,23 +102,36 @@ test("rejects an invalid run id", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "persisted-run-invalid-"));
   await assert.rejects(
     () => readPersistedRun(root, "bad!"),
-    (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity" && error.message.includes("bad!"),
+    (error: unknown) => error instanceof PersistedRunReadError && error.code === "invalid-run-id" && error.message === "Invalid run id bad!.",
   );
   await assert.rejects(
     () => readPersistedRun(root, "../outside"),
-    (error: unknown) => (error instanceof SkillRunError || error instanceof StrictSkillRunError) && (error as { code: string }).code === "run-integrity",
+    (error: unknown) => error instanceof PersistedRunReadError && error.code === "invalid-run-id" && error.message === "Invalid run id ../outside.",
   );
 });
 
-test("maps not-found per runtime", async () => {
+test("maps not-found (runtime-agnostic)", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "persisted-run-notfound-"));
   await assert.rejects(
     () => readPersistedRun(root, "run_notfound_12345"),
-    (error: unknown) => error instanceof SkillRunError && error.code === "run-not-found" && error.message === "Skill run not found: run_notfound_12345.",
+    (error: unknown) => error instanceof PersistedRunReadError && error.code === "run-not-found" && error.message === "Skill run not found: run_notfound_12345.",
   );
 });
 
-test("maps integrity errors per runtime", async () => {
+test("maps invalid persisted JSON", async () => {
+  const invalidRoot = await mkdtemp(path.join(os.tmpdir(), "persisted-run-invalid-json-"));
+  const invalidId = "run_invalid_json_123";
+  const invalidPath = path.join(invalidRoot, ".skillranger", "runs", `${invalidId}.json`);
+  const { mkdir } = await import("node:fs/promises");
+  await mkdir(path.dirname(invalidPath), { recursive: true });
+  await writeFile(invalidPath, "{ invalid json");
+  await assert.rejects(
+    () => readPersistedRun(invalidRoot, invalidId),
+    (error: unknown) => error instanceof PersistedRunReadError && error.code === "invalid-persisted-json" && error.message === `Skill run ${invalidId} is not valid persisted JSON.`,
+  );
+});
+
+test("maps integrity errors per runtime after routing", async () => {
   // lifecycle: valid JSON but invalid persisted state
   const lifecycleRoot = await mkdtemp(path.join(os.tmpdir(), "persisted-run-lifecycle-integrity-"));
   const lifecycleId = "run_lifecycle_integrity";
@@ -170,18 +183,5 @@ test("maps integrity errors per runtime", async () => {
   await assert.rejects(
     () => readPersistedRun(strictRoot, strictId),
     (error: unknown) => error instanceof StrictSkillRunError && error.code === "run-integrity",
-  );
-
-  // invalid persisted JSON (raw) maps to lifecycle integrity
-  const invalidRoot = await mkdtemp(path.join(os.tmpdir(), "persisted-run-invalid-json-"));
-  const invalidId = "run_invalid_json_123";
-  const invalidPath = path.join(invalidRoot, ".skillranger", "runs", `${invalidId}.json`);
-  await mkdtemp(path.join(os.tmpdir(), "dummy")); // ensure base exists via mkdir in store path
-  const { mkdir } = await import("node:fs/promises");
-  await mkdir(path.dirname(invalidPath), { recursive: true });
-  await writeFile(invalidPath, "{ invalid json");
-  await assert.rejects(
-    () => readPersistedRun(invalidRoot, invalidId),
-    (error: unknown) => error instanceof SkillRunError && error.code === "run-integrity" && error.message === `Skill run ${invalidId} is not valid persisted JSON.`,
   );
 });

@@ -1,12 +1,7 @@
-import { stat } from "node:fs/promises";
 import { type RunFileLockHooks } from "../run-lock.ts";
 import { RunStore } from "../run-store.ts";
 import { SkillRunError, type SkillRun } from "./types.ts";
 import { assertValidSkillRun, runIdPattern } from "./validation.ts";
-
-const isErrno = (error: unknown, code: string): error is NodeJS.ErrnoException => (
-  error instanceof Error && "code" in error && error.code === code
-);
 
 export class SkillRunStore {
   private readonly projectRootInput: string;
@@ -33,21 +28,13 @@ export class SkillRunStore {
   get projectRoot(): string { return this.projectRootInput; }
 
   async create(run: SkillRun): Promise<SkillRun> {
-    assertValidSkillRun(run);
-    if (run.revision !== 0) throw new SkillRunError("run-integrity", "A new skill run must start at revision 0.");
-    const lock = await this.core.lock.acquire(run.runId);
-    try {
-      try {
-        await stat(this.core.runPath(run.runId));
-        throw new SkillRunError("run-integrity", `Skill run already exists: ${run.runId}`);
-      } catch (error) {
-        if (!isErrno(error, "ENOENT")) throw error;
-      }
-      await this.core.writeUnlocked(run);
-      return run;
-    } finally {
-      await this.core.lock.release(lock);
-    }
+    return this.core.create(run, {
+      beforeLock: (candidate) => {
+        assertValidSkillRun(candidate);
+        if (candidate.revision !== 0) throw new SkillRunError("run-integrity", "A new skill run must start at revision 0.");
+      },
+      alreadyExists: (runId) => new SkillRunError("run-integrity", `Skill run already exists: ${runId}`),
+    });
   }
 
   async read(runId: string): Promise<SkillRun> {
@@ -55,31 +42,19 @@ export class SkillRunStore {
   }
 
   async replace(runId: string, run: SkillRun): Promise<SkillRun> {
-    if (run.runId !== runId) throw new SkillRunError("run-integrity", "A runtime replacement cannot change the run ID.");
-    const lock = await this.core.lock.acquire(runId);
-    try {
-      const current = await this.core.readUnlocked(runId);
-      if (run.revision <= current.revision) throw new SkillRunError("run-integrity", "A runtime replacement must advance the revision.");
-      await this.core.writeUnlocked(run);
-      return run;
-    } finally {
-      await this.core.lock.release(lock);
-    }
+    return this.core.replace(runId, run, {
+      idMismatch: () => new SkillRunError("run-integrity", "A runtime replacement cannot change the run ID."),
+      notAdvanced: () => new SkillRunError("run-integrity", "A runtime replacement must advance the revision."),
+    });
   }
 
   async update(runId: string, apply: (run: SkillRun) => SkillRun | Promise<SkillRun>): Promise<SkillRun> {
-    const lock = await this.core.lock.acquire(runId);
-    try {
-      const current = await this.core.readUnlocked(runId);
-      const reduced = await apply(structuredClone(current));
-      if (reduced.runId !== runId) throw new SkillRunError("run-integrity", "A run update cannot change the run ID.");
-      const next = { ...reduced, revision: current.revision + 1 };
-      assertValidSkillRun(next);
-      await this.core.writeUnlocked(next);
-      return next;
-    } finally {
-      await this.core.lock.release(lock);
-    }
+    return this.core.update(runId, apply, {
+      prepareNext: (current, reduced) => {
+        if (reduced.runId !== runId) throw new SkillRunError("run-integrity", "A run update cannot change the run ID.");
+        return { ...reduced, revision: current.revision + 1 };
+      },
+    });
   }
 }
 

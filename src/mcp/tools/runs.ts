@@ -1,5 +1,5 @@
 import "../../domains/bundled.ts";
-import { readPersistedRun } from "../../runtime/persisted-run.ts";
+import { PersistedRunReadError, readPersistedRun } from "../../runtime/persisted-run.ts";
 import { startPreparedSkillRun } from "../../runs/start.ts";
 import {
   completeSkillRun,
@@ -31,6 +31,7 @@ import {
   readNextChunk as readNextChunkService,
   verifySkill as verifyStrictSkillService,
 } from "../../runtime/strict/run-operations.ts";
+import { resolveTrustedValidatorRegistry } from "../../runtime/strict/validator-registry.ts";
 import { McpToolError, mcpToolEffects, type JsonObject, type McpToolDefinition, type McpToolErrorCode, type McpToolHandler } from "./types.ts";
 import {
   projectRootProperty,
@@ -219,6 +220,7 @@ const verifyStrict: McpToolHandler = async (args) => {
     store,
     requireString(args.runId, "runId"),
     requireString(args.skillId, "skillId"),
+    resolveTrustedValidatorRegistry,
   );
   return strictRunResult(run);
 };
@@ -299,7 +301,16 @@ const inspectRun: McpToolHandler = async (args) => {
   const projectRoot = resolveProjectRoot(args.projectRoot);
   const runId = requireString(args.runId, "runId");
   if (!/^run_[a-z0-9_-]{7,127}$/.test(runId)) throw new McpToolError("run-integrity", `Invalid run id ${runId}.`);
-  const persisted = await readPersistedRun(projectRoot, runId);
+  let persisted: Awaited<ReturnType<typeof readPersistedRun>>;
+  try {
+    persisted = await readPersistedRun(projectRoot, runId);
+  } catch (error) {
+    if (error instanceof PersistedRunReadError) {
+      if (error.code === "run-not-found") throw new McpToolError("run-not-found", error.message);
+      throw new McpToolError("run-integrity", error.message);
+    }
+    throw error;
+  }
   if (persisted.runtime === "strict-v2") return strictRunResult(persisted.run);
   const run = persisted.run;
   const result = runResult(run);

@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { RunFileLock, type RunFileLockHooks } from "./run-lock.ts";
 
 const isErrno = (error: unknown, code: string): error is NodeJS.ErrnoException =>
   error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === code;
 
-export type RunStoreConfig<TRun extends { runId: string }> = {
+export type RunStoreConfig<TRun extends { runId: string; revision: number }> = {
   runIdPattern: RegExp;
   assertValidRun: (run: unknown) => asserts run is TRun;
   hooks?: RunFileLockHooks;
@@ -24,7 +24,7 @@ export type RunStoreConfig<TRun extends { runId: string }> = {
   };
 };
 
-export class RunStore<TRun extends { runId: string }> {
+export class RunStore<TRun extends { runId: string; revision: number }> {
   readonly projectRoot: string;
   private readonly config: RunStoreConfig<TRun>;
   readonly lock: RunFileLock;
@@ -94,5 +94,67 @@ export class RunStore<TRun extends { runId: string }> {
 
   async read(runId: string): Promise<TRun> {
     return this.readUnlocked(runId);
+  }
+
+  async create(
+    run: TRun,
+    hooks: {
+      beforeLock?: (run: TRun) => void;
+      alreadyExists: (runId: string) => Error;
+    },
+  ): Promise<TRun> {
+    hooks.beforeLock?.(run);
+    const lock = await this.lock.acquire(run.runId);
+    try {
+      try {
+        await stat(this.runPath(run.runId));
+        throw hooks.alreadyExists(run.runId);
+      } catch (error) {
+        if (!isErrno(error, "ENOENT")) throw error;
+      }
+      await this.writeUnlocked(run);
+      return run;
+    } finally {
+      await this.lock.release(lock);
+    }
+  }
+
+  async replace(
+    runId: string,
+    run: TRun,
+    hooks: {
+      idMismatch: () => Error;
+      notAdvanced: () => Error;
+    },
+  ): Promise<TRun> {
+    if (run.runId !== runId) throw hooks.idMismatch();
+    const lock = await this.lock.acquire(runId);
+    try {
+      const current = await this.readUnlocked(runId);
+      if (run.revision <= current.revision) throw hooks.notAdvanced();
+      await this.writeUnlocked(run);
+      return run;
+    } finally {
+      await this.lock.release(lock);
+    }
+  }
+
+  async update(
+    runId: string,
+    apply: (run: TRun) => TRun | Promise<TRun>,
+    hooks: {
+      prepareNext: (current: TRun, applied: TRun) => TRun;
+    },
+  ): Promise<TRun> {
+    const lock = await this.lock.acquire(runId);
+    try {
+      const current = await this.readUnlocked(runId);
+      const applied = await apply(structuredClone(current));
+      const next = hooks.prepareNext(current, applied);
+      await this.writeUnlocked(next);
+      return next;
+    } finally {
+      await this.lock.release(lock);
+    }
   }
 }
