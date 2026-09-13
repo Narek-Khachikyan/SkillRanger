@@ -194,6 +194,10 @@ _Avoid_: new lifecycle, report-in runtime, verified mode
 The act of a host opting into the strict-v2 runtime (`strict: true` on `prepare_task`, or the router config default). It is orthogonal to routing mode (model-assisted vs limited-deterministic fallback).
 _Avoid_: routing migration, verification upgrade, mode switch
 
+**Run store**:
+The one persistence module behind both run runtimes; it alone owns run paths, run-id validation, file locking, atomic writes, and schema-versioned reads, while evidence ingestion, verification, and finalization are service rules over it, not storage.
+_Avoid_: duplicated store logic, runtime-owned file handling, storage-coupled verification
+
 ## Core (universal) skills
 
 **Core skill / universal skill**:
